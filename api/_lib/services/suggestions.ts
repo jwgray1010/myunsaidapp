@@ -872,7 +872,7 @@ class SuggestionsService {
     })() as Bucket;
 
     const intensityScore = analysis.flags.intensityScore;
-    const contextLabel = analysis.context?.label || context;
+    const contextLabel = context || analysis.context?.label || 'general'; // Prioritize user-provided context
 
     // 2) Retrieve (hybrid)
     const pool = await hybridRetrieve(text, contextLabel, toneKeyNorm, 200);
