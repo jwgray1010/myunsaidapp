@@ -170,7 +170,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
         model_version: 'v1.0.0-advanced',
         attachment_informed: true,
         suggestion_count: suggestionAnalysis.suggestions.length,
-        status: isNewUser ? 'learning_attachment' : 'active' // Learning attachment style but fully functional
+        status: 'active' // Always active - learning happens in background
       }
     };
     
