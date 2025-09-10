@@ -784,6 +784,7 @@ class SuggestionsService {
   }
 
   private isContextAppropriate(suggestion: any, analysis: any): boolean {
+    // TEMPORARY: Disable context filtering to test if this is blocking suggestions
     // Check if suggestion contexts match analysis context
     if (suggestion.contexts && Array.isArray(suggestion.contexts)) {
       const analysisContext = analysis.context?.label || 'general';
@@ -791,8 +792,10 @@ class SuggestionsService {
                                 suggestion.contexts.includes('general') ||
                                 suggestion.contexts.length === 0;
       
+      // Log for debugging but don't filter
       if (!hasMatchingContext) {
-        return false;
+        logger.info(`Context mismatch (allowing): suggestion contexts=${JSON.stringify(suggestion.contexts)}, analysisContext=${analysisContext}`);
+        // return false; // DISABLED
       }
     }
 
