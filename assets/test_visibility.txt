@@ -1,0 +1,3 @@
+<!-- Test file to check VS Code visibility -->
+This is a test file to verify VS Code is showing new files properly.
+Assets should be visible in the assets/ folder.
