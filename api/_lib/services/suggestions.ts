@@ -221,13 +221,44 @@ function getVecById(id: string): Float32Array | null {
 }
 
 function bm25Search(query: string, limit = 200): any[] {
-  const bm25 = dataLoader.get('adviceBM25');
+  let bm25 = dataLoader.get('adviceBM25');
   logger.info('bm25Search called', { 
     hasBM25: !!bm25, 
     query, 
     limit,
     bm25Type: typeof bm25
   });
+  
+  // If BM25 index is missing, rebuild it inline (Vercel serverless issue)
+  if (!bm25) {
+    logger.info('BM25 index missing, rebuilding inline...');
+    const therapyAdvice = dataLoader.get('therapyAdvice');
+    const items = Array.isArray(therapyAdvice) ? therapyAdvice : [];
+    
+    if (items.length > 0) {
+      const docs = items.map((it: any) => ({
+        id: it.id,
+        text: [
+          it.advice,
+          ...(it.contexts || []),
+          ...(it.attachmentStyles || []),
+          ...(it.boostSources || [])
+        ]
+          .filter(Boolean)
+          .join(' ')
+      }));
+      
+      // Quick inline BM25 setup
+      const { BM25 } = require('./bm25');
+      bm25 = new BM25(docs);
+      (dataLoader as any).adviceBM25 = bm25;
+      (dataLoader as any).adviceIndexItems = items;
+      logger.info('BM25 index rebuilt inline', { itemCount: items.length });
+    } else {
+      logger.warn('No therapy advice items found for BM25 rebuild');
+      return [];
+    }
+  }
   
   if (!bm25) return [];
   
