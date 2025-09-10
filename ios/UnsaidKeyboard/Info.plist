@@ -40,7 +40,26 @@
 	</dict>
 	<key>AppGroupID</key>
 	<string>group.com.example.unsaid</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>api.myunsaidapp.com</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<false/>
+			</dict>
+		</dict>
+	</dict>
 	<key>UNSAID_API_BASE_URL</key>
 	<string>https://api.myunsaidapp.com</string>
+	<key>UNSAID_API_KEY</key>
+	<string>your-api-key-here</string>
 </dict>
 </plist>

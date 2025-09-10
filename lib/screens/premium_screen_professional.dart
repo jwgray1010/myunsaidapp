@@ -760,7 +760,8 @@ class _PremiumScreenProfessionalState extends State<PremiumScreenProfessional>
                                                   color: Colors.black54,
                                                   decoration:
                                                       TextDecoration.underline,
-                                                  decorationColor: Colors.black54,
+                                                  decorationColor:
+                                                      Colors.black54,
                                                 ),
                                           ),
                                         ],

@@ -530,7 +530,8 @@ class _OnboardingAccountScreenProfessionalState
                                                     ),
                                                     text: TextSpan(
                                                       style: const TextStyle(
-                                                        color: Colors.black, // Changed from UnsaidPalette.softInk to black
+                                                        color: Colors
+                                                            .black, // Changed from UnsaidPalette.softInk to black
                                                         fontSize: 14,
                                                         height: 1.4,
                                                       ),
@@ -657,7 +658,8 @@ class _SignInButton extends StatelessWidget {
                 (MediaQuery.textScalerOf(context).scale(1.0)).clamp(0.8, 1.2),
               ),
               style: theme.textTheme.labelLarge?.copyWith(
-                color: Colors.black, // Changed from UnsaidPalette.softInk to black
+                color:
+                    Colors.black, // Changed from UnsaidPalette.softInk to black
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.2,
               ),

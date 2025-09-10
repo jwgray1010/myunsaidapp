@@ -68,8 +68,8 @@ final class ToneSuggestionCoordinator {
         cfg.httpShouldUsePipelining = true
         cfg.httpMaximumConnectionsPerHost = 2
         cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
-        cfg.timeoutIntervalForRequest = 5.0
-        cfg.timeoutIntervalForResource = 15.0
+        cfg.timeoutIntervalForRequest = 10.0  // Increased from 5.0 for cellular
+        cfg.timeoutIntervalForResource = 30.0  // Increased from 15.0
         cfg.httpCookieAcceptPolicy = .never
         cfg.httpCookieStorage = nil
         cfg.httpAdditionalHeaders = [
@@ -609,7 +609,7 @@ final class ToneSuggestionCoordinator {
 
         workQueue.async { [weak self] in
             guard let self else { completion(nil); return }
-            var req = URLRequest(url: url, timeoutInterval: 5.0)
+            var req = URLRequest(url: url, timeoutInterval: 10.0)  // Increased from 5.0
             req.httpMethod = "POST"
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.setValue("Bearer \(self.apiKey)", forHTTPHeaderField: "Authorization")

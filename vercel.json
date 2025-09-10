@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "@vercel/node@3.0.21",
+      "includeFiles": "api/{_lib,services,schemas,types,utils,cron,v1}/**/*,data/**/*"
+    }
+  },
+  "routes": [
+    { "src": "^/api/v1/(.*)$", "dest": "/api/v1/$1" },
+    { "src": "^/api/(.*)$",    "dest": "/api/v1/$1" },
+    { "src": "^/(.*)$",        "dest": "/api/v1/index" }
+  ]
+}

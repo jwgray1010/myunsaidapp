@@ -35,19 +35,3 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
-
-# Flutter/Dart
-.dart_tool/
-.packages
-.flutter-plugins
-.flutter-plugins-dependencies
-.metadata
-*.iml
-build/
-
-# Prevent stray Dart configs in iOS folder
-ios/.dart_tool/
-ios/*.iml
-ios/pubspec.yaml
-ios/pubspec.lock
-ios/analysis_options.yaml
