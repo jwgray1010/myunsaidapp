@@ -94,15 +94,23 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
 
   Future<void> _loadPrefs() async {
     try {
+      // Try to get name from secure storage first
       final name =
           await _storage.getSecureData('display_name') ??
           await _storage.getSecureData('first_name');
+
       final sens = await _storage.getSecureData('analysis_sensitivity');
       final tone = await _storage.getSecureData('default_tone');
       final compact = await _storage.getSecureData('habits_compact');
+
       if (!mounted) return;
       setState(() {
-        if (name != null && name.isNotEmpty) _userName = name;
+        if (name != null && name.isNotEmpty) {
+          _userName = name;
+        } else {
+          // Keep "Friend" as fallback - could also try Firebase Auth here
+          _userName = 'Friend';
+        }
         final s = double.tryParse(sens ?? '');
         if (s != null) _sensitivity = s;
         if (tone != null && tone.isNotEmpty) _tonePref = tone;
@@ -110,7 +118,14 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
           _compactHabits = compact == '1' || compact.toLowerCase() == 'true';
         }
       });
-    } catch (_) {}
+    } catch (_) {
+      // Keep default values on error
+      if (mounted) {
+        setState(() {
+          _userName = 'Friend';
+        });
+      }
+    }
   }
 
   Future<void> _loadKeyboardSummary() async {
@@ -200,6 +215,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        color: Colors.black87,
                       ),
                     ),
                   ),
@@ -261,7 +277,10 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
       case 'Repair Effectiveness':
         return _buildRepairEffectivenessDetails(history, controller);
       default:
-        return const Text('Details coming soon...');
+        return const Text(
+          'Details coming soon...',
+          style: TextStyle(color: Colors.black87),
+        );
     }
   }
 
@@ -292,14 +311,17 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
       children: [
         const Text(
           'Recent examples of secure habits in your messages:',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
         ),
         const SizedBox(height: 12),
         ...examples.map(
           (example) => Card(
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Text(example),
+              child: Text(
+                example,
+                style: const TextStyle(color: Colors.black87),
+              ),
             ),
           ),
         ),
@@ -309,7 +331,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
               padding: EdgeInsets.all(12),
               child: Text(
                 'No recent examples found. Try using phrases like "I understand...", "I need...", or "Could we..."',
-                style: TextStyle(color: Colors.grey),
+                style: TextStyle(color: Colors.black54),
               ),
             ),
           ),
@@ -340,7 +362,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
       children: [
         const Text(
           'Tone breakdown (last 10 messages):',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
         ),
         const SizedBox(height: 12),
         _buildToneRow('Positive', positive, Colors.green),
@@ -373,14 +395,17 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
       children: [
         const Text(
           'Repair attempts in the last 7 days:',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
         ),
         const SizedBox(height: 12),
-        Text('Total messages analyzed: ${recent7d.length}'),
+        Text(
+          'Total messages analyzed: ${recent7d.length}',
+          style: const TextStyle(color: Colors.black87),
+        ),
         const SizedBox(height: 8),
         const Text(
           'Look for patterns of repair after tension (like "sorry", "I understand", "let me try again")',
-          style: TextStyle(color: Colors.grey),
+          style: TextStyle(color: Colors.black54),
         ),
       ],
     );
@@ -397,7 +422,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 8),
-          Text('$label: $count'),
+          Text('$label: $count', style: const TextStyle(color: Colors.black87)),
         ],
       ),
     );
@@ -614,11 +639,11 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
           SliverAppBar(
             pinned: true,
             floating: false,
-            expandedHeight: 180,
+            expandedHeight: 205, // Increased by 2.4 pixels
             flexibleSpace: FlexibleSpaceBar(
               titlePadding: const EdgeInsetsDirectional.only(
                 start: 16,
-                bottom: 60,
+                bottom: 72, // Increased padding
               ),
               title: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -854,6 +879,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
                         style: const TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 16,
+                          color: Colors.black87,
                         ),
                       ),
                     ],
@@ -865,7 +891,11 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
             Text(
               label,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+                color: Colors.black87,
+              ),
             ),
             const SizedBox(height: 2),
             Text(
@@ -969,7 +999,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
 
     Widget buildEmpty(String msg) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Text(msg, style: const TextStyle(color: UnsaidPalette.softInk)),
+      child: Text(msg, style: const TextStyle(color: Colors.black54)),
     );
 
     Widget buildData() {
@@ -988,33 +1018,24 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
                   style,
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: UnsaidPalette.ink,
+                    color: Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Score: $score  •  Samples: $samples',
-                  style: const TextStyle(
-                    color: UnsaidPalette.softInk,
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(color: Colors.black54, fontSize: 12),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Range: $range',
-                  style: const TextStyle(
-                    color: UnsaidPalette.softInk,
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(color: Colors.black54, fontSize: 12),
                 ),
                 if (updated != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     'Last updated ${_relativeTime(updated)}',
-                    style: const TextStyle(
-                      color: UnsaidPalette.softInk,
-                      fontSize: 11,
-                    ),
+                    style: const TextStyle(color: Colors.black54, fontSize: 11),
                   ),
                 ],
                 const SizedBox(height: 8),
@@ -1149,7 +1170,10 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
                       SizedBox(width: 8),
                       Text(
                         'Pre-Send Coach',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
                       ),
                     ],
                   ),
@@ -1260,7 +1284,11 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
                 children: [
                   const Text(
                     'What to expect:',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: Colors.black87,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   _buildAnalyticsTip(
@@ -1308,7 +1336,10 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
                   children: [
                     Text(
                       tone,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     LinearProgressIndicator(
@@ -1369,6 +1400,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
+                    color: Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -1461,8 +1493,12 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
     padding: const EdgeInsets.only(bottom: 8),
     child: ElevatedButton.icon(
       onPressed: () => _launchUrlSafely(url),
-      icon: const Icon(Icons.open_in_new),
-      label: Text(label),
+      style: ElevatedButton.styleFrom(
+        foregroundColor: Colors.black87,
+        backgroundColor: Colors.white,
+      ),
+      icon: const Icon(Icons.open_in_new, color: Colors.black87),
+      label: Text(label, style: const TextStyle(color: Colors.black87)),
     ),
   );
 
@@ -1630,9 +1666,15 @@ class _TipRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text(body, style: const TextStyle(color: UnsaidPalette.softInk)),
+              Text(body, style: const TextStyle(color: Colors.black54)),
             ],
           ),
         ),

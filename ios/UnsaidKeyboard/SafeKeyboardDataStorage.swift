@@ -211,16 +211,21 @@ final class SafeKeyboardDataStorage {
         store(mergedSuggestions,  forKey: StorageKeys.pendingSuggestions,  defaults: defaults)
 
         // metadata (small, no need to debounce extra)
+        let totalItems = mergedInteractions.count + mergedAnalytics.count + mergedTones.count + mergedSuggestions.count
         let metadata: [String: Any] = [
             "last_sync": Date().timeIntervalSince1970,
             "interactions_count": mergedInteractions.count,
             "analytics_count": mergedAnalytics.count,
             "tone_count": mergedTones.count,
             "suggestions_count": mergedSuggestions.count,
+            "total_items": totalItems,
+            "has_pending_data": totalItems > 0,
             "keyboard_version": "2.0.0",
             "sync_source": "keyboard_extension"
         ]
         defaults.set(metadata, forKey: StorageKeys.storageMetadata)
+        
+        // TODO: Add smart notification triggers when needed
 
         // clear in-memory queues after success
         workQueue.async {

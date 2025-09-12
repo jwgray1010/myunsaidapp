@@ -149,6 +149,7 @@ class _PersonalityTestScreenProfessionalState
 
     if (mounted) {
       try {
+        // Skip personality results and go directly to premium
         Navigator.pushReplacementNamed(
           context,
           '/premium',
@@ -440,8 +441,8 @@ class _PersonalityTestScreenProfessionalState
                                       border: Border.all(
                                         color: isSelected
                                             ? colorDot
-                                            : Colors.white.withValues(
-                                                alpha: 0.7,
+                                            : Colors.grey.withValues(
+                                                alpha: 0.5,
                                               ),
                                         width: 2,
                                       ),

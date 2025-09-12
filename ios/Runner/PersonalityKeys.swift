@@ -17,6 +17,8 @@ enum PersonalityKeys: String {
     case dominantTypeLabel          = "dominant_type_label"
     case personalityScores          = "personality_scores"
     case communicationPreferences   = "communication_preferences"
+    case profanityLevel             = "profanity_level"
+    case sarcasmLevel               = "sarcasm_level"
 
     // Emotional state
     case currentEmotionalState      = "currentEmotionalState"

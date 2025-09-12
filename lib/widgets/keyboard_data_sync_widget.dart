@@ -28,7 +28,6 @@ class _KeyboardDataSyncWidgetState extends State<KeyboardDataSyncWidget>
   final KeyboardDataService _keyboardDataService = KeyboardDataService();
   bool _isSyncing = false;
   bool _isNewUser = false;
-  DateTime? _lastSyncAttempt;
 
   @override
   void initState() {
@@ -47,21 +46,6 @@ class _KeyboardDataSyncWidgetState extends State<KeyboardDataSyncWidget>
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-
-    // Sync data when app becomes active, but not too frequently
-    if (state == AppLifecycleState.resumed && widget.enableAutoSync) {
-      final now = DateTime.now();
-      if (_lastSyncAttempt == null ||
-          now.difference(_lastSyncAttempt!).inMinutes >= 2) {
-        _performDataSync();
-      } else {
-        debugPrint('🔄 KeyboardDataSyncWidget: Skipping sync (too recent)');
-      }
-    }
-  }
 
   /// Perform initial data sync when app starts
   Future<void> _performInitialSync() async {
@@ -90,8 +74,6 @@ class _KeyboardDataSyncWidgetState extends State<KeyboardDataSyncWidget>
   Future<void> _performDataSync() async {
     if (_isSyncing) return; // Prevent concurrent syncs
 
-    _lastSyncAttempt = DateTime.now();
-
     setState(() {
       _isSyncing = true;
     });
@@ -102,10 +84,15 @@ class _KeyboardDataSyncWidgetState extends State<KeyboardDataSyncWidget>
       // Check for pending data first with timeout protection
       final metadata = await _keyboardDataService
           .getKeyboardStorageMetadata()
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        debugPrint('⏱️ KeyboardDataSyncWidget: Metadata request timed out');
-        return null;
-      });
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint(
+                '⏱️ KeyboardDataSyncWidget: Metadata request timed out',
+              );
+              return null;
+            },
+          );
 
       // Detect if this is a new user for better UX
       _isNewUser = _detectNewUser(metadata);
@@ -114,10 +101,12 @@ class _KeyboardDataSyncWidgetState extends State<KeyboardDataSyncWidget>
       if (metadata == null) {
         if (_isNewUser) {
           debugPrint(
-              '👋 KeyboardDataSyncWidget: Welcome! Start using the keyboard to see data sync.');
+            '👋 KeyboardDataSyncWidget: Welcome! Start using the keyboard to see data sync.',
+          );
         } else {
           debugPrint(
-              'ℹ️ KeyboardDataSyncWidget: No metadata available (error occurred)');
+            'ℹ️ KeyboardDataSyncWidget: No metadata available (error occurred)',
+          );
         }
         return;
       }
@@ -128,10 +117,12 @@ class _KeyboardDataSyncWidgetState extends State<KeyboardDataSyncWidget>
       if (!hasPendingData || totalItems == 0) {
         if (_isNewUser) {
           debugPrint(
-              '👋 KeyboardDataSyncWidget: New user detected - no data to sync yet. Start typing to generate data!');
+            '👋 KeyboardDataSyncWidget: New user detected - no data to sync yet. Start typing to generate data!',
+          );
         } else {
           debugPrint(
-              '✅ KeyboardDataSyncWidget: No pending data to sync (total_items: $totalItems)');
+            '✅ KeyboardDataSyncWidget: No pending data to sync (total_items: $totalItems)',
+          );
         }
         return;
       }
@@ -141,14 +132,18 @@ class _KeyboardDataSyncWidgetState extends State<KeyboardDataSyncWidget>
       // Retrieve keyboard data with timeout
       final keyboardData = await _keyboardDataService
           .retrievePendingKeyboardData()
-          .timeout(const Duration(seconds: 15), onTimeout: () {
-        debugPrint('⏱️ KeyboardDataSyncWidget: Data retrieval timed out');
-        return null;
-      });
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              debugPrint('⏱️ KeyboardDataSyncWidget: Data retrieval timed out');
+              return null;
+            },
+          );
 
       if (keyboardData != null && keyboardData.hasData) {
         debugPrint(
-            '📥 KeyboardDataSyncWidget: Retrieved ${keyboardData.totalItems} items');
+          '📥 KeyboardDataSyncWidget: Retrieved ${keyboardData.totalItems} items',
+        );
 
         // Process the data
         await _keyboardDataService.processKeyboardData(keyboardData);
@@ -159,21 +154,29 @@ class _KeyboardDataSyncWidgetState extends State<KeyboardDataSyncWidget>
         // Clear the data
         final cleared = await _keyboardDataService
             .clearPendingKeyboardData()
-            .timeout(const Duration(seconds: 10), onTimeout: () {
-          debugPrint('⏱️ KeyboardDataSyncWidget: Clear operation timed out');
-          return false;
-        });
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () {
+                debugPrint(
+                  '⏱️ KeyboardDataSyncWidget: Clear operation timed out',
+                );
+                return false;
+              },
+            );
 
         if (cleared) {
           debugPrint(
-              '✅ KeyboardDataSyncWidget: Data sync completed successfully');
+            '✅ KeyboardDataSyncWidget: Data sync completed successfully',
+          );
         } else {
           debugPrint(
-              '⚠️ KeyboardDataSyncWidget: Warning - data not cleared after sync');
+            '⚠️ KeyboardDataSyncWidget: Warning - data not cleared after sync',
+          );
         }
       } else {
         debugPrint(
-            'ℹ️ KeyboardDataSyncWidget: No keyboard data to process (empty result)');
+          'ℹ️ KeyboardDataSyncWidget: No keyboard data to process (empty result)',
+        );
       }
     } catch (e) {
       debugPrint('❌ KeyboardDataSyncWidget: Data sync error: $e');

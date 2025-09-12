@@ -24,6 +24,8 @@ class SettingsManager extends ChangeNotifier {
   static const String _fontSizeKey = 'font_size';
   static const String _highContrastKey = 'high_contrast_mode';
   static const String _backupEnabledKey = 'backup_enabled';
+  static const String _profanityLevelKey = 'profanity_level';
+  static const String _sarcasmLevelKey = 'sarcasm_level';
 
   /// Initialize the settings manager
   Future<void> initialize() async {
@@ -33,7 +35,7 @@ class SettingsManager extends ChangeNotifier {
   /// Get all current settings as a map
   Map<String, dynamic> getAllSettings() {
     if (_prefs == null) return {};
-    
+
     return {
       'analysis_sensitivity': _prefs!.getDouble(_sensitivityKey) ?? 0.5,
       'default_tone': _prefs!.getString(_toneKey) ?? 'Polite',
@@ -46,6 +48,8 @@ class SettingsManager extends ChangeNotifier {
       'font_size': _prefs!.getDouble(_fontSizeKey) ?? 14.0,
       'high_contrast_mode': _prefs!.getBool(_highContrastKey) ?? false,
       'backup_enabled': _prefs!.getBool(_backupEnabledKey) ?? true,
+      'profanity_level': _prefs!.getInt(_profanityLevelKey) ?? 2,
+      'sarcasm_level': _prefs!.getInt(_sarcasmLevelKey) ?? 2,
       'export_date': DateTime.now().toIso8601String(),
       'app_version': '1.0.0',
     };
@@ -55,7 +59,7 @@ class SettingsManager extends ChangeNotifier {
   Future<bool> importSettings(Map<String, dynamic> settings) async {
     try {
       if (_prefs == null) await initialize();
-      
+
       // Validate settings structure
       if (!_validateSettingsStructure(settings)) {
         return false;
@@ -77,23 +81,38 @@ class SettingsManager extends ChangeNotifier {
       }
 
       if (settings.containsKey('notifications_enabled')) {
-        await _prefs!.setBool(_notificationsKey, settings['notifications_enabled'] ?? true);
+        await _prefs!.setBool(
+          _notificationsKey,
+          settings['notifications_enabled'] ?? true,
+        );
       }
 
       if (settings.containsKey('dark_mode_enabled')) {
-        await _prefs!.setBool(_darkModeKey, settings['dark_mode_enabled'] ?? false);
+        await _prefs!.setBool(
+          _darkModeKey,
+          settings['dark_mode_enabled'] ?? false,
+        );
       }
 
       if (settings.containsKey('ai_analysis_enabled')) {
-        await _prefs!.setBool(_aiAnalysisKey, settings['ai_analysis_enabled'] ?? true);
+        await _prefs!.setBool(
+          _aiAnalysisKey,
+          settings['ai_analysis_enabled'] ?? true,
+        );
       }
 
       if (settings.containsKey('real_time_analysis')) {
-        await _prefs!.setBool(_realTimeAnalysisKey, settings['real_time_analysis'] ?? false);
+        await _prefs!.setBool(
+          _realTimeAnalysisKey,
+          settings['real_time_analysis'] ?? false,
+        );
       }
 
       if (settings.containsKey('share_analytics')) {
-        await _prefs!.setBool(_shareAnalyticsKey, settings['share_analytics'] ?? false);
+        await _prefs!.setBool(
+          _shareAnalyticsKey,
+          settings['share_analytics'] ?? false,
+        );
       }
 
       if (settings.containsKey('selected_language')) {
@@ -111,11 +130,33 @@ class SettingsManager extends ChangeNotifier {
       }
 
       if (settings.containsKey('high_contrast_mode')) {
-        await _prefs!.setBool(_highContrastKey, settings['high_contrast_mode'] ?? false);
+        await _prefs!.setBool(
+          _highContrastKey,
+          settings['high_contrast_mode'] ?? false,
+        );
       }
 
       if (settings.containsKey('backup_enabled')) {
-        await _prefs!.setBool(_backupEnabledKey, settings['backup_enabled'] ?? true);
+        await _prefs!.setBool(
+          _backupEnabledKey,
+          settings['backup_enabled'] ?? true,
+        );
+      }
+
+      if (settings.containsKey('profanity_level')) {
+        final profanityLevel = settings['profanity_level'] as int?;
+        if (profanityLevel != null &&
+            profanityLevel >= 1 &&
+            profanityLevel <= 5) {
+          await _prefs!.setInt(_profanityLevelKey, profanityLevel);
+        }
+      }
+
+      if (settings.containsKey('sarcasm_level')) {
+        final sarcasmLevel = settings['sarcasm_level'] as int?;
+        if (sarcasmLevel != null && sarcasmLevel >= 1 && sarcasmLevel <= 5) {
+          await _prefs!.setInt(_sarcasmLevelKey, sarcasmLevel);
+        }
       }
 
       notifyListeners();
@@ -131,11 +172,11 @@ class SettingsManager extends ChangeNotifier {
     try {
       final settings = getAllSettings();
       final jsonString = jsonEncode(settings);
-      
+
       final directory = await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final file = File('${directory.path}/unsaid_settings_$timestamp.json');
-      
+
       await file.writeAsString(jsonString);
       return file.path;
     } catch (e) {
@@ -149,10 +190,10 @@ class SettingsManager extends ChangeNotifier {
     try {
       final file = File(filePath);
       if (!await file.exists()) return false;
-      
+
       final jsonString = await file.readAsString();
       final settings = jsonDecode(jsonString) as Map<String, dynamic>;
-      
+
       return await importSettings(settings);
     } catch (e) {
       print('Error importing settings from file: $e');
@@ -163,7 +204,7 @@ class SettingsManager extends ChangeNotifier {
   /// Reset all settings to defaults
   Future<void> resetToDefaults() async {
     if (_prefs == null) await initialize();
-    
+
     await _prefs!.clear();
     notifyListeners();
   }
@@ -180,6 +221,8 @@ class SettingsManager extends ChangeNotifier {
   double getFontSize() => _prefs?.getDouble(_fontSizeKey) ?? 14.0;
   bool getHighContrastMode() => _prefs?.getBool(_highContrastKey) ?? false;
   bool getBackupEnabled() => _prefs?.getBool(_backupEnabledKey) ?? true;
+  int getProfanityLevel() => _prefs?.getInt(_profanityLevelKey) ?? 2;
+  int getSarcasmLevel() => _prefs?.getInt(_sarcasmLevelKey) ?? 2;
 
   /// Individual setting setters
   Future<void> setSensitivity(double value) async {
@@ -237,14 +280,27 @@ class SettingsManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setProfanityLevel(int value) async {
+    await _prefs?.setInt(_profanityLevelKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setSarcasmLevel(int value) async {
+    await _prefs?.setInt(_sarcasmLevelKey, value);
+    notifyListeners();
+  }
+
   /// Validation helpers
   bool _validateSettingsStructure(Map<String, dynamic> settings) {
     // Check if it contains at least some expected keys
     final expectedKeys = [
-      'analysis_sensitivity', 'default_tone', 'notifications_enabled',
-      'dark_mode_enabled', 'ai_analysis_enabled'
+      'analysis_sensitivity',
+      'default_tone',
+      'notifications_enabled',
+      'dark_mode_enabled',
+      'ai_analysis_enabled',
     ];
-    
+
     return expectedKeys.any((key) => settings.containsKey(key));
   }
 
@@ -254,7 +310,13 @@ class SettingsManager extends ChangeNotifier {
   }
 
   bool _isValidLanguage(String language) {
-    const validLanguages = ['English', 'Spanish', 'French', 'German', 'Italian'];
+    const validLanguages = [
+      'English',
+      'Spanish',
+      'French',
+      'German',
+      'Italian',
+    ];
     return validLanguages.contains(language);
   }
 }

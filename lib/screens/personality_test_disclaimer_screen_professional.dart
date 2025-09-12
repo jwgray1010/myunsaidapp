@@ -196,7 +196,7 @@ class _PersonalityTestDisclaimerScreenProfessionalState
                       'Personality Assessment',
                       style: theme.textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.primary,
+                        color: Colors.white,
                         letterSpacing: 0.5,
                       ),
                       textAlign: TextAlign.center,
@@ -342,105 +342,36 @@ class _PersonalityTestDisclaimerScreenProfessionalState
                     // Action Buttons
                     Column(
                       children: [
-                        // Modern Assessment Button (Primary)
-                        if (widget.onAgreeModern != null)
-                          Tooltip(
-                            message:
-                                "Enhanced assessment with attachment science (Recommended)",
-                            showDuration: const Duration(seconds: 3),
-                            textStyle: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary.withValues(
-                                alpha: 0.9,
+                        // Primary Assessment Button
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: widget.onAgreeModern ?? widget.onAgree,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 16,
+                                horizontal: 24,
                               ),
-                              borderRadius: BorderRadius.circular(8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 2,
                             ),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: widget.onAgreeModern,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: theme.colorScheme.primary,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                    horizontal: 24,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  elevation: 2,
-                                ),
-                                icon: const Icon(
-                                  Icons.psychology_outlined,
-                                  size: 20,
-                                ),
-                                label: Text(
-                                  'Start Enhanced Assessment',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                            icon: const Icon(
+                              Icons.psychology_outlined,
+                              size: 20,
+                            ),
+                            label: Text(
+                              'Start Personality Assessment',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
                               ),
                             ),
                           ),
-
-                        if (widget.onAgreeModern != null &&
-                            widget.onAgree != null)
-                          const SizedBox(height: 12),
-
-                        // Classic Assessment Button (Alternative)
-                        if (widget.onAgree != null)
-                          Tooltip(
-                            message: "Classic personality test (2-3 minutes)",
-                            showDuration: const Duration(seconds: 3),
-                            textStyle: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary.withValues(
-                                alpha: 0.9,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: widget.onAgree,
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: theme.colorScheme.primary,
-                                  side: BorderSide(
-                                    color: theme.colorScheme.primary,
-                                    width: 1.5,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                    horizontal: 24,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                                icon: const Icon(
-                                  Icons.check_circle_outline,
-                                  size: 20,
-                                ),
-                                label: Text(
-                                  widget.onAgreeModern != null
-                                      ? 'Use Classic Assessment Instead'
-                                      : 'I Understand & Want to Continue',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+                        ),
 
                         const SizedBox(height: 16),
 
@@ -522,11 +453,16 @@ class _PersonalityTestDisclaimerScreenProfessionalState
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
                                     ),
+                                    elevation: 2,
                                   ),
                                   child: const Text(
                                     'Skip Questions → Go to Premium',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
+                                      color: Colors
+                                          .white, // Explicitly set white text
+                                      fontSize:
+                                          16, // Larger font for better readability
                                     ),
                                   ),
                                 ),

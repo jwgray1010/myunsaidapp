@@ -56,7 +56,11 @@ class UnsaidCard extends StatelessWidget {
         border: Border.all(color: Colors.black.withValues(alpha: 0.04)),
       ),
       child: DefaultTextStyle(
-        style: const TextStyle(color: Colors.black),
+        style: const TextStyle(
+          color: Colors.black87, // Dark text for white background
+          fontSize: 14,
+          height: 1.4,
+        ),
         child: child,
       ),
     );
@@ -203,19 +207,19 @@ class UnsaidActionButton extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               title,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: UnsaidPalette.textPrimary,
+                color: Colors.black87, // Dark text for white background
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 12,
-                color: UnsaidPalette.textSecondary,
+                color: Colors.black54, // Lighter dark text for subtitle
               ),
               textAlign: TextAlign.center,
               maxLines: 2,
@@ -299,16 +303,25 @@ class UnsaidSectionHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget? trailing;
+  final bool useWhiteBackground; // New parameter to control text color
 
   const UnsaidSectionHeader({
     super.key,
     required this.title,
     this.subtitle,
     this.trailing,
+    this.useWhiteBackground = false, // Default to gradient background styling
   });
 
   @override
   Widget build(BuildContext context) {
+    final titleColor = useWhiteBackground
+        ? Colors.black87
+        : UnsaidPalette.textPrimary;
+    final subtitleColor = useWhiteBackground
+        ? Colors.black54
+        : UnsaidPalette.textSecondary;
+
     return Row(
       children: [
         Expanded(
@@ -320,7 +333,7 @@ class UnsaidSectionHeader extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: UnsaidPalette.textPrimary,
+                  color: titleColor,
                   letterSpacing: -0.2,
                 ),
               ),
@@ -328,10 +341,7 @@ class UnsaidSectionHeader extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   subtitle!,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: UnsaidPalette.textSecondary,
-                  ),
+                  style: TextStyle(fontSize: 13, color: subtitleColor),
                 ),
               ],
             ],

@@ -74,7 +74,23 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>UNSAID_API_BASE_URL</key>
-	<string>https://api.myunsaidapp.com/api/v1</string>
+	<string>https://api.myunsaidapp.com</string>
+		<key>UNSAID_API_KEY</key>
+	<string>37da2c87b923d4e9dd388f13580d75396c84d8ab5f9c58b505a80e892b3d7e9d</string>
+	
+	<!-- Background App Refresh for automatic data sync -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>background-processing</string>
+		<string>background-fetch</string>
+	</array>
+	
+	<!-- Background Task Identifiers -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.example.unsaid.data-processing</string>
+		<string>com.example.unsaid.keyboard-sync</string>
+	</array>
 	
 	<!-- Disable Firebase Analytics/Remote Config in dev to avoid SSL hang -->
 	<key>FIREBASE_ANALYTICS_COLLECTION_ENABLED</key>

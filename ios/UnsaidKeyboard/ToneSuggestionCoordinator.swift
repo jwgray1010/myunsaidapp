@@ -25,7 +25,7 @@ private struct SharedConvItem: Codable {
 }
 
 // MARK: - Coordinator
-final class ToneSuggestionCoordinator {
+final class ToneSuggestionCoordinator: ToneStreamDelegate {
     // MARK: Public
     weak var delegate: ToneSuggestionDelegate?
 
@@ -54,8 +54,13 @@ final class ToneSuggestionCoordinator {
         return (fromExt?.nilIfEmpty ?? fromMain?.nilIfEmpty) ?? ""
     }
     private var isAPIConfigured: Bool {
-        if Date() < authBackoffUntil { return false }
-        return !apiBaseURL.isEmpty && !apiKey.isEmpty
+        if Date() < authBackoffUntil { 
+            print("🔴 API blocked due to auth backoff until \(authBackoffUntil)")
+            return false 
+        }
+        let configured = !apiBaseURL.isEmpty && !apiKey.isEmpty
+        print("🔧 API configured: \(configured) - URL: '\(apiBaseURL)', Key: '\(apiKey.prefix(10))...'")
+        return configured
     }
 
     // MARK: Networking
@@ -122,6 +127,62 @@ final class ToneSuggestionCoordinator {
     private let logger = Logger(subsystem: "com.example.unsaid.unsaid.UnsaidKeyboard", category: "ToneSuggestionCoordinator")
     private var logThrottle: [String: Date] = [:]
     private let logThrottleInterval: TimeInterval = 1.0
+    
+    // MARK: - Haptic Controller
+    // Note: Temporarily commented out due to missing shared types
+    // Will need to uncomment once the shared types compilation issues are resolved
+    private let hapticController: Any? = nil // UnifiedHapticsController.shared
+    private var isHapticSessionActive = false
+    private var lastToneUpdateTime: Date = .distantPast
+    private let toneUpdateThrottle: TimeInterval = 0.1 // 10 Hz max
+    
+    // MARK: - WebSocket Stream Client
+    private let streamClient = ToneStreamClient()
+    private var isStreamEnabled = false
+    
+    // MARK: - Health Debug
+    private let netLog = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "UnsaidKeyboard", category: "Network")
+    
+    func dumpAPIConfig() {
+        let base = Bundle.main.object(forInfoDictionaryKey: "UNSAID_API_BASE_URL") as? String ?? "<missing>"
+        let key  = Bundle.main.object(forInfoDictionaryKey: "UNSAID_API_KEY") as? String ?? "<missing>"
+        os_log("🔧 API Config - Base URL: %{public}@, Key prefix: %{public}@", log: netLog, type: .info, base, String(key.prefix(8)))
+    }
+    
+    func debugPing() {
+        dumpAPIConfig()
+
+        // Ensure base has no trailing /api/v1 because we append it here.
+        let rawBase = (Bundle.main.object(forInfoDictionaryKey: "UNSAID_API_BASE_URL") as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedBase: String = rawBase.hasSuffix("/api/v1") ? String(rawBase.dropLast(7)) : rawBase
+        guard var comps = URLComponents(string: cleanedBase) else {
+            os_log("❌ Invalid base URL", log: self.netLog, type: .error); return
+        }
+        comps.path = "/api/v1/health"
+        guard let url = comps.url else { os_log("❌ Could not build health URL", log: self.netLog, type: .error); return }
+
+        os_log("🌐 GET %{public}@", log: self.netLog, type: .info, url.absoluteString)
+
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 15
+
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.waitsForConnectivity = true
+        let session = URLSession(configuration: cfg)
+        session.dataTask(with: req) { data, resp, err in
+            if let err = err {
+                os_log("❌ Request error: %{public}@", log: self.netLog, type: .error, String(describing: err))
+                return
+            }
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            os_log("✅ Status: %d", log: self.netLog, type: .info, status)
+            if let data = data, let body = String(data: data, encoding: .utf8) {
+                #if DEBUG
+                os_log("Body: %{public}@", log: self.netLog, type: .debug, body)
+                #endif
+            }
+        }.resume()
+    }
 
     // MARK: - Init/Deinit
     init() {
@@ -142,24 +203,78 @@ final class ToneSuggestionCoordinator {
         debugPrint(" - Data Freshness: \(personalityBridge.getDataFreshness()) hours")
         debugPrint(" - New User: \(personalityBridge.isNewUser())")
         debugPrint(" - Learning Days Remaining: \(personalityBridge.learningDaysRemaining())")
+        
+        // Health ping to verify API configuration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.debugPing()
+        }
         #endif
     }
 
     deinit {
+        print("🗑️ ToneSuggestionCoordinator deinit - cleaning up resources")
+        
+        // Stop haptic session and WebSocket streaming
+        stopHapticSession()
+        
+        // Cancel any pending work
         pendingWorkItem?.cancel()
         inFlightTask?.cancel()
+        
+        // Stop network monitoring
         stopNetworkMonitoring()
+        
+        print("✅ ToneSuggestionCoordinator cleanup complete")
     }
 
     // MARK: - Public API
     func analyzeFinalSentence(_ sentence: String) { handleTextChange(sentence) }
+    
+    /// Start haptic session (call once when user begins typing)
+    func startHapticSession() {
+        guard !isHapticSessionActive else { return }
+        isHapticSessionActive = true
+        // hapticController.startHapticSession() // TODO: Uncomment when types are resolved
+        
+        // Connect WebSocket for real-time tone updates
+        streamClient.delegate = self
+        streamClient.connect()
+    }
+    
+    /// Stop haptic session (call once when user stops typing or app backgrounds)
+    func stopHapticSession() {
+        guard isHapticSessionActive else { return }
+        isHapticSessionActive = false
+        // hapticController.stopHapticSession() // TODO: Uncomment when types are resolved
+        
+        // Disconnect WebSocket
+        streamClient.disconnect()
+    }
+    
+    /// Get haptic metrics for debugging
+    func getHapticMetrics() -> (starts: Int, stops: Int, updates: Int, latencyMs: Double) {
+        // TODO: Uncomment when types are resolved
+        // if let controller = hapticController as? UnifiedHapticsController {
+        //     return controller.getMetrics()
+        // } else {
+            // Fallback when haptic controller is not available
+            return (starts: 0, stops: 0, updates: 0, latencyMs: 0.0)
+        // }
+    }
 
     func handleTextChange(_ text: String) {
         updateCurrentText(text)
+        
+        // Stream text to WebSocket for real-time analysis (if connected)
+        if isStreamEnabled && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            streamClient.sendTextUpdate(text)
+        }
+        
         guard shouldEnqueueAnalysis() else {
             throttledLog("skip enqueue (timing / unchanged / short)", category: "analysis")
             return
         }
+        print("📝 Enqueueing tone analysis for: '\(text.prefix(50))...'")
         pendingWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.performTextUpdate() }
         pendingWorkItem = work
@@ -318,6 +433,9 @@ final class ToneSuggestionCoordinator {
                     if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: tone) {
                         self.currentToneStatus = tone
                         self.delegate?.didUpdateToneStatus(tone)
+                        
+                        // Update haptic feedback (throttled to 10 Hz)
+                        self.updateHapticFeedback(for: tone)
                     }
                 }
             }
@@ -937,6 +1055,22 @@ final class ToneSuggestionCoordinator {
     ?? sharedUserDefaults.string(forKey: "userEmail")
     }
     private func getEmotionalState() -> String { personalityBridge.getCurrentEmotionalState() }
+    
+    // MARK: - Haptic Feedback
+    /// Update haptic feedback based on tone status (throttled to 10 Hz)
+    private func updateHapticFeedback(for toneStatus: String) {
+        let now = Date()
+        guard now.timeIntervalSince(lastToneUpdateTime) >= toneUpdateThrottle else {
+            return // Throttle updates to 10 Hz
+        }
+        lastToneUpdateTime = now
+        
+        // TODO: Uncomment when types are resolved
+        // Convert string to ToneStatus enum
+        // let toneStatusEnum = ToneStatus(rawValue: toneStatus) ?? .neutral
+        // let (intensity, sharpness) = UnifiedHapticsController.toneToHaptics(toneStatusEnum)
+        // hapticController.applyTone(intensity: intensity, sharpness: sharpness)
+    }
 
     // MARK: - Network monitoring
     private func startNetworkMonitoringSafely() {
@@ -972,6 +1106,37 @@ final class ToneSuggestionCoordinator {
         logThrottle[key] = now
         logger.debug("[\(category)] \(message)")
         #endif
+    }
+}
+
+// MARK: - ToneStreamDelegate
+extension ToneSuggestionCoordinator {
+    func toneStreamDidConnect() {
+        isStreamEnabled = true
+        throttledLog("tone stream connected", category: "stream")
+    }
+    
+    func toneStreamDidDisconnect() {
+        isStreamEnabled = false
+        throttledLog("tone stream disconnected", category: "stream")
+        
+        // Fall back to neutral tone on network loss
+        updateHapticFeedback(for: "neutral")
+    }
+    
+    func toneStreamDidReceiveToneUpdate(intensity: Float, sharpness: Float) {
+        // Apply real-time haptic updates from WebSocket
+        guard isHapticSessionActive else { return }
+        
+        let now = Date()
+        guard now.timeIntervalSince(lastToneUpdateTime) >= toneUpdateThrottle else {
+            return // Throttle to 10 Hz
+        }
+        lastToneUpdateTime = now
+        
+        // TODO: Uncomment when types are resolved
+        // hapticController.applyTone(intensity: intensity, sharpness: sharpness)
+        throttledLog("applied stream tone: I=\(String(format: "%.2f", intensity)) S=\(String(format: "%.2f", sharpness))", category: "stream")
     }
 }
 

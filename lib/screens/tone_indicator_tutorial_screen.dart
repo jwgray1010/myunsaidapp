@@ -436,7 +436,7 @@ class _ToneIndicatorTutorialScreenState
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: UnsaidPalette.ink,
+                    color: Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 8),

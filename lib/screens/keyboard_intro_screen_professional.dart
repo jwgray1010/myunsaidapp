@@ -448,11 +448,11 @@ class _KeyboardIntroScreenProfessionalState
                                   children: [
                                     Text(
                                       'Smart Features',
-                                      style: theme.textTheme.titleLarge
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            color: UnsaidPalette.ink,
-                                          ),
+                                      style: theme.textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors
+                                            .black87, // Fixed: dark text for white card
+                                      ),
                                     ),
                                     const SizedBox(height: 20),
                                     ...[
@@ -649,7 +649,7 @@ class _KeyboardIntroScreenProfessionalState
                                                     ?.copyWith(
                                                       fontWeight:
                                                           FontWeight.w600,
-                                                      color: UnsaidPalette.ink,
+                                                      color: Colors.black87,
                                                     ),
                                               ),
                                             ],

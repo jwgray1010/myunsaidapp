@@ -191,25 +191,30 @@ final List<PersonalityQuestion> goalItems = [
     isGoal: true,
     options: [
       PersonalityQuestionOption(
-          text: "New connection or dating",
-          value: 4,
-          routeTag: "dating_sensitive"),
+        text: "New connection or dating",
+        value: 4,
+        routeTag: "dating_sensitive",
+      ),
       PersonalityQuestionOption(
-          text: "Repairing or deepening an existing relationship",
-          value: 4,
-          routeTag: "empathetic_mirror"),
+        text: "Repairing or deepening an existing relationship",
+        value: 4,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "Staying consistent and becoming more secure",
-          value: 4,
-          routeTag: "secure_training"),
+        text: "Staying consistent and becoming more secure",
+        value: 4,
+        routeTag: "secure_training",
+      ),
       PersonalityQuestionOption(
-          text: "Managing co-parenting communication",
-          value: 4,
-          routeTag: "coparenting_support"),
+        text: "Managing co-parenting communication",
+        value: 4,
+        routeTag: "coparenting_support",
+      ),
       PersonalityQuestionOption(
-          text: "Getting through tough conversations better",
-          value: 4,
-          routeTag: "boundary_forward"),
+        text: "Getting through tough conversations better",
+        value: 4,
+        routeTag: "boundary_forward",
+      ),
     ],
   ),
   const PersonalityQuestion(
@@ -219,13 +224,25 @@ final List<PersonalityQuestion> goalItems = [
     isGoal: true,
     options: [
       PersonalityQuestionOption(
-          text: "Yes, often", value: 5, routeTag: "dating_sensitive"),
+        text: "Yes, often",
+        value: 5,
+        routeTag: "dating_sensitive",
+      ),
       PersonalityQuestionOption(
-          text: "Sometimes", value: 4, routeTag: "empathetic_mirror"),
+        text: "Sometimes",
+        value: 4,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "Rarely", value: 2, routeTag: "secure_training"),
+        text: "Rarely",
+        value: 2,
+        routeTag: "secure_training",
+      ),
       PersonalityQuestionOption(
-          text: "No, not at all", value: 1, routeTag: "empathetic_mirror"),
+        text: "No, not at all",
+        value: 1,
+        routeTag: "empathetic_mirror",
+      ),
     ],
   ),
   const PersonalityQuestion(
@@ -235,19 +252,25 @@ final List<PersonalityQuestion> goalItems = [
     isGoal: true,
     options: [
       PersonalityQuestionOption(
-          text: "Yes, I always avoid conflict",
-          value: 5,
-          routeTag: "deescalator"),
+        text: "Yes, I always avoid conflict",
+        value: 5,
+        routeTag: "deescalator",
+      ),
       PersonalityQuestionOption(
-          text: "I often shut down", value: 4, routeTag: "coparenting_support"),
+        text: "I often shut down",
+        value: 4,
+        routeTag: "coparenting_support",
+      ),
       PersonalityQuestionOption(
-          text: "Sometimes I avoid it",
-          value: 3,
-          routeTag: "empathetic_mirror"),
+        text: "Sometimes I avoid it",
+        value: 3,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "No, I engage with difficult conversations",
-          value: 1,
-          routeTag: "boundary_forward"),
+        text: "No, I engage with difficult conversations",
+        value: 1,
+        routeTag: "boundary_forward",
+      ),
     ],
   ),
   const PersonalityQuestion(
@@ -257,15 +280,25 @@ final List<PersonalityQuestion> goalItems = [
     isGoal: true,
     options: [
       PersonalityQuestionOption(
-          text: "Yes, always me", value: 5, routeTag: "empathetic_mirror"),
+        text: "Yes, always me",
+        value: 5,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "Usually me", value: 4, routeTag: "empathetic_mirror"),
+        text: "Usually me",
+        value: 4,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "Sometimes", value: 3, routeTag: "empathetic_mirror"),
+        text: "Sometimes",
+        value: 3,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "No, we both work on it",
-          value: 2,
-          routeTag: "secure_training"),
+        text: "No, we both work on it",
+        value: 2,
+        routeTag: "secure_training",
+      ),
     ],
   ),
   const PersonalityQuestion(
@@ -275,19 +308,25 @@ final List<PersonalityQuestion> goalItems = [
     isGoal: true,
     options: [
       PersonalityQuestionOption(
-          text: "Yes, actively dating", value: 5, routeTag: "dating_sensitive"),
+        text: "Yes, actively dating",
+        value: 5,
+        routeTag: "dating_sensitive",
+      ),
       PersonalityQuestionOption(
-          text: "Yes, new relationship",
-          value: 4,
-          routeTag: "dating_sensitive"),
+        text: "Yes, new relationship",
+        value: 4,
+        routeTag: "dating_sensitive",
+      ),
       PersonalityQuestionOption(
-          text: "No, focusing on existing relationships",
-          value: 2,
-          routeTag: "empathetic_mirror"),
+        text: "No, focusing on existing relationships",
+        value: 2,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "No, single and not dating",
-          value: 1,
-          routeTag: "secure_training"),
+        text: "No, single and not dating",
+        value: 1,
+        routeTag: "secure_training",
+      ),
     ],
   ),
   const PersonalityQuestion(
@@ -297,15 +336,25 @@ final List<PersonalityQuestion> goalItems = [
     isGoal: true,
     options: [
       PersonalityQuestionOption(
-          text: "Yes, definitely", value: 5, routeTag: "empathetic_mirror"),
+        text: "Yes, definitely",
+        value: 5,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "Yes, somewhat", value: 4, routeTag: "empathetic_mirror"),
+        text: "Yes, somewhat",
+        value: 4,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "Maybe", value: 3, routeTag: "empathetic_mirror"),
+        text: "Maybe",
+        value: 3,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "No, I'm comfortable with my expression",
-          value: 1,
-          routeTag: "secure_training"),
+        text: "No, I'm comfortable with my expression",
+        value: 1,
+        routeTag: "secure_training",
+      ),
     ],
   ),
   const PersonalityQuestion(
@@ -315,19 +364,25 @@ final List<PersonalityQuestion> goalItems = [
     isGoal: true,
     options: [
       PersonalityQuestionOption(
-          text: "Yes, very challenging topics",
-          value: 5,
-          routeTag: "boundary_forward"),
+        text: "Yes, very challenging topics",
+        value: 5,
+        routeTag: "boundary_forward",
+      ),
       PersonalityQuestionOption(
-          text: "Yes, some difficult conversations",
-          value: 4,
-          routeTag: "deescalator"),
+        text: "Yes, some difficult conversations",
+        value: 4,
+        routeTag: "deescalator",
+      ),
       PersonalityQuestionOption(
-          text: "Maybe some smaller issues",
-          value: 3,
-          routeTag: "empathetic_mirror"),
+        text: "Maybe some smaller issues",
+        value: 3,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "No, things are stable", value: 1, routeTag: "secure_training"),
+        text: "No, things are stable",
+        value: 1,
+        routeTag: "secure_training",
+      ),
     ],
   ),
   const PersonalityQuestion(
@@ -337,17 +392,25 @@ final List<PersonalityQuestion> goalItems = [
     isGoal: true,
     options: [
       PersonalityQuestionOption(
-          text: "Mostly logistics", value: 3, routeTag: "coparenting_support"),
+        text: "Mostly logistics",
+        value: 3,
+        routeTag: "coparenting_support",
+      ),
       PersonalityQuestionOption(
-          text: "Mix of both", value: 3, routeTag: "coparenting_support"),
+        text: "Mix of both",
+        value: 3,
+        routeTag: "coparenting_support",
+      ),
       PersonalityQuestionOption(
-          text: "Mostly emotional conflict",
-          value: 4,
-          routeTag: "empathetic_mirror"),
+        text: "Mostly emotional conflict",
+        value: 4,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "Not applicable - no co-parenting",
-          value: 1,
-          routeTag: "empathetic_mirror"),
+        text: "Not applicable - no co-parenting",
+        value: 1,
+        routeTag: "empathetic_mirror",
+      ),
     ],
   ),
   const PersonalityQuestion(
@@ -357,15 +420,25 @@ final List<PersonalityQuestion> goalItems = [
     isGoal: true,
     options: [
       PersonalityQuestionOption(
-          text: "Yes, that sounds helpful", value: 5, routeTag: "balanced"),
+        text: "Yes, that sounds helpful",
+        value: 5,
+        routeTag: "balanced",
+      ),
       PersonalityQuestionOption(
-          text: "Maybe occasionally", value: 3, routeTag: "secure_training"),
+        text: "Maybe occasionally",
+        value: 3,
+        routeTag: "secure_training",
+      ),
       PersonalityQuestionOption(
-          text: "Not really needed", value: 2, routeTag: "empathetic_mirror"),
+        text: "Not really needed",
+        value: 2,
+        routeTag: "empathetic_mirror",
+      ),
       PersonalityQuestionOption(
-          text: "No, I prefer minimal intervention",
-          value: 1,
-          routeTag: "deescalator"),
+        text: "No, I prefer minimal intervention",
+        value: 1,
+        routeTag: "deescalator",
+      ),
     ],
   ),
   const PersonalityQuestion(
@@ -375,13 +448,94 @@ final List<PersonalityQuestion> goalItems = [
     isGoal: true,
     options: [
       PersonalityQuestionOption(
-          text: "More clarity", value: 5, routeTag: "boundary_forward"),
+        text: "More clarity",
+        value: 5,
+        routeTag: "boundary_forward",
+      ),
       PersonalityQuestionOption(
-          text: "More warmth", value: 5, routeTag: "dating_sensitive"),
+        text: "More warmth",
+        value: 5,
+        routeTag: "dating_sensitive",
+      ),
       PersonalityQuestionOption(
-          text: "More calm", value: 5, routeTag: "secure_training"),
+        text: "More calm",
+        value: 5,
+        routeTag: "secure_training",
+      ),
       PersonalityQuestionOption(
-          text: "All of the above", value: 4, routeTag: "empathetic_mirror"),
+        text: "All of the above",
+        value: 4,
+        routeTag: "empathetic_mirror",
+      ),
+    ],
+  ),
+
+  // Communication Style: Profanity Usage
+  const PersonalityQuestion(
+    id: "G8",
+    question:
+        "How often do you use strong language or profanity when you're frustrated or angry?",
+    isGoal: true,
+    options: [
+      PersonalityQuestionOption(
+        text: "Never - I avoid profanity completely",
+        value: 1,
+        routeTag: "gentle_communicator",
+      ),
+      PersonalityQuestionOption(
+        text: "Rarely - only in extreme situations",
+        value: 2,
+        routeTag: "measured_communicator",
+      ),
+      PersonalityQuestionOption(
+        text: "Sometimes - when I'm really upset",
+        value: 3,
+        routeTag: "moderate_communicator",
+      ),
+      PersonalityQuestionOption(
+        text: "Often - it's part of how I express myself",
+        value: 4,
+        routeTag: "expressive_communicator",
+      ),
+      PersonalityQuestionOption(
+        text: "Frequently - it's natural for me",
+        value: 5,
+        routeTag: "direct_communicator",
+      ),
+    ],
+  ),
+
+  // Communication Style: Sarcasm Usage
+  const PersonalityQuestion(
+    id: "G9",
+    question: "How often do you use sarcasm or irony in your communication?",
+    isGoal: true,
+    options: [
+      PersonalityQuestionOption(
+        text: "Never - I prefer direct communication",
+        value: 1,
+        routeTag: "direct_communicator",
+      ),
+      PersonalityQuestionOption(
+        text: "Rarely - only occasionally",
+        value: 2,
+        routeTag: "measured_communicator",
+      ),
+      PersonalityQuestionOption(
+        text: "Sometimes - when making a point",
+        value: 3,
+        routeTag: "moderate_communicator",
+      ),
+      PersonalityQuestionOption(
+        text: "Often - it's part of my humor",
+        value: 4,
+        routeTag: "witty_communicator",
+      ),
+      PersonalityQuestionOption(
+        text: "Frequently - it's my default style",
+        value: 5,
+        routeTag: "sarcastic_communicator",
+      ),
     ],
   ),
 ];
@@ -398,7 +552,7 @@ class AttachmentScores {
   final double socialDesirability; // 0..1 (higher means more idealized)
   final bool disorganizedLean;
   final String
-      quadrant; // "secure", "anxious", "avoidant", "disorganized_lean", "mixed"
+  quadrant; // "secure", "anxious", "avoidant", "disorganized_lean", "mixed"
   final String confidenceLabel; // "High", "Moderate", "Cautious"
 
   const AttachmentScores({
@@ -425,8 +579,10 @@ class GoalRoutingResult {
   final Set<String> routeTags; // unique tag set from selections
   final String primaryProfile; // derived from routeTags (simple heuristic)
 
-  const GoalRoutingResult(
-      {required this.routeTags, required this.primaryProfile});
+  const GoalRoutingResult({
+    required this.routeTags,
+    required this.primaryProfile,
+  });
 }
 
 class AttachmentAssessment {
@@ -447,11 +603,13 @@ class AttachmentAssessment {
   /// ------------------------------
   static AttachmentScores _scoreAttachment(Map<String, int> responses) {
     // 1) Extract scored items (12 core)
-    final core = attachmentItems.where((q) =>
-        (q.dimension == Dimension.anxiety ||
-            q.dimension == Dimension.avoidance) &&
-        !q.isAttentionCheck &&
-        !q.isSocialDesirability);
+    final core = attachmentItems.where(
+      (q) =>
+          (q.dimension == Dimension.anxiety ||
+              q.dimension == Dimension.avoidance) &&
+          !q.isAttentionCheck &&
+          !q.isSocialDesirability,
+    );
 
     // Compute reversed-coded values and split by dimension
     final List<double> scoredAll = [];
@@ -495,10 +653,13 @@ class AttachmentAssessment {
     final attentionPassed = (attnVal == 4); // "Agree" per instruction
 
     // 5) Social desirability (mean of SD items -> normalize to 0..1)
-    final sdVals =
-        ["SD1", "SD2"].map((id) => (responses[id] ?? 3).toDouble()).toList();
-    final sdMean =
-        sdVals.isEmpty ? 3.0 : sdVals.reduce((a, b) => a + b) / sdVals.length;
+    final sdVals = [
+      "SD1",
+      "SD2",
+    ].map((id) => (responses[id] ?? 3).toDouble()).toList();
+    final sdMean = sdVals.isEmpty
+        ? 3.0
+        : sdVals.reduce((a, b) => a + b) / sdVals.length;
     final socialDesirability = ((sdMean - 1.0) / 4.0).clamp(0.0, 1.0);
 
     // 6) Disorganized-leaning flag: both high + paradox endorsement

@@ -666,7 +666,8 @@ class _SettingsScreenProfessionalState
                 slivers: [
                   SliverAppBar(
                     pinned: true,
-                    expandedHeight: 110,
+                    expandedHeight:
+                        130, // Increased from 110 to prevent overflow
                     actions: [
                       IconButton(
                         tooltip: 'Search settings',
@@ -812,8 +813,10 @@ class _SettingsScreenProfessionalState
           secondary: t.leading != null
               ? Icon(t.leading, color: theme.colorScheme.onSurfaceVariant)
               : null,
-          title: Text(t.title),
-          subtitle: t.subtitle != null ? Text(t.subtitle!) : null,
+          title: Text(t.title, style: const TextStyle(color: Colors.black87)),
+          subtitle: t.subtitle != null
+              ? Text(t.subtitle!, style: const TextStyle(color: Colors.black54))
+              : null,
           value: t.getterBool!(),
           onChanged: (v) {
             HapticFeedback.selectionClick();
@@ -833,7 +836,12 @@ class _SettingsScreenProfessionalState
                   if (t.leading != null)
                     Icon(t.leading, color: theme.colorScheme.onSurfaceVariant),
                   if (t.leading != null) const SizedBox(width: 8),
-                  Text(t.title, style: theme.textTheme.titleMedium),
+                  Text(
+                    t.title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: Colors.black87,
+                    ),
+                  ),
                   const Spacer(),
                   if (t.labelFor != null)
                     Text(
@@ -872,8 +880,10 @@ class _SettingsScreenProfessionalState
           leading: t.leading != null
               ? Icon(t.leading, color: theme.colorScheme.onSurfaceVariant)
               : null,
-          title: Text(t.title),
-          subtitle: t.subtitle != null ? Text(t.subtitle!) : null,
+          title: Text(t.title, style: const TextStyle(color: Colors.black87)),
+          subtitle: t.subtitle != null
+              ? Text(t.subtitle!, style: const TextStyle(color: Colors.black54))
+              : null,
           trailing: SizedBox(
             width: 180,
             child: DropdownButtonFormField<String>(
@@ -907,8 +917,10 @@ class _SettingsScreenProfessionalState
                         color: theme.colorScheme.onSurfaceVariant,
                       ))
               : null,
-          title: Text(t.title),
-          subtitle: t.subtitle != null ? Text(t.subtitle!) : null,
+          title: Text(t.title, style: const TextStyle(color: Colors.black87)),
+          subtitle: t.subtitle != null
+              ? Text(t.subtitle!, style: const TextStyle(color: Colors.black54))
+              : null,
           trailing: FilledButton.tonal(
             onPressed: t.onTap,
             child: const Text('Open'),

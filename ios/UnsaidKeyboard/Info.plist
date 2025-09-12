@@ -36,7 +36,7 @@
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.keyboard-service</string>
 		<key>NSExtensionPrincipalClass</key>
-		<string>UnsaidKeyboard.KeyboardViewController</string>
+		<string>$(PRODUCT_MODULE_NAME).KeyboardViewController</string>
 	</dict>
 	<key>AppGroupID</key>
 	<string>group.com.example.unsaid</string>
@@ -53,13 +53,18 @@
 				<key>NSExceptionMinimumTLSVersion</key>
 				<string>TLSv1.2</string>
 				<key>NSExceptionRequiresForwardSecrecy</key>
-				<false/>
+				<true/>
+			</dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
 			</dict>
 		</dict>
 	</dict>
 	<key>UNSAID_API_BASE_URL</key>
 	<string>https://api.myunsaidapp.com</string>
 	<key>UNSAID_API_KEY</key>
-	<string>your-api-key-here</string>
+	<string>37da2c87b923d4e9dd388f13580d75396c84d8ab5f9c58b505a80e892b3d7e9d</string>
 </dict>
 </plist>

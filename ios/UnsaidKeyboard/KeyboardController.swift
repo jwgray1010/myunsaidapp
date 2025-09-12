@@ -136,8 +136,41 @@ final class KeyboardController: UIInputView,
         return (fromExt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? fromMain?.trimmingCharacters(in: .whitespacesAndNewlines)) ?? ""
     }
     
-    // MARK: - Native feedback
-    private let impact = UIImpactFeedbackGenerator(style: .light)
+    // MARK: - Advanced Haptic Integration
+    private var isHapticSessionStarted = false
+    private var hapticSessionTimer: Timer?
+    private let hapticSessionTimeout: TimeInterval = 10.0 // Stop session after 10s of inactivity
+    
+    // Unified haptic feedback method
+    private func performHapticFeedback() {
+        // Ensure haptic session is started for the typing run
+        if !isHapticSessionStarted {
+            coordinator?.startHapticSession()
+            isHapticSessionStarted = true
+        }
+        
+        // Reset the session timeout timer
+        resetHapticSessionTimer()
+        
+        // The continuous haptic feedback is now handled by tone updates
+        // No per-keystroke start/stop needed
+    }
+    
+    private func resetHapticSessionTimer() {
+        hapticSessionTimer?.invalidate()
+        hapticSessionTimer = Timer.scheduledTimer(withTimeInterval: hapticSessionTimeout, repeats: false) { [weak self] _ in
+            self?.stopHapticSessionDueToInactivity()
+        }
+    }
+    
+    private func stopHapticSessionDueToInactivity() {
+        guard isHapticSessionStarted else { return }
+        coordinator?.stopHapticSession()
+        isHapticSessionStarted = false
+        hapticSessionTimer?.invalidate()
+        hapticSessionTimer = nil
+    }
+    
     var enableInputClicksWhenVisible: Bool { true }
 
     // MARK: - Spell checking
@@ -255,6 +288,25 @@ final class KeyboardController: UIInputView,
     test.set(true, forKey: "groupRoundtrip")
     let ok = test.bool(forKey: "groupRoundtrip")
         logger.info("App Group roundtrip ok: \(ok)")
+        
+        // Debug API configuration
+        let extBundle = Bundle(for: KeyboardController.self)
+        let baseURL = extBundle.object(forInfoDictionaryKey: "UNSAID_API_BASE_URL") as? String ?? "NOT FOUND"
+        let apiKey = extBundle.object(forInfoDictionaryKey: "UNSAID_API_KEY") as? String ?? "NOT FOUND"
+        logger.info("🔧 API Config - Base URL: \(baseURL)")
+        logger.info("🔧 API Config - API Key: \(apiKey.prefix(10))...")
+        logger.info("🔧 Coordinator initialized: \(self.coordinator != nil)")
+        
+        // Test network connectivity immediately
+        coordinator?.forceImmediateAnalysis("ping")
+    }
+    
+    deinit {
+        // Ensure haptic session is stopped when keyboard is deallocated
+        hapticSessionTimer?.invalidate()
+        if isHapticSessionStarted {
+            coordinator?.stopHapticSession()
+        }
     }
     
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -323,7 +375,7 @@ final class KeyboardController: UIInputView,
         }
         
         proxy.deleteBackward()
-        impact.impactOccurred()
+        performHapticFeedback()
         textDidChange()
     }
     
@@ -334,13 +386,13 @@ final class KeyboardController: UIInputView,
     }
     
     func hapticLight() {
-        impact.impactOccurred()
+        performHapticFeedback()
     }
 
     // MARK: - SuggestionChipManagerDelegate
     func suggestionChipDidExpand(_ chip: SuggestionChipView) {
         // Handle expansion analytics
-        impact.impactOccurred()
+        performHapticFeedback()
     }
     
     func suggestionChipDidDismiss(_ chip: SuggestionChipView) {
@@ -632,11 +684,6 @@ final class KeyboardController: UIInputView,
     }
 
     private func createSimpleLogoImage() -> UIImage {
-        // Create a simple circular logo programmatically - 44x44 to fill tone indicator
-        let size = CGSize(width: 44, height: 44)
-        let renderer = UIGraphicsImageRenderer(size: size)
-
-        func createSimpleLogoImage() -> UIImage {
         // Create a simple circular logo programmatically - 50x50 for better visibility
         let size = CGSize(width: 50, height: 50)
         let renderer = UIGraphicsImageRenderer(size: size)
@@ -670,9 +717,6 @@ final class KeyboardController: UIInputView,
             )
             text.draw(in: textRect, withAttributes: attributes)
         }
-
-        return image.withRenderingMode(.alwaysOriginal)
-    }
 
         return image.withRenderingMode(.alwaysOriginal)
     }
@@ -959,7 +1003,7 @@ final class KeyboardController: UIInputView,
 
         // Sizing rules
         space.widthAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
-        let secureFixWidth = secureFix.widthAnchor.constraint(equalToConstant: 88)
+        let secureFixWidth = secureFix.widthAnchor.constraint(equalToConstant: 78) // Reduced from 88 to 78
         secureFixWidth.priority = UILayoutPriority.required
         secureFixWidth.isActive = true
 
@@ -986,7 +1030,7 @@ final class KeyboardController: UIInputView,
         }
         
         proxy.insertText(textToInsert)
-        impact.impactOccurred()
+        performHapticFeedback()
         
         // Auto-switch to letters mode after punctuation
         if [".", "!", "?", ",", ";", ":"].contains(title) && currentMode != .letters {
@@ -1009,13 +1053,13 @@ final class KeyboardController: UIInputView,
     
     @objc private func handleSpaceKey() {
         spaceHandler.handleSpaceKey()
-        impact.impactOccurred()
+        performHapticFeedback()
     }
     
     @objc private func handleReturnKey() {
         guard let proxy = textDocumentProxy else { return }
         proxy.insertText("\n")
-        impact.impactOccurred()
+        performHapticFeedback()
         textDidChange() // This will call updateShiftForContext
     }
     
@@ -1045,18 +1089,23 @@ final class KeyboardController: UIInputView,
         lastShiftTapAt = now
         updateShiftButtonAppearance()
         updateKeycaps()
-        impact.impactOccurred()
+        performHapticFeedback()
     }
     
     @objc private func handleModeSwitch() {
         currentMode = currentMode == .letters ? .numbers : .letters
         updateKeyboardForCurrentMode()
-        impact.impactOccurred()
+        performHapticFeedback()
     }
     
     @objc private func handleSecureFix() {
         secureFixManager.handleSecureFix()
-        impact.impactOccurred()
+        performHapticFeedback()
+        
+        // TEMP: Health ping debug trigger
+        #if DEBUG
+        coordinator?.debugPing()
+        #endif
     }
     
     @objc private func deleteTouchDown() {
@@ -1173,7 +1222,10 @@ final class KeyboardController: UIInputView,
         
         // Trigger automatic tone analysis
         if let coordinator = coordinator {
-            coordinator.handleTextChange(currentText)
+            logger.info("📝 Text changed, triggering analysis: '\(self.currentText.prefix(50))...'")
+            coordinator.handleTextChange(self.currentText)
+        } else {
+            logger.error("❌ No coordinator available for tone analysis")
         }
     }
     
@@ -1232,7 +1284,7 @@ final class KeyboardController: UIInputView,
     @objc private func undoButtonTapped() {
         if let proxy = textDocumentProxy {
             _ = spellCheckerIntegration.undoLastCorrection(in: proxy)
-            impact.impactOccurred()
+            performHapticFeedback()
         }
     }
     
@@ -1262,6 +1314,7 @@ final class KeyboardController: UIInputView,
 
     // MARK: - ToneSuggestionDelegate
     func didUpdateSuggestions(_ suggestions: [String]) {
+        logger.info("💡 Received suggestions: \(suggestions)")
         guard let first = suggestions.first else { return }
         suggestionChipManager.showSuggestionChip(text: first, toneString: lastToneStatusString)
         secureFixManager.markAdviceShown(toneString: lastToneStatusString)
@@ -1269,6 +1322,7 @@ final class KeyboardController: UIInputView,
     }
 
     func didUpdateToneStatus(_ status: String) {
+        logger.info("🎯 Received tone status: \(status)")
         lastToneStatusString = status
         setToneStatusString(status)
     }

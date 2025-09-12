@@ -385,12 +385,22 @@ final class EnhancedCommunicatorService: ObservableObject {
         req.setValue("ios-keyboard-v2.1.0", forHTTPHeaderField: "User-Agent")
         req.setValue(userIdProvider(), forHTTPHeaderField: "X-User-Id")
 
+        // Add idempotency key for non-GET requests to prevent duplicate server operations
+        if method != "GET" {
+            req.setValue(UUID().uuidString, forHTTPHeaderField: "Idempotency-Key")
+        }
+
         if let key = apiKeyProvider(), !key.isEmpty {
             req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         }
 
         if let body = body {
             req.httpBody = try encoder.encode(body)
+        }
+        
+        // Ensure GET requests have no body
+        if method == "GET" {
+            req.httpBody = nil
         }
 
         do {
@@ -406,8 +416,12 @@ final class EnhancedCommunicatorService: ObservableObject {
                 }
             case 408, 500, 502, 503, 504:
                 if retry > 0 {
-                    // small, capped backoff
-                    try await Task.sleep(nanoseconds: 250_000_000)
+                    // Jittered exponential backoff with cap
+                    let origRetry = 1 // Original retry count
+                    let baseDelay = 200.0 * Double(1 << (origRetry - retry)) // Exponential backoff
+                    let cappedDelay = min(baseDelay, 1200.0) // Cap at 1.2 seconds
+                    let jitter = cappedDelay * (0.8 + Double.random(in: 0...0.4)) // ±20% jitter
+                    try await Task.sleep(nanoseconds: UInt64(jitter * 1_000_000))
                     return try await request(path: path, method: method, body: body, retry: retry - 1)
                 }
                 throw CommunicatorError.serverError(http.statusCode)
@@ -417,9 +431,13 @@ final class EnhancedCommunicatorService: ObservableObject {
         } catch is CancellationError {
             throw CommunicatorError.cancelled
         } catch {
-            // Retry once for transient network errors
+            // Retry once for transient network errors with jittered backoff
             if retry > 0 {
-                try await Task.sleep(nanoseconds: 250_000_000)
+                let origRetry = 1
+                let baseDelay = 200.0 * Double(1 << (origRetry - retry))
+                let cappedDelay = min(baseDelay, 1200.0)
+                let jitter = cappedDelay * (0.8 + Double.random(in: 0...0.4))
+                try await Task.sleep(nanoseconds: UInt64(jitter * 1_000_000))
                 return try await request(path: path, method: method, body: body, retry: retry - 1)
             }
             throw error

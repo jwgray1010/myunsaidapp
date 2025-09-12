@@ -61,26 +61,26 @@ final class KeyButton: UIButton {
 final class KeyButtonFactory {
 
     // MARK: - Layout constants
-    // iOS-authentic keyboard sizing (matches system keyboard)
+    // iOS-compliant keyboard sizing (enforces 44pt minimum per Apple HIG)
     static var touchTargetHeight: CGFloat {
         let screenWidth = UIScreen.main.bounds.width
         if screenWidth >= 414 { // Plus/Max devices
             return 46
         } else if screenWidth <= 320 { // SE/Mini devices  
-            return 38
+            return 44 // iOS minimum - was 38, now compliant
         } else {
-            return 42 // Standard iPhone portrait (matches iOS system keyboard)
+            return 44 // iOS minimum - was 42, now compliant
         }
     }
     
-    static let minKeyWidth: CGFloat = 44
+    static let minKeyWidth: CGFloat = 26  // Reduced to match iOS letter key proportions
     static let keyCornerRadius: CGFloat = 8 // Increased for modern iOS look
 
     // MARK: - Button Creation
 
     static func makeKeyButton(title: String) -> KeyButton {
         let button = KeyButton(type: .system)
-        commonKeySetup(button, hPad: 6, vPad: 8) // Reduced horizontal padding, adjusted vertical
+        commonKeySetup(button, hPad: 4, vPad: 8) // Reduced horizontal padding for better iOS fit
         button.setTitle(title, for: .normal)
 
         // Use iOS-like sizing with Dynamic Type support - slightly smaller for better fit
@@ -92,7 +92,7 @@ final class KeyButtonFactory {
         button.titleLabel?.numberOfLines = 1
         button.titleLabel?.textAlignment = .center
 
-        KeyStyle.apply(to: button)
+        applyLetterKeyStyle(to: button)
         return button
     }
 
@@ -116,7 +116,7 @@ final class KeyButtonFactory {
     }
 
     static func makeSpaceButton() -> UIButton {
-        let button = ExtendedTouchButton(type: .system)
+        let button = ExtendedSpaceButton(type: .system) // Use special subclass for better touch
         commonKeySetup(button, hPad: 6, vPad: 4)
         button.setTitle("space", for: .normal)
         button.accessibilityLabel = "Space"
@@ -136,7 +136,7 @@ final class KeyButtonFactory {
         let config = UIImage.SymbolConfiguration(textStyle: .title2, scale: .medium)
         button.setPreferredSymbolConfiguration(config, forImageIn: .normal)
 
-        KeyStyle.apply(to: button)
+        applyImportantKeyStyle(to: button, background: .white, text: .label)
         return button
     }
 
@@ -166,20 +166,16 @@ final class KeyButtonFactory {
         button.titleLabel?.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: baseFont)
         button.titleLabel?.adjustsFontForContentSizeCategory = true
 
-        // Use neutral styling for Return button
-        button.backgroundColor = UIColor.systemGray3
-        button.setTitleColor(UIColor.label, for: .normal)
-        
-        button.layer.cornerRadius = keyCornerRadius
-        button.layer.borderWidth = 0
+        // Use important key styling for Return button (gets shadow for prominence)
+        applyImportantKeyStyle(to: button, background: .systemGray3, text: .label)
 
         return button
     }
 
-    /// Branded Secure action key (same size as Return).
+    /// Branded Secure action key (smaller to fit better).
     static func makeSecureButton() -> KeyButton {
         let button = KeyButton(type: .system)
-        commonKeySetup(button, hPad: 8, vPad: 10)
+        commonKeySetup(button, hPad: 6, vPad: 10) // Reduced horizontal padding from 8 to 6
         
         // Shorter title so it fits naturally
         button.setTitle("Secure", for: .normal)
@@ -189,8 +185,8 @@ final class KeyButtonFactory {
         button.setContentHuggingPriority(.required, for: .horizontal)
         button.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        // Font style same as Return
-        let baseFont = UIFont.systemFont(ofSize: 18, weight: .medium)
+        // Slightly smaller font to fit better
+        let baseFont = UIFont.systemFont(ofSize: 16, weight: .medium) // Reduced from 18 to 16
         button.titleLabel?.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: baseFont)
         button.titleLabel?.adjustsFontForContentSizeCategory = true
         
@@ -209,7 +205,10 @@ final class KeyButtonFactory {
     private static func commonKeySetup(_ button: UIButton, hPad: CGFloat, vPad: CGFloat) {
         button.translatesAutoresizingMaskIntoConstraints = false
         button.heightAnchor.constraint(equalToConstant: touchTargetHeight).isActive = true
-        button.widthAnchor.constraint(greaterThanOrEqualToConstant: minKeyWidth).isActive = true
+        // Remove minimum width constraint for letter keys to allow natural iOS proportions
+        if hPad > 4 { // Only apply min width to control buttons (which have larger padding)
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: minKeyWidth).isActive = true
+        }
         button.contentEdgeInsets = UIEdgeInsets(top: vPad, left: hPad, bottom: vPad, right: hPad)
         button.clipsToBounds = false
 
@@ -250,15 +249,29 @@ final class KeyButtonFactory {
         setContentColor(button, text)
         decorate(button)
     }
+    
+    private static func applyImportantKeyStyle(to button: UIButton, background: UIColor, text: UIColor) {
+        button.backgroundColor = background
+        setContentColor(button, text)
+        decorateWithShadow(button) // Important keys get shadows for visual hierarchy
+    }
 
     private static func applyBrandKeyStyle(to button: UIButton, brandBackground: UIColor) {
         button.backgroundColor = brandBackground
         button.setTitleColor(.white, for: .normal) // white text for best contrast
         button.tintColor = .white
-        decorate(button)
+        decorateWithShadow(button) // Brand keys get shadows for prominence
     }
 
     private static func decorate(_ button: UIButton) {
+        button.layer.cornerRadius = keyCornerRadius
+        button.layer.borderWidth = 0.5
+        button.layer.borderColor = UIColor.keyBorder.cgColor
+        // Shadow removed for standard keys to improve GPU performance
+        // Shadows only applied to special keys (delete, return, space) in their specific styling
+    }
+    
+    private static func decorateWithShadow(_ button: UIButton) {
         button.layer.cornerRadius = keyCornerRadius
         button.layer.borderWidth = 0.5
         button.layer.borderColor = UIColor.keyBorder.cgColor
@@ -266,6 +279,8 @@ final class KeyButtonFactory {
         button.layer.shadowOpacity = 0.14
         button.layer.shadowRadius = 1.0
         button.layer.shadowOffset = CGSize(width: 0, height: 1)
+        // Ensure opaque background for better compositing
+        button.layer.isOpaque = true
     }
 
     private static func setContentColor(_ button: UIButton, _ color: UIColor) {
@@ -356,6 +371,38 @@ final class KeyButtonFactory {
             UIView.animate(withDuration: 0.08) {
                 button.transform = .identity
                 button.alpha = 1.0
+            }
+        }
+    }
+}
+
+// MARK: - ExtendedSpaceButton
+/// Special button for space bar with extra-large touch area for better UX
+final class ExtendedSpaceButton: UIButton {
+
+    // Extra large hit area for space bar - most commonly used key
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let expandedBounds = bounds.insetBy(dx: -12, dy: -8) // Extra expansion for space
+        return expandedBounds.contains(point)
+    }
+
+    // draw shadow efficiently
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
+    }
+
+    // lightweight press animation
+    override var isHighlighted: Bool {
+        didSet {
+            let transform: CGAffineTransform = isHighlighted ? CGAffineTransform(scaleX: 0.98, y: 0.98) : .identity
+            let alpha: CGFloat = isHighlighted ? 0.85 : 1.0
+            
+            UIView.animate(withDuration: 0.08,
+                           delay: 0,
+                           options: [.curveEaseInOut, .allowUserInteraction, .beginFromCurrentState]) {
+                self.transform = transform
+                self.alpha = alpha
             }
         }
     }

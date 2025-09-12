@@ -249,6 +249,7 @@ class _PremiumScreenProfessionalState extends State<PremiumScreenProfessional>
       builder: (context) => WillPopScope(
         onWillPop: () async => false,
         child: AlertDialog(
+          backgroundColor: Colors.white,
           content: Row(
             children: [
               const CircularProgressIndicator(),
@@ -256,7 +257,9 @@ class _PremiumScreenProfessionalState extends State<PremiumScreenProfessional>
               Expanded(
                 child: Text(
                   'Starting your subscription...',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.black87),
                 ),
               ),
             ],
@@ -270,12 +273,13 @@ class _PremiumScreenProfessionalState extends State<PremiumScreenProfessional>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
+        backgroundColor: Colors.white,
+        title: Text(title, style: TextStyle(color: Colors.black87)),
+        content: Text(message, style: TextStyle(color: Colors.black87)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: const Text('OK', style: TextStyle(color: Colors.black87)),
           ),
         ],
       ),

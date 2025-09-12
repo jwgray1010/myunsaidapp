@@ -9,35 +9,6 @@
 import Foundation
 import os.log
 
-// MARK: - Bridge Keys (centralized so Runner & Extension stay in sync)
-enum PersonalityKeys: String {
-    // Core
-    case personalityDataV2          = "personality_data_v2"
-    case attachmentStyle            = "attachment_style"
-    case communicationStyle         = "communication_style"
-    case personalityType            = "personality_type"
-    case dominantTypeLabel          = "dominant_type_label"
-    case personalityScores          = "personality_scores"
-    case communicationPreferences   = "communication_preferences"
-
-    // Emotional state
-    case currentEmotionalState      = "currentEmotionalState"
-    case currentEmotionalBucket     = "currentEmotionalStateBucket"
-    case emotionalStateLabel        = "emotionalStateLabel"
-    case emotionalStateTimestamp    = "emotionalStateTimestamp"
-
-    // Relationship
-    case partnerAttachmentStyle     = "partner_attachment_style"
-    case relationshipContext        = "relationship_context"
-
-    // Meta / Sync
-    case dataVersion                = "personality_data_version"
-    case lastUpdate                 = "personality_last_update"
-    case isComplete                 = "personality_test_complete"
-    case syncStatus                 = "personality_sync_status"
-    case lastSyncTimestamp          = "last_sync_timestamp"
-}
-
 // MARK: - Light typed model
 struct PersonalityProfile: Codable {
     var attachmentStyle: String = "secure"
@@ -45,6 +16,8 @@ struct PersonalityProfile: Codable {
     var personalityType: String = "analytical"
     var emotionalState: String = "neutral"
     var emotionalBucket: String = "moderate"
+    var profanityLevel: Int = 2  // 1-5 scale
+    var sarcasmLevel: Int = 2    // 1-5 scale
 
     var scores: [String: Int]? = nil
     var preferences: [String: AnyCodable]? = nil
@@ -58,19 +31,21 @@ struct PersonalityProfile: Codable {
     // Encode to a flat dictionary compatible with UserDefaults
     func toDictionary() -> [String: Any] {
         var d: [String: Any] = [
-            PersonalityKeys.attachmentStyle.rawValue: attachmentStyle,
-            PersonalityKeys.communicationStyle.rawValue: communicationStyle,
-            PersonalityKeys.personalityType.rawValue: personalityType,
-            PersonalityKeys.currentEmotionalState.rawValue: emotionalState,
-            PersonalityKeys.currentEmotionalBucket.rawValue: emotionalBucket,
-            PersonalityKeys.isComplete.rawValue: isComplete,
-            PersonalityKeys.dataVersion.rawValue: version
+            "attachment_style": attachmentStyle,
+            "communication_style": communicationStyle,
+            "personality_type": personalityType,
+            "currentEmotionalState": emotionalState,
+            "currentEmotionalStateBucket": emotionalBucket,
+            "profanity_level": profanityLevel,
+            "sarcasm_level": sarcasmLevel,
+            "personality_test_complete": isComplete,
+            "personality_data_version": version
         ]
-        if let last = lastUpdate { d[PersonalityKeys.lastUpdate.rawValue] = last }
-        if let s = scores { d[PersonalityKeys.personalityScores.rawValue] = s }
-        if let p = preferences { d[PersonalityKeys.communicationPreferences.rawValue] = p.mapValues { $0.value } }
-        if let partner = partnerAttachmentStyle { d[PersonalityKeys.partnerAttachmentStyle.rawValue] = partner }
-        if let ctx = relationshipContext { d[PersonalityKeys.relationshipContext.rawValue] = ctx }
+        if let last = lastUpdate { d["personality_last_update"] = last }
+        if let s = scores { d["personality_scores"] = s }
+        if let p = preferences { d["communication_preferences"] = p.mapValues { $0.value } }
+        if let partner = partnerAttachmentStyle { d["partner_attachment_style"] = partner }
+        if let ctx = relationshipContext { d["relationship_context"] = ctx }
         return d
     }
 }
@@ -142,11 +117,14 @@ final class PersonalityDataBridge {
 
     // MARK: - Public lightweight getters (used by keyboard)
 
-    func getAttachmentStyle() -> String { string(.attachmentStyle, fallback: "secure") }
-    func getCommunicationStyle() -> String { string(.communicationStyle, fallback: "direct") }
-    func getPersonalityType() -> String { string(.personalityType, fallback: "analytical") }
-    func getCurrentEmotionalState() -> String { string(.currentEmotionalState, fallback: "neutral") }
-    func getCurrentEmotionalBucket() -> String { string(.currentEmotionalBucket, fallback: "moderate") }
+    // Quick getters for common lookups
+    func getAttachmentStyle() -> String { string("attachment_style", fallback: "secure") }
+    func getCommunicationStyle() -> String { string("communication_style", fallback: "direct") }
+    func getPersonalityType() -> String { string("personality_type", fallback: "analytical") }
+    func getCurrentEmotionalState() -> String { string("currentEmotionalState", fallback: "neutral") }
+    func getCurrentEmotionalBucket() -> String { string("currentEmotionalStateBucket", fallback: "moderate") }
+    func getProfanityLevel() -> Int { ud.integer(forKey: "profanity_level") > 0 ? ud.integer(forKey: "profanity_level") : 2 }
+    func getSarcasmLevel() -> Int { ud.integer(forKey: "sarcasm_level") > 0 ? ud.integer(forKey: "sarcasm_level") : 2 }
 
     /// Returns a flattened profile dictionary suitable for API payloads.
     func getPersonalityProfile() -> [String: Any] {
@@ -157,18 +135,18 @@ final class PersonalityDataBridge {
             "personality_type": getPersonalityType(),
             "emotional_state": getCurrentEmotionalState(),
             "emotional_bucket": getCurrentEmotionalBucket(),
-            "is_complete": ud.bool(forKey: PersonalityKeys.isComplete.rawValue)
+            "is_complete": ud.bool(forKey: "personality_test_complete")
         ]
-        if let scores = ud.dictionary(forKey: PersonalityKeys.personalityScores.rawValue) {
+        if let scores = ud.dictionary(forKey: "personality_scores") {
             profile["personality_scores"] = scores
         }
-        if let prefs = ud.dictionary(forKey: PersonalityKeys.communicationPreferences.rawValue) {
+        if let prefs = ud.dictionary(forKey: "communication_preferences") {
             profile["communication_preferences"] = prefs
         }
-        if let partner = ud.string(forKey: PersonalityKeys.partnerAttachmentStyle.rawValue) {
+        if let partner = ud.string(forKey: "partner_attachment_style") {
             profile["partner_attachment_style"] = partner
         }
-        if let ctx = ud.string(forKey: PersonalityKeys.relationshipContext.rawValue) {
+        if let ctx = ud.string(forKey: "relationship_context") {
             profile["relationship_context"] = ctx
         }
         profile["data_freshness"] = getDataFreshness()
@@ -176,12 +154,12 @@ final class PersonalityDataBridge {
     }
 
     func isPersonalityTestComplete() -> Bool {
-    ud.bool(forKey: PersonalityKeys.isComplete.rawValue)
+        ud.bool(forKey: "personality_test_complete")
     }
 
     /// Hours since last update, or -1 if unknown.
     func getDataFreshness() -> Double {
-    guard let date = ud.object(forKey: PersonalityKeys.lastUpdate.rawValue) as? Date else { return -1 }
+        guard let date = ud.object(forKey: "personality_last_update") as? Date else { return -1 }
         return Date().timeIntervalSince(date) / 3600.0
     }
 
@@ -189,51 +167,58 @@ final class PersonalityDataBridge {
 
     func storePersonalityData(_ profile: PersonalityProfile) {
         writeTransaction(profile.toDictionary().merging([
-            PersonalityKeys.personalityDataV2.rawValue: profile.toDictionary(),
-            PersonalityKeys.isComplete.rawValue: profile.isComplete,
-            PersonalityKeys.dataVersion.rawValue: profile.version,
-            PersonalityKeys.lastUpdate.rawValue: profile.lastUpdate ?? Date(),
-            PersonalityKeys.syncStatus.rawValue: "synced",
-            PersonalityKeys.lastSyncTimestamp.rawValue: Date().timeIntervalSince1970
+            "personality_data_v2": profile.toDictionary(),
+            "personality_test_complete": profile.isComplete,
+            "personality_data_version": profile.version,
+            "personality_last_update": profile.lastUpdate ?? Date(),
+            "sync_status": "synced",
+            "last_sync_timestamp": Date().timeIntervalSince1970
         ]) { $1 })
         log("Stored personality profile", level: .info)
     }
 
     func storeEmotionalState(state: String, bucket: String, label: String) {
         writeTransaction([
-            PersonalityKeys.currentEmotionalState.rawValue: state,
-            PersonalityKeys.currentEmotionalBucket.rawValue: bucket,
-            PersonalityKeys.emotionalStateLabel.rawValue: label,
-            PersonalityKeys.emotionalStateTimestamp.rawValue: Date().timeIntervalSince1970,
-            PersonalityKeys.lastUpdate.rawValue: Date()
+            "currentEmotionalState": state,
+            "currentEmotionalStateBucket": bucket,
+            "emotional_state_label": label,
+            "emotional_state_timestamp": Date().timeIntervalSince1970,
+            "personality_last_update": Date()
         ])
         log("Updated emotional state (\(label))", level: .info)
     }
 
     func storeRelationshipContext(partnerStyle: String? = nil, context: String? = nil) {
-        var payload: [String: Any] = [PersonalityKeys.lastUpdate.rawValue: Date()]
-        if let p = partnerStyle { payload[PersonalityKeys.partnerAttachmentStyle.rawValue] = p }
-        if let c = context { payload[PersonalityKeys.relationshipContext.rawValue] = c }
+        var payload: [String: Any] = ["personality_last_update": Date()]
+        if let p = partnerStyle { payload["partner_attachment_style"] = p }
+        if let c = context { payload["relationship_context"] = c }
         writeTransaction(payload)
         log("Updated relationship context", level: .info)
     }
 
-    func markSyncPending() { writeTransaction([PersonalityKeys.syncStatus.rawValue: "pending"]) }
+    func markSyncPending() { writeTransaction(["sync_status": "pending"]) }
     func markSyncComplete() {
         writeTransaction([
-            PersonalityKeys.syncStatus.rawValue: "synced",
-            PersonalityKeys.lastSyncTimestamp.rawValue: Date().timeIntervalSince1970
+            "sync_status": "synced",
+            "last_sync_timestamp": Date().timeIntervalSince1970
         ])
     }
 
     func needsSync() -> Bool {
-    let status = ud.string(forKey: PersonalityKeys.syncStatus.rawValue) ?? "never"
-    let last = ud.double(forKey: PersonalityKeys.lastSyncTimestamp.rawValue)
+        let status = ud.string(forKey: "sync_status") ?? "never"
+        let last = ud.double(forKey: "last_sync_timestamp")
         return status != "synced" || (Date().timeIntervalSince1970 - last) > 300
     }
 
     func clearAllData() {
-        for key in PersonalityKeys.allCases.map({ $0.rawValue }) {
+        let allKeys = [
+            "personality_data_v2", "attachment_style", "communication_style", "personality_type",
+            "dominant_type_label", "personality_scores", "communication_preferences",
+            "currentEmotionalState", "currentEmotionalStateBucket", "emotional_state_label", "emotional_state_timestamp",
+            "partner_attachment_style", "relationship_context",
+            "personality_data_version", "personality_last_update", "personality_test_complete", "sync_status", "last_sync_timestamp"
+        ]
+        for key in allKeys {
             ud.removeObject(forKey: key)
         }
         cache.removeAll()
@@ -246,22 +231,23 @@ final class PersonalityDataBridge {
 
 private extension PersonalityDataBridge {
 
-    func string(_ key: PersonalityKeys, fallback: String) -> String {
+    func string(_ key: String, fallback: String) -> String {
         refreshCacheIfStale()
-        if let v = cache[key.rawValue] as? String { return v }
-    return ud.string(forKey: key.rawValue) ?? fallback
+        if let v = cache[key] as? String { return v }
+        return ud.string(forKey: key) ?? fallback
     }
 
     func refreshCacheIfStale() {
-    guard Date().timeIntervalSince(cacheStamp) >= cacheTTL else { return }
+        guard Date().timeIntervalSince(cacheStamp) >= cacheTTL else { return }
         var newCache: [String: Any] = [:]
         // Small set only; avoid pulling large blobs
-        for k in [
-            PersonalityKeys.attachmentStyle, PersonalityKeys.communicationStyle, PersonalityKeys.personalityType,
-            PersonalityKeys.currentEmotionalState, PersonalityKeys.currentEmotionalBucket,
-            PersonalityKeys.isComplete, PersonalityKeys.lastUpdate
-        ] {
-            newCache[k.rawValue] = ud.object(forKey: k.rawValue)
+        let keys = [
+            "attachment_style", "communication_style", "personality_type",
+            "currentEmotionalState", "currentEmotionalStateBucket",
+            "personality_test_complete", "personality_last_update"
+        ]
+        for k in keys {
+            newCache[k] = ud.object(forKey: k)
         }
         cache = newCache
         cacheStamp = Date()
@@ -289,17 +275,7 @@ private extension PersonalityDataBridge {
     }
 }
 
-private extension PersonalityKeys {
-    static var allCases: [PersonalityKeys] {
-        return [
-            .personalityDataV2, .attachmentStyle, .communicationStyle, .personalityType,
-            .dominantTypeLabel, .personalityScores, .communicationPreferences,
-            .currentEmotionalState, .currentEmotionalBucket, .emotionalStateLabel, .emotionalStateTimestamp,
-            .partnerAttachmentStyle, .relationshipContext,
-            .dataVersion, .lastUpdate, .isComplete, .syncStatus, .lastSyncTimestamp
-        ]
-    }
-}
+// MARK: - Removed PersonalityKeys extension as we're using string literals directly
 
 // MARK: - Attachment Learning Extensions
 extension PersonalityDataBridge {
@@ -325,10 +301,10 @@ extension PersonalityDataBridge {
     }
 
     func markAttachmentConfirmed(style: String, source: String) {
-    udSafe.set(style, forKey: PersonalityKeys.attachmentStyle.rawValue)
-    udSafe.set(Date(), forKey: "attachment_confirmed_at")
-    udSafe.set(source, forKey: "attachment_source")
-    udSafe.set(true, forKey: PersonalityKeys.isComplete.rawValue)
+        udSafe.set(style, forKey: "attachment_style")
+        udSafe.set(Date(), forKey: "attachment_confirmed_at")
+        udSafe.set(source, forKey: "attachment_source")
+        udSafe.set(true, forKey: "personality_test_complete")
         log("Confirmed attachment style: \(style) (source: \(source))", level: .info)
     }
 
