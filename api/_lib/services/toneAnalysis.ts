@@ -288,6 +288,7 @@ class ToneDetectors {
   private edgeRegexes: { re: RegExp, cat: string, weight?: number }[] = [];
   private intensifiers: { re: RegExp, mult: number }[] = [];
   private profanity: string[] = [];
+  private tonePatternRegexes: { re: RegExp, bucket: Bucket, weight: number }[] = [];
 
   constructor() {
     // Remove async initialization - will be lazy & sync
@@ -325,7 +326,7 @@ class ToneDetectors {
 
     // Handle actual tone_triggerwords.json structure:
     // {
-    //   "alert": { "triggerwords": [{text, intensity, type, variants}] },
+    //   "alert": { "triggerwords": [{text, intensity, type, variants, aho, contextTags, metadata}] },
     //   "caution": { "triggerwords": [...] },
     //   "clear": { "triggerwords": [...] }
     // }
@@ -341,17 +342,52 @@ class ToneDetectors {
       logger.info(`Loading ${items.length} triggerwords for bucket: ${bucket}`);
       for (const item of items) {
         const wBase = item.intensity ?? 1.0;
-        // For now, use base intensity until we implement attachment style weighting
-        const w = wBase;
+        
+        // Apply context multipliers if available
+        const contextMultipliers = trig?.weights?.contextMultipliers || {};
+        let contextWeight = 1.0;
+        if (item.type && contextMultipliers.default && contextMultipliers.default[item.type]) {
+          contextWeight = contextMultipliers.default[item.type];
+        }
+        
+        const w = wBase * contextWeight;
 
-        const terms = [item.text, ...(item.variants || [])].filter(Boolean);
+        // Use enhanced aho patterns if available, fallback to variants
+        const patterns = item.aho || [item.text, ...(item.variants || [])];
+        const terms = patterns.filter(Boolean);
+        
         for (const t of terms) {
           push(t, bucket, w);
           totalWords++;
         }
+        
+        // Log metadata for debugging if available
+        if (item.metadata) {
+          logger.debug(`Loaded triggerword: ${item.text}`, {
+            bucket,
+            intensity: w,
+            type: item.type,
+            source: item.metadata.source,
+            lastUpdated: item.metadata.lastUpdated
+          });
+        }
       }
     }
     logger.info(`Total trigger words loaded: ${totalWords}`);
+
+    // Load engine configuration for negation and context handling
+    const engineConfig = trig?.engine || {};
+    if (engineConfig.negation?.enabled) {
+      logger.info('Enhanced negation handling enabled', {
+        markers: engineConfig.negation.markers?.length || 0,
+        scope: engineConfig.negation.scope
+      });
+    }
+    if (engineConfig.contextScopes) {
+      logger.info('Context scopes loaded', {
+        scopes: Object.keys(engineConfig.contextScopes)
+      });
+    }
 
     const safe = (p: string) => { try { return new RegExp(p, 'i'); } catch { return null; } };
     (negP?.patterns || negP || []).forEach((p: string) => { const r = safe(String(p)); if (r) this.negRegexes.push(r); });
@@ -397,7 +433,36 @@ class ToneDetectors {
     this.profanity = profanityWords;
     logger.info(`Loaded ${profanityWords.length} profanity words: ${profanityWords.slice(0, 10).join(', ')}...`);
 
-    logger.info(`ToneDetectors initialized with ${this.trigByLen.size} trigger word lengths, ${this.profanity.length} profanity words`);
+    // Load tone patterns (optional, won't break boot if missing)
+    const tonePatterns = dataLoader.get('tonePatterns') || dataLoader.get('tone_patterns'); // array
+    if (Array.isArray(tonePatterns)) {
+      logger.info(`Loading ${tonePatterns.length} tone patterns`);
+      for (const p of tonePatterns) {
+        const bucket = (['clear','caution','alert'] as Bucket[]).includes(p.tone) ? p.tone : 'caution';
+        const w = typeof p.confidence === 'number' ? p.confidence : 0.85;
+
+        // Add exact phrases & semanticVariants to Aho-Corasick
+        if (p.type !== 'regex') {
+          if (p.pattern) this.ahoCorasick.addPattern(this.normalizeText(p.pattern), bucket, w);
+          (p.semanticVariants || []).forEach((v: string) =>
+            this.ahoCorasick.addPattern(this.normalizeText(v), bucket, Math.max(0.5, w * 0.95)));
+        }
+
+        // Compile regex patterns
+        if (p.type === 'regex' && p.pattern) {
+          try { 
+            this.tonePatternRegexes.push({ re: new RegExp(p.pattern, 'i'), bucket, weight: w }); 
+          } catch (error) {
+            logger.warn(`Failed to compile regex pattern: ${p.pattern}`, error);
+          }
+        }
+      }
+      logger.info(`Loaded ${this.tonePatternRegexes.length} regex patterns from tone_patterns.json`);
+    } else {
+      logger.info('No tone_patterns.json found or invalid format, skipping');
+    }
+
+    logger.info(`ToneDetectors initialized with ${this.trigByLen.size} trigger word lengths, ${this.profanity.length} profanity words, ${this.tonePatternRegexes.length} tone pattern regexes`);
   }
 
   // Text normalization for consistent matching
@@ -431,21 +496,46 @@ class ToneDetectors {
   private scan(terms: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number }[] {
     this.initSyncIfNeeded();   // ✅ No async in hot path
 
+    let hits: { bucket: Bucket; weight: number; term: string; start: number; end: number }[] = [];
+
     // ✅ Use Aho-Corasick for O(n) performance when enabled
     if (this.useAhoCorasick) {
-      return this.ahoCorasick.search(terms);
-    }
-
-    // ✅ Fallback to original O(n*m) implementation
-    const hits: { bucket: Bucket; weight: number; term: string; start: number; end: number }[] = [];
-    const MAX_N = Math.max(1, ...Array.from(this.trigByLen.keys(), n => n || 1));
-    for (let i=0;i<terms.length;i++) {
-      for (let n=Math.min(MAX_N, terms.length - i); n>=1; n--) {
-        const arr = this.trigByLen.get(n); if (!arr || !arr.length) continue;
-        const span = terms.slice(i, i+n).join(' ');
-        for (const cand of arr) if (span === cand.term) hits.push({ bucket:cand.bucket, weight:cand.w, term:cand.term, start:i, end:i+n-1 });
+      hits = this.ahoCorasick.search(terms);
+    } else {
+      // ✅ Fallback to original O(n*m) implementation
+      const MAX_N = Math.max(1, ...Array.from(this.trigByLen.keys(), n => n || 1));
+      for (let i=0;i<terms.length;i++) {
+        for (let n=Math.min(MAX_N, terms.length - i); n>=1; n--) {
+          const arr = this.trigByLen.get(n); if (!arr || !arr.length) continue;
+          const span = terms.slice(i, i+n).join(' ');
+          for (const cand of arr) if (span === cand.term) hits.push({ bucket:cand.bucket, weight:cand.w, term:cand.term, start:i, end:i+n-1 });
+        }
       }
     }
+
+    // ✅ Add regex pattern matching from tone_patterns.json
+    if (this.tonePatternRegexes.length > 0) {
+      const fullText = terms.join(' ');
+      this.tonePatternRegexes.forEach(({ re, bucket, weight }) => {
+        const match = re.exec(fullText);
+        if (match) {
+          // Estimate position in terms array (rough approximation)
+          const startChar = match.index || 0;
+          const endChar = startChar + match[0].length;
+          const startTerm = fullText.substring(0, startChar).split(' ').length - 1;
+          const endTerm = Math.min(terms.length - 1, startTerm + match[0].split(' ').length - 1);
+          
+          hits.push({
+            bucket,
+            weight,
+            term: match[0],
+            start: Math.max(0, startTerm),
+            end: Math.max(0, endTerm)
+          });
+        }
+      });
+    }
+
     return hits;
   }
 
@@ -863,9 +953,16 @@ export class ToneAnalysisService {
     // Enhanced profanity analysis (single call, structured result)
     const profanityAnalysis = detectors.analyzeProfanity(text);
 
+    // Get context multipliers and attachment bias from enhanced tone_triggerwords.json
+    const triggerWordsData = dataLoader.get('toneTriggerWords') || dataLoader.get('toneTriggerwords');
+    const contextMultipliers = triggerWordsData?.weights?.contextMultipliers?.[contextHint] || {};
+    const attachmentBias = triggerWordsData?.weights?.attachmentBias?.[attachmentStyle] || {};
+
     logger.info('_scoreTones called', { text: text.substring(0, 50), attachmentStyle, contextHint });
     logger.info('Features available', { edgeList: f.edge_list, emoAnger: f.emo_anger, lngAbsolutes: f.lng_absolutes });
     logger.info('Profanity analysis', profanityAnalysis);
+    logger.info('Context multipliers loaded', { contextHint, multipliers: Object.keys(contextMultipliers).length });
+    logger.info('Attachment bias loaded', { attachmentStyle, biases: Object.keys(attachmentBias).length });
 
     // Emotion-driven
     out.angry      += (f.emo_anger || 0) * W.emo;
@@ -874,20 +971,35 @@ export class ToneAnalysisService {
     out.positive   += (f.emo_joy || 0) * (W.emo * 0.9);
     out.supportive += (f.emo_affection || 0) * (W.emo * 0.9);
 
-    // Context cues
+    // Context cues with enhanced multipliers
     const ctx = (contextHint || 'general').toLowerCase();
-    if (ctx === 'conflict') { out.angry += 0.25; out.frustrated += 0.20; }
-    if (ctx === 'planning') { out.assertive += 0.12; out.neutral += 0.08; }
-    if (ctx === 'repair')   { out.supportive += 0.18; }
+    if (ctx === 'conflict') { 
+      out.angry += 0.25 * (contextMultipliers.escalation || 1.0); 
+      out.frustrated += 0.20 * (contextMultipliers.contempt || 1.0); 
+    }
+    if (ctx === 'planning') { 
+      out.assertive += 0.12 * (contextMultipliers.structure || 1.0); 
+      out.neutral += 0.08 * (contextMultipliers.plan || 1.0); 
+    }
+    if (ctx === 'repair') { 
+      out.supportive += 0.18 * (contextMultipliers.solution || 1.0); 
+    }
 
     // Linguistic (absolutes & modals tilt toward confront/defend)
-    out.angry     += Math.min(0.25, (f.lng_absolutes || 0) * (W.absolutesBoost ?? 0.06));
+    const absolutesMultiplier = contextMultipliers.escalation || 1.0;
+    out.angry += Math.min(0.25, (f.lng_absolutes || 0) * (W.absolutesBoost ?? 0.06) * absolutesMultiplier);
     out.assertive += Math.min(0.20, (f.lng_modal || 0) * 0.03);
 
-    // Attachment adjustments
-    if (attachmentStyle === 'anxious')  { out.anxious    += (f.attach_anxious || 0) * 0.35; }
-    if (attachmentStyle === 'avoidant') { out.frustrated += (f.attach_avoidant || 0) * 0.25; }
-    if (attachmentStyle === 'secure')   { out.supportive += (f.attach_secure || 0) * 0.25; }
+    // Enhanced attachment adjustments with bias from JSON
+    if (attachmentStyle === 'anxious') { 
+      out.anxious += (f.attach_anxious || 0) * 0.35 * (attachmentBias.uncertainty || 1.0); 
+    }
+    if (attachmentStyle === 'avoidant') { 
+      out.frustrated += (f.attach_avoidant || 0) * 0.25 * (attachmentBias.avoidance || 1.0); 
+    }
+    if (attachmentStyle === 'secure') { 
+      out.supportive += (f.attach_secure || 0) * 0.25 * (attachmentBias.solution || 1.0); 
+    }
 
     // Intensity (punctuation, caps, elongation, modifiers)
     const intensity = clamp01(
@@ -912,16 +1024,21 @@ export class ToneAnalysisService {
     out.frustrated += neg * 0.08; 
     out.neutral    -= neg * 0.05;
 
-    // Phrase edges (rupture/repair) with weights
+    // Phrase edges (rupture/repair) with weights and context multipliers
     const edgeResults = Array.isArray(f.edge_list) ? f.edge_list : [];
     for (const edge of edgeResults) {
       const weight = typeof edge === 'object' ? edge.weight : 1;
       const category = typeof edge === 'object' ? edge.cat : edge;
-      if (category === 'rupture') { out.angry += 0.25 * weight; out.frustrated += 0.15 * weight; }
-      if (category === 'repair')  { out.supportive += 0.22 * weight; }
+      if (category === 'rupture') { 
+        out.angry += 0.25 * weight * (contextMultipliers.escalation || 1.0); 
+        out.frustrated += 0.15 * weight * (contextMultipliers.contempt || 1.0); 
+      }
+      if (category === 'repair') { 
+        out.supportive += 0.22 * weight * (contextMultipliers.solution || 1.0); 
+      }
     }
 
-    // Enhanced profanity handling with severity levels
+    // Enhanced profanity handling with severity levels and context multipliers
     if (profanityAnalysis.hasProfanity) {
       let profanityWeight = 0.2; // base weight
       
@@ -931,6 +1048,9 @@ export class ToneAnalysisService {
         case 'moderate': profanityWeight = 0.2; break;
         case 'strong': profanityWeight = 0.4; break;
       }
+      
+      // Apply context multipliers for profanity
+      profanityWeight *= (contextMultipliers.profanity || 1.0);
       
       // Scale by count (with diminishing returns)
       const countMultiplier = Math.min(2.0, 1 + Math.log(profanityAnalysis.count) * 0.3);
@@ -1053,9 +1173,16 @@ export class ToneAnalysisService {
       
       logger.info(`Hard-floor check: text="${text}", hasProfanity=${profanityAnalysis.hasProfanity}, hasTargetedSecondPerson=${profanityAnalysis.hasTargetedSecondPerson}, severity=${profanityAnalysis.severity}, matches=${profanityAnalysis.matches.join(',')}`);
       
-      // Enhanced hard-floor with severity consideration
-      if (profanityAnalysis.hasTargetedSecondPerson || (profanityAnalysis.hasProfanity && profanityAnalysis.severity === 'strong' && secondPerson)) {
-        logger.info(`🔒 HARD-FLOOR TRIGGERED: ${profanityAnalysis.hasTargetedSecondPerson ? 'targeted profanity' : 'strong profanity + 2nd-person'} => forcing angry tone`);
+      // Enhanced hard-floor with severity consideration  
+      // Trigger for: targeted profanity, OR moderate/strong profanity + 2nd-person, OR strong profanity alone
+      if (profanityAnalysis.hasTargetedSecondPerson || 
+          (profanityAnalysis.hasProfanity && (profanityAnalysis.severity === 'strong' || profanityAnalysis.severity === 'moderate') && secondPerson) ||
+          (profanityAnalysis.hasProfanity && profanityAnalysis.severity === 'strong')) {
+        
+        const triggerReason = profanityAnalysis.hasTargetedSecondPerson ? 'targeted profanity' : 
+                            profanityAnalysis.severity === 'strong' ? 'strong profanity' : 
+                            'moderate profanity + 2nd-person';
+        logger.info(`🔒 HARD-FLOOR TRIGGERED: ${triggerReason} => forcing angry tone`);
         
         // Scale intervention by severity
         let angerBoost = 1.2;
@@ -1067,7 +1194,7 @@ export class ToneAnalysisService {
           supportivePenalty = 0.7;
           positivePenalty = 0.6;
         } else if (profanityAnalysis.severity === 'moderate') {
-          angerBoost = 1.0;
+          angerBoost = 1.0;  // Still significant boost for moderate + targeting
           supportivePenalty = 0.4;
           positivePenalty = 0.3;
         }
@@ -1084,8 +1211,10 @@ export class ToneAnalysisService {
       let classification = this._primaryFromDist(distribution);
       let confidence = distribution[classification] || 0.33;
       
-      // Override for profanity + 2nd-person targeting
-      if (profanityAnalysis.hasTargetedSecondPerson || (profanityAnalysis.hasProfanity && profanityAnalysis.severity === 'strong' && secondPerson)) {
+      // Override for profanity + 2nd-person targeting or strong profanity
+      if (profanityAnalysis.hasTargetedSecondPerson || 
+          (profanityAnalysis.hasProfanity && (profanityAnalysis.severity === 'strong' || profanityAnalysis.severity === 'moderate') && secondPerson) ||
+          (profanityAnalysis.hasProfanity && profanityAnalysis.severity === 'strong')) {
         classification = 'angry';
         confidence = Math.max(confidence, 0.75);
       }
@@ -1305,6 +1434,43 @@ export function createToneAnalyzer(config: any = {}): any {
     getConfig() { return { ...config, tier }; },
     updateConfig(newConfig: any) { Object.assign(config, newConfig); return this; }
   };
+}
+
+// -----------------------------
+// Quick analysis function for testing (compatibility)
+// -----------------------------
+export async function getGeneralToneAnalysis(text: string, attachmentStyle: string = 'secure', context: string = 'general'): Promise<any> {
+  try {
+    const result = await toneAnalysisService.analyzeAdvancedTone(text, {
+      context,
+      attachmentStyle,
+      includeAttachmentInsights: false
+    });
+    
+    const bucketResult = mapBucketsFromJson(result.primary_tone, context, result.intensity);
+    
+    return {
+      tone: result.primary_tone,
+      confidence: result.confidence,
+      buckets: bucketResult.dist,
+      primary_bucket: bucketResult.primary,
+      intensity: result.intensity,
+      emotions: result.emotions,
+      linguistic_features: result.linguistic_features,
+      context_analysis: result.context_analysis,
+      metadata: { attachmentStyle, context, timestamp: new Date().toISOString() }
+    };
+  } catch (error: any) {
+    logger.error('General tone analysis failed:', error);
+    return {
+      tone: 'neutral',
+      confidence: 0.3,
+      buckets: { clear: 0.5, caution: 0.3, alert: 0.2 },
+      primary_bucket: 'clear',
+      intensity: 0.3,
+      error: error?.message || 'Analysis failed'
+    };
+  }
 }
 
 // -----------------------------

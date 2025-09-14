@@ -1,6 +1,6 @@
 {
-  "version": "1.3.0",
-  "notes": "Severity thresholds collaborating with tone detection, context, intensity, negation/sarcasm, guardrails, and user preferences. Includes hysteresis, decay, co-occurrence, and audit spec.",
+  "version": "1.3.1",
+  "notes": "Production-hardened: aligned bands/clamps, explicit combination modes and band boundary policy, context-only allowance, bias precedence, NaN/missing-link handling, and clarified profile semantics. Backward compatible with v1.3.0.",
   "links": {
     "contexts": "context_classifier.json",
     "triggers": "tone_triggerwords.json",
@@ -15,6 +15,40 @@
     "profiles": "multiplier.json"
   },
 
+  "engine": {
+    "applyOrder": [
+      "triggerScore",
+      "contextScore",
+      "intensity",
+      "negationSarcasm",
+      "attachmentAdjustments",
+      "preferenceAdjustments",
+      "thesaurusAugment",
+      "channelRoleProfileBias",
+      "cooccurrenceBoosts",
+      "aggregateBlend",
+      "hysteresisCooldownDecay",
+      "clamp",
+      "banding",
+      "audit"
+    ],
+    "combination": {
+      "biasMode": "additive",              
+      "cooccurrenceMode": "additive",
+      "negSarMode": "additive",
+      "attachmentMode": "additive"
+    },
+    "bandPolicy": {
+      "bounds": "left_inclusive_right_exclusive", 
+      "ties": "prefer_higher_band"                 
+    },
+    "missingLinks": {
+      "onMissing": "fallback_zero",       
+      "logWarning": true
+    },
+    "nanHandling": "coerce_to_zero"        
+  },
+
   "defaults": {
     "aggregation": "weighted_mean",
     "cooldown_ms": 300,
@@ -24,16 +58,14 @@
     "minThreshold": 0.30,
     "maxThreshold": 0.85,
     "requireContentTriggers": true,
-    "blendWeights": {
-      "triggerScore": 0.45,
+    "allowContextOnly": ["CTX_SAFETY","CTX_REPAIR","CTX_BOUNDARY"],  
       "contextScore": 0.20,
       "intensityScore": 0.12,
       "negationSarcasm": -0.08,
       "attachmentAdj": 0.12,
       "preferenceAdj": 0.07,
       "cooccurrenceBoost": 0.12
-    }
-  },
+    },
 
   "channels": {
     "sms":   { "toneBias": { "alert": 0.00, "caution": 0.01, "clear": 0.00 } },
@@ -49,7 +81,10 @@
 
   "profiles": {
     "high_sensitivity": { "sarcasmPenalty": 1.3, "negationPenalty": 1.2, "intensityBoost": 1.1 },
-    "low_reactivity":   { "intensityBoost": 0.9, "alertClamp": -0.02 }
+    "low_reactivity":   { "intensityBoost": 0.9, "alertClamp": -0.02 },
+    "semantics": {
+      "alertClamp": "DEPRECATED_as_clamp; interpret as additive alert bias applied post-aggregate, pre-clamp. Negative values reduce alert."
+    }
   },
 
   "tones": {
@@ -127,11 +162,13 @@
     { "lte_chars": 60,  "bias": { "alert": 0.01, "caution": 0.00, "clear": -0.01 } },
     { "gt_chars": 200,  "bias": { "alert": -0.01, "caution": 0.01, "clear": 0.02 } }
   ],
+  "lengthPolicy": { "conflict": "prefer_more_specific", "order": ["gt_chars","lte_chars"] },
 
   "byRecency": {
     "repeatWithin_ms": 120000,
     "stacking": { "alert": 0.02, "caution": 0.01, "clear": 0.00 },
-    "cap": 0.06
+    "cap": 0.06,
+    "applyMode": "additive"
   },
 
   "cohortOverrides": {
@@ -166,7 +203,7 @@
   ],
 
   "severityBands": {
-    "alert":   { "low": [0.55, 0.62], "med": [0.62, 0.72], "high": [0.72, 1.00] },
+    "alert":   { "low": [0.55, 0.62], "med": [0.62, 0.72], "high": [0.72, 0.85] },
     "caution": { "low": [0.40, 0.45], "med": [0.45, 0.52], "high": [0.52, 0.65] },
     "clear":   { "low": [0.35, 0.40], "med": [0.40, 0.48], "high": [0.48, 0.60] }
   },

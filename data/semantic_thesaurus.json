@@ -1,41 +1,160 @@
 {
-  "version": "1.1.0",
-  "notes": "Central semantic backbone. Other layers reference cluster `key` (e.g., 'blame'). Adds routing weights, attachment tuning, and rewrite cues.",
+  "version": "1.3.0",
+  "notes": "Robust semantic backbone with multilingual normalization, feature-level scoring, irony/sarcasm signals, dialogue state, routing matrix, confidence calibration, and richer rewrite policy hooks. Backward compatible with 1.1.0 keys.",
   "settings": {
-    "normalize": { "casefold": true, "strip_punct": true, "lemmatize": true },
-    "matchMode": "hybrid", 
-    "thresholds": { "exact": 0.90, "regex": 0.82, "spacy": 0.76, "embedding": 0.73, "cluster_fire": 0.78 },
-    "negation": { "window": 4, "invertTone": true, "penalty": 0.25, "denylist": ["not only ... but", "not because"] },
-    "cooldown_ms": 250,
+    "normalize": {
+      "casefold": true,
+      "strip_punct": true,
+      "lemmatize": true,
+      "unicode_nfkc": true,
+      "collapse_whitespace": true,
+      "preserve_emojis": true,
+      "apostrophes": ["'", "’", "`"],
+      "diacritics": "strip",
+      "elongation_collapse": { "enabled": true, "max_repeat": 3 },
+      "spelling_variants": { "enabled": true, "british_to_american": true }
+    },
+    "languages": {
+      "default": "en",
+      "detect": true,
+      "supported": ["en","es","fr","de","pt","it"],
+      "fallback": "en",
+      "xlang_heuristics": {
+        "mirror_lexemes": true,
+        "transliterate": true,
+        "shared_emojis": true
+      }
+    },
+    "matchMode": "hybrid",
+    "thresholds": {
+      "exact": 0.90,
+      "regex": 0.82,
+      "spacy": 0.76,
+      "embedding": 0.73,
+      "cluster_fire": 0.78,
+      "irony_override": 0.65,
+      "xlang_penalty": 0.03
+    },
+    "negation": {
+      "window": 4,
+      "invertTone": true,
+      "penalty": 0.25,
+      "denylist": ["not only ... but", "not because", "not just ... also"]
+    },
+    "context": {
+      "turn_window": 6,
+      "speaker_tracking": true,
+      "carry_over_intensity": 0.15,
+      "cooldown_ms": 250,
+      "cooldown_by_category": { "conflict": 350, "risk": 500, "validation": 150 }
+    },
     "reverseRegisterRule": {
       "enabled": true,
       "signals": ["affiliative insult", "banter markers", "emoji soften"],
-      "dampenMultiplier": 0.6
+      "dampenMultiplier": 0.6,
+      "banter_markers": ["jk","lol","lmao","😂","😅","😉","j/k","kidding"]
+    },
+    "ironySarcasm": {
+      "enabled": true,
+      "signals": {
+        "scare_quotes": true,
+        "slash_s": true,
+        "ellipsis_pause": true,
+        "emoji_eye_roll": ["🙄","😒"],
+        "contrastive_markers": ["yeah right","sure, jan"]
+      },
+      "boost_contempt": 0.08,
+      "dampen_literal_toxicity": 0.05
+    },
+    "features": {
+      "caps_ratio_weight": 0.06,
+      "exclaim_count_weight": 0.05,
+      "absolute_terms": ["always","never","every","nothing","no one","everyone"],
+      "absolutizer_weight": 0.07,
+      "question_barrage_weight": 0.06,
+      "emoji_softeners": ["🙂","😊","🫶","🙏","✨","💙"],
+      "emoji_harsh": ["💀","🤡","🖕","🔥","⚔️"]
     }
   },
 
   "weights": {
-    "categoryWeights": { "boundary": 1.03, "validation": 1.10, "de-escalation": 1.05, "plan": 1.00, "conflict": 1.00, "repair": 1.00, "distancing": 1.00, "risk": 1.05, "jealousy": 1.02 },
+    "categoryWeights": {
+      "boundary": 1.03,
+      "validation": 1.10,
+      "de-escalation": 1.05,
+      "plan": 1.00,
+      "conflict": 1.00,
+      "repair": 1.00,
+      "distancing": 1.00,
+      "risk": 1.07,
+      "jealousy": 1.02
+    },
     "profiles": {
-      "high_sensitivity": { "sarcasmPenalty": 1.3, "negationPenalty": 1.2 },
-      "low_reactivity":   { "intensityBoost": 0.9 }
+      "high_sensitivity": { "sarcasmPenalty": 1.3, "negationPenalty": 1.2, "ironySensitivity": 1.2 },
+      "low_reactivity":   { "intensityBoost": 0.9, "cooldownFactor": 1.1 },
+      "default":          { "intensityBoost": 1.0 }
     }
+  },
+
+  "routing": {
+    "matrix": {
+      "conflict":      ["boundary","de-escalation","validation","repair"],
+      "risk":          ["validation","boundary","de-escalation","plan"],
+      "jealousy":      ["validation","plan","boundary"],
+      "distancing":    ["validation","de-escalation","plan"],
+      "validation":    ["plan","repair"],
+      "boundary":      ["plan","validation"]
+    },
+    "policy": {
+      "max_actions": 2,
+      "prefer_clear_over_alert_when": ["apology","validation","de-escalation"],
+      "block_escalate_if": ["gaslighting","ultimatum"]
+    }
+  },
+
+  "confidenceCalibration": {
+    "blend": {
+      "regex": 0.35,
+      "spacy": 0.20,
+      "embedding": 0.35,
+      "features": 0.10
+    },
+    "feature_bonus_caps": 0.02,
+    "feature_bonus_abs": 0.03,
+    "banter_dampen": 0.08,
+    "cooldown_decay": 0.06
   },
 
   "links": {
     "attachmentOverrides": {
-      "anxious":    { "cautionBoost": 0.10, "alertDampen": 0.05 },
-      "avoidant":   { "clearBoost": 0.10,  "cautionBoost": 0.05 },
+      "anxious":      { "cautionBoost": 0.10, "alertDampen": 0.05 },
+      "avoidant":     { "clearBoost": 0.10,  "cautionBoost": 0.05 },
       "disorganized": { "alertBoost": 0.10, "cautionBoost": 0.10 },
-      "secure":     { "clearBoost": 0.15 }
+      "secure":       { "clearBoost": 0.15 }
     },
     "userPreferenceCategories": { "boundary": 0.10, "validation": 0.10, "de-escalation": 0.05 }
   },
 
+  "actionPolicies": {
+    "on_detect": {
+      "conflict": ["suggest_rewrite_secure", "offer_options_menu"],
+      "risk": ["suggest_evidence_check","offer_pause_timer"],
+      "validation": ["mirror_then_ask"],
+      "boundary": ["format_boundary_secure"],
+      "repair": ["micro_apology_template"]
+    },
+    "templates": {
+      "rewrite_secure": "I-statements: feeling + need + doable request, no global labels.",
+      "options_menu": "Offer 2–3 concrete choices with time anchors.",
+      "boundary_secure": "Limit + rationale + alternative.",
+      "micro_apology": "Behavior → impact → repair step; avoid 'but'."
+    }
+  },
+
   "clusterSchema": {
     "id": "string",
-    "key": "string (reference handle, e.g., 'blame')",
-    "category": "taxonomy bucket for routing (e.g., conflict/repair/plan/validation/boundary/distancing/jealousy/risk)",
+    "key": "string",
+    "category": "conflict|repair|plan|validation|boundary|distancing|jealousy|risk|de-escalation",
     "description": "short explainer",
     "toneAffinities": { "alert": "0..1", "caution": "0..1", "clear": "-1..1" },
     "attachmentAdjustments": { "secure": "delta", "anxious": "delta", "avoidant": "delta", "disorganized": "delta" },
@@ -45,7 +164,8 @@
       "regex": ["patterns"],
       "spacyPatterns": [[{ "LOWER": "token" }]],
       "semanticTags": ["concept tags"],
-      "embeddingHints": ["seed phrases"]
+      "embeddingHints": ["seed phrases"],
+      "xlang": { "es": ["..."], "fr": ["..."] }
     },
     "negationSensitive": "bool",
     "intensityHooks": ["amplifiers/absolutizers/etc"],
@@ -58,6 +178,19 @@
     "weights": { "base": "0..1", "multiplierProfile": "profile key" },
     "tests": [{ "text": "example", "expect": { "tone": "alert", "context": "conflict" } }]
   },
+
+  "contexts": [
+    { "id": "CTX_CONFLICT", "signals": ["second-person blame","absolutizers"], "bias": { "alert": 0.08 } },
+    { "id": "CTX_ESCALATION", "signals": ["caps","exclaims>2","threat_terms"], "bias": { "alert": 0.12 } },
+    { "id": "CTX_REPAIR", "signals": ["apology_markers","future_plan"], "bias": { "clear": 0.10 } },
+    { "id": "CTX_RISK", "signals": ["reality_invalidation","threats"], "bias": { "alert": 0.15 } },
+    { "id": "CTX_PLANNING", "signals": ["time_tokens","dates","numbers"], "bias": { "clear": 0.08 } },
+    { "id": "CTX_RUPTURE", "signals": ["withdrawal","silence_markers"], "bias": { "caution": 0.07 } },
+    { "id": "CTX_MICRO_APOLOGY", "signals": ["sorry","my mistake"], "bias": { "clear": 0.06 } },
+    { "id": "CTX_INSECURITY", "signals": ["comparisons","triangulation"], "bias": { "caution": 0.05 } },
+    { "id": "CTX_BOUNDARY", "signals": ["limit_setting","request_stop"], "bias": { "clear": 0.08 } },
+    { "id": "CTX_DISCLOSURE", "signals": ["self_disclosure"], "bias": { "caution": 0.04 } }
+  ],
 
   "clusters": [
     {
@@ -73,7 +206,11 @@
         "regex": ["\\b(your|ur)\\s+(fault|doing|mess|mistake)\\b","\\bbecause of you\\b","\\bthis\\s+is\\s+on\\s+you\\b","\\byou\\s+(caused|made)\\s+this\\b"],
         "spacyPatterns": [[{ "LOWER": {"IN":["your","ur"]}}, { "LOWER": {"IN":["fault","doing","mess","mistake"]}}], [{ "LOWER":"because"},{ "LOWER":"of"},{ "LOWER":"you"}]],
         "semanticTags": ["assigning_cause","externalization"],
-        "embeddingHints": ["it's your fault","this happened because of you"]
+        "embeddingHints": ["it's your fault","this happened because of you"],
+        "xlang": {
+          "es": ["es tu culpa","por tu culpa"],
+          "fr": ["c’est de ta faute","à cause de toi"]
+        }
       },
       "negationSensitive": true,
       "intensityHooks": ["always","never","!!!","caps"],
@@ -83,7 +220,7 @@
           "Name one behavior + one effect; avoid global attributions."
         ],
         "examples": [
-          "“Instead of ‘This is your fault’ → ‘I felt stuck when X happened. Next time could we Y?’”"
+          "Instead of “This is your fault” → “I felt stuck when X happened. Next time could we Y?”"
         ]
       },
       "crossRefs": {
@@ -108,7 +245,11 @@
         "regex": ["\\b(shut\\s*down|go\\s+quiet|check\\s+out|stonewall)\\b","\\b(pull(?:ing)?\\s+away)\\b"],
         "spacyPatterns": [[{ "LOWER":"go"},{ "LOWER":{"IN":["quiet","silent"]}}]],
         "semanticTags": ["withdrawal","shutdown"],
-        "embeddingHints": ["I’m shutting down","I checked out of the convo"]
+        "embeddingHints": ["I’m shutting down","I checked out of the convo"],
+        "xlang": {
+          "es": ["me cierro","me callo","me desconecto"],
+          "fr": ["je me ferme","je me tais","je décroche"]
+        }
       },
       "negationSensitive": false,
       "intensityHooks": ["ellipsis","long pause markers"],
@@ -143,7 +284,11 @@
         "regex": ["\\b(pathetic|ridiculous|grow\\s+up)\\b","\\bwhatever\\b"],
         "spacyPatterns": [[{ "LOWER":"you’re"},{ "LOWER":"impossible"}]],
         "semanticTags": ["mockery","superiority"],
-        "embeddingHints": ["eye roll tone","ugh whatever"]
+        "embeddingHints": ["eye roll tone","ugh whatever"],
+        "xlang": {
+          "es": ["patético","ridículo","ya claro"],
+          "fr": ["pathétique","ridicule","bien sûr (ironique)"]
+        }
       },
       "negationSensitive": false,
       "intensityHooks": ["sarcasm","caps","!!!"],
@@ -175,7 +320,11 @@
         "regex": ["\\bif\\s+you\\s+don'?t.*\\bthen\\b","\\b(or\\s+else)\\b","\\blast\\s+chance\\b"],
         "spacyPatterns": [[{ "LOWER":"if"},{ "LOWER":"you"},{ "LOWER":{"REGEX":"don'?t"} }]],
         "semanticTags": ["conditional_threat"],
-        "embeddingHints": ["do this or I’m done"]
+        "embeddingHints": ["do this or I’m done"],
+        "xlang": {
+          "es": ["si no lo haces","o si no"],
+          "fr": ["si tu ne","sinon"]
+        }
       },
       "negationSensitive": false,
       "intensityHooks": ["caps","exclamation"],
@@ -242,12 +391,8 @@
       },
       "negationSensitive": false,
       "intensityHooks": ["future-orientation bonus"],
-      "rewriteCues": {
-        "secureFix": [
-          "Add one concrete next step with time anchor."
-        ],
-        "examples": ["“We’ll figure it out after dinner—let’s talk at 7.”"]
-      },
+      "rewriteCues": { "secureFix": ["Add one concrete next step with time anchor."],
+        "examples": ["“We’ll figure it out after dinner—let’s talk at 7.”"] },
       "crossRefs": {
         "triggerwordsTags": ["reassurance","validation"],
         "therapyAdviceTags": ["validation","co-regulation","timeboxing"],
@@ -274,9 +419,7 @@
       "negationSensitive": false,
       "intensityHooks": ["specificity bonus"],
       "rewriteCues": {
-        "secureFix": [
-          "Limit + rationale + follow-up option."
-        ],
+        "secureFix": ["Limit + rationale + follow-up option."],
         "examples": ["“I’m not okay with late texts. Let’s talk 9–6; urgent = call.”"]
       },
       "crossRefs": {
@@ -305,9 +448,7 @@
       "negationSensitive": true,
       "intensityHooks": ["absolutizer","rapid-fire questions"],
       "rewriteCues": {
-        "secureFix": [
-          "Name the feeling + ask for a reassurance plan."
-        ],
+        "secureFix": ["Name the feeling + ask for a reassurance plan."],
         "examples": ["“I felt insecure last night—can we set expectations for texting?”"]
       },
       "crossRefs": {
@@ -336,9 +477,7 @@
       "negationSensitive": false,
       "intensityHooks": ["frequency mandates","deadline threats"],
       "rewriteCues": {
-        "secureFix": [
-          "Translate to request + rationale; offer choices."
-        ],
+        "secureFix": ["Translate to request + rationale; offer choices."],
         "examples": ["“Could you text when you arrive? It helps me plan dinner.”"]
       },
       "crossRefs": {
@@ -367,9 +506,7 @@
       "negationSensitive": false,
       "intensityHooks": ["absolutizer","contempt blend"],
       "rewriteCues": {
-        "secureFix": [
-          "Replace global invalidation with curiosity and specifics."
-        ],
+        "secureFix": ["Replace global invalidation with curiosity and specifics."],
         "examples": ["“My memory is different; can we check messages to align?”"]
       },
       "crossRefs": {
@@ -398,9 +535,7 @@
       "negationSensitive": false,
       "intensityHooks": ["downtoner"],
       "rewriteCues": {
-        "secureFix": [
-          "Pair hedge with a concrete ask/time."
-        ],
+        "secureFix": ["Pair hedge with a concrete ask/time."],
         "examples": ["“I think Friday works—can we lock 6pm?”"]
       },
       "crossRefs": {
@@ -429,9 +564,7 @@
       "negationSensitive": false,
       "intensityHooks": ["numbers","dates"],
       "rewriteCues": {
-        "secureFix": [
-          "Offer two concrete options and confirm timezone."
-        ],
+        "secureFix": ["Offer two concrete options and confirm timezone."],
         "examples": ["“Tue 6–7 or Wed 5–6 (CT)? Your pick.”"]
       },
       "crossRefs": {
@@ -460,9 +593,7 @@
       "negationSensitive": false,
       "intensityHooks": ["specificity bonus"],
       "rewriteCues": {
-        "secureFix": [
-          "Mirror one concrete detail before suggesting next step."
-        ],
+        "secureFix": ["Mirror one concrete detail before suggesting next step."],
         "examples": ["“I hear you felt dismissed when I was late. Want to set an arrival window?”"]
       },
       "crossRefs": {
@@ -491,9 +622,7 @@
       "negationSensitive": false,
       "intensityHooks": ["timeboxing","breath cue"],
       "rewriteCues": {
-        "secureFix": [
-          "Name the goal (understand/repair) + set a short pause or summary."
-        ],
+        "secureFix": ["Name the goal (understand/repair) + set a short pause or summary."],
         "examples": ["“I want to understand. Can we pause 10 mins and regroup?”"]
       },
       "crossRefs": {
@@ -503,5 +632,19 @@
       },
       "weights": { "base": 0.9, "multiplierProfile": "low_reactivity" }
     }
-  ]
+  ],
+
+  "tests": {
+    "unit": [
+      { "text": "This is your fault!!!", "expect": { "cluster": "blame", "tone": "alert", "route": ["boundary","de-escalation"] } },
+      { "text": "I’m sorry about my tone. I’ll pause next time.", "expect": { "cluster": "apology", "tone": "clear", "route": ["validation"] } },
+      { "text": "If you don’t answer, then we’re done.", "expect": { "cluster": "ultimatum", "tone": "alert" } },
+      { "text": "maybe we lock Friday?", "expect": { "cluster": "uncertainty", "route": ["plan"] } },
+      { "text": "lol you’re ridiculous 🙄", "expect": { "cluster": "contempt", "sarcasm": true } }
+    ],
+    "regression": [
+      "not only was it late but helpful (no negation flip)",
+      "I don’t think you’re wrong (negation softens blame)"
+    ]
+  }
 }

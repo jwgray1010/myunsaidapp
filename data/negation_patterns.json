@@ -1,48 +1,131 @@
 {
-  "version": "1.1",
-  "negation_indicators": [
+  "version": "1.6-negation+",
+  "notes": "Negation signals with Unicode-safe boundaries, dependency-aware scope, double-negation cancellation, polarity flipping, per-hit caps/cooldowns, and locale variants.",
+  "globals": {
+    "regexFlags": "iu",
+    "normalize": ["NFC","trim","squashSpaces"],
+    "apostropheClass": "['’`´]",
+    "tokenBoundary": "(?:(?<=\\W)|^)(?=\\P{M}*\\p{L}|\\d)|(?<=\\p{L}|\\d)(?=\\W|$)",
+    "maxInputChars": 2400,
+    "timeoutMs": 16,
+    "dedupeWindowMs": 600,
+    "exceptZones": ["url","email","code_block","quoted_title"],
+    "quotedSpeechDampen": { "reduce": 0.25, "maxQuoteLen": 160 }
+  },
+
+  "classes": {
+    "APO": "['’`´]",
+    "DONT": "don(?:${APO})?t|do(?:${APO})?nt|doe(?:${APO})?t|dont",
+    "CANT": "can(?:${APO})?t|cannot",
+    "MODALS": "(?:can|could|should|would|do|does|did|is|are|was|were|have|has|had|will|must|ain)",
+    "NEGPRO": "(?:no one|nobody|none|nothing|nowhere)",
+    "SCARCITY": "(?:hardly|rarely|barely|scarcely)",
+    "NEGADV": "(?:not|never|no|${SCARCITY})",
+    "YOU": "(?:you|u|ya)"
+  },
+
+  "scoring": {
+    "perHitCap": 0.36,
+    "maxPerMessage": 3,
+    "totalCap": 0.55,
+    "cooldownMsDefault": 3500,
+    "attachmentAdjustments": { "anxious": -0.02, "avoidant": -0.01 }
+  },
+
+  "operators": {
+    "doubleNegation": {
+      "enabled": true,
+      "windowTokens": 8,
+      "cancelImpact": true,
+      "minIndicators": 2,
+      "exceptions": ["not only","not because","never mind","no doubt","no problem","no worries"]
+    },
+    "polarityFlip": {
+      "enabled": true,
+      "windowTokens": 6,
+      "flipTargets": ["absolutizing","escalation","criticism","judgment"],
+      "dampenTargets": ["repair","validation","planning"]
+    },
+    "dependency": {
+      "use": true,
+      "govPosWhitelist": ["VERB","AUX","ADJ"],
+      "decayIfNoLink": 0.72
+    }
+  },
+
+  "locales": {
+    "en": { "enabled": true },
+    "es": {
+      "enabled": true,
+      "indicators": [
+        { "id": "NEG_ES_NUNCA", "pattern": "\\bnunca\\b", "impact": -0.28, "scopeTokens": 6 },
+        { "id": "NEG_ES_NO", "pattern": "(?<=^|\\W)no\\b(?!\\s*(hay|problema|pasa nada))", "impact": -0.22, "scopeTokens": 5 },
+        { "id": "NEG_ES_SIN", "pattern": "\\bsin\\b", "impact": -0.18, "scopeTokens": 6 }
+      ]
+    }
+  },
+
+  "caps": {
+    "insultProfanityFloorSeverity": 0.35
+  },
+
+  "indicators": [
     {
       "id": "NEG_SIMPLE_NOT",
-      "pattern": "\\bnot\\b|n['’]t\\b",
+      "pattern": "(?<=^|\\W)not\\b|\\b(n${APO}?t)\\b",
       "impact": -0.25,
-      "description": "direct negation",
-      "scopeTokens": 5,
+      "description": "direct negation (not / n't)",
+      "scopeTokens": 6,
       "applyTo": ["patterns","triggers"],
       "toneAdjustments": { "alert": -0.05, "caution": -0.02 },
       "contextAdjustments": { "planning": -0.05, "repair": -0.03 },
-      "attachmentAdjustments": { "anxious": -0.02, "avoidant": -0.01 },
-      "exceptions": ["not only","not just","not to mention"],
-      "spacyNegation": { "useDependency": true, "reducedImpactIfNoDep": 0.7, "govPosWhitelist": ["VERB","AUX","ADJ"] }
+      "exceptions": ["not only","not just","not to mention","not because"],
+      "perIndicatorCooldownMs": 2500,
+      "dependency": { "use": true, "reducedImpactIfNoDep": 0.7, "govPosWhitelist": ["VERB","AUX","ADJ"] }
+    },
+    {
+      "id": "NEG_MODAL_CONTRACTED",
+      "pattern": "\\b${MODALS}${APO}?t\\b",
+      "impact": -0.26,
+      "description": "contracted modal negation",
+      "scopeTokens": 6,
+      "applyTo": ["patterns","triggers"],
+      "perIndicatorCooldownMs": 2500,
+      "dependency": { "use": true, "reducedImpactIfNoDep": 0.75, "govPosWhitelist": ["VERB","AUX"] }
+    },
+    {
+      "id": "NEG_CANNOT",
+      "pattern": "\\bcannot\\b",
+      "impact": -0.26,
+      "description": "non-contracted cannot",
+      "scopeTokens": 6,
+      "applyTo": ["patterns","triggers"]
     },
     {
       "id": "NEG_NEVER",
-      "pattern": "\\bnever\\b",
-      "impact": -0.28,
+      "pattern": "(?<=^|\\W)never\\b",
+      "impact": -0.29,
       "description": "absolute negation",
-      "scopeTokens": 5,
+      "scopeTokens": 6,
       "applyTo": ["patterns","triggers"],
-      "toneAdjustments": { "alert": -0.06 },
-      "exceptions": [],
-      "spacyNegation": { "useDependency": true, "reducedImpactIfNoDep": 0.8 }
+      "dependency": { "use": true, "reducedImpactIfNoDep": 0.8 }
     },
     {
       "id": "NEG_NO",
-      "pattern": "\\bno\\b(?!\\s+(one|body|thing|where))",
-      "impact": -0.20,
+      "pattern": "(?<=^|\\W)no\\b(?!\\s+(?:one|body|thing|where|problem|worries|doubt))",
+      "impact": -0.21,
       "description": "determinative no",
-      "scopeTokens": 4,
+      "scopeTokens": 5,
       "applyTo": ["patterns","triggers","contexts"],
-      "contextAdjustments": { "planning": -0.05 },
-      "exceptions": ["no doubt","no problem","no worries"]
+      "contextAdjustments": { "planning": -0.05 }
     },
     {
       "id": "NEG_NONE_PRONOUNS",
-      "pattern": "\\b(no one|nobody|none|nothing|nowhere)\\b",
+      "pattern": "\\b${NEGPRO}\\b",
       "impact": -0.25,
       "description": "negative pronouns",
-      "scopeTokens": 5,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": []
+      "scopeTokens": 6,
+      "applyTo": ["patterns","triggers"]
     },
     {
       "id": "NEG_NEITHER_NOR",
@@ -50,190 +133,211 @@
       "impact": -0.22,
       "description": "correlative negation",
       "scopeTokens": 8,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": []
+      "applyTo": ["patterns","triggers"]
     },
     {
       "id": "NEG_NO_LONGER_ANYMORE",
-      "pattern": "\\bno longer\\b|\\bnot anymore\\b",
+      "pattern": "\\bno\\s+longer\\b|\\bnot\\s+anymore\\b",
       "impact": -0.30,
-      "description": "cessation markers",
+      "description": "cessation",
       "scopeTokens": 6,
       "applyTo": ["patterns","triggers"],
-      "toneAdjustments": { "caution": -0.03 },
-      "exceptions": []
+      "toneAdjustments": { "caution": -0.03 }
     },
     {
       "id": "NEG_WITHOUT",
-      "pattern": "\\bwithout\\b",
+      "pattern": "(?<=^|\\W)without\\b",
       "impact": -0.22,
       "description": "absence marker",
-      "scopeTokens": 6,
+      "scopeTokens": 7,
       "applyTo": ["patterns","triggers","contexts"],
       "contextAdjustments": { "planning": -0.04, "support": -0.03 },
       "exceptions": ["without a doubt","without fail"]
     },
     {
       "id": "NEG_SCARCITY",
-      "pattern": "\\b(hardly|rarely|barely|scarcely)\\b",
+      "pattern": "\\b${SCARCITY}\\b",
       "impact": -0.20,
       "description": "minimizers / near-negation",
-      "scopeTokens": 5,
+      "scopeTokens": 6,
       "applyTo": ["patterns","triggers"],
-      "exceptions": ["can hardly wait","hardly ever kidding"]
+      "exceptions": ["can hardly wait"]
     },
     {
       "id": "NEG_UNLESS_EXCEPT",
       "pattern": "\\bunless\\b|\\bexcept\\b",
       "impact": -0.15,
-      "description": "conditional/exception negation",
-      "scopeTokens": 8,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": []
+      "description": "conditional / exception",
+      "scopeTokens": 10,
+      "applyTo": ["patterns","triggers"]
     },
     {
       "id": "NEG_STOP_QUIT_CEASE",
-      "pattern": "\\b(stop(ped|ping)?|quit|cease(d|s|ing)?)\\b",
+      "pattern": "\\b(stop(?:ped|ping)?|quit|cease(?:d|s|ing)?)\\b",
       "impact": -0.18,
       "description": "volitional cessation verbs",
-      "scopeTokens": 6,
+      "scopeTokens": 7,
       "applyTo": ["patterns","triggers"],
       "exceptions": ["stop by","stop at","quit while ahead"]
     },
     {
       "id": "NEG_AVOID",
-      "pattern": "\\bavoid(s|ed|ing)?\\b",
+      "pattern": "\\bavoid(?:s|ed|ing)?\\b",
       "impact": -0.16,
-      "description": "avoidance as negative intent",
-      "scopeTokens": 6,
+      "description": "avoidance",
+      "scopeTokens": 7,
       "applyTo": ["patterns","triggers"],
-      "toneAdjustments": { "caution": -0.02 },
-      "exceptions": []
+      "toneAdjustments": { "caution": -0.02 }
     },
     {
       "id": "NEG_LESS_FEWER",
       "pattern": "\\b(less|fewer)\\b",
       "impact": -0.12,
       "description": "comparative reduction",
-      "scopeTokens": 4,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": ["less likely (keep semantic tone)"]
-    },
-    {
-      "id": "NEG_MODAL_NT",
-      "pattern": "\\b(can|could|should|would|do|does|did|is|are|was|were|have|has|had|will|must|ain)('?t)\\b",
-      "impact": -0.26,
-      "description": "contracted modal negation",
       "scopeTokens": 5,
       "applyTo": ["patterns","triggers"],
-      "exceptions": [],
-      "spacyNegation": { "useDependency": true, "reducedImpactIfNoDep": 0.75, "govPosWhitelist": ["VERB","AUX"] }
-    },
-    {
-      "id": "NEG_CANNOT",
-      "pattern": "\\bcannot\\b",
-      "impact": -0.26,
-      "description": "non-contracted modal negation",
-      "scopeTokens": 5,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": []
+      "exceptions": ["less likely"]
     },
     {
       "id": "NEG_BY_NO_MEANS",
-      "pattern": "\\bby no means\\b",
+      "pattern": "\\bby\\s+no\\s+means\\b",
       "impact": -0.24,
-      "description": "emphatic negation (idiom)",
-      "scopeTokens": 6,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": []
+      "description": "emphatic negation",
+      "scopeTokens": 7,
+      "applyTo": ["patterns","triggers"]
     },
     {
       "id": "NEG_UNDER_NO_CIRCUMSTANCES",
-      "pattern": "\\bunder no circumstances\\b",
+      "pattern": "\\bunder\\s+no\\s+circumstances\\b",
       "impact": -0.26,
       "description": "emphatic prohibition",
-      "scopeTokens": 8,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": []
+      "scopeTokens": 9,
+      "applyTo": ["patterns","triggers"]
     },
     {
       "id": "NEG_FAR_FROM",
-      "pattern": "\\bfar from\\b",
+      "pattern": "\\bfar\\s+from\\b",
       "impact": -0.16,
-      "description": "discourse negation (distance from claim)",
+      "description": "discourse negation",
       "scopeTokens": 6,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": []
+      "applyTo": ["patterns","triggers"]
     },
     {
       "id": "NEG_ON_THE_CONTRARY",
-      "pattern": "\\bon the contrary\\b",
+      "pattern": "\\bon\\s+the\\s+contrary\\b",
       "impact": -0.18,
-      "description": "discourse-level reversal",
+      "description": "discourse reversal",
       "scopeTokens": 8,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": []
+      "applyTo": ["patterns","triggers"]
     },
     {
       "id": "NEG_ANYTHING_BUT",
       "pattern": "\\b(anything|anyone|anybody|anywhere)\\s+but\\b",
       "impact": -0.20,
       "description": "emphatic exclusion",
-      "scopeTokens": 6,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": []
+      "scopeTokens": 7,
+      "applyTo": ["patterns","triggers"]
     },
     {
       "id": "NEG_NO_WAY_CHANCE",
-      "pattern": "\\b(no way|no chance)\\b",
+      "pattern": "\\b(no\\s+way|no\\s+chance)\\b",
       "impact": -0.22,
       "description": "categorical dismissal",
-      "scopeTokens": 6,
+      "scopeTokens": 7,
       "applyTo": ["patterns","triggers"],
-      "exceptions": ["no way around (keep context)"]
+      "exceptions": ["no way around"]
     },
     {
       "id": "NEG_FAIL_TO",
-      "pattern": "\\bfail(s|ed|ing)?\\s+to\\b",
+      "pattern": "\\bfail(?:s|ed|ing)?\\s+to\\b",
       "impact": -0.22,
       "description": "negated action via failure",
-      "scopeTokens": 7,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": ["fail to see the joke (sarcasm may apply)"]
+      "scopeTokens": 8,
+      "applyTo": ["patterns","triggers"]
     },
     {
       "id": "NEG_DENY_REFUSE_REJECT",
-      "pattern": "\\b(deny|refuse|reject)(s|ed|ing)?\\b",
+      "pattern": "\\b(deny|refuse|reject)(?:s|ed|ing)?\\b",
       "impact": -0.16,
-      "description": "negation via refusal/denial",
-      "scopeTokens": 6,
+      "description": "refusal/denial",
+      "scopeTokens": 7,
       "applyTo": ["patterns","triggers","contexts"],
       "contextAdjustments": { "boundary": -0.04 },
-      "exceptions": ["refuse to settle (could be assertive boundary)"]
+      "exceptions": ["refuse to settle"]
     },
     {
       "id": "NEG_PREVENT_FROM",
-      "pattern": "\\b(prevent|deter|prohibit|ban)(s|ed|ing)?\\b",
+      "pattern": "\\b(prevent|deter|prohibit|ban)(?:s|ed|ing)?\\b",
       "impact": -0.16,
-      "description": "negation via prevention",
-      "scopeTokens": 8,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": []
+      "description": "prevention",
+      "scopeTokens": 9,
+      "applyTo": ["patterns","triggers"]
     },
     {
       "id": "NEG_LITTLE_TO_NO",
-      "pattern": "\\blittle to no\\b",
+      "pattern": "\\blittle\\s+to\\s+no\\b",
       "impact": -0.18,
       "description": "near-zero quantifier",
+      "scopeTokens": 6,
+      "applyTo": ["patterns","triggers"]
+    },
+
+    {
+      "id": "NEG_RAISE_SEEM_APPEAR",
+      "pattern": "\\b(seem|seems|seemed|appear|appears|appeared)\\s+not\\b",
+      "impact": -0.18,
+      "description": "neg-raising with seem/appear",
+      "scopeTokens": 7,
+      "applyTo": ["patterns","triggers"]
+    },
+    {
+      "id": "NEG_RAISE_THINK_BELIEVE",
+      "pattern": "\\b(think|believe|suppose|guess)\\s+not\\b",
+      "impact": -0.18,
+      "description": "neg-raising with cognition verbs",
+      "scopeTokens": 7,
+      "applyTo": ["patterns","triggers"]
+    },
+    {
+      "id": "NEG_PREFIX_UN_IM_IN_IR_IL_NON",
+      "pattern": "(?<!\\w)(un|im|in|ir|il|non)[-]?(?:\\p{L}{3,})\\b",
+      "impact": -0.10,
+      "description": "affixal negation (weak, contextual)",
       "scopeTokens": 5,
-      "applyTo": ["patterns","triggers"],
-      "exceptions": []
+      "applyTo": ["patterns"],
+      "exceptions": ["united","income","inline","irish","illinois","nonprofit","nonstop"]
     }
   ],
-  "caps": {
-    "perHitCap": 0.35,
-    "maxPerMessage": 2,
-    "totalCap": 0.5,
-    "insultProfanityFloorSeverity": 0.35
-  }
+
+  "combos": [
+    {
+      "id": "DOUBLE_NEG_CANCEL",
+      "whenAny": ["NEG_SIMPLE_NOT","NEG_MODAL_CONTRACTED","NEG_NEVER","NEG_NO","NEG_NONE_PRONOUNS","NEG_SCARCITY"],
+      "windowTokens": 8,
+      "minHits": 2,
+      "effect": { "cancel": true, "explain": "double-negation cancellation" }
+    },
+    {
+      "id": "NEG_ABSOLUTIZER_ESCALATE",
+      "whenAll": ["NEG_NEVER","NEG_NO","NEG_FAIL_TO"],
+      "windowTokens": 14,
+      "extraBoost": 0.06,
+      "reclassifyHint": "absolutizing"
+    }
+  ],
+
+  "routingHints": {
+    "flipPolarityTargets": ["blame","absolutizing","gaslighting","criticism"],
+    "dampenSupportTargets": ["repair","validation","planning","reassurance"]
+  },
+
+  "tests": [
+    { "text": "I can't meet tonight.", "expect": { "fires": ["NEG_MODAL_CONTRACTED"], "impactAtLeast": -0.22 } },
+    { "text": "Not only is it late, but it's fine.", "expect": { "fires": ["NEG_SIMPLE_NOT"], "doubleNegCanceled": true } },
+    { "text": "You never listen.", "expect": { "fires": ["NEG_NEVER"], "polarityFlipTargets": ["escalation"] } },
+    { "text": "Without a doubt, we can do this.", "expect": { "fires": [], "reason": "exception phrase" } },
+    { "text": "I hardly ever complain.", "expect": { "fires": ["NEG_SCARCITY"] } },
+    { "text": "I think not.", "expect": { "fires": ["NEG_RAISE_THINK_BELIEVE"] } },
+    { "text": "“We can’t go.” (quoted)", "expect": { "firesDampened": true } }
+  ]
 }

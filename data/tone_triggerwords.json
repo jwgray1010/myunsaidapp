@@ -1,4 +1,4 @@
-{
+  {
   "weights": {
     "default": {
       "typeMultipliers": {
@@ -13,14 +13,12 @@
         "gaslighting": 1.05,
         "jealousy": 1.03,
         "control": 1.05,
-
         "uncertainty": 1.00,
         "hedge": 0.95,
         "discomfort": 1.00,
         "concern": 1.02,
         "avoidance": 1.02,
         "safety": 1.03,
-
         "structure": 1.00,
         "plan": 1.00,
         "agreement": 1.00,
@@ -63,139 +61,410 @@
         "boundary": 1.08,
         "solution": 1.10
       }
+    },
+    "attachmentBias": {
+      "anxious": { "jealousy": 1.05, "uncertainty": 1.04, "avoidance": 0.98 },
+      "avoidant": { "avoidance": 1.06, "boundary": 1.02, "agreement": 0.98 },
+      "disorganized": { "escalation": 1.05, "threat": 1.04 },
+      "secure": { "solution": 1.04, "structure": 1.03 }
+    },
+    "contextMultipliers": {
+      "conflict": {
+        "profanity": 1.15,
+        "insult": 1.12,
+        "escalation": 1.20,
+        "threat": 1.25,
+        "ultimatum": 1.18,
+        "contempt": 1.15,
+        "gaslighting": 1.18,
+        "command": 1.10,
+        "uncertainty": 0.85,
+        "hedge": 0.80
+      },
+      "planning": {
+        "structure": 1.15,
+        "plan": 1.18,
+        "agreement": 1.12,
+        "confirmation": 1.10,
+        "solution": 1.15,
+        "boundary": 1.08,
+        "uncertainty": 1.25,
+        "hedge": 1.20,
+        "concern": 1.10
+      },
+      "repair": {
+        "solution": 1.25,
+        "boundary": 1.20,
+        "agreement": 1.15,
+        "structure": 1.12,
+        "plan": 1.10,
+        "safety": 1.15,
+        "escalation": 0.70,
+        "threat": 0.60,
+        "contempt": 0.65
+      },
+      "disclosure": {
+        "uncertainty": 1.20,
+        "discomfort": 1.15,
+        "concern": 1.12,
+        "safety": 1.18,
+        "avoidance": 0.90,
+        "command": 0.75
+      },
+      "casual": {
+        "hedge": 0.85,
+        "uncertainty": 0.90,
+        "discomfort": 0.88,
+        "escalation": 0.92,
+        "contempt": 0.90
+      }
+    }
+  },
+  "version": "2.0.0",
+  "notes": "Production-ready triggerwords with normalization, modifiers, pair/co-occurrence boosts, negation flips, emoji/caps/punct scaling, allowlist guards, and optional spaCy + Aho-Corasick/regex patterns. Backward-compatible: alert/caution/clear.triggerwords[].",
+  "engine": {
+    "matching": "aho-corasick",
+    "alsoUseRegex": true,
+    "wordBoundary": true,
+    "normalize": {
+      "lowercase": true,
+      "stripAccents": true,
+      "collapseWhitespace": true,
+      "canonicalizeApostrophes": true
+    },
+    "tokenWindow": 4,
+    "locale": ["en", "en-US", "en-GB"],
+    "negation": {
+      "enabled": true,
+      "markers": ["not", "don't", "doesn't", "didn't", "won't", "can't", "isn't", "aren't", "wasn't", "weren't", "haven't", "hasn't", "hadn't", "never", "no", "none", "nothing", "nobody", "nowhere"],
+      "scope": 3,
+      "flipIntensity": 0.6,
+      "exceptions": ["not safe", "not okay", "not good", "not right", "not cool"]
+    },
+    "contextScopes": {
+      "conflict": ["argument", "fight", "angry", "mad", "upset", "tension", "hostile"],
+      "planning": ["schedule", "plan", "organize", "arrange", "coordinate", "meeting", "calendar"],
+      "repair": ["sorry", "apologize", "fix", "resolve", "work on", "improve", "better"],
+      "disclosure": ["share", "tell", "confess", "admit", "reveal", "open up", "vulnerable"],
+      "casual": ["chat", "talk", "hang", "chill", "casual", "informal", "friendly"]
+    }
+  },
+  "globals": {
+    "intensifiers": {
+      "tokens": ["very","really","super","extremely","literally","absolutely","totally","so","way"],
+      "weight": 0.05,
+      "scope": "same_clause"
+    },
+    "attenuators": {
+      "tokens": ["a bit","slightly","kind of","kinda","sort of","somewhat","maybe","perhaps"],
+      "weight": -0.04,
+      "scope": "same_clause"
     }
   },
 
-  "alert": {
-    "triggerwords": [
-      { "text": "fuck", "intensity": 1.00, "type": "profanity", "variants": ["fucking","fucked","fuck off","fuck you","stfu","f u"] },
-      { "text": "shit", "intensity": 0.85, "type": "profanity", "variants": ["bullshit","bs","shitty","holy shit","piece of shit"] },
-      { "text": "asshole", "intensity": 0.90, "type": "profanity", "variants": ["dumbass","jackass","smartass"] },
-      { "text": "bitch", "intensity": 0.95, "type": "profanity", "variants": ["son of a bitch","bitches"] },
-      { "text": "damn", "intensity": 0.70, "type": "profanity", "variants": ["dammit","goddamn","god damn"] },
-      { "text": "cunt", "intensity": 1.00, "type": "profanity", "variants": [] },
-      { "text": "prick", "intensity": 0.90, "type": "profanity" },
-      { "text": "dick", "intensity": 0.90, "type": "profanity", "variants": ["dickhead","cock","cocksucker"] },
+    "categories": {
+      "profanity": "Offensive expletives/curses",
+      "insult": "Name-calling or personal attacks",
+      "bullying": "Repeated/targeted demeaning statements",
+      "threat": "Intent to harm or punish",
+      "ultimatum": "Conditional coercion/relationship stakes",
+      "contempt": "Belittling/dismissive tone",
+      "escalation": "Absolutes/overgeneralizations/hostility",
+      "command": "Imperatives applied to partner",
+      "gaslighting": "Undermining reality/perception",
+      "jealousy": "Possessive/insecure probing",
+      "control": "Restrictions, surveillance, isolation",
+      "uncertainty": "Ambiguity/low confidence",
+      "hedge": "Softening qualifiers",
+      "discomfort": "Social unease/tension",
+      "concern": "Worry/nervousness",
+      "avoidance": "Delay/deflect/withdraw",
+      "safety": "Risk/unsafe cues",
+      "structure": "Organizing/clarifying",
+      "plan": "Actionability/time/place",
+      "agreement": "Consensus/alignment",
+      "confirmation": "Check understanding",
+      "boundary": "Limits/needs",
+      "solution": "Repair/resolution"
+    },
 
-  {
-    "text": "idiot",
-    "intensity": 0.95,
-    "type": "insult",
-    "variants": [
-      "moron","stupid","dumb","imbecile","airhead","nitwit","numbskull","blockhead","bonehead",
-      "simpleton","dimwit","dummy","dope","halfwit","fool","losing your mind","out of your mind",
-      "knucklehead","pea brain","thick skull","brainless","mindless","thickheaded","scatterbrain",
-      "gullible","dense","lamebrain","dork","numpty","dipstick","goofball","clown","joke"
-    ]
-  },
-  {
-    "text": "loser",
-    "intensity": 0.90,
-    "type": "bullying",
-    "variants": [
-      "pathetic","worthless","useless","failure","nobody","reject","outcast","misfit","dropout",
-      "waste of space","has-been","deadbeat","flop","trainwreck","zero","nothings","small-time",
-      "washed up","good-for-nothing","lowlife","scum","bottom feeder","scrub","trash","garbage person"
-    ]
-  },
-  {
-    "text": "coward",
-    "intensity": 0.85,
-    "type": "insult",
-    "variants": [
-      "weak","crybaby","baby","snowflake","soft","spineless","gutless","chicken","yellow-belly",
-      "scaredy-cat","timid","pushover","milquetoast","fearful","wimp","pantywaist","softie",
-      "shrinking violet","namby-pamby","fragile","delicate","overreacting","overly dramatic"
-    ]
-  },
-  {
-    "text": "toxic",
-    "intensity": 0.85,
-    "type": "insult",
-    "variants": [
-      "manipulative","controlling","gaslighter","gaslighting","poisonous","destructive","soul-sucking",
-      "draining","abusive","vindictive","exploitative","deceitful","scheming","two-faced","fake friend",
-      "puppet master","emotional leech","user","predatory","harmful","malevolent","evil"
-    ]
-  },
-  {
-    "text": "fake",
-    "intensity": 0.75,
-    "type": "insult",
-    "variants": [
-      "two-faced","hypocrite","phony","liar","cheater","poser","fraud","fraudulent","deceiver",
-      "snake","wolf in sheep's clothing","double-dealer","backstabber","pretender","con artist",
-      "charlatan","counterfeit","false","insincere","plastic","sham","deceptive"
-    ]
-  },
-  {
-    "text": "creep",
-    "intensity": 0.85,
-    "type": "insult",
-    "variants": [
-      "creepy","predator","pervert","weirdo","lurker","stalker","skeezy","sleazy","gross","nasty",
-      "dirty old man","sexual harasser","sketchy","pest","degenerate","low-life","creeper",
-      "lecher","lech","voyeur","ogler"
-    ]
-  },
-  
-      { "text": "threaten", "intensity": 1.10, "type": "threat", "variants": ["threat","or else","you'll regret","watch yourself","watch your back"] },
-      { "text": "retaliate", "intensity": 1.10, "type": "threat", "variants": ["retaliation","revenge","payback"] },
-      { "text": "ultimatum", "intensity": 1.05, "type": "ultimatum", "variants": ["do this or we're done","last chance","final warning","last straw"] },
+    "alert": {
+      "triggerwords": [
+        { "text": "fuck", "lemmas": ["fuck"], "intensity": 1.00, "type": "profanity",
+          "aho": ["fuck","fucking","fucked","fuck off","fuck you","stfu","f u","f*ck","f#ck","f@ck","fuk","fck","🤬","💩"],
+          "negationSensitive": false, "sarcasmSensitive": true, "contextTags": ["anger","contempt"], "positionBoost": {"start": 0.02, "end": 0.01},
+          "metadata": {"source": "seed-v1", "lastUpdated": "2025-09-14", "confidenceNotes": "High precision profanity; watch for sarcastic use in casual contexts"}
+        },
+        { "text": "asshole", "intensity": 0.90, "type": "profanity",
+          "aho": ["asshole","dumbass","jackass","smartass","😤","🙄"], "negationSensitive": false,
+          "metadata": {"source": "enhanced-v2", "lastUpdated": "2025-09-14", "confidenceNotes": "Strong insult indicator with emoji variants"}
+        },
+        { "text": "bitch", "intensity": 0.95, "type": "profanity",
+          "aho": ["bitch","son of a bitch","bitches","bi*ch","🤢"], "negationSensitive": false,
+          "metadata": {"source": "seed-v1", "lastUpdated": "2025-09-14", "confidenceNotes": "High intensity; context-dependent in casual use"}
+        },
+        { "text": "damn", "intensity": 0.70, "type": "profanity",
+          "aho": ["damn","dammit","goddamn","god damn","😡"], "negationSensitive": false
+        },
+        { "text": "cunt", "intensity": 1.00, "type": "profanity", "aho": ["cunt","🤬"], "negationSensitive": false },
+        { "text": "prick", "intensity": 0.90, "type": "profanity", "aho": ["prick","😠"], "negationSensitive": false },
+        { "text": "dick", "intensity": 0.90, "type": "profanity",
+          "aho": ["dick","dickhead","cock","cocksucker","d*ck","c*ck","🍆","😤"], "negationSensitive": false,
+          "allowWhenProperNoun": true
+        },
 
-      { "text": "yell", "intensity": 0.85, "type": "escalation", "variants": ["yelling","scream","screaming","shout","shouting","all caps"] },
-      { "text": "attack", "intensity": 0.95, "type": "escalation", "variants": ["attacked","assault","come at"] },
-      { "text": "accuse", "intensity": 0.85, "type": "escalation", "variants": ["accused","blame","blamed"] },
+        { "text": "idiot", "intensity": 0.95, "type": "insult",
+          "aho": ["idiot","moron","stupid","dumb","imbecile","airhead","nitwit","numbskull","blockhead","bonehead","simpleton","dimwit","dummy","dope","halfwit","fool","out of your mind","knucklehead","pea brain","brainless","mindless","scatterbrain","dense","lamebrain","dork","dipstick","clown","joke","🤡","🙄","😤"],
+          "windowPairs": [["you",0.06]]
+        },
+        { "text": "loser", "intensity": 0.90, "type": "bullying",
+          "aho": ["loser","pathetic","worthless","useless","failure","nobody","reject","outcast","deadbeat","flop","zero","washed up","good-for-nothing","lowlife","trash","garbage person"]
+        },
+        { "text": "coward", "intensity": 0.85, "type": "insult",
+          "aho": ["coward","weak","crybaby","snowflake","spineless","gutless","wimp","soft"], "windowPairs": [["you",0.05]]
+        },
+        { "text": "toxic", "intensity": 0.85, "type": "insult",
+          "aho": ["toxic","manipulative","controlling","gaslighter","poisonous","vindictive","exploitative","two-faced","fake friend","emotional leech","predatory"]
+        },
+        { "text": "fake", "intensity": 0.75, "type": "insult",
+          "aho": ["fake","two-faced","hypocrite","phony","liar","cheater","poser","fraud","backstabber","pretender","deceptive"]
+        },
+        { "text": "creep", "intensity": 0.85, "type": "insult",
+          "aho": ["creep","creepy","predator","pervert","weirdo","stalker","sleazy","gross","degenerate"]
+        },
 
-      { "text": "pathetic", "intensity": 0.95, "type": "contempt", "variants": ["disgusting","gross","nasty","trash","garbage"] },
-      { "text": "shut up", "intensity": 0.95, "type": "contempt", "variants": ["shut the fuck up","stfu"] },
-      { "text": "get over it", "intensity": 0.80, "type": "contempt", "variants": ["whatever","obviously","as if","eye roll","🙄"] },
+        { "text": "threaten", "intensity": 1.10, "type": "threat",
+          "aho": ["threaten","threat","or else","you'll regret","watch yourself","watch your back","take you to court","lawyer up"]
+        },
+        { "text": "retaliate", "intensity": 1.10, "type": "threat",
+          "aho": ["retaliate","retaliation","revenge","payback","get even","make you pay"]
+        },
+        { "text": "ultimatum", "intensity": 1.05, "type": "ultimatum",
+          "aho": ["do this or we're done","last chance","final warning","last straw","if you don't then we're over"]
+        },
 
-      { "text": "you better", "intensity": 0.95, "type": "command", "variants": ["you should","do as i say","you have to","now"] },
-      { "text": "cut you off", "intensity": 0.90, "type": "command", "variants": ["cut off","block you","block","i'll block you"] },
+        { "text": "yell", "intensity": 0.85, "type": "escalation",
+          "aho": ["yell","yelling","scream","screaming","shout","shouting","all caps"]
+        },
+        { "text": "attack", "intensity": 0.95, "type": "escalation",
+          "aho": ["attack","attacked","assault","come at"]
+        },
+        { "text": "accuse", "intensity": 0.85, "type": "escalation",
+          "aho": ["accuse","accused","blame","blamed"]
+        },
+        { "text": "hate", "intensity": 1.00, "type": "escalation",
+          "aho": ["hate","hating","hatred","despise","detest","loathe","can't stand"]
+        },
+        { "text": "worst", "intensity": 0.90, "type": "insult", "aho": ["worst","terrible","awful","horrible","disgusting","revolting"] },
+        { "text": "everything", "intensity": 0.70, "type": "escalation",
+          "aho": ["everything","nothing","anything"], "context": "negative", "windowPairs": [["you",0.08]]
+        },
+        { "text": "never", "intensity": 0.75, "type": "escalation",
+          "aho": ["never","not ever","don't ever","won't ever"], "windowPairs": [["you",0.10]]
+        },
+        { "text": "destroy", "intensity": 0.95, "type": "threat",
+          "aho": ["destroy","ruin","wreck","devastate","crush","annihilate"]
+        },
 
-      { "text": "can't talk to", "intensity": 0.90, "type": "control", "variants": ["not allowed to see","stop seeing","remove them","delete them"] },
-      { "text": "share location", "intensity": 0.95, "type": "control", "variants": ["turn on location","send your location now"] },
-      { "text": "who is that", "intensity": 0.80, "type": "jealousy", "variants": ["why did you like","who were you with","who's that"] },
+        { "text": "you never listen", "intensity": 0.95, "type": "escalation",
+          "aho": ["you never listen","you don't listen","you're not listening","you never hear me","you don't hear me"],
+          "contextTags": ["rupture","communication"], "negationSensitive": true,
+          "metadata": {"source": "relationship-patterns-v1", "lastUpdated": "2025-09-14", "confidenceNotes": "High precision for communication breakdown patterns"}
+        },
+        { "text": "i don't care anymore", "intensity": 0.90, "type": "contempt",
+          "aho": ["i don't care anymore","i give up","i'm done caring","whatever happens happens","i quit"],
+          "contextTags": ["withdrawal","contempt"], "negationSensitive": true,
+          "metadata": {"source": "relationship-patterns-v1", "lastUpdated": "2025-09-14", "confidenceNotes": "Strong indicator of emotional withdrawal"}
+        },
+        { "text": "we're done", "intensity": 1.10, "type": "ultimatum",
+          "aho": ["we're done","we are done","this is over","it's over","we're finished","i'm done with this","i'm done with you"],
+          "contextTags": ["ultimatum","rupture"], "negationSensitive": true,
+          "metadata": {"source": "relationship-patterns-v1", "lastUpdated": "2025-09-14", "confidenceNotes": "Critical relationship termination language"}
+        },
+        { "text": "this is not safe", "intensity": 1.05, "type": "safety",
+          "aho": ["this is not safe","i don't feel safe","this isn't safe","not safe","unsafe","feel threatened"],
+          "contextTags": ["safety","concern"], "negationSensitive": false,
+          "metadata": {"source": "safety-patterns-v1", "lastUpdated": "2025-09-14", "confidenceNotes": "Critical safety indicator; requires immediate attention"}
+        },
+        { "text": "you always", "intensity": 0.75, "type": "escalation",
+          "aho": ["you always","you constantly","you keep","every time you","whenever you"],
+          "contextTags": ["generalization","criticism"], "negationSensitive": true
+        },
+        { "text": "you make me", "intensity": 0.80, "type": "control",
+          "aho": ["you make me","you force me","because of you i","you caused me to"],
+          "contextTags": ["blame","responsibility"], "negationSensitive": true
+        },
+        { "text": "dead to me", "intensity": 1.00, "type": "contempt",
+          "aho": ["dead to me","finished","done with you","we're over"]
+        },
+        { "text": "pathetic", "intensity": 0.95, "type": "contempt",
+          "aho": ["pathetic","disgusting","gross","nasty","trash","garbage"]
+        },
+        { "text": "shut up", "intensity": 0.95, "type": "contempt",
+          "aho": ["shut up","shut the fuck up","stfu"]
+        },
+        { "text": "get over it", "intensity": 0.80, "type": "contempt",
+          "aho": ["get over it","whatever","obviously","as if","eye roll","🙄"]
+        },
 
-      { "text": "always", "intensity": 0.65, "type": "escalation", "variants": ["never","every time","constant"] },
-      { "text": "furious", "intensity": 0.85, "type": "escalation", "variants": ["rage","raging","pissed","pissed off","fuming","🤬"] }
-    ]
-  },
+        { "text": "you better", "intensity": 0.95, "type": "command",
+          "aho": ["you better","you should","do as i say","you have to","now","right now","immediately"]
+        },
+        { "text": "cut you off", "intensity": 0.90, "type": "command",
+          "aho": ["cut you off","cut off","block you","block","i'll block you","mute you","i'll ghost you"]
+        },
 
-  "caution": {
-    "triggerwords": [
-      { "text": "unclear", "intensity": 0.70, "type": "uncertainty", "variants": ["not clear","hard to tell","not obvious","idk","i don't know"] },
-      { "text": "confuse", "intensity": 0.70, "type": "uncertainty", "variants": ["confused","confusing","misunderstand","misunderstood"] },
-      { "text": "unsure", "intensity": 0.65, "type": "uncertainty", "variants": ["not sure","can't tell","can't say","iffy","on the fence"] },
-      { "text": "maybe", "intensity": 0.50, "type": "hedge", "variants": ["perhaps","possibly","might","could","kinda","sort of","tbh"] },
+        { "text": "can't talk to", "intensity": 0.90, "type": "control",
+          "aho": ["can't talk to","not allowed to see","stop seeing","remove them","delete them","unfollow them","no more friends with"]
+        },
+        { "text": "share location", "intensity": 0.95, "type": "control",
+          "aho": ["share location","turn on location","send your location now","live location"]
+        },
+        { "text": "who is that", "intensity": 0.80, "type": "jealousy",
+          "aho": ["who is that","why did you like","who were you with","who's that","why are they texting you"]
+        },
+        { "text": "always", "intensity": 0.65, "type": "escalation",
+          "aho": ["always","every time","constant"], "windowPairs": [["you",0.10]]
+        },
+        { "text": "furious", "intensity": 0.85, "type": "escalation",
+          "aho": ["furious","rage","raging","pissed","pissed off","fuming","🤬"]
+        },
 
-      { "text": "hesitate", "intensity": 0.60, "type": "hedge", "variants": ["hesitant","second guess","second thoughts"] },
+        { "text": "gaslighting pattern", "intensity": 0.95, "type": "gaslighting",
+          "regex": "(?i)\\b(you'?re imagining this|that never happened|you made it up|you'?re crazy|you'?re overreacting|i never said that)\\b",
+          "examples": ["You're imagining this.", "That never happened.", "You're crazy."]
+        },
+        { "text": "mocking quotes", "intensity": 0.80, "type": "contempt",
+          "regex": "(?i)\\b\"(calm down|relax|sure|okay)\"\\b",
+          "notes": "Quotation marks used to mock"
+        },
+        { "text": "absolutes with you", "intensity": 0.90, "type": "escalation",
+          "regex": "(?i)\\byou\\s+(always|never|constantly|every\\s+time)\\b"
+        },
 
-      { "text": "uncomfortable", "intensity": 0.70, "type": "discomfort", "variants": ["awkward","tension","uneasy","weird","off vibe","😬"] },
-      { "text": "worried", "intensity": 0.65, "type": "concern", "variants": ["worry","concern","concerns","nervous","anxious","anxiety","stressed","overwhelmed"] },
+        { "text": "sarcasm marker", "intensity": 0.75, "type": "contempt",
+          "aho": ["/s","yeah right","sure thing","oh really","how convenient","what a surprise","of course","naturally"],
+          "contextTags": ["sarcasm","contempt"], "sarcasmSensitive": false
+        },
+        { "text": "fake politeness", "intensity": 0.70, "type": "contempt",
+          "aho": ["thanks so much","gee thanks","wow thanks","thanks a lot","how thoughtful","how sweet"],
+          "contextTags": ["sarcasm","passive-aggressive"], "sarcasmSensitive": false
+        },
+        { "text": "eye roll indicators", "intensity": 0.65, "type": "contempt",
+          "aho": ["🙄","*eye roll*","*rolls eyes*","sure buddy","uh huh","mhmm","right...","ok sure"],
+          "contextTags": ["sarcasm","dismissive"], "sarcasmSensitive": false
+        }
+      ]
+    },
 
-      { "text": "red flag", "intensity": 0.75, "type": "concern", "variants": ["flags","watch out","look out","be careful","cautious","warning sign"] },
-      { "text": "safety", "intensity": 0.75, "type": "safety", "variants": ["not safe","sketchy","unsafe","risky"] },
+    "caution": {
+      "triggerwords": [
+        { "text": "unclear", "intensity": 0.70, "type": "uncertainty",
+          "aho": ["unclear","not clear","hard to tell","not obvious","idk","i don't know","unsure"]
+        },
+        { "text": "confuse", "intensity": 0.70, "type": "uncertainty",
+          "aho": ["confuse","confused","confusing","misunderstand","misunderstood"]
+        },
+        { "text": "unsure", "intensity": 0.65, "type": "uncertainty",
+          "aho": ["unsure","not sure","can't tell","can't say","iffy","on the fence"]
+        },
+        { "text": "maybe", "intensity": 0.50, "type": "hedge",
+          "aho": ["maybe","perhaps","possibly","might","could","kinda","sort of","tbh","idk"]
+        },
+        { "text": "hesitate", "intensity": 0.60, "type": "hedge",
+          "aho": ["hesitate","hesitant","second guess","second thoughts"]
+        },
+        { "text": "uncomfortable", "intensity": 0.70, "type": "discomfort",
+          "aho": ["uncomfortable","awkward","tension","uneasy","weird","off vibe","😬","on edge","nervous energy"]
+        },
+        { "text": "worried", "intensity": 0.65, "type": "concern",
+          "aho": ["worried","worry","concern","concerns","nervous","anxious","anxiety","stressed","overwhelmed","panicky"]
+        },
+        { "text": "red flag", "intensity": 0.75, "type": "concern",
+          "aho": ["red flag","flags","watch out","look out","be careful","cautious","warning sign","🚩"]
+        },
+        { "text": "safety", "intensity": 0.75, "type": "safety",
+          "aho": ["safety","not safe","sketchy","unsafe","risky","dangerous","sus"]
+        },
+        { "text": "avoid", "intensity": 0.60, "type": "avoidance",
+          "aho": ["avoid","avoiding","put it off","delay","later maybe","not now","another time","raincheck"]
+        },
+        { "text": "not ready", "intensity": 0.65, "type": "avoidance", "aho": ["not ready","need space","need time"] },
+        { "text": "overwhelmed", "intensity": 0.65, "type": "concern", "aho": ["overwhelmed","overloaded","too much","burned out"] },
+        { "text": "conflicting feelings", "intensity": 0.65, "type": "uncertainty",
+          "aho": ["mixed feelings","conflicted","torn","on the fence"]
+        },
+        { "text": "soft pushback", "intensity": 0.60, "type": "hedge",
+          "regex": "(?i)\\b(i'?m not sure that|i'?m not convinced|i guess)\\b"
+        }
+      ]
+    },
 
-      { "text": "avoid", "intensity": 0.60, "type": "avoidance", "variants": ["avoiding","put it off","delay","later maybe","not now","another time"] }
-    ]
-  },
+    "clear": {
+      "triggerwords": [
+        { "text": "specific", "intensity": 0.70, "type": "structure", "aho": ["specific","precise","exact","exactly","precisely"] },
+        { "text": "clarify", "intensity": 0.75, "type": "structure", "aho": ["clarify","clarity","to be clear","in other words","rephrase","explain"] },
+        { "text": "direct", "intensity": 0.70, "type": "structure", "aho": ["direct","straightforward","no fluff","plainly"] },
+        { "text": "open", "intensity": 0.65, "type": "agreement", "aho": ["open","openly","honest","honestly","truthful","transparent"] },
+        { "text": "plan", "intensity": 0.70, "type": "plan", "aho": ["plan","plans","planning","step by step","game plan"] },
+        { "text": "agree", "intensity": 0.65, "type": "agreement", "aho": ["agree","agreed","agreement","deal","sounds good"] },
+        { "text": "decide", "intensity": 0.65, "type": "plan", "aho": ["decide","decision","choose","pick"] },
+        { "text": "confirm", "intensity": 0.65, "type": "confirmation", "aho": ["confirm","confirmed","confirmation","make sure","ensure","double-check"] },
+        { "text": "schedule", "intensity": 0.65, "type": "plan", "aho": ["schedule","scheduled","set time","set date","calendar","slot"] },
+        { "text": "resolved", "intensity": 0.75, "type": "solution", "aho": ["resolved","solution","solve","solved","settled","fixed"] },
+        { "text": "boundary", "intensity": 0.80, "type": "boundary",
+          "aho": ["boundary","limit","line","what I can do","what I can’t do","i'm not able to","i can't ___ but i can ___"]
+        },
+        { "text": "understand", "intensity": 0.60, "type": "agreement", "aho": ["understand","understood","got it","makes sense","i hear you"] },
+        { "text": "proposal pattern", "intensity": 0.70, "type": "plan",
+          "regex": "(?i)\\b(let'?s|how about we|can we)\\s+(schedule|meet|try|decide|pick)\\b"
+        },
+        { "text": "repair intent", "intensity": 0.75, "type": "solution",
+          "regex": "(?i)\\b(i (want|would like) to repair|can we reset|i'?d like to start over|how can we fix)\\b"
+        },
+        { "text": "secure i-statement", "intensity": 0.70, "type": "boundary",
+          "regex": "(?i)\\b(i feel|i need|i prefer)\\b"
+        }
+      ]
+    },
 
-  "clear": {
-    "triggerwords": [
-      { "text": "specific", "intensity": 0.70, "type": "structure", "variants": ["precise","exact","exactly","precisely"] },
-      { "text": "clarify", "intensity": 0.75, "type": "structure", "variants": ["clarity","to be clear","in other words","rephrase","explain"] },
-      { "text": "direct", "intensity": 0.70, "type": "structure", "variants": ["straightforward","no fluff"] },
-      { "text": "open", "intensity": 0.65, "type": "agreement", "variants": ["openly","honest","honestly","truthful"] },
-      { "text": "plan", "intensity": 0.70, "type": "plan", "variants": ["plans","planning","step by step"] },
-      { "text": "agree", "intensity": 0.65, "type": "agreement", "variants": ["agreed","agreement","deal"] },
-      { "text": "decide", "intensity": 0.65, "type": "plan", "variants": ["decision","choose"] },
-      { "text": "confirm", "intensity": 0.65, "type": "confirmation", "variants": ["confirmed","confirmation","make sure","ensure"] },
-      { "text": "schedule", "intensity": 0.65, "type": "plan", "variants": ["scheduled","set time","set date","calendar"] },
-      { "text": "resolved", "intensity": 0.75, "type": "solution", "variants": ["solution","solve","solved","settled"] },
-      { "text": "boundary", "intensity": 0.80, "type": "boundary", "variants": ["limit","line","what I can do","what I can’t do"] },
-      { "text": "understand", "intensity": 0.60, "type": "agreement", "variants": ["understood","got it","makes sense"] }
+  "crossIntegration": {
+    "description": "References to other JSON files for comprehensive tone detection",
+    "integrationPoints": {
+      "tone_patterns.json": {
+        "purpose": "Regex patterns and phrase matching for boundary/solution/repair phrasing",
+        "usage": "Augments triggerwords with complex pattern detection",
+        "priority": "high"
+      },
+      "phrase_edges.json": {
+        "purpose": "Edge clusters (repair, rupture, disclosure, shutdown) for contextual weighting",
+        "usage": "Provides context for tone hit interpretation",
+        "priority": "medium"
+      },
+      "intensity_modifiers.json": {
+        "purpose": "ALL CAPS, punctuation (!!!!), emoji scaling combinations",
+        "usage": "Modifies intensity scores based on formatting and context",
+        "priority": "high"
+      },
+      "sarcasm_indicators.json": {
+        "purpose": "Sarcasm detection to boost contempt weighting for phrases like 'whatever 🙄'",
+        "usage": "Adjusts tone classification when sarcasm is detected",
+        "priority": "medium"
+      },
+      "context_classifier.json": {
+        "purpose": "Context detection (conflict, planning, repair) for multiplier application",
+        "usage": "Applied via contextMultipliers section above",
+        "priority": "high",
+        "status": "integrated"
+      }
+    },
+    "loadingOrder": [
+      "tone_triggerwords.json",
+      "intensity_modifiers.json", 
+      "tone_patterns.json",
+      "context_classifier.json",
+      "sarcasm_indicators.json",
+      "phrase_edges.json"
     ]
   }
 }
