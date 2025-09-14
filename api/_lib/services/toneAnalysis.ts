@@ -275,14 +275,20 @@ class ToneDetectors {
 
     // Extract all triggerWords from profanity lexicon categories
     const profanityWords: string[] = [];
+    logger.info(`Profanity lexicon debug: prof=`, prof);
     if (prof?.categories) {
-      prof.categories.forEach((category: any) => {
+      logger.info(`Found ${prof.categories.length} profanity categories`);
+      prof.categories.forEach((category: any, index: number) => {
+        logger.info(`Category ${index}: id=${category.id}, triggerWords=${category.triggerWords}`);
         if (category.triggerWords && Array.isArray(category.triggerWords)) {
           profanityWords.push(...category.triggerWords);
         }
       });
+    } else {
+      logger.warn(`No profanity categories found in data: prof=`, prof);
     }
     this.profanity = profanityWords;
+    logger.info(`Loaded ${profanityWords.length} profanity words: ${profanityWords.slice(0, 10).join(', ')}...`);
 
     logger.info(`ToneDetectors initialized with ${this.trigByLen.size} trigger word lengths, ${this.profanity.length} profanity words`);
   }
@@ -321,7 +327,12 @@ class ToneDetectors {
     return out; 
   }
   intensityBump(text: string) { let bump = 0; for (const {re,mult} of this.intensifiers) if (re.test(text)) bump += (mult - 1); return Math.max(0,bump); }
-  containsProfanity(text: string) { const T = text.toLowerCase(); return this.profanity.some(w => T.includes(w)); }
+  containsProfanity(text: string) { 
+    const T = text.toLowerCase(); 
+    const found = this.profanity.some(w => T.includes(w));
+    logger.info(`Profanity check: text="${T}", profanityWords=[${this.profanity.slice(0, 5).join(', ')}...], found=${found}`);
+    return found;
+  }
   getProfanityCount() { return this.profanity.length; }
 }
 
