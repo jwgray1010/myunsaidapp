@@ -277,6 +277,187 @@ class AhoCorasickAutomaton {
 }
 
 // -----------------------------
+// Enhanced Context Detection System
+// -----------------------------
+
+interface WeightedCue {
+  pattern: string;
+  weight: number;
+  type: 'token' | 'ngram' | 'regex';
+}
+
+interface ContextConfig {
+  id: string;
+  context: string;
+  priority: number;
+  polarity: 'escalatory' | 'deescalatory' | 'neutral';
+  windowTokens: number;
+  scope: 'local' | 'message' | 'session';
+  toneCues: string[];
+  toneCuesWeighted?: WeightedCue[];
+  counterCues?: string[];
+  positionBoost?: { start: number; end: number; allCaps: number };
+  repeatDecay?: number;
+  cooldown_ms?: number;
+  maxBoostsPerMessage?: number;
+  excludeIfContexts?: string[];
+  requiresAny?: string[];
+  deescalates?: string[];
+  severity?: Record<Bucket, number>;
+  confidenceBoosts?: Record<Bucket, number>;
+  attachmentGates?: Record<string, { allow?: string[]; block?: string[]; dampening?: number }>;
+}
+
+class ContextDetector {
+  private config: ContextConfig;
+  private weightedRegexes: { regex: RegExp; weight: number }[] = [];
+  private counterRegexes: RegExp[] = [];
+  private lastHit = 0;
+  private messageBoosts = 0;
+
+  constructor(config: ContextConfig) {
+    this.config = config;
+    this.initializePatterns();
+  }
+
+  private initializePatterns() {
+    // Compile weighted patterns
+    if (this.config.toneCuesWeighted) {
+      for (const cue of this.config.toneCuesWeighted) {
+        try {
+          if (cue.type === 'regex') {
+            this.weightedRegexes.push({ 
+              regex: new RegExp(cue.pattern, 'gi'), 
+              weight: cue.weight 
+            });
+          } else if (cue.type === 'token' || cue.type === 'ngram') {
+            // Convert to word boundary regex for exact matching
+            const escaped = cue.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            this.weightedRegexes.push({ 
+              regex: new RegExp(`\\b${escaped}\\b`, 'gi'), 
+              weight: cue.weight 
+            });
+          }
+        } catch (error) {
+          logger.warn(`Failed to compile pattern for ${this.config.id}: ${cue.pattern}`, error);
+        }
+      }
+    }
+
+    // Compile counter-cue patterns
+    if (this.config.counterCues) {
+      for (const counterCue of this.config.counterCues) {
+        try {
+          const escaped = counterCue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          this.counterRegexes.push(new RegExp(`\\b${escaped}\\b`, 'gi'));
+        } catch (error) {
+          logger.warn(`Failed to compile counter-cue for ${this.config.id}: ${counterCue}`, error);
+        }
+      }
+    }
+  }
+
+  detectInWindow(tokens: string[], windowStart: number = 0): {
+    score: number;
+    hits: Array<{ match: string; weight: number; position: number }>;
+    counterHits: string[];
+    dampened: boolean;
+  } {
+    const now = Date.now();
+    const text = tokens.slice(windowStart, windowStart + (this.config.windowTokens || 32)).join(' ');
+    
+    // Check cooldown
+    if (this.config.cooldown_ms && (now - this.lastHit) < this.config.cooldown_ms) {
+      return { score: 0, hits: [], counterHits: [], dampened: true };
+    }
+
+    // Check saturation
+    if (this.config.maxBoostsPerMessage && this.messageBoosts >= this.config.maxBoostsPerMessage) {
+      return { score: 0, hits: [], counterHits: [], dampened: true };
+    }
+
+    let score = 0;
+    const hits: Array<{ match: string; weight: number; position: number }> = [];
+    const counterHits: string[] = [];
+
+    // Check basic tone cues
+    for (const cue of this.config.toneCues) {
+      const escaped = cue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        const position = match.index / text.length; // Normalized position
+        hits.push({ match: cue, weight: 1.0, position });
+        score += 1.0;
+      }
+    }
+
+    // Check weighted patterns
+    for (const { regex, weight } of this.weightedRegexes) {
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        const position = match.index / text.length;
+        hits.push({ match: match[0], weight, position });
+        score += weight;
+      }
+    }
+
+    // Check counter-cues
+    for (const counterRegex of this.counterRegexes) {
+      let match;
+      while ((match = counterRegex.exec(text)) !== null) {
+        counterHits.push(match[0]);
+      }
+    }
+
+    // Apply counter-cue dampening
+    if (counterHits.length > 0) {
+      score *= 0.6; // Default dampening factor
+    }
+
+    // Apply position boosts
+    if (this.config.positionBoost && hits.length > 0) {
+      for (const hit of hits) {
+        if (hit.position < 0.2) { // Start of message
+          score += this.config.positionBoost.start * hit.weight;
+        } else if (hit.position > 0.8) { // End of message
+          score += this.config.positionBoost.end * hit.weight;
+        }
+      }
+
+      // Check for all caps
+      if (this.config.positionBoost.allCaps && /[A-Z]{3,}/.test(text)) {
+        score += this.config.positionBoost.allCaps;
+      }
+    }
+
+    // Apply repeat decay
+    if (this.config.repeatDecay && hits.length > 1) {
+      const uniqueMatches = new Set(hits.map(h => h.match.toLowerCase()));
+      if (uniqueMatches.size < hits.length) {
+        const repetitions = hits.length - uniqueMatches.size;
+        score *= Math.pow(this.config.repeatDecay, repetitions);
+      }
+    }
+
+    if (score > 0) {
+      this.lastHit = now;
+      this.messageBoosts++;
+    }
+
+    return { score, hits, counterHits, dampened: false };
+  }
+
+  resetMessageState() {
+    this.messageBoosts = 0;
+  }
+
+  getConfig(): ContextConfig {
+    return this.config;
+  }
+}
+
+// -----------------------------
 // JSON-backed detectors
 // -----------------------------
 class ToneDetectors {
@@ -289,7 +470,11 @@ class ToneDetectors {
   private intensifiers: { re: RegExp, mult: number }[] = [];
   private profanity: string[] = [];
   private tonePatternRegexes: { re: RegExp, bucket: Bucket, weight: number }[] = [];
-
+  
+  // ✅ Enhanced context detection system
+  private contextDetectors = new Map<string, ContextDetector>();
+  private contextHitHistory = new Map<string, { lastHit: number; hitCount: number }>();
+  
   constructor() {
     // Remove async initialization - will be lazy & sync
   }
@@ -462,7 +647,30 @@ class ToneDetectors {
       logger.info('No tone_patterns.json found or invalid format, skipping');
     }
 
-    logger.info(`ToneDetectors initialized with ${this.trigByLen.size} trigger word lengths, ${this.profanity.length} profanity words, ${this.tonePatternRegexes.length} tone pattern regexes`);
+    // ✅ Load enhanced context detectors
+    const contextData = dataLoader.get('contextClassifier');
+    if (contextData?.contexts) {
+      logger.info(`Loading ${contextData.contexts.length} context detectors`);
+      for (const contextConfig of contextData.contexts) {
+        try {
+          const detector = new ContextDetector(contextConfig as ContextConfig);
+          this.contextDetectors.set(contextConfig.id, detector);
+          logger.debug(`Loaded context detector: ${contextConfig.id}`, {
+            priority: contextConfig.priority,
+            polarity: contextConfig.polarity,
+            weightedCues: contextConfig.toneCuesWeighted?.length || 0,
+            counterCues: contextConfig.counterCues?.length || 0
+          });
+        } catch (error) {
+          logger.warn(`Failed to load context detector: ${contextConfig.id}`, error);
+        }
+      }
+      logger.info(`Loaded ${this.contextDetectors.size} context detectors`);
+    } else {
+      logger.warn('No context classifier data found');
+    }
+
+    logger.info(`ToneDetectors initialized with ${this.trigByLen.size} trigger word lengths, ${this.profanity.length} profanity words, ${this.tonePatternRegexes.length} tone pattern regexes, ${this.contextDetectors.size} context detectors`);
   }
 
   // Text normalization for consistent matching
@@ -541,6 +749,153 @@ class ToneDetectors {
 
   hasNegation(text: string) { return this.negRegexes.some(r => r.test(text)); }
   hasSarcasm(text: string) { return this.sarcRegexes.some(r => r.test(text)); }
+
+  // ✅ Enhanced context detection with smart schema features
+  detectContexts(tokens: string[], attachmentStyle: string = 'secure'): {
+    primaryContext: string | null;
+    allContexts: Array<{ 
+      id: string; 
+      score: number; 
+      confidence: number;
+      boosts: Record<Bucket, number>;
+      severity: Record<Bucket, number>;
+      dampened: boolean;
+    }>;
+    deescalated: string[];
+  } {
+    this.initSyncIfNeeded();
+    
+    const contextResults: Array<{ 
+      id: string; 
+      score: number; 
+      config: ContextConfig;
+      hits: Array<{ match: string; weight: number; position: number }>;
+      counterHits: string[];
+      dampened: boolean;
+    }> = [];
+
+    // Reset message state for all detectors
+    for (const detector of this.contextDetectors.values()) {
+      detector.resetMessageState();
+    }
+
+    // Detect all contexts
+    for (const [contextId, detector] of this.contextDetectors) {
+      const config = detector.getConfig();
+      
+      // Check attachment gates
+      const gates = config.attachmentGates?.[attachmentStyle];
+      if (gates) {
+        if (gates.block?.includes(config.context)) {
+          continue; // Skip blocked contexts for this attachment style
+        }
+        if (gates.allow && !gates.allow.includes(config.context)) {
+          continue; // Skip contexts not in allow list
+        }
+      }
+
+      // Check requires conditions
+      if (config.requiresAny) {
+        const hasRequired = config.requiresAny.some(req => 
+          tokens.some(token => token.toLowerCase().includes(req.toLowerCase()))
+        );
+        if (!hasRequired) continue;
+      }
+
+      const result = detector.detectInWindow(tokens);
+      if (result.score > 0) {
+        contextResults.push({
+          id: contextId,
+          score: result.score,
+          config,
+          hits: result.hits,
+          counterHits: result.counterHits,
+          dampened: result.dampened
+        });
+      }
+    }
+
+    // Sort by priority (higher first), then by score
+    contextResults.sort((a, b) => {
+      const priorityDiff = (b.config.priority || 1) - (a.config.priority || 1);
+      if (priorityDiff !== 0) return priorityDiff;
+      return b.score - a.score;
+    });
+
+    // Apply exclusion rules and deconfliction
+    const filteredResults: typeof contextResults = [];
+    const excludedContexts = new Set<string>();
+    
+    for (const result of contextResults) {
+      const config = result.config;
+      
+      // Check if this context should be excluded by higher priority contexts
+      if (config.excludeIfContexts) {
+        const shouldExclude = config.excludeIfContexts.some(excludeId => 
+          filteredResults.some(fr => fr.config.context === excludeId)
+        );
+        if (shouldExclude) {
+          excludedContexts.add(result.id);
+          continue;
+        }
+      }
+      
+      filteredResults.push(result);
+    }
+
+    // Find deescalating contexts
+    const deescalated: string[] = [];
+    for (const result of filteredResults) {
+      if (result.config.deescalates) {
+        for (const deescalatedContext of result.config.deescalates) {
+          if (filteredResults.some(fr => fr.config.context === deescalatedContext)) {
+            deescalated.push(deescalatedContext);
+          }
+        }
+      }
+    }
+
+    // Build final results
+    const allContexts = filteredResults.map(result => {
+      const config = result.config;
+      const gates = config.attachmentGates?.[attachmentStyle];
+      let finalScore = result.score;
+      
+      // Apply attachment dampening
+      if (gates?.dampening) {
+        finalScore *= gates.dampening;
+      }
+
+      // Calculate confidence (0-1) based on score and hits
+      const confidence = Math.min(1.0, finalScore / Math.max(1, result.hits.length));
+      
+      // Get boosts and severity adjustments
+      const boosts: Record<Bucket, number> = {
+        clear: config.confidenceBoosts?.clear || 0,
+        caution: config.confidenceBoosts?.caution || 0,
+        alert: config.confidenceBoosts?.alert || 0
+      };
+      
+      const severity: Record<Bucket, number> = {
+        clear: config.severity?.clear || 0,
+        caution: config.severity?.caution || 0,
+        alert: config.severity?.alert || 0
+      };
+
+      return {
+        id: result.id,
+        score: finalScore,
+        confidence,
+        boosts,
+        severity,
+        dampened: result.dampened
+      };
+    });
+
+    const primaryContext = allContexts.length > 0 ? allContexts[0].id : null;
+
+    return { primaryContext, allContexts, deescalated };
+  }
   edgeHits(text: string) { 
     logger.info('edgeHits method called', { textLength: text.length, edgeRegexCount: this.edgeRegexes.length });
     const out:{cat:string,weight:number}[]=[]; 
@@ -634,7 +989,8 @@ const detectors = new ToneDetectors();
 function mapBucketsFromJson(
   toneLabel: string,
   contextKey: string,
-  intensity: number
+  intensity: number,
+  contextSeverity?: Record<Bucket, number>
 ): { primary: Bucket, dist: Record<Bucket, number>, meta: any } {
   const map = dataLoader.get('toneBucketMapping') || dataLoader.get('toneBucketMap');
   const base = map?.default?.[toneLabel] ?? map?.default?.neutral ?? { clear:0.33,caution:0.34,alert:0.33 };
@@ -654,10 +1010,20 @@ function mapBucketsFromJson(
     alert: Math.max(0,(dist.alert ?? 0)+(shift.alert ?? 0)),
   };
 
+  // ✅ Apply context severity adjustments (new mechanism)
+  if (contextSeverity) {
+    logger.info('Applying context severity adjustments', contextSeverity);
+    dist = {
+      clear: Math.max(0, dist.clear + (contextSeverity.clear || 0)),
+      caution: Math.max(0, dist.caution + (contextSeverity.caution || 0)),
+      alert: Math.max(0, dist.alert + (contextSeverity.alert || 0)),
+    };
+  }
+
   const s = dist.clear + dist.caution + dist.alert || 1;
   const normalizedDist = { clear: dist.clear/s, caution: dist.caution/s, alert: dist.alert/s };
   const primary = (Object.entries(normalizedDist).sort((a,b)=>b[1]-a[1])[0][0]) as Bucket;
-  return { primary, dist: normalizedDist, meta: { intensity, key } };
+  return { primary, dist: normalizedDist, meta: { intensity, key, contextSeverity } };
 }
 
 // -----------------------------
@@ -953,6 +1319,16 @@ export class ToneAnalysisService {
     // Enhanced profanity analysis (single call, structured result)
     const profanityAnalysis = detectors.analyzeProfanity(text);
 
+    // ✅ Enhanced context detection with smart schema
+    const tokens = text.toLowerCase().split(/\s+/).filter(Boolean);
+    const contextDetection = detectors.detectContexts(tokens, attachmentStyle);
+    
+    logger.info('Enhanced context detection', { 
+      primaryContext: contextDetection.primaryContext,
+      allContexts: contextDetection.allContexts.length,
+      deescalated: contextDetection.deescalated
+    });
+
     // Get context multipliers and attachment bias from enhanced tone_triggerwords.json
     const triggerWordsData = dataLoader.get('toneTriggerWords') || dataLoader.get('toneTriggerwords');
     const contextMultipliers = triggerWordsData?.weights?.contextMultipliers?.[contextHint] || {};
@@ -971,18 +1347,55 @@ export class ToneAnalysisService {
     out.positive   += (f.emo_joy || 0) * (W.emo * 0.9);
     out.supportive += (f.emo_affection || 0) * (W.emo * 0.9);
 
-    // Context cues with enhanced multipliers
-    const ctx = (contextHint || 'general').toLowerCase();
-    if (ctx === 'conflict') { 
-      out.angry += 0.25 * (contextMultipliers.escalation || 1.0); 
-      out.frustrated += 0.20 * (contextMultipliers.contempt || 1.0); 
+    // ✅ Apply enhanced context boosts and severity adjustments
+    for (const contextResult of contextDetection.allContexts) {
+      // Apply confidence boosts (original mechanism)
+      for (const [bucket, boost] of Object.entries(contextResult.boosts)) {
+        if (bucket === 'clear') {
+          out.supportive += boost * contextResult.confidence;
+          out.positive += boost * contextResult.confidence * 0.8;
+        } else if (bucket === 'caution') {
+          out.anxious += boost * contextResult.confidence;
+          out.frustrated += boost * contextResult.confidence * 0.7;
+        } else if (bucket === 'alert') {
+          out.angry += boost * contextResult.confidence;
+          out.frustrated += boost * contextResult.confidence * 0.6;
+        }
+      }
+      
+      // Apply severity adjustments (new mechanism for direct bucket impact)
+      // These will be applied later when computing bucket distributions
+      fr.contextSeverity = fr.contextSeverity || { clear: 0, caution: 0, alert: 0 };
+      for (const [bucket, severity] of Object.entries(contextResult.severity)) {
+        fr.contextSeverity[bucket] += severity * contextResult.confidence;
+      }
     }
-    if (ctx === 'planning') { 
+
+    // Apply deescalation effects
+    let deescalationFactor = 1.0;
+    if (contextDetection.deescalated.length > 0) {
+      deescalationFactor = 0.7; // Reduce aggressive tones when deescalated
+      logger.info('Deescalation applied', { deescalated: contextDetection.deescalated });
+    }
+
+    // Context cues with enhanced multipliers
+    const ctx = contextDetection.primaryContext || (contextHint || 'general').toLowerCase();
+    if (ctx.includes('conflict') || ctx.includes('escalation')) { 
+      out.angry += 0.25 * (contextMultipliers.escalation || 1.0) * deescalationFactor; 
+      out.frustrated += 0.20 * (contextMultipliers.contempt || 1.0) * deescalationFactor; 
+    }
+    if (ctx.includes('planning')) { 
       out.assertive += 0.12 * (contextMultipliers.structure || 1.0); 
       out.neutral += 0.08 * (contextMultipliers.plan || 1.0); 
     }
-    if (ctx === 'repair') { 
+    if (ctx.includes('repair')) { 
       out.supportive += 0.18 * (contextMultipliers.solution || 1.0); 
+    }
+    if (ctx.includes('humor')) {
+      // Humor context significantly reduces aggressive tones
+      out.angry *= 0.3;
+      out.frustrated *= 0.5;
+      out.positive += 0.15;
     }
 
     // Linguistic (absolutes & modals tilt toward confront/defend)
@@ -1275,6 +1688,9 @@ export class ToneAnalysisService {
         },
       };
 
+      // ✅ Add context severity for bucket mapping
+      (result as any).contextSeverity = (fr as any).contextSeverity;
+
       if (options.includeAttachmentInsights) {
         result.attachment_insights = {
           likely_attachment_response: style,
@@ -1447,7 +1863,7 @@ export async function getGeneralToneAnalysis(text: string, attachmentStyle: stri
       includeAttachmentInsights: false
     });
     
-    const bucketResult = mapBucketsFromJson(result.primary_tone, context, result.intensity);
+    const bucketResult = mapBucketsFromJson(result.primary_tone, context, result.intensity, (result as any).contextSeverity);
     
     return {
       tone: result.primary_tone,

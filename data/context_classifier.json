@@ -1,10 +1,26 @@
 {
-  "version": "1.1",
+  "version": "2.0",
+  "schemaVersion": "2.0.0",
+  "lastUpdated": "2025-09-14",
+  "description": "Enhanced context classifier with smart schema: weighted patterns, priority-based deconfliction, cooldowns, counter-cues, and attachment gates",
+  "features": {
+    "weightedPatterns": "Regex and n-gram patterns with custom weights",
+    "prioritySystem": "Context priority for conflict resolution",
+    "cooldownMechanics": "Timing controls and saturation limits",
+    "counterCues": "Dampening patterns to reduce false positives",
+    "positionBoosts": "Start/end position and formatting awareness",
+    "attachmentGates": "Style-specific context filtering and dampening",
+    "severityMapping": "Direct bucket impact beyond confidence boosts"
+  },
   "contexts": [
     {
       "id": "CTX_CONFLICT",
       "context": "conflict",
       "description": "Argument or tense exchange",
+      "priority": 5,
+      "polarity": "escalatory",
+      "windowTokens": 32,
+      "scope": "message",
       "toneCues": [
         "argue",
         "fight",
@@ -22,12 +38,36 @@
         "gaslighting",
         "stop twisting my words",
         "that's unfair",
-        "that’s unfair",
+        "that's unfair",
         "not fair"
       ],
+      "toneCuesWeighted": [
+        {"pattern": "\\b(yell|shout|scream|screaming)\\b", "weight": 0.25, "type": "regex"},
+        {"pattern": "gaslighting", "weight": 0.35, "type": "token"},
+        {"pattern": "stop twisting my words", "weight": 0.30, "type": "ngram"},
+        {"pattern": "\\b(fuck|fucking)\\s+(hell|shit|damn)\\b", "weight": 0.28, "type": "regex"},
+        {"pattern": "you always", "weight": 0.22, "type": "ngram"},
+        {"pattern": "you never", "weight": 0.22, "type": "ngram"},
+        {"pattern": "\\b(shut\\s+up|stfu)\\b", "weight": 0.30, "type": "regex"}
+      ],
+      "counterCues": ["jk", "kidding", "lol", "🙂", "😉", "haha", "just teasing"],
+      "positionBoost": { 
+        "start": 0.04, 
+        "end": 0.02, 
+        "allCaps": 0.05 
+      },
+      "repeatDecay": 0.6,
+      "cooldown_ms": 400,
+      "maxBoostsPerMessage": 3,
+      "excludeIfContexts": ["humor", "repair"],
+      "requiresAny": ["you", "we", "us"],
       "confidenceBoosts": {
         "alert": 0.25,
         "caution": 0.05
+      },
+      "severity": { 
+        "alert": 0.2, 
+        "caution": 0.1 
       },
       "attachmentAdjustments": {
         "anxious": {
@@ -44,6 +84,12 @@
         },
         "secure": {
           "clear": 0.20
+        }
+      },
+      "attachmentGates": {
+        "avoidant": { 
+          "allow": ["boundary", "withdrawal"], 
+          "dampening": 0.7 
         }
       }
     },
@@ -94,6 +140,10 @@
       "id": "CTX_REPAIR",
       "context": "repair",
       "description": "Attempt to reconcile or make peace",
+      "priority": 4,
+      "polarity": "deescalatory",
+      "windowTokens": 40,
+      "scope": "message",
       "toneCues": [
         "sorry",
         "apologize",
@@ -108,9 +158,30 @@
         "make things right",
         "make amends"
       ],
+      "toneCuesWeighted": [
+        {"pattern": "\\b(sorry|apologize|apologies)\\b", "weight": 0.25, "type": "regex"},
+        {"pattern": "my\\s+(fault|bad|mistake)", "weight": 0.30, "type": "regex"},
+        {"pattern": "I\\s+(was\\s+wrong|messed\\s+up|screwed\\s+up)", "weight": 0.28, "type": "regex"},
+        {"pattern": "make\\s+(it\\s+right|amends|up\\s+to\\s+you)", "weight": 0.22, "type": "regex"},
+        {"pattern": "forgive\\s+me", "weight": 0.35, "type": "regex"}
+      ],
+      "counterCues": ["but", "however", "except", "still", "though"],
+      "positionBoost": { 
+        "start": 0.08, 
+        "end": 0.06, 
+        "allCaps": 0.02 
+      },
+      "repeatDecay": 0.8,
+      "cooldown_ms": 200,
+      "maxBoostsPerMessage": 4,
+      "requiresAny": ["I", "me", "my"],
       "confidenceBoosts": {
         "clear": 0.25,
         "caution": 0.05
+      },
+      "severity": { 
+        "clear": 0.20, 
+        "caution": -0.10 
       },
       "attachmentAdjustments": {
         "anxious": {
@@ -125,6 +196,11 @@
         },
         "secure": {
           "clear": 0.20
+        }
+      },
+      "attachmentGates": {
+        "avoidant": { 
+          "dampening": 0.8 
         }
       }
     },
@@ -248,6 +324,10 @@
       "id": "CTX_HUMOR",
       "context": "humor",
       "description": "Joking, teasing, or banter",
+      "priority": 3,
+      "polarity": "deescalatory",
+      "windowTokens": 20,
+      "scope": "local",
       "toneCues": [
         "lol",
         "haha",
@@ -268,8 +348,29 @@
         "😜",
         "😉"
       ],
+      "toneCuesWeighted": [
+        {"pattern": "\\b(lol|haha|lmao|rofl)\\b", "weight": 0.20, "type": "regex"},
+        {"pattern": "just\\s+(kidding|teasing|joking)", "weight": 0.30, "type": "regex"},
+        {"pattern": "😂|🤣|😅", "weight": 0.25, "type": "regex"},
+        {"pattern": "/s\\b", "weight": 0.35, "type": "regex"},
+        {"pattern": "\\bjk\\b", "weight": 0.22, "type": "token"}
+      ],
+      "deescalates": ["conflict", "escalation", "blame"],
+      "positionBoost": { 
+        "start": 0.02, 
+        "end": 0.08, 
+        "allCaps": -0.02 
+      },
+      "repeatDecay": 0.9,
+      "cooldown_ms": 100,
+      "maxBoostsPerMessage": 5,
       "confidenceBoosts": {
         "clear": 0.20
+      },
+      "severity": { 
+        "clear": 0.15, 
+        "alert": -0.20,
+        "caution": -0.10 
       },
       "attachmentAdjustments": {
         "anxious": {
@@ -592,19 +693,23 @@
       "id": "CTX_ESCALATION",
       "context": "escalation",
       "description": "Rising tension or worsening disagreement",
+      "priority": 5,
+      "polarity": "escalatory",
+      "windowTokens": 24,
+      "scope": "message",
       "toneCues": [
         "always",
         "never",
         "done with this",
         "fed up",
         "sick of",
-        "can’t stand",
+        "can't stand",
         "cant stand",
         "every time",
         "as usual",
         "I'm done",
         "im done",
-        "I’m done",
+        "I'm done",
         "over this",
         "can't deal",
         "cant deal",
@@ -612,8 +717,29 @@
         "I can't stand this",
         "I cant stand this"
       ],
+      "toneCuesWeighted": [
+        {"pattern": "\\b(always|never)\\b", "weight": 0.20, "type": "regex"},
+        {"pattern": "\\b(done|finished)\\s+with\\s+(this|you|us)\\b", "weight": 0.30, "type": "regex"},
+        {"pattern": "so\\s+(sick|tired|fed\\s+up)", "weight": 0.25, "type": "regex"},
+        {"pattern": "can't\\s+(stand|deal|take)", "weight": 0.22, "type": "regex"},
+        {"pattern": "every\\s+(damn|fucking|single)\\s+time", "weight": 0.35, "type": "regex"}
+      ],
+      "counterCues": ["sometimes", "maybe", "might", "could be", "perhaps"],
+      "positionBoost": { 
+        "start": 0.06, 
+        "end": 0.04, 
+        "allCaps": 0.08 
+      },
+      "repeatDecay": 0.5,
+      "cooldown_ms": 300,
+      "maxBoostsPerMessage": 2,
+      "excludeIfContexts": ["humor", "repair"],
       "confidenceBoosts": {
         "alert": 0.30
+      },
+      "severity": { 
+        "alert": 0.25, 
+        "caution": 0.15 
       },
       "attachmentAdjustments": {
         "anxious": {
