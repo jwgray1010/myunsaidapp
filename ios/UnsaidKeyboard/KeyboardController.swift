@@ -91,7 +91,11 @@ final class SpellCandidatesStrip: UIView {
     }
     
     func updateCandidates(_ suggestions: [String]) {
-        setSuggestions(suggestions) { _ in }
+        setSuggestions(suggestions, onTap: self.onTap ?? { _ in })
+    }
+    
+    func setSpellCorrectionHandler(_ handler: @escaping (String) -> Void) {
+        self.onTap = handler
     }
 
     private func pill(_ title: String) -> UIButton {
@@ -490,6 +494,34 @@ final class KeyboardController: UIInputView,
     func didApplySpellCorrection(_ correction: String, original: String) {
         // Handle spell correction analytics
     }
+    
+    private func applySpellCorrection(_ correction: String) {
+        guard let proxy = textDocumentProxy else { return }
+        
+        // Get the current word being typed
+        let beforeCursor = proxy.documentContextBeforeInput ?? ""
+        let words = beforeCursor.components(separatedBy: .whitespacesAndNewlines)
+        guard let lastWord = words.last, !lastWord.isEmpty else { return }
+        
+        // Delete the current word and insert the correction
+        for _ in 0..<lastWord.count {
+            proxy.deleteBackward()
+        }
+        proxy.insertText(correction)
+        
+        // Update our text state
+        handleTextChange()
+        
+        // Trigger haptic feedback
+        performHapticFeedback()
+        
+        // Log the correction
+        logger.info("📝 Applied spell correction: '\(lastWord)' → '\(correction)'")
+        
+        // Notify spell checker delegate
+        spellCheckerIntegration.applyCorrection(correction, for: lastWord)
+        didApplySpellCorrection(correction, original: lastWord)
+    }
 
     // MARK: - SecureFixManagerDelegate
     func getOpenAIAPIKey() -> String {
@@ -681,6 +713,11 @@ final class KeyboardController: UIInputView,
             spellStrip.leadingAnchor.constraint(equalTo: toneButtonBackground.trailingAnchor, constant: 8),
             spellStrip.trailingAnchor.constraint(equalTo: undoButton.leadingAnchor, constant: -8)
         ])
+        
+        // Set up spell correction handler
+        spellStrip.setSpellCorrectionHandler { [weak self] correction in
+            self?.applySpellCorrection(correction)
+        }
 
         // Start with neutral tone
         setToneStatus(.neutral)
@@ -777,9 +814,17 @@ final class KeyboardController: UIInputView,
     // MARK: - Tone Status Management
 
     private func setToneStatus(_ tone: ToneStatus, animated: Bool = true) {
-        guard let bg = toneButtonBackground else { return }
-        guard tone != currentTone || bg.alpha == 0 else { return } // skip redundant work
+        logger.info("🎯 setToneStatus called with: \(tone), animated: \(animated)")
+        guard let bg = toneButtonBackground else { 
+            logger.warning("🎯 No tone button background found!")
+            return 
+        }
+        guard tone != currentTone || bg.alpha == 0 else { 
+            logger.info("🎯 Skipping redundant tone update")
+            return 
+        } // skip redundant work
         currentTone = tone
+        logger.info("🎯 Updating tone button to: \(tone)")
 
         // Destination visual state
         let (colors, baseColor): ([CGColor], UIColor?) = gradientColors(for: tone)
@@ -1352,6 +1397,7 @@ final class KeyboardController: UIInputView,
     }
 
     private func setToneStatusString(_ status: String) {
+        logger.info("🎯 Setting tone status: \(status)")
         switch status.lowercased() {
         case "alert":   setToneStatus(.alert)
         case "caution": setToneStatus(.caution)
@@ -1359,6 +1405,7 @@ final class KeyboardController: UIInputView,
         default:        setToneStatus(.neutral)
         }
         toneButton?.accessibilityLabel = "Tone: \(status.capitalized)"
+        logger.info("🎯 Tone status set to: \(currentTone)")
     }
 
     // MARK: - ToneSuggestionDelegate
@@ -1372,6 +1419,8 @@ final class KeyboardController: UIInputView,
 
     func didUpdateToneStatus(_ status: String) {
         logger.info("🎯 Received tone status: \(status)")
+        logger.info("🎯 Current tone button exists: \(toneButton != nil)")
+        logger.info("🎯 Current tone background exists: \(toneButtonBackground != nil)")
         lastToneStatusString = status
         setToneStatusString(status)
     }
