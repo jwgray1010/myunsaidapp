@@ -29,8 +29,8 @@ class UnsaidGradientScaffold extends StatelessWidget {
           data: Theme.of(context).copyWith(
             textTheme: Theme.of(context).textTheme.copyWith(
               titleLarge: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color:
-                    UnsaidPalette.textPrimaryDark, // White for gradient backgrounds
+                color: UnsaidPalette
+                    .textPrimaryDark, // White for gradient backgrounds
                 fontWeight: FontWeight.w700,
               ),
               titleMedium: Theme.of(context).textTheme.titleMedium?.copyWith(

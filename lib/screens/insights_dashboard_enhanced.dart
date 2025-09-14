@@ -641,7 +641,8 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
             SliverAppBar(
               pinned: true,
               floating: false,
-              expandedHeight: 220, // Increased height to accommodate content properly
+              expandedHeight:
+                  220, // Increased height to accommodate content properly
               forceElevated: innerBoxIsScrolled,
               backgroundColor: Colors.transparent,
               elevation: 0,

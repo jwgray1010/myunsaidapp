@@ -149,9 +149,11 @@ final class KeyButtonFactory {
         b.setTitle("Return", for: .normal)
         b.accessibilityLabel = "Return"
 
-        let base = UIFont.systemFont(ofSize: 18, weight: .medium)
+        let base = UIFont.systemFont(ofSize: 16, weight: .medium) // Reduced from 18 to 16
         b.titleLabel?.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: base)
         b.titleLabel?.adjustsFontForContentSizeCategory = true
+        b.titleLabel?.adjustsFontSizeToFitWidth = true // Add auto-sizing
+        b.titleLabel?.minimumScaleFactor = 0.75 // Allow scaling down to 75%
 
         // Give “Return” a bit more visual weight
         applyImportantKeyStyle(to: b, background: .systemGray3, text: .label)
@@ -168,9 +170,11 @@ final class KeyButtonFactory {
         b.setContentHuggingPriority(.required, for: .horizontal)
         b.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        let base = UIFont.systemFont(ofSize: 16, weight: .medium)
+        let base = UIFont.systemFont(ofSize: 15, weight: .medium) // Reduced from 16 to 15
         b.titleLabel?.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: base)
         b.titleLabel?.adjustsFontForContentSizeCategory = true
+        b.titleLabel?.adjustsFontSizeToFitWidth = true // Add auto-sizing
+        b.titleLabel?.minimumScaleFactor = 0.70 // Allow scaling down to 70%
 
         applyBrandKeyStyle(to: b, brandBackground: .keyboardRose)
         return b

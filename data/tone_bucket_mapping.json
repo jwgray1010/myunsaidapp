@@ -2,6 +2,20 @@
   "version": "2.0",
   "notes": "Full-featured tone-to-suggestion mapping with thresholds, weights, attachment tuning, and premium gating.",
   "defaultBucket": "general_support",
+  "default": {
+    "angry": { "clear": 0.1, "caution": 0.3, "alert": 0.6 },
+    "frustrated": { "clear": 0.15, "caution": 0.45, "alert": 0.4 },
+    "anxious": { "clear": 0.2, "caution": 0.6, "alert": 0.2 },
+    "sad": { "clear": 0.25, "caution": 0.6, "alert": 0.15 },
+    "assertive": { "clear": 0.4, "caution": 0.4, "alert": 0.2 },
+    "positive": { "clear": 0.8, "caution": 0.15, "alert": 0.05 },
+    "supportive": { "clear": 0.85, "caution": 0.12, "alert": 0.03 },
+    "neutral": { "clear": 0.5, "caution": 0.3, "alert": 0.2 },
+    "tentative": { "clear": 0.3, "caution": 0.6, "alert": 0.1 },
+    "confident": { "clear": 0.6, "caution": 0.25, "alert": 0.15 },
+    "negative": { "clear": 0.2, "caution": 0.5, "alert": 0.3 },
+    "safety_concern": { "clear": 0.05, "caution": 0.25, "alert": 0.7 }
+  },
   "toneBuckets": {
     "alert": {
       "confidenceThreshold": 0.25,

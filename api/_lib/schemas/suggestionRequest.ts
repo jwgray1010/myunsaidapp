@@ -37,7 +37,7 @@ export const suggestionRequestSchema = z.object({
   context: z.string().optional().describe('Optional hint about conversation context - system auto-detects from text if not provided'),
   toneOverride: toneOverrideSchema.optional().describe('Optional override for detected tone. Useful for testing or manual control'),
   attachmentStyle: attachmentStyleSchema.optional().describe('Optional user attachment-style override, if already known'),
-  features: featuresSchema.describe('Feature flags to include in the response. Common values: advice, quick_fixes, evidence, emotional_support'),
+  features: featuresSchema.optional().describe('Feature flags to include in the response. Common values: advice, quick_fixes, evidence, emotional_support'),
   meta: metaSchema.optional().describe('Optional metadata for tracing and UX decisions'),
   // Client sequencing fields (used by coordinators)
   client_seq: z.number().optional().describe('Client sequence number for last-writer-wins'),

@@ -1054,11 +1054,13 @@ final class KeyboardController: UIInputView,
         stack.addArrangedSubview(secureFix)
         stack.addArrangedSubview(returnBtn)
 
-        // Sizing rules
-        space.widthAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
-        let secureFixWidth = secureFix.widthAnchor.constraint(equalToConstant: 78) // Reduced from 88 to 78
-        secureFixWidth.priority = UILayoutPriority.required
-        secureFixWidth.isActive = true
+        // Sizing rules - make secure fix and return buttons the same size
+        space.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true // Reduced from 180 to 160
+        
+        // Set equal width for secure fix and return buttons
+        let buttonWidth: CGFloat = 85 // Increased to make both buttons larger and equal
+        secureFix.widthAnchor.constraint(equalToConstant: buttonWidth).isActive = true
+        returnBtn.widthAnchor.constraint(equalToConstant: buttonWidth).isActive = true
 
         space.setContentHuggingPriority(UILayoutPriority.defaultLow, for: NSLayoutConstraint.Axis.horizontal)
         space.setContentCompressionResistancePriority(UILayoutPriority.defaultLow, for: NSLayoutConstraint.Axis.horizontal)

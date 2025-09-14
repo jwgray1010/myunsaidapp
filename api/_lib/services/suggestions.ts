@@ -194,6 +194,114 @@ class TrialManager {
 }
 
 // ============================
+// Performance Optimizations
+// ============================
+interface CacheEntry {
+  result: any;
+  timestamp: number;
+  hits: number;
+}
+
+class PerformanceCache {
+  private analysisCache = new Map<string, CacheEntry>();
+  private suggestionCache = new Map<string, CacheEntry>();
+  private readonly maxCacheSize = 500;
+  private readonly cacheExpiryMs = 30 * 60 * 1000; // 30 minutes
+
+  private generateCacheKey(text: string, context?: string, attachmentStyle?: string): string {
+    const normalized = text.toLowerCase().trim().replace(/\s+/g, ' ');
+    return `${normalized}:${context || 'general'}:${attachmentStyle || 'secure'}`;
+  }
+
+  getCachedAnalysis(text: string, context?: string, attachmentStyle?: string): any | null {
+    const key = this.generateCacheKey(text, context, attachmentStyle);
+    const entry = this.analysisCache.get(key);
+    
+    if (!entry) return null;
+    
+    // Check expiry
+    if (Date.now() - entry.timestamp > this.cacheExpiryMs) {
+      this.analysisCache.delete(key);
+      return null;
+    }
+    
+    entry.hits++;
+    return entry.result;
+  }
+
+  setCachedAnalysis(text: string, result: any, context?: string, attachmentStyle?: string): void {
+    const key = this.generateCacheKey(text, context, attachmentStyle);
+    
+    // Clean up old entries if cache is full
+    if (this.analysisCache.size >= this.maxCacheSize) {
+      this.evictOldEntries(this.analysisCache);
+    }
+    
+    this.analysisCache.set(key, {
+      result: JSON.parse(JSON.stringify(result)), // Deep clone
+      timestamp: Date.now(),
+      hits: 1
+    });
+  }
+
+  getCachedSuggestions(analysisKey: string, maxSuggestions: number, tier: string): any[] | null {
+    const key = `${analysisKey}:${maxSuggestions}:${tier}`;
+    const entry = this.suggestionCache.get(key);
+    
+    if (!entry) return null;
+    
+    // Check expiry
+    if (Date.now() - entry.timestamp > this.cacheExpiryMs) {
+      this.suggestionCache.delete(key);
+      return null;
+    }
+    
+    entry.hits++;
+    return entry.result;
+  }
+
+  setCachedSuggestions(analysisKey: string, suggestions: any[], maxSuggestions: number, tier: string): void {
+    const key = `${analysisKey}:${maxSuggestions}:${tier}`;
+    
+    // Clean up old entries if cache is full
+    if (this.suggestionCache.size >= this.maxCacheSize) {
+      this.evictOldEntries(this.suggestionCache);
+    }
+    
+    this.suggestionCache.set(key, {
+      result: JSON.parse(JSON.stringify(suggestions)), // Deep clone
+      timestamp: Date.now(),
+      hits: 1
+    });
+  }
+
+  private evictOldEntries(cache: Map<string, CacheEntry>): void {
+    // Remove least recently used entries (lowest hits + oldest timestamp)
+    const entries = Array.from(cache.entries())
+      .sort((a, b) => (a[1].hits + a[1].timestamp / 1000000) - (b[1].hits + b[1].timestamp / 1000000))
+      .slice(0, Math.floor(this.maxCacheSize * 0.2)); // Remove 20% of entries
+    
+    for (const [key] of entries) {
+      cache.delete(key);
+    }
+  }
+
+  getStats(): { analysisEntries: number; suggestionEntries: number; totalHits: number } {
+    const analysisHits = Array.from(this.analysisCache.values()).reduce((sum, entry) => sum + entry.hits, 0);
+    const suggestionHits = Array.from(this.suggestionCache.values()).reduce((sum, entry) => sum + entry.hits, 0);
+    
+    return {
+      analysisEntries: this.analysisCache.size,
+      suggestionEntries: this.suggestionCache.size,
+      totalHits: analysisHits + suggestionHits
+    };
+  }
+}
+
+// Global performance cache instance
+const performanceCache = new PerformanceCache();
+
+// ============================
 // Helpers: retrieval / guardrails / calibration
 // ============================
 function cosine(a: Float32Array, b: Float32Array): number {
@@ -247,6 +355,8 @@ function mmr(pool: any[], qVec: Float32Array | null, vecOf: (it:any)=>Float32Arr
   while (out.length < Math.min(k, pool.length) && cand.size) {
     let best: any = null;
     let bestScore = -Infinity;
+    const candidates: {item: any, score: number}[] = [];
+    
     for (const it of Array.from(cand)) {
       const v = vecOf(it);
       const rel = qVec && v ? cosine(qVec, v) : 0;
@@ -260,8 +370,26 @@ function mmr(pool: any[], qVec: Float32Array | null, vecOf: (it:any)=>Float32Arr
         nov = 1 - maxSim;
       }
       const score = lambda*rel + (1-lambda)*nov;
-      if (score > bestScore) { bestScore = score; best = it; }
+      candidates.push({item: it, score});
     }
+    
+    // Sort candidates for deterministic tie-breaking
+    candidates.sort((a, b) => {
+      const scoreDiff = b.score - a.score;
+      if (Math.abs(scoreDiff) > 0.0001) return scoreDiff;
+      
+      // Tie-breaker: category then ID
+      const catA = a.item.category || a.item.categories?.[0] || 'zzz';
+      const catB = b.item.category || b.item.categories?.[0] || 'zzz';
+      const catDiff = catA.localeCompare(catB);
+      if (catDiff !== 0) return catDiff;
+      
+      return (a.item.id || '').localeCompare(b.item.id || '');
+    });
+    
+    best = candidates[0]?.item;
+    bestScore = candidates[0]?.score ?? -Infinity;
+    
     if (!best) break;
     out.push(best);
     cand.delete(best);
@@ -283,6 +411,10 @@ async function hybridRetrieve(text: string, contextLabel: string, toneKey: strin
   let denseTop: any[] = [];
   let qVec: Float32Array | null = null;
 
+  // Vector cache for performance
+  const vecCache = new Map<string, Float32Array>();
+  const getV = (id:string)=> vecCache.get(id) || (()=>{ const v=getVecById(id); if (v) vecCache.set(id,v); return v; })();
+
   const hasVecs = !!getVecById(corpus[0]?.id || '');
   logger.info('Vector check', { hasVecs, firstItemId: corpus[0]?.id });
   
@@ -291,7 +423,7 @@ async function hybridRetrieve(text: string, contextLabel: string, toneKey: strin
     qVec = new Float32Array(qArr);
     denseTop = corpus
       .map((it:any) => {
-        const v = getVecById(it.id);
+        const v = getV(it.id);
         const s = (v && qVec) ? cosine(v, qVec) : 0;
         return [it, s] as const;
       })
@@ -304,17 +436,24 @@ async function hybridRetrieve(text: string, contextLabel: string, toneKey: strin
   const sparseTop = bm25Search(query, k*2);
   logger.info('Sparse retrieval completed', { sparseTopSize: sparseTop.length });
 
+  // Fallback if both retrieval methods fail
+  const fallbackIfEmpty = !denseTop.length && !sparseTop.length ? corpus.slice(0, Math.min(200, corpus.length)) : [];
+
   const uniq = new Map<string, any>();
-  for (const it of [...denseTop, ...sparseTop]) if (it?.id && !uniq.has(it.id)) uniq.set(it.id, it);
+  for (const it of [...denseTop, ...sparseTop, ...fallbackIfEmpty]) if (it?.id && !uniq.has(it.id)) uniq.set(it.id, it);
   const pool = Array.from(uniq.values());
   logger.info('Hybrid retrieval merging completed', { 
     poolSize: pool.length, 
     denseTopSize: denseTop.length, 
-    sparseTopSize: sparseTop.length 
+    sparseTopSize: sparseTop.length,
+    fallbackUsed: fallbackIfEmpty.length > 0
   });
   
-  const result = mmr(pool, qVec, (it:any)=>getVecById(it.id), k, 0.7);
-  logger.info('MMR diversification completed', { finalResultSize: result.length });
+  // MMR with context-aware lambda
+  const retrievalConfig = dataLoader.get('retrievalConfig');
+  const lambda = retrievalConfig?.mmrLambda?.[contextLabel] ?? 0.7;
+  const result = mmr(pool, qVec, (it:any)=>getV(it.id), k, lambda);
+  logger.info('MMR diversification completed', { finalResultSize: result.length, lambda });
   return result;
 }
 
@@ -374,6 +513,86 @@ class AnalysisOrchestrator {
     private loader: any
   ) {}
 
+  enhancedSecondPersonDetection(text: string, spacyResult: any, fullAnalysis: any): {
+    hasSecondPerson: boolean;
+    confidence: number;
+    patterns: string[];
+    targeting: 'direct' | 'indirect' | 'none';
+  } {
+    const patterns: string[] = [];
+    let confidence = 0;
+    let targeting: 'direct' | 'indirect' | 'none' = 'none';
+
+    // Check spaCy entities for PRON_2P
+    const spacyProns = Array.isArray(fullAnalysis?.entities) 
+      ? fullAnalysis.entities.filter((e:any) => e.label === 'PRON_2P') 
+      : [];
+    
+    if (spacyProns.length > 0) {
+      patterns.push('spaCy_PRON_2P');
+      confidence += 0.8;
+      targeting = 'direct';
+    }
+
+    // Enhanced regex patterns for second-person detection
+    const directPatterns = [
+      /\byou\s+(are|were|will|would|can|could|should|need|have|had|do|did|don't|didn't|won't|wouldn't)\b/gi,
+      /\byou['']?(re|ve|ll|d)\b/gi,
+      /\byour(s?)\b/gi,
+      /\byourself\b/gi
+    ];
+
+    const indirectPatterns = [
+      /\bif\s+you\b/gi,
+      /\bwhen\s+you\b/gi,
+      /\bhave\s+you\b/gi,
+      /\bdo\s+you\b/gi,
+      /\bwould\s+you\b/gi,
+      /\bcould\s+you\b/gi
+    ];
+
+    // Check direct targeting patterns
+    for (const pattern of directPatterns) {
+      const matches = text.match(pattern);
+      if (matches) {
+        patterns.push(`direct_${pattern.source}`);
+        confidence += 0.6 * matches.length;
+        if (targeting === 'none') targeting = 'direct';
+      }
+    }
+
+    // Check indirect targeting patterns
+    for (const pattern of indirectPatterns) {
+      const matches = text.match(pattern);
+      if (matches) {
+        patterns.push(`indirect_${pattern.source}`);
+        confidence += 0.3 * matches.length;
+        if (targeting === 'none') targeting = 'indirect';
+      }
+    }
+
+    // Check for imperatives (commands) which often imply second person
+    const imperativePatterns = [
+      /^\s*[A-Z][a-z]+\s+(your|the|this|that)/i, // "Take your time"
+      /^\s*[A-Z][a-z]+\s+(to|with|for|about)/i,  // "Talk to someone"
+      /^\s*(try|consider|think|remember|focus|stop|start|keep|let|make|take|give|find|ask)\b/gi
+    ];
+
+    for (const pattern of imperativePatterns) {
+      const matches = text.match(pattern);
+      if (matches) {
+        patterns.push(`imperative_${pattern.source}`);
+        confidence += 0.4 * matches.length;
+        if (targeting === 'none') targeting = 'indirect';
+      }
+    }
+
+    confidence = Math.min(1.0, confidence);
+    const hasSecondPerson = confidence > 0.2;
+
+    return { hasSecondPerson, confidence, patterns, targeting };
+  }
+
   async analyze(
     text: string,
     providedTone?: { classification: string; confidence: number } | null,
@@ -417,6 +636,7 @@ class AnalysisOrchestrator {
       tone: toneResult!,
       context: spacyResult.context || { label: contextHint || 'general', score: 0.5 },
       entities: fullAnalysis.entities || [],
+      secondPerson: this.enhancedSecondPersonDetection(text, spacyResult, fullAnalysis),
       flags: {
         hasNegation: fullAnalysis.negation?.present || (spacyResult.deps || []).some((d:any)=>d.rel==='neg'),
         hasSarcasm: spacyResult.sarcasm?.present || false,
@@ -444,7 +664,8 @@ class AdviceEngine {
     userPrefBoost: 0.5,
     severityFit: 1.2,
     phraseEdgeBoost: 0.4,
-    premiumBoost: 0.2
+    premiumBoost: 0.2,
+    secondPersonBoost: 0.8
   };
 
   constructor(private loader: any) {}
@@ -458,49 +679,34 @@ class AdviceEngine {
   resolveToneBucket(toneLabel: string, contextLabel: string, intensityScore: number = 0): ToneBucketResult {
     const map = this.loader.get('toneBucketMapping') || this.loader.get('toneBucketMap') || {};
     
-    // Base probability distributions for each tone bucket
-    // These represent how confident we are that the tone is correctly classified
-    let dist = { clear: 0.33, caution: 0.33, alert: 0.33 };
+    // Use JSON as source of truth for base distributions
+    const tb = map?.toneBuckets?.[toneLabel];
+    let dist: any = tb?.base ?? { clear: 0.33, caution: 0.33, alert: 0.33 };
     
-    if (toneLabel === 'clear') {
-      dist = { clear: 0.7, caution: 0.2, alert: 0.1 };
-    } else if (toneLabel === 'caution') {
-      dist = { clear: 0.2, caution: 0.6, alert: 0.2 };
-    } else if (toneLabel === 'alert') {
-      dist = { clear: 0.1, caution: 0.3, alert: 0.6 };
-    }
+    // Apply per-context overrides from JSON
+    const ctxOv = map?.contextOverrides?.[contextLabel]?.[toneLabel];
+    if (ctxOv) dist = { ...dist, ...ctxOv };
     
-    // Apply intensity adjustments from the JSON configuration
-    if (map.toneBuckets?.[toneLabel]?.intensityFactor && intensityScore > 0) {
-      const factor = map.toneBuckets[toneLabel].intensityFactor;
-      const adjustment = intensityScore * (factor - 1) * 0.1; // Scale the adjustment
-      
-      // Boost the primary bucket and reduce others
-      if (toneLabel === 'alert') {
-        dist.alert = Math.min(0.9, dist.alert + adjustment);
-        dist.clear = Math.max(0.05, dist.clear - adjustment * 0.5);
-        dist.caution = Math.max(0.05, dist.caution - adjustment * 0.5);
-      } else if (toneLabel === 'caution') {
-        dist.caution = Math.min(0.8, dist.caution + adjustment);
-        dist.clear = Math.max(0.1, dist.clear - adjustment * 0.5);
-        dist.alert = Math.max(0.1, dist.alert - adjustment * 0.5);
-      }
-    }
+    // Normalize after overrides
+    let sum = Object.values(dist).reduce((a:number,b:any)=>a+(Number(b)||0),0) || 1;
+    dist = { clear:(Number(dist.clear)||0)/sum, caution:(Number(dist.caution)||0)/sum, alert:(Number(dist.alert)||0)/sum };
 
+    // Apply intensity shifts
     const thr = map.intensityShifts?.thresholds || { low: 0.15, med: 0.35, high: 0.60 };
     const shiftKey = intensityScore >= thr.high ? 'high' : intensityScore >= thr.med ? 'med' : 'low';
     const shift = map.intensityShifts?.[shiftKey] || { alert: 0, caution: 0, clear: 0 };
 
     dist = {
-      clear: Math.max(0, (dist.clear ?? 0) + (shift.clear || 0)),
-      caution: Math.max(0, (dist.caution ?? 0) + (shift.caution || 0)),
-      alert: Math.max(0, (dist.alert ?? 0) + (shift.alert || 0)),
+      clear: Math.max(0, (Number(dist.clear) ?? 0) + (Number(shift.clear) || 0)),
+      caution: Math.max(0, (Number(dist.caution) ?? 0) + (Number(shift.caution) || 0)),
+      alert: Math.max(0, (Number(dist.alert) ?? 0) + (Number(shift.alert) || 0)),
     };
 
-    const sum = (dist.clear ?? 0) + (dist.caution ?? 0) + (dist.alert ?? 0) || 1;
-    dist.clear   = (dist.clear   ?? 0) / sum;
-    dist.caution = (dist.caution ?? 0) / sum;
-    dist.alert   = (dist.alert   ?? 0) / sum;
+    // Final normalization
+    sum = (Number(dist.clear) ?? 0) + (Number(dist.caution) ?? 0) + (Number(dist.alert) ?? 0) || 1;
+    dist.clear   = (Number(dist.clear)   ?? 0) / sum;
+    dist.caution = (Number(dist.caution) ?? 0) / sum;
+    dist.alert   = (Number(dist.alert)   ?? 0) / sum;
 
     const primary = (Object.entries(dist).sort((a, b) => (b[1] as number) - (a[1] as number))[0][0]) as string;
     return { primary, dist: dist as ToneBucketDistribution };
@@ -513,6 +719,30 @@ class AdviceEngine {
     const byCtx = bucket?.byContext || {};
     const ctxAdj = contextLabel ? (byCtx[contextLabel] || 0) : 0;
     return base + ctxAdj;
+  }
+
+  applyTemperatureCalibration(scores: number[], contextLabel: string, intensityScore: number): number[] {
+    const cal = this.loader.get('temperatureCalibration') || {};
+    
+    // Get base temperature from JSON config
+    let temp = cal?.baseTemperature ?? 1.0;
+    
+    // Apply context-specific temperature adjustments
+    const ctxAdj = cal?.contextAdjustments?.[contextLabel] ?? 0;
+    temp += ctxAdj;
+    
+    // Apply intensity-based temperature scaling
+    const intAdj = cal?.intensityAdjustments || {};
+    const intKey = intensityScore >= 0.6 ? 'high' : intensityScore >= 0.3 ? 'medium' : 'low';
+    temp += (intAdj[intKey] ?? 0);
+    
+    // Ensure temperature stays in reasonable bounds
+    temp = Math.max(0.1, Math.min(5.0, temp));
+    
+    // Apply temperature scaling: score' = score / temperature
+    // Higher temperature = more uniform distribution (lower confidence)
+    // Lower temperature = sharper distribution (higher confidence)
+    return scores.map(score => score / temp);
   }
 
   userPrefBoostFor(adviceItem: any, userPref: any): number {
@@ -539,6 +769,7 @@ class AdviceEngine {
     phraseEdgeHits: string[];
     userPref: any;
     tier: 'general'|'premium';
+    secondPerson?: { hasSecondPerson: boolean; confidence: number; targeting: string };
   }): any[] {
     const W = this.currentWeights(signals.contextLabel);
 
@@ -573,6 +804,13 @@ class AdviceEngine {
       // User preferences
       s += W.userPrefBoost * this.userPrefBoostFor(it, signals.userPref);
 
+      // Enhanced Second-Person Detection Boost
+      if (signals.secondPerson?.hasSecondPerson) {
+        const spBoost = signals.secondPerson.confidence * 
+          (signals.secondPerson.targeting === 'direct' ? 1.0 : 0.6);
+        s += W.secondPersonBoost * spBoost;
+      }
+
       // Severity fit vs baseline
       const baseline = this.severityBaselineFor(toneBucket, signals.contextLabel);
       const required = it.severityThreshold?.[toneBucket] ?? baseline;
@@ -598,7 +836,37 @@ class AdviceEngine {
       return { ...it, ltrScore: Number(s.toFixed(4)) };
     });
 
-    return scored.sort((a,b)=> (b.ltrScore ?? 0) - (a.ltrScore ?? 0));
+    // Apply temperature calibration to scores
+    const rawScores = scored.map(item => item.ltrScore);
+    const calibratedScores = this.applyTemperatureCalibration(rawScores, signals.contextLabel, signals.intensityScore);
+    
+    // Update items with calibrated scores
+    scored.forEach((item, idx) => {
+      item.ltrScore = Number(calibratedScores[idx].toFixed(4));
+    });
+
+    return scored.sort((a,b)=> {
+      // Primary sort: ltrScore descending
+      const scoreDiff = (b.ltrScore ?? 0) - (a.ltrScore ?? 0);
+      if (Math.abs(scoreDiff) > 0.0001) return scoreDiff; // Significant score difference
+      
+      // Secondary sort: category alphabetically for consistency
+      const catA = a.category || a.categories?.[0] || 'zzz';
+      const catB = b.category || b.categories?.[0] || 'zzz';
+      const catDiff = catA.localeCompare(catB);
+      if (catDiff !== 0) return catDiff;
+      
+      // Tertiary sort: advice length (shorter first for readability)
+      const lenA = (a.advice || '').length;
+      const lenB = (b.advice || '').length;
+      const lenDiff = lenA - lenB;
+      if (lenDiff !== 0) return lenDiff;
+      
+      // Quaternary sort: ID for final deterministic ordering
+      const idA = a.id || '';
+      const idB = b.id || '';
+      return idA.localeCompare(idB);
+    });
   }
 }
 
@@ -694,8 +962,10 @@ class SuggestionsService {
     }
 
     const filteredSuggestions = suggestions.filter(suggestion => {
-      // 1. Profanity filtering
-      if (this.containsProfanity(suggestion.advice, profanityLexicons)) {
+      // 1. Profanity filtering (with targeting awareness)
+      const is2P = analysis?.secondPerson?.hasSecondPerson || 
+                   (Array.isArray(analysis?.entities) && analysis.entities.some((e:any)=>e.label==='PRON_2P'));
+      if (this.containsProfanity(suggestion.advice, profanityLexicons, is2P)) {
         logger.warn(`Suggestion filtered for profanity: ${suggestion.id}`);
         return false;
       }
@@ -718,6 +988,18 @@ class SuggestionsService {
         return false;
       }
 
+      // 5. Enhanced guardrails: Softener requirement checks
+      if (!this.passesSoftenerRequirements(suggestion, analysis, guardrailConfig)) {
+        logger.warn(`Suggestion filtered for softener requirements: ${suggestion.id}`);
+        return false;
+      }
+
+      // 6. Enhanced guardrails: Intensity-based safety checks
+      if (!this.passesIntensityGuardrails(suggestion, analysis, guardrailConfig)) {
+        logger.warn(`Suggestion filtered for intensity guardrails: ${suggestion.id}`);
+        return false;
+      }
+
       return true;
     });
 
@@ -725,15 +1007,98 @@ class SuggestionsService {
     return filteredSuggestions;
   }
 
-  private containsProfanity(text: string, profanityLexicons: any): boolean {
-    if (!profanityLexicons?.words || !Array.isArray(profanityLexicons.words)) {
-      return false;
+  private passesSoftenerRequirements(suggestion: any, analysis: any, guardrailConfig: any): boolean {
+    const softenerReqs = guardrailConfig?.softenerRequirements;
+    if (!softenerReqs) return true;
+
+    const intensityScore = analysis?.intensity?.score || 0;
+    const isAlertContext = analysis?.toneBuckets?.primary === 'alert';
+    const hasNegation = analysis?.negation?.detected || false;
+
+    // Check if softeners are required based on context
+    const requiresSoftener = 
+      (softenerReqs.alwaysForAlert && isAlertContext) ||
+      (intensityScore >= (softenerReqs.thresholdHighIntensity || 0.7)) ||
+      (hasNegation && softenerReqs.requireForNegation);
+
+    if (!requiresSoftener) return true;
+
+    // Check if suggestion contains required softeners
+    const advice = suggestion.advice?.toLowerCase() || '';
+    const requiredSofteners = softenerReqs.patterns || [
+      'might', 'perhaps', 'maybe', 'could', 'seems like', 'appears to', 
+      'i wonder if', 'what if', 'have you considered', 'it\'s possible'
+    ];
+
+    const hasSoftener = requiredSofteners.some((pattern: string) => {
+      const regex = new RegExp(`\\b${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      return regex.test(advice);
+    });
+
+    return hasSoftener;
+  }
+
+  private passesIntensityGuardrails(suggestion: any, analysis: any, guardrailConfig: any): boolean {
+    const intensityGuards = guardrailConfig?.intensityGuardrails;
+    if (!intensityGuards) return true;
+
+    const intensityScore = analysis?.intensity?.score || 0;
+    const advice = suggestion.advice?.toLowerCase() || '';
+
+    // Block high-intensity suggestions if they contain confrontational language
+    if (intensityScore >= (intensityGuards.highIntensityThreshold || 0.8)) {
+      const confrontationalPatterns = intensityGuards.confrontationalPatterns || [
+        'you should', 'you must', 'you need to', 'you have to', 'you always', 'you never'
+      ];
+
+      const isConfrontational = confrontationalPatterns.some((pattern: string) => {
+        const regex = new RegExp(`\\b${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        return regex.test(advice);
+      });
+
+      if (isConfrontational) return false;
     }
 
-    const lowercaseText = text.toLowerCase();
-    return profanityLexicons.words.some((word: string) => 
-      lowercaseText.includes(word.toLowerCase())
-    );
+    // Require gentle language for medium-high intensity
+    if (intensityScore >= (intensityGuards.gentleLanguageThreshold || 0.5)) {
+      const gentlePatterns = intensityGuards.gentlePatterns || [
+        'feel', 'sense', 'experience', 'notice', 'gentle', 'kind', 'understanding'
+      ];
+
+      const hasGentleLanguage = gentlePatterns.some((pattern: string) => {
+        const regex = new RegExp(`\\b${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        return regex.test(advice);
+      });
+
+      // Allow if has gentle language OR passes other safety checks
+      return hasGentleLanguage || suggestion.triggerTone === 'clear';
+    }
+
+    return true;
+  }
+
+  private containsProfanity(text: string, profanityLexicons: any, isSecondPersonTargeted=false): boolean {
+    const cats = profanityLexicons?.categories; // preferred shape
+    const words = profanityLexicons?.words;     // legacy shape
+    if (!cats && !Array.isArray(words)) return false;
+
+    // Build patterns once per instance
+    if (!(this as any)._profRegexCache) (this as any)._profRegexCache = new Map<string, RegExp>();
+    const wb = (w:string)=>`(?:^|[^\\p{L}\\p{N}])(${w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})(?=$|[^\\p{L}\\p{N}])`;
+
+    const list = cats
+      ? cats.flatMap((c:any)=>c.triggerWords?.map((w:string)=>({w, targeting:c.targeting||'any', severity:c.severity||'med'}))||[])
+      : words.map((w:string)=>({w, targeting:'any', severity:'med'}));
+
+    for (const {w, targeting} of list) {
+      let rx = (this as any)._profRegexCache.get(w);
+      if (!rx) { rx = new RegExp(wb(w), 'iu'); (this as any)._profRegexCache.set(w, rx); }
+      if (rx.test(text)) {
+        if (targeting === 'other' && !isSecondPersonTargeted) continue;
+        return true;
+      }
+    }
+    return false;
   }
 
   private matchesBlockedPattern(text: string, blockedPatterns: string[]): boolean {
@@ -753,22 +1118,12 @@ class SuggestionsService {
   }
 
   private isContextAppropriate(suggestion: any, analysis: any): boolean {
-    // TEMPORARY: Disable context filtering to test if this is blocking suggestions
-    // Check if suggestion contexts match analysis context
-    if (suggestion.contexts && Array.isArray(suggestion.contexts)) {
-      const analysisContext = analysis.context?.label || 'general';
-      const hasMatchingContext = suggestion.contexts.includes(analysisContext) || 
-                                suggestion.contexts.includes('general') ||
-                                suggestion.contexts.length === 0;
-      
-      // Log for debugging but don't filter
-      if (!hasMatchingContext) {
-        logger.info(`Context mismatch (allowing): suggestion contexts=${JSON.stringify(suggestion.contexts)}, analysisContext=${analysisContext}`);
-        // return false; // DISABLED
-      }
-    }
+    const analysisContext = analysis.context?.label || 'general';
+    if (!suggestion.contexts || suggestion.contexts.length === 0) return true;
+    if (suggestion.contexts.includes('general') || suggestion.contexts.includes(analysisContext)) return true;
+    return false; // re-enable filtering
 
-    // Check tone appropriateness
+    // Keep tone appropriateness check
     if (suggestion.triggerTone) {
       const analysisTone = analysis.toneBuckets?.primary;
       if (analysisTone && suggestion.triggerTone !== analysisTone) {
@@ -857,13 +1212,67 @@ class SuggestionsService {
     if (!trialStatus?.hasAccess) throw new Error('Trial expired or access denied');
     const tier = this.trialManager.resolveTier(trialStatus);
 
-    // 1) spaCy + local analyzer (no LLM)
-    const analysis = await this.orchestrator.analyze(
-      text,
-      toneAnalysisResult ?? null,
-      attachmentStyle,
-      context
-    );
+    // Check cache for analysis first
+    let analysis = performanceCache.getCachedAnalysis(text, context, attachmentStyle);
+    
+    if (!analysis) {
+      // 1) spaCy + local analyzer (no LLM) - Cache miss, perform analysis
+      analysis = await this.orchestrator.analyze(
+        text,
+        toneAnalysisResult ?? null,
+        attachmentStyle,
+        context
+      );
+      
+      // Cache the analysis result
+      performanceCache.setCachedAnalysis(text, analysis, context, attachmentStyle);
+      logger.info('Analysis cached', { textLength: text.length, context, attachmentStyle });
+    } else {
+      logger.info('Analysis cache hit', { textLength: text.length, context, attachmentStyle });
+    }
+
+    // Generate cache key for suggestions
+    const analysisKey = `${JSON.stringify(analysis.tone)}:${analysis.context.label}:${JSON.stringify(analysis.flags)}`;
+    
+    // Check cache for suggestions
+    let suggestions = performanceCache.getCachedSuggestions(analysisKey, maxSuggestions, tier);
+    
+    if (suggestions) {
+      logger.info('Suggestions cache hit', { count: suggestions.length, tier, maxSuggestions });
+      
+      // Return cached suggestions with proper format
+      return {
+        success: true,
+        tier,
+        original_text: text,
+        context,
+        suggestions,
+        analysis: {
+          tone: analysis.tone,
+          mlGenerated: analysis.mlGenerated,
+          context: analysis.context,
+          flags: analysis.flags,
+          toneBuckets: { primary: 'clear', dist: { clear: 0.8, caution: 0.15, alert: 0.05 } }
+        },
+        analysis_meta: {
+          complexity_score: this.calculateComplexity(text),
+          emotional_intensity: this.calculateEmotionalIntensity(text),
+          clarity_level: this.calculateClarity(text),
+          empathy_present: this.detectEmpathy(text),
+          potential_triggers: this.identifyTriggers(text),
+          recommended_approach: this.recommendApproach(context, options.conflictLevel || 'low')
+        },
+        metadata: {
+          attachmentStyle,
+          timestamp: new Date().toISOString(),
+          version: '4.0.0'
+        } as any,
+        trialStatus
+      };
+    }
+
+    // Cache miss - continue with full processing
+    logger.info('Suggestions cache miss - performing full processing');
 
     // Normalize tone to 3-bucket family if needed
     const toneKeyNorm = (() => {
@@ -928,7 +1337,8 @@ class SuggestionsService {
       intensityScore,
       phraseEdgeHits: Array.isArray(analysis.flags.phraseEdgeHits) ? analysis.flags.phraseEdgeHits : [],
       userPref: dataLoader.get('userPreference'),
-      tier
+      tier,
+      secondPerson: analysis.secondPerson
     });
     logger.info('Ranking completed', { rankedSize: ranked.length, personalizedSize: personalized.length });
 
@@ -959,24 +1369,30 @@ class SuggestionsService {
     const { primary, dist } = this.adviceEngine.resolveToneBucket(toneKeyNorm, contextLabel, intensityScore);
 
     // 10) Assemble response (no fallbacks)
+    const finalSuggestions = calibrated.map(({ advice, categories, ltrScore, id, __calib }) => ({
+      id,
+      text: advice, // Direct therapy advice text from therapy_advice.json
+      categories,
+      type: 'advice' as const, // This is therapy advice, not a rewrite
+      confidence: __calib ?? ltrScore ?? 0.5,
+      reason: 'Therapeutic advice based on tone analysis and attachment style',
+      category: 'emotional' as const, // Match schema enum
+      priority: 1,
+      context_specific: true,
+      attachment_informed: true,
+      ltrScore
+    }));
+
+    // Cache the final suggestions for future use
+    performanceCache.setCachedSuggestions(analysisKey, finalSuggestions, maxSuggestions, tier);
+    logger.info('Suggestions cached', { count: finalSuggestions.length, tier, maxSuggestions });
+
     return {
       success: true,
       tier,
       original_text: text,
       context,
-      suggestions: calibrated.map(({ advice, categories, ltrScore, id, __calib }) => ({
-        id,
-        text: advice, // Direct therapy advice text from therapy_advice.json
-        categories,
-        type: 'advice', // This is therapy advice, not a rewrite
-        confidence: __calib ?? ltrScore ?? 0.5,
-        reason: 'Therapeutic advice based on tone analysis and attachment style',
-        category: 'emotional', // Match schema enum
-        priority: 1,
-        context_specific: true,
-        attachment_informed: true,
-        ltrScore
-      })),
+      suggestions: finalSuggestions,
       analysis: {
         tone: analysis.tone,
         mlGenerated: analysis.mlGenerated,

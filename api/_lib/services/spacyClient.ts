@@ -19,10 +19,29 @@ import { join, resolve } from 'path';
 import { env } from 'process';
 import { logger } from '../logger';
 
+const CLIENT_VERSION = '1.2.0';
+
 // Prefer global performance if available (Node >=16). Fallback to Date.now.
 const now = (): number => (globalThis.performance && typeof globalThis.performance.now === 'function')
   ? globalThis.performance.now()
   : Date.now();
+
+function extractSecondPersonTokenSpans(tokens: SpacyToken[]) {
+  const SECOND = new Set(['you','your',"you're",'ur','u','yours','yourself',"youre"]);
+  const spans: Array<{start:number; end:number}> = [];
+  for (const t of tokens) {
+    const lem = (t.lemma || t.text || '').toLowerCase();
+    if (SECOND.has(lem)) spans.push({ start: t.index, end: t.index });
+  }
+  spans.sort((a,b)=>a.start-b.start);
+  const merged: typeof spans = [];
+  for (const s of spans) {
+    const last = merged[merged.length-1];
+    if (last && s.start <= last.end + 1) last.end = Math.max(last.end, s.end);
+    else merged.push({ ...s });
+  }
+  return merged;
+}
 
 // -----------------------------
 // Public types (kept for compatibility)
@@ -295,23 +314,27 @@ export class SpacyService {
 
   // ---------- tiny NLP helpers ----------
   private simplePOSTag(word: string): string {
-    const w = word.toLowerCase();
-    const pron = ['i','you','he','she','it','we','they','me','him','her','us','them','my','your','our','their'];
-    const aux  = ['am','is','are','was','were','be','been','being','do','does','did','have','has','had','will','would','could','should','may','might','must'];
-    if (pron.includes(w)) return 'PRON';
-    if (aux.includes(w)) return 'AUX';
-    if (/ing$/.test(w) || /ed$/.test(w)) return 'VERB';
-    if (/ly$/.test(w)) return 'ADV';
-    if (/^[A-Z]/.test(word)) return 'PROPN';
-    return 'NOUN';
+    const w = word;
+    const lw = w.toLowerCase();
+    const pron = new Set(['i','you','he','she','it','we','they','me','him','her','us','them','my','your','our','their','yours',"you're","youre"]);
+    const aux  = new Set(['am','is','are','was','were','be','been','being','do','does','did','have','has','had','will','would','could','should','may','might','must']);
+    if (pron.has(lw)) return 'PRON';
+    if (aux.has(lw)) return 'AUX';
+    if (/[a-z]+(ing|ed)$/.test(lw)) return 'VERB';
+    if (/[a-z]+ly$/.test(lw)) return 'ADV';
+    if (/^[A-Z][a-z]+$/.test(w) && !/^[A-Z]+$/.test(w)) return 'PROPN'; // avoid mid-sentence ALLCAPS
+    if (/^[\p{P}\p{S}]$/u.test(w)) return 'PUNCT';
+    return /[a-z]/i.test(w) ? 'NOUN' : 'X';
   }
 
   private basicLemmatize(word: string): string {
-    const w = word.toLowerCase();
+    let w = word.toLowerCase();
+    w = w.replace(/'/g,"'"); // normalize curly apostrophe
     if (w.endsWith("n't")) return w.replace("n't",' not');
-    if (w.endsWith('ing') && w.length > 4) return w.slice(0, -3);
-    if (w.endsWith('ed') && w.length > 3) return w.slice(0, -2);
-    if (w.endsWith('s') && w.length > 3) return w.slice(0, -1);
+    if (/(?:'re|'ve|'ll|'d)$/.test(w)) w = w.replace(/'(re|ve|ll|d)$/,'');
+    if (w.endsWith('ing') && w.length > 4) return w.slice(0,-3);
+    if (w.endsWith('ed') && w.length > 3)  return w.slice(0,-2);
+    if (w.endsWith('s')  && w.length > 3)  return w.slice(0,-1);
     return w;
   }
 
@@ -383,40 +406,37 @@ export class SpacyService {
   }
 
   private findNegationDeps(text: string, toks: SpacyToken[], sents: Array<{start:number;end:number}>) {
-    // Build dependency-like links: neg trigger -> nearest verb head (within window)
     const deps: Array<{ rel: string; head: number; token: number; start: number; end: number }> = [];
     const subtreeSpan: Record<number, { start: number; end: number }> = {};
 
     const negWordSet = new Set([
-      'not','dont','don\'t','wont','won\'t','cant','can\'t','shouldnt','shouldn\'t','wouldnt','wouldn\'t',
-      'couldnt','couldn\'t','havent','haven\'t','hasnt','hasn\'t','hadnt','hadn\'t','isnt','isn\'t','arent','aren\'t',
-      'wasnt','wasn\'t','werent','weren\'t','never','no','nothing','nobody','nowhere'
+      'not',"don't","dont","won't","wont","can't","cant","shouldn't","shouldnt","wouldn't","wouldnt",
+      "couldn't","couldnt","haven't","havent","hasn't","hasnt","hadn't","hadnt","isn't","isnt","aren't","arent",
+      "wasn't","wasnt","weren't","werent",'never','no','nothing','nobody','nowhere'
     ]);
+
+    // Build sentence map by char
+    const findSentByChar = (ch: number) => sents.find(s => ch >= s.start && ch < s.end) || { start: 0, end: text.length };
 
     for (let i = 0; i < toks.length; i++) {
       const t = toks[i];
       const norm = t.text.toLowerCase();
       if (!negWordSet.has(norm)) continue;
 
-      // find nearest verb/adjective to the right, then left (window 5)
-      let head = -1;
-      for (let j = i+1; j <= Math.min(i+5, toks.length-1); j++) {
-        if (toks[j].pos === 'VERB' || toks[j].pos === 'AUX' || toks[j].pos === 'ADJ') { head = j; break; }
-      }
-      if (head === -1) {
-        for (let j = i-1; j >= Math.max(0, i-5); j--) {
-          if (toks[j].pos === 'VERB' || toks[j].pos === 'AUX' || toks[j].pos === 'ADJ') { head = j; break; }
-        }
-      }
-      if (head === -1) head = i; // fallback to self
+      // Prefer right-ward head within window; else left; prefer VERB>AUX>ADJ
+      const pref = (idx: number) => (toks[idx].pos === 'VERB' ? 3 : toks[idx].pos === 'AUX' ? 2 : toks[idx].pos === 'ADJ' ? 1 : 0);
+      let head = -1, best = -1;
+      for (let j = i+1; j <= Math.min(i+6, toks.length-1); j++) { const p = pref(j); if (p > best) { best = p; head = j; if (p===3) break; } }
+      if (head === -1) for (let j = i-1; j >= Math.max(0, i-6); j--) { const p = pref(j); if (p > best) { best = p; head = j; if (p===3) break; } }
+      if (head === -1) head = i;
 
-      // scope: use sentence containing the head
-      const headChar = toks[head].start ?? 0;
-      const sent = sents.find(s => headChar >= s.start && headChar <= s.end) || { start: 0, end: text.length };
-      deps.push({ rel: 'neg', head, token: i, start: sent.start, end: sent.end });
-      if (!subtreeSpan[head]) subtreeSpan[head] = { start: sent.start, end: sent.end };
+      // Scope: head's sentence, but shrink to head's local phrase when possible
+      const sent = findSentByChar(toks[head].start ?? 0);
+      const localStart = Math.min(toks[head].start ?? sent.start, sent.start);
+      const localEnd   = Math.max(toks[head].end   ?? sent.end,   sent.end);
+      deps.push({ rel: 'neg', head, token: i, start: localStart, end: localEnd });
+      if (!subtreeSpan[head]) subtreeSpan[head] = { start: localStart, end: localEnd };
     }
-
     return { deps, subtreeSpan };
   }
 
@@ -441,15 +461,23 @@ export class SpacyService {
   private detectSarcasm(text: string): SarcasmAnalysis {
     const hits: any[] = [];
     for (const { rx, conf } of this.sarcasmPatterns) {
-      const m = rx.exec(text);
-      if (m) hits.push({ pattern: m[0], position: m.index, type: 'linguistic_pattern', confidence: conf });
+      let rxGlobal = rx;
+      if (!rx.global) { // clone with /g if missing
+        const flags = (rx.ignoreCase ? 'i' : '') + (rx.multiline ? 'm' : '') + 'g';
+        rxGlobal = new RegExp(rx.source, flags);
+      }
+      let m: RegExpExecArray | null;
+      while ((m = rxGlobal.exec(text)) !== null) hits.push({ pattern: m[0], position: m.index, type: 'linguistic_pattern', confidence: conf });
     }
-    // punctuation cues
+    // punctuation cues (global)
     const punct = /[!]{2,}|[?]{2,}|[.]{3,}/g; let mm: RegExpExecArray | null;
     while ((mm = punct.exec(text)) !== null) hits.push({ pattern: mm[0], position: mm.index, type: 'punctuation_pattern', confidence: 0.4 });
 
-    const score = hits.length ? Math.min(1, hits.reduce((s, h) => s + (h.confidence || 0.4), 0) / hits.length) : 0;
-    return { hasSarcasm: hits.length > 0, sarcasmIndicators: hits, sarcasmScore: score, overallSarcasmProbability: Math.min(hits.length * 0.3, 1) };
+    // bounded aggregation
+    const sum = hits.reduce((s,h)=>s+(h.confidence||0.4),0);
+    const score = Math.min(1, sum / Math.max(1, hits.length));
+    const prob  = Math.min(1, 0.25*hits.length + 0.5*score); // tunable
+    return { hasSarcasm: hits.length>0, sarcasmIndicators: hits, sarcasmScore: score, overallSarcasmProbability: prob };
   }
 
   private detectIntensity(text: string): IntensityAnalysis {
@@ -458,18 +486,21 @@ export class SpacyService {
     let m: RegExpExecArray | null;
     while ((m = rx.exec(text)) !== null) {
       const w = m[0].toLowerCase();
-      let level = 'moderate'; let mult = 1.0;
-      if (['extremely','incredibly','totally','completely','absolutely','utterly'].includes(w)) { level = 'high'; mult = 1.5; }
-      else if (['very','really','quite'].includes(w)) { level = 'moderate-high'; mult = 1.2; }
-      else if (['somewhat','a little','slightly','barely','hardly'].includes(w)) { level = 'low'; mult = 0.7; }
+      let level = 'moderate', mult = 1.0;
+      if (['extremely','incredibly','totally','completely','absolutely','utterly'].includes(w)) { level='high'; mult=1.5; }
+      else if (['very','really','quite'].includes(w)) { level='moderate-high'; mult=1.2; }
+      else if (['somewhat','a little','slightly','barely','hardly'].includes(w)) { level='low'; mult=0.7; }
       words.push({ word: w, position: m.index, level, multiplier: mult, scope: this.peekNext(text, m.index) });
     }
-    // JSON modifiers
     for (const pat of this.intensityPatterns) {
-      try { if (pat.rx.test(text)) words.push({ word: pat.rx.source, position: -1, level: pat.level || 'custom', multiplier: pat.mult, scope: 'json' }); } catch {}
+      let mm: RegExpExecArray | null;
+      const g = pat.rx.global ? pat.rx : new RegExp(pat.rx.source, (pat.rx.ignoreCase?'i':'')+'g');
+      while ((mm = g.exec(text)) !== null) words.push({ word: pat.rx.source, position: mm.index, level: pat.level || 'custom', multiplier: pat.mult, scope: 'json' });
     }
-    const overall = words.length ? words.reduce((s: number, w: any) => s + (w.multiplier || 1), 0) / words.length : 1.0;
-    const dom = (() => { const m: Record<string,number> = {}; words.forEach((w:any)=>m[w.level]=(m[w.level]||0)+1); return Object.entries(m).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'neutral'; })();
+    // bounded blend (prevents explosion)
+    const bump = words.reduce((prod, w)=> prod * (1 - Math.min(Math.max((w.multiplier||1)-1,0), 0.35)), 1);
+    const overall = 1 - bump; // in [0,1)
+    const dom = (() => { const m: Record<string,number> = {}; words.forEach((w:any)=>m[w.level]=(m[w.level]||0)+1); return Object.entries(m).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'neutral';})();
     return { hasIntensity: words.length>0, intensityWords: words, intensityCount: words.length, overallIntensity: overall, dominantLevel: dom };
   }
 
@@ -480,20 +511,45 @@ export class SpacyService {
   }
 
   private classifyContext(text: string): ContextClassification {
-    const contexts: any[] = [];
+    const toks = this.splitTokens(text);
     const lower = text.toLowerCase();
     const confs = this.contextClassifiers?.contexts || [];
+    const decayTau = 80; // chars; JSON-tunable later
+    const contextual: any[] = [];
+
     for (const ctx of confs) {
       let score = 0; const matched: string[] = [];
-      const keys = ctx.keywords || ctx.toneCues || [];
-      const phrases = ctx.phrases || [];
       const w = ctx.weight || 1.0;
-      keys.forEach((k: string) => { if (lower.includes(String(k).toLowerCase())) { score += w; matched.push(k); } });
-      phrases.forEach((p: string) => { if (lower.includes(String(p).toLowerCase())) { score += w * 1.5; matched.push(p); } });
-      if (score > 0) contexts.push({ context: ctx.context || ctx.name, score, confidence: Math.min(score/3.0, 1.0), matchedPatterns: matched, description: ctx.description });
+      const phrases = [...(ctx.phrases||[]), ...(ctx.keywords||ctx.toneCues||[])];
+
+      for (const p of phrases) {
+        const rx = new RegExp(String(p).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'ig');
+        let m: RegExpExecArray | null;
+        while ((m = rx.exec(lower)) !== null) {
+          const pos = m.index;
+          const decay = Math.exp(-(lower.length - pos)/Math.max(1,decayTau));
+          score += w * (1.0 + 0.2 * (p.split(' ').length > 1 ? 1 : 0)) * decay;
+          matched.push(p);
+        }
+      }
+      if (score > 0) contextual.push({ context: ctx.context || ctx.name, score, matchedPatterns: matched });
     }
-    contexts.sort((a,b)=>b.score-a.score);
-    return { primaryContext: contexts[0]?.context || 'general', secondaryContext: contexts[1]?.context || null, allContexts: contexts, confidence: contexts[0]?.confidence || 0.1 };
+
+    contextual.sort((a,b)=>b.score-a.score);
+    const top = contextual[0];
+    const temp = Math.max(0.6, Math.min(1.8, this.contextClassifiers?.temperature?.[top?.context] ?? 1.0));
+    const logits = contextual.map(c => c.score);
+    const max = Math.max(...logits, 0);
+    const exps = contextual.map(c => Math.exp((c.score - max)/temp));
+    const Z = exps.reduce((a,b)=>a+b, 0) || 1;
+    const conf = exps[0]/Z;
+
+    return {
+      primaryContext: top?.context || 'general',
+      secondaryContext: contextual[1]?.context || null,
+      allContexts: contextual.map((c,i)=>({ context:c.context, score:c.score, confidence: exps[i]/Z, matchedPatterns: c.matchedPatterns })),
+      confidence: conf
+    };
   }
 
   // ---------- tiny utils ----------
@@ -520,8 +576,8 @@ export class SpacyService {
     const start = now();
     const original = this.clamp(text || '');
 
-    // LRU (by mode + text)
-    const key = `${this.mode}:${original}`;
+    // LRU (by version + mode + text)
+    const key = `${CLIENT_VERSION}:${this.mode}:${original}`;
     const cached = this._lruGet(this._analysisLRU, key);
     if (cached && cached.processingTimeMs < this.budgets.maxMillis) {
       return this._toProcessResult(cached);
@@ -586,9 +642,20 @@ export class SpacyService {
       ));
     })();
 
+    // Extract second-person spans for PRON_2P entities
+    const secondPerson = extractSecondPersonTokenSpans(diag.tokens);
+
     return {
       context,
-      entities: diag.entities,
+      entities: [
+        ...diag.entities,
+        ...secondPerson.map(s => ({ 
+          text: 'you', 
+          label: 'PRON_2P', 
+          start: diag.tokens[s.start]?.start ?? 0, 
+          end: diag.tokens[s.end]?.end ?? 0 
+        }))
+      ],
       negation: { present: diag.negationAnalysis.hasNegation, score: diag.negationAnalysis.hasNegation ? negScore : 0 },
       sarcasm: { present: diag.sarcasmAnalysis.hasSarcasm, score: sarcScore },
       intensity: { score: intensityScore },
@@ -685,6 +752,7 @@ export class SpacyService {
   getServiceStatus(): any {
     return {
       status: 'operational',
+      version: CLIENT_VERSION,
       dataFilesLoaded: {
         context_classifiers: !!this.contextClassifiers,
         negation_indicators: !!this.negationIndicators,

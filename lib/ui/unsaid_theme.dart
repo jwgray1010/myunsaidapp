@@ -136,7 +136,8 @@ ThemeData buildUnsaidTheme() {
       onPrimary: UnsaidPalette.textPrimaryDark, // White text on primary color
       onSecondary:
           UnsaidPalette.textPrimaryDark, // White text on secondary color
-      onSurface: UnsaidPalette.textPrimary, // Dark text on surface (cards) - now dark by default
+      onSurface: UnsaidPalette
+          .textPrimary, // Dark text on surface (cards) - now dark by default
     ),
   );
 
@@ -145,34 +146,28 @@ ThemeData buildUnsaidTheme() {
     textTheme: base.textTheme.copyWith(
       titleLarge: base.textTheme.titleLarge?.copyWith(
         fontWeight: FontWeight.w700,
-        color: UnsaidPalette
-            .textPrimary, // Dark text by default
+        color: UnsaidPalette.textPrimary, // Dark text by default
         letterSpacing: -0.2,
       ),
       titleMedium: base.textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w600,
-        color: UnsaidPalette
-            .textPrimary, // Dark text by default
+        color: UnsaidPalette.textPrimary, // Dark text by default
         letterSpacing: -0.1,
       ),
       titleSmall: base.textTheme.titleSmall?.copyWith(
         fontWeight: FontWeight.w500,
-        color: UnsaidPalette
-            .textPrimary, // Dark text by default
+        color: UnsaidPalette.textPrimary, // Dark text by default
       ),
       bodyLarge: base.textTheme.bodyLarge?.copyWith(
-        color: UnsaidPalette
-            .textSecondary, // Medium dark text by default
+        color: UnsaidPalette.textSecondary, // Medium dark text by default
         height: 1.35,
       ),
       bodyMedium: base.textTheme.bodyMedium?.copyWith(
-        color: UnsaidPalette
-            .textSecondary, // Medium dark text by default
+        color: UnsaidPalette.textSecondary, // Medium dark text by default
         height: 1.35,
       ),
       bodySmall: base.textTheme.bodySmall?.copyWith(
-        color: UnsaidPalette
-            .textTertiary, // Light dark text by default
+        color: UnsaidPalette.textTertiary, // Light dark text by default
       ),
       labelLarge: base.textTheme.labelLarge?.copyWith(
         color: UnsaidPalette.textPrimary,
@@ -188,7 +183,8 @@ ThemeData buildUnsaidTheme() {
     appBarTheme: base.appBarTheme.copyWith(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      foregroundColor: UnsaidPalette.textPrimaryDark, // White for gradient app bars
+      foregroundColor:
+          UnsaidPalette.textPrimaryDark, // White for gradient app bars
       titleTextStyle: base.textTheme.titleLarge?.copyWith(
         fontWeight: FontWeight.w700,
         color: UnsaidPalette.textPrimaryDark, // White for gradient app bars

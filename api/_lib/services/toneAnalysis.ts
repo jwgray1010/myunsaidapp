@@ -98,7 +98,7 @@ function plattCalibrate(conf: number, ctx: string) {
 type SpacyLite = {
   tokens: { text: string; lemma: string; pos: string; i: number }[];
   sents: { start: number; end: number }[];
-  negScopes: Array<{ start: number; end: number }>;
+  negScopes: Array<{ label: string; start: number; end: number }>;
   sarcasmCue: boolean;
   contextLabel?: string;
 };
@@ -116,13 +116,13 @@ async function spacyLite(text: string, hintContext?: string): Promise<SpacyLite>
   }));
 
   // Extract negation scopes - using simplified approach since detailed deps may not be available
-  const negScopes: Array<{start:number;end:number}> = [];
+  const negScopes: Array<{label: string; start:number;end:number}> = [];
   const deps = (r as any).deps || [];
   for (const dep of deps) {
     if (dep && dep.rel === 'neg') {
       const subtreeSpan = (r as any).subtreeSpan;
       const span = subtreeSpan?.[dep.head];
-      if (span) negScopes.push({ start: span.start, end: span.end });
+      if (span) negScopes.push({ label: 'NEG', start: span.start, end: span.end });
     }
   }
 
@@ -152,13 +152,13 @@ function spacyLiteSync(text: string, hintContext?: string): SpacyLite {
   }));
 
   // Extract negation scopes - using simplified approach since detailed deps may not be available
-  const negScopes: Array<{start:number;end:number}> = [];
+  const negScopes: Array<{label: string; start:number;end:number}> = [];
   const deps = (r as any).deps || [];
   for (const dep of deps) {
     if (dep && dep.rel === 'neg') {
       const subtreeSpan = (r as any).subtreeSpan;
       const span = subtreeSpan?.[dep.head];
-      if (span) negScopes.push({ start: span.start, end: span.end });
+      if (span) negScopes.push({ label: 'NEG', start: span.start, end: span.end });
     }
   }
 
@@ -176,10 +176,113 @@ function spacyLiteSync(text: string, hintContext?: string): SpacyLite {
 }
 
 // -----------------------------
+// Aho-Corasick automaton for efficient multi-pattern matching
+// -----------------------------
+class AhoCorasickNode {
+  children = new Map<string, AhoCorasickNode>();
+  failure: AhoCorasickNode | null = null;
+  output: { bucket: Bucket; weight: number; term: string }[] = [];
+}
+
+class AhoCorasickAutomaton {
+  private root = new AhoCorasickNode();
+  private built = false;
+
+  addPattern(pattern: string, bucket: Bucket, weight: number) {
+    let node = this.root;
+    const terms = pattern.split(' ');
+    
+    for (const term of terms) {
+      if (!node.children.has(term)) {
+        node.children.set(term, new AhoCorasickNode());
+      }
+      node = node.children.get(term)!;
+    }
+    
+    node.output.push({ bucket, weight, term: pattern });
+    this.built = false; // Mark as needing rebuild
+  }
+
+  build() {
+    if (this.built) return;
+    
+    // Build failure links using BFS
+    const queue: AhoCorasickNode[] = [];
+    
+    // Initialize first level
+    for (const child of this.root.children.values()) {
+      child.failure = this.root;
+      queue.push(child);
+    }
+    
+    // Build failure links for deeper levels
+    while (queue.length > 0) {
+      const currentNode = queue.shift()!;
+      
+      for (const [char, childNode] of currentNode.children) {
+        queue.push(childNode);
+        
+        let failureNode = currentNode.failure;
+        while (failureNode !== null && !failureNode.children.has(char)) {
+          failureNode = failureNode.failure;
+        }
+        
+        if (failureNode === null) {
+          childNode.failure = this.root;
+        } else {
+          childNode.failure = failureNode.children.get(char)!;
+          // Add failure node's output to current node's output
+          childNode.output.push(...childNode.failure.output);
+        }
+      }
+    }
+    
+    this.built = true;
+  }
+
+  search(tokens: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number }[] {
+    this.build();
+    
+    const results: { bucket: Bucket; weight: number; term: string; start: number; end: number }[] = [];
+    let currentNode = this.root;
+    
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      
+      // Follow failure links until we find a match or reach root
+      while (currentNode !== this.root && !currentNode.children.has(token)) {
+        currentNode = currentNode.failure!;
+      }
+      
+      if (currentNode.children.has(token)) {
+        currentNode = currentNode.children.get(token)!;
+        
+        // Check for pattern matches at this position
+        for (const match of currentNode.output) {
+          const termLength = match.term.split(' ').length;
+          const start = i - termLength + 1;
+          results.push({
+            bucket: match.bucket,
+            weight: match.weight,
+            term: match.term,
+            start: start,
+            end: i
+          });
+        }
+      }
+    }
+    
+    return results;
+  }
+}
+
+// -----------------------------
 // JSON-backed detectors
 // -----------------------------
 class ToneDetectors {
   private trigByLen = new Map<number, {term: string, bucket: Bucket, w: number}[]>();
+  private ahoCorasick = new AhoCorasickAutomaton(); // ✅ New Aho-Corasick automaton
+  private useAhoCorasick = true; // ✅ Feature flag for gradual rollout
   private negRegexes: RegExp[] = [];
   private sarcRegexes: RegExp[] = [];
   private edgeRegexes: { re: RegExp, cat: string, weight?: number }[] = [];
@@ -210,10 +313,14 @@ class ToneDetectors {
     const prof  = dataLoader.get('profanityLexicons');
 
     const push = (t: string, bucket: Bucket, w: number) => {
-      const L = t.trim().toLowerCase().split(/\s+/).length;
+      const normalizedTerm = this.normalizeText(t);
+      const L = normalizedTerm.split(/\s+/).length;
       const arr = this.trigByLen.get(L) || [];
-      arr.push({ term: t.toLowerCase(), bucket, w });
+      arr.push({ term: normalizedTerm, bucket, w });
       this.trigByLen.set(L, arr);
+      
+      // ✅ Also add to Aho-Corasick automaton for O(n) performance
+      this.ahoCorasick.addPattern(normalizedTerm, bucket, w);
     };
 
     // Handle actual tone_triggerwords.json structure:
@@ -293,16 +400,43 @@ class ToneDetectors {
     logger.info(`ToneDetectors initialized with ${this.trigByLen.size} trigger word lengths, ${this.profanity.length} profanity words`);
   }
 
+  // Text normalization for consistent matching
+  private normalizeText(text: string): string {
+    return text
+      .normalize('NFKC')  // Unicode normalization
+      .toLowerCase()      // Case folding
+      .replace(/\s+/g, ' ')  // Collapse whitespace
+      .replace(/[^\w\s]/g, ' ')  // Strip punctuation, replace with space
+      .trim();
+  }
+
+  // Tokenize normalized text consistently
+  private tokenizeNormalized(text: string): string[] {
+    return this.normalizeText(text)
+      .split(/\s+/)
+      .filter(token => token.length > 0);
+  }
+
   scanSurface(tokens: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number }[] { 
-    return this.scan(tokens.map(t => t.toLowerCase())); 
+    // Normalize tokens for consistent matching
+    const normalizedTokens = tokens.map(t => this.normalizeText(t));
+    return this.scan(normalizedTokens); 
   }
   scanLemmas(lemmas: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number }[] { 
-    return this.scan(lemmas); 
+    // Normalize lemmas for consistent matching
+    const normalizedLemmas = lemmas.map(l => this.normalizeText(l));
+    return this.scan(normalizedLemmas); 
   }
 
   private scan(terms: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number }[] {
     this.initSyncIfNeeded();   // ✅ No async in hot path
 
+    // ✅ Use Aho-Corasick for O(n) performance when enabled
+    if (this.useAhoCorasick) {
+      return this.ahoCorasick.search(terms);
+    }
+
+    // ✅ Fallback to original O(n*m) implementation
     const hits: { bucket: Bucket; weight: number; term: string; start: number; end: number }[] = [];
     const MAX_N = Math.max(1, ...Array.from(this.trigByLen.keys(), n => n || 1));
     for (let i=0;i<terms.length;i++) {
@@ -326,12 +460,78 @@ class ToneDetectors {
     logger.info('edgeHits method completed', { resultCount: out.length });
     return out; 
   }
-  intensityBump(text: string) { let bump = 0; for (const {re,mult} of this.intensifiers) if (re.test(text)) bump += (mult - 1); return Math.max(0,bump); }
+  intensityBump(text: string) { 
+    const cap = 0.3; // Cap per signal to prevent explosion
+    let combinedEffect = 1.0; // Start with 1 (no effect)
+    
+    for (const {re, mult} of this.intensifiers) {
+      if (re.test(text)) {
+        const signalEffect = Math.min(mult - 1, cap); // Cap the individual effect
+        combinedEffect *= (1 - signalEffect); // Blend effects multiplicatively
+      }
+    }
+    
+    const finalBump = 1 - combinedEffect; // Convert back to additive bump
+    
+    // Scale by text length to prevent short texts from being over-boosted
+    const lengthScale = Math.min(1.0, Math.log(text.length + 1) / Math.log(50)); // Scale smoothly up to 50 chars
+    
+    return Math.max(0, finalBump * lengthScale);
+  }
   containsProfanity(text: string) { 
     const T = text.toLowerCase(); 
-    const found = this.profanity.some(w => T.includes(w));
+    // Use word boundaries to avoid false positives like "class" triggering "ass"
+    const found = this.profanity.some(w => {
+      // Create word boundary regex for each profanity word
+      const regex = new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      return regex.test(T);
+    });
     logger.info(`Profanity check: text="${T}", profanityWords=[${this.profanity.slice(0, 5).join(', ')}...], found=${found}`);
     return found;
+  }
+
+  // Enhanced profanity detection with structured results
+  analyzeProfanity(text: string): { 
+    hasProfanity: boolean; 
+    count: number; 
+    matches: string[]; 
+    hasTargetedSecondPerson: boolean;
+    severity: 'mild' | 'moderate' | 'strong' | 'none';
+  } {
+    const T = text.toLowerCase();
+    const matches: string[] = [];
+    let maxSeverity: 'mild' | 'moderate' | 'strong' | 'none' = 'none';
+    
+    // Get profanity data with severity levels
+    const prof = dataLoader.get('profanityLexicons');
+    if (prof?.categories) {
+      for (const category of prof.categories) {
+        if (category.triggerWords && Array.isArray(category.triggerWords)) {
+          for (const word of category.triggerWords) {
+            const regex = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+            if (regex.test(T)) {
+              matches.push(word);
+              // Track highest severity
+              if (category.severity === 'strong') maxSeverity = 'strong';
+              else if (category.severity === 'moderate' && maxSeverity !== 'strong') maxSeverity = 'moderate';
+              else if (category.severity === 'mild' && maxSeverity === 'none') maxSeverity = 'mild';
+            }
+          }
+        }
+      }
+    }
+
+    // Check for second-person targeting
+    const hasSecondPerson = /\byou(r|'re|re|)\b/.test(T);
+    const hasTargetedSecondPerson = matches.length > 0 && hasSecondPerson;
+
+    return {
+      hasProfanity: matches.length > 0,
+      count: matches.length,
+      matches,
+      hasTargetedSecondPerson,
+      severity: maxSeverity
+    };
   }
   getProfanityCount() { return this.profanity.length; }
 }
@@ -413,7 +613,16 @@ export class ToneStream {
     log.alert += bump * 0.6; log.caution += bump * 0.2;
 
     // Guardrail: profanity instantly nudges toward alert
-    if (detectors.containsProfanity(txt)) { log.alert += 0.5; log.clear -= 0.1; }
+    const profanityCheck = detectors.analyzeProfanity(txt);
+    if (profanityCheck.hasProfanity) { 
+      // Scale alert boost by severity
+      let alertBoost = 0.3;
+      if (profanityCheck.severity === 'strong') alertBoost = 0.6;
+      else if (profanityCheck.severity === 'moderate') alertBoost = 0.4;
+      
+      log.alert += alertBoost; 
+      log.clear -= 0.1; 
+    }
 
     const dist = softmax3(log);
     this.lastDist = normalize3({
@@ -436,7 +645,16 @@ export class ToneStream {
     log.alert += bump * 0.6; log.caution += bump * 0.2;
 
     // Guardrail: profanity instantly nudges toward alert
-    if (detectors.containsProfanity(txt)) { log.alert += 0.5; log.clear -= 0.1; }
+    const profanityCheck = detectors.analyzeProfanity(txt);
+    if (profanityCheck.hasProfanity) { 
+      // Scale alert boost by severity
+      let alertBoost = 0.3;
+      if (profanityCheck.severity === 'strong') alertBoost = 0.6;
+      else if (profanityCheck.severity === 'moderate') alertBoost = 0.4;
+      
+      log.alert += alertBoost; 
+      log.clear -= 0.1; 
+    }
 
     const dist = softmax3(log);
     this.lastDist = normalize3({
@@ -483,8 +701,8 @@ class AdvancedFeatureExtractor {
     };
   }
 
-  extract(text: string, attachmentStyle: string = 'secure') {
-    logger.info('Feature extraction started', { textLength: text.length });
+  extract(text: string, attachmentStyle: string = 'secure', skipNegationFallback: boolean = false) {
+    logger.info('Feature extraction started', { textLength: text.length, skipNegationFallback });
     const T = text.toLowerCase();
     const features: any = {};
 
@@ -534,34 +752,41 @@ class AdvancedFeatureExtractor {
       features[`attach_${style}`] = hits / Math.max(1, (list as string[]).length);
     }
 
-    // negation/sarcasm regex fallback (spaCy will refine later)
-    const neg = dataLoader.get('negationPatterns') || dataLoader.get('negationIndicators');
-    const sar = dataLoader.get('sarcasmIndicators');
-    
-    logger.info('Negation data debug', { 
-      neg: typeof neg, 
-      negStructure: neg ? Object.keys(neg) : 'null',
-      hasPatterns: neg?.patterns ? 'yes' : 'no',
-      hasNegationIndicators: neg?.negation_indicators ? 'yes' : 'no',
-      isArray: Array.isArray(neg),
-      negSample: neg ? JSON.stringify(neg).substring(0, 200) : 'null'
-    });
-    
-    // Fix: negation data is structured as { negation_indicators: [...] }
-    const negationList = neg?.negation_indicators || neg?.patterns || neg || [];
-    const sarcasmList = sar?.sarcasm_indicators || sar?.patterns || sar || [];
-    
-    const hasNeg = Array.isArray(negationList) && negationList.some((item: any) => {
-      const pattern = item?.pattern || item;
-      return typeof pattern === 'string' && new RegExp(pattern, 'i').test(text);
-    });
-    
-    const hasSarc = Array.isArray(sarcasmList) && sarcasmList.some((item: any) => {
-      const pattern = item?.pattern || item;
-      return typeof pattern === 'string' && new RegExp(pattern, 'i').test(text);
-    });
-    features.neg_present = hasNeg ? 0.3 : 0;
-    features.sarc_present = hasSarc ? 0.3 : 0;
+    // negation/sarcasm regex fallback (only if spaCy won't handle it)
+    if (!skipNegationFallback) {
+      const neg = dataLoader.get('negationPatterns') || dataLoader.get('negationIndicators');
+      const sar = dataLoader.get('sarcasmIndicators');
+      
+      logger.info('Negation data debug', { 
+        neg: typeof neg, 
+        negStructure: neg ? Object.keys(neg) : 'null',
+        hasPatterns: neg?.patterns ? 'yes' : 'no',
+        hasNegationIndicators: neg?.negation_indicators ? 'yes' : 'no',
+        isArray: Array.isArray(neg),
+        negSample: neg ? JSON.stringify(neg).substring(0, 200) : 'null'
+      });
+      
+      // Fix: negation data is structured as { negation_indicators: [...] }
+      const negationList = neg?.negation_indicators || neg?.patterns || neg || [];
+      const sarcasmList = sar?.sarcasm_indicators || sar?.patterns || sar || [];
+      
+      const hasNeg = Array.isArray(negationList) && negationList.some((item: any) => {
+        const pattern = item?.pattern || item;
+        return typeof pattern === 'string' && new RegExp(pattern, 'i').test(text);
+      });
+      
+      const hasSarc = Array.isArray(sarcasmList) && sarcasmList.some((item: any) => {
+        const pattern = item?.pattern || item;
+        return typeof pattern === 'string' && new RegExp(pattern, 'i').test(text);
+      });
+      features.neg_present = hasNeg ? 0.3 : 0;
+      features.sarc_present = hasSarc ? 0.3 : 0;
+    } else {
+      // Will be set by spaCy results later
+      features.neg_present = 0;
+      features.sarc_present = 0;
+      logger.info('Skipping negation/sarcasm fallback - will use spaCy results');
+    }
 
     // phrase edges
     logger.info('Calling detectors.edgeHits');
@@ -635,8 +860,12 @@ export class ToneAnalysisService {
       anxious: 0, angry: 0, frustrated: 0, sad: 0, assertive: 0 
     };
 
+    // Enhanced profanity analysis (single call, structured result)
+    const profanityAnalysis = detectors.analyzeProfanity(text);
+
     logger.info('_scoreTones called', { text: text.substring(0, 50), attachmentStyle, contextHint });
     logger.info('Features available', { edgeList: f.edge_list, emoAnger: f.emo_anger, lngAbsolutes: f.lng_absolutes });
+    logger.info('Profanity analysis', profanityAnalysis);
 
     // Emotion-driven
     out.angry      += (f.emo_anger || 0) * W.emo;
@@ -692,8 +921,27 @@ export class ToneAnalysisService {
       if (category === 'repair')  { out.supportive += 0.22 * weight; }
     }
 
-    // Profanity guardrail: push toward alert and dampen supportive
-    if (detectors.containsProfanity(text)) { out.angry += 0.3; out.supportive = Math.max(0, out.supportive - 0.2); }
+    // Enhanced profanity handling with severity levels
+    if (profanityAnalysis.hasProfanity) {
+      let profanityWeight = 0.2; // base weight
+      
+      // Scale by severity
+      switch (profanityAnalysis.severity) {
+        case 'mild': profanityWeight = 0.1; break;
+        case 'moderate': profanityWeight = 0.2; break;
+        case 'strong': profanityWeight = 0.4; break;
+      }
+      
+      // Scale by count (with diminishing returns)
+      const countMultiplier = Math.min(2.0, 1 + Math.log(profanityAnalysis.count) * 0.3);
+      profanityWeight *= countMultiplier;
+      
+      out.angry += profanityWeight;
+      out.supportive = Math.max(0, out.supportive - profanityWeight * 0.5);
+      
+      // Store profanity analysis for hard-floor check later
+      fr.profanityAnalysis = profanityAnalysis;
+    }
 
     for (const k of Object.keys(out)) out[k] = Math.max(0, out[k]);
     return { scores: out, intensity };
@@ -776,9 +1024,9 @@ export class ToneAnalysisService {
       const doc = await spacyLite(text, options.context);
       logger.info('spacyLite completed', { tokens: doc.tokens.length, contextLabel: doc.contextLabel });
 
-      // Extract features
+      // Extract features (skip negation fallback since spaCy will provide it)
       logger.info('Extracting features');
-      const fr = this.fx.extract(text, style);
+      const fr = this.fx.extract(text, style, true); // skipNegationFallback = true
       logger.info('Features extracted', { featureCount: Object.keys(fr.features).length });
       
       // Replace naive neg/sarc with spaCy scoped values
@@ -799,16 +1047,34 @@ export class ToneAnalysisService {
       // 🔒 Hard-floor: profanity + 2nd-person targeting => angry
       const T = text.toLowerCase();
       const secondPerson = /\byou(r|'re|re|)\b/.test(T) || (fr.features?.lng_second ?? 0) > 0;
-      const hasProfanity = detectors.containsProfanity(text);
       
-      logger.info(`Hard-floor check: text="${text}", hasProfanity=${hasProfanity}, secondPerson=${secondPerson}, profanityWords=${detectors.getProfanityCount()}`);
+      // Use enhanced profanity analysis from scoring
+      const profanityAnalysis = (fr as any).profanityAnalysis || detectors.analyzeProfanity(text);
       
-      if (hasProfanity && secondPerson) {
-        logger.info(`🔒 HARD-FLOOR TRIGGERED: profanity + 2nd-person => forcing angry tone`);
-        // Push anger way up so argmax is stable; dampen supportive/positive
-        scores.angry = Math.max(scores.angry ?? 0, 1.2);
-        scores.supportive = Math.max(0, (scores.supportive ?? 0) - 0.5);
-        scores.positive   = Math.max(0, (scores.positive   ?? 0) - 0.4);
+      logger.info(`Hard-floor check: text="${text}", hasProfanity=${profanityAnalysis.hasProfanity}, hasTargetedSecondPerson=${profanityAnalysis.hasTargetedSecondPerson}, severity=${profanityAnalysis.severity}, matches=${profanityAnalysis.matches.join(',')}`);
+      
+      // Enhanced hard-floor with severity consideration
+      if (profanityAnalysis.hasTargetedSecondPerson || (profanityAnalysis.hasProfanity && profanityAnalysis.severity === 'strong' && secondPerson)) {
+        logger.info(`🔒 HARD-FLOOR TRIGGERED: ${profanityAnalysis.hasTargetedSecondPerson ? 'targeted profanity' : 'strong profanity + 2nd-person'} => forcing angry tone`);
+        
+        // Scale intervention by severity
+        let angerBoost = 1.2;
+        let supportivePenalty = 0.5;
+        let positivePenalty = 0.4;
+        
+        if (profanityAnalysis.severity === 'strong') {
+          angerBoost = 1.5;
+          supportivePenalty = 0.7;
+          positivePenalty = 0.6;
+        } else if (profanityAnalysis.severity === 'moderate') {
+          angerBoost = 1.0;
+          supportivePenalty = 0.4;
+          positivePenalty = 0.3;
+        }
+        
+        scores.angry = Math.max(scores.angry ?? 0, angerBoost);
+        scores.supportive = Math.max(0, (scores.supportive ?? 0) - supportivePenalty);
+        scores.positive   = Math.max(0, (scores.positive   ?? 0) - positivePenalty);
       }
       
       logger.info('Tones scored', { scores, intensity });
@@ -819,7 +1085,7 @@ export class ToneAnalysisService {
       let confidence = distribution[classification] || 0.33;
       
       // Override for profanity + 2nd-person targeting
-      if (detectors.containsProfanity(text) && secondPerson) {
+      if (profanityAnalysis.hasTargetedSecondPerson || (profanityAnalysis.hasProfanity && profanityAnalysis.severity === 'strong' && secondPerson)) {
         classification = 'angry';
         confidence = Math.max(confidence, 0.75);
       }
@@ -957,7 +1223,7 @@ export function mapToneToBuckets(
     data = loadAllData(config.dataDir);
   }
   
-  const bucketMap = data.toneBucketMap || {};
+  const bucketMap = data.toneBucketMapping || data.toneBucketMap || {};
   const defaultBuckets = bucketMap.default || {};
   const contextOverrides = bucketMap.contextOverrides || {};
   const intensityShifts = bucketMap.intensityShifts || {};
@@ -965,9 +1231,14 @@ export function mapToneToBuckets(
   const tone = toneResult.classification || toneResult.tone?.classification || toneResult.primary_tone || 'neutral';
   const confidence = toneResult.confidence || toneResult.tone?.confidence || 0.5;
   
-  // Get base bucket probabilities
-  let buckets = { clear: 0.5, caution: 0.3, alert: 0.2 };
-  if (defaultBuckets[tone]) buckets = { ...defaultBuckets[tone] };
+  // Get base bucket probabilities with fallback
+  let buckets = { clear: 0.5, caution: 0.3, alert: 0.2 }; // neutral fallback
+  if (defaultBuckets[tone]) {
+    buckets = { ...defaultBuckets[tone] };
+    logger.info('Found bucket mapping for tone', { tone, buckets });
+  } else {
+    logger.warn('No bucket mapping found for tone, using neutral fallback', { tone, availableTones: Object.keys(defaultBuckets) });
+  }
   
   // Apply context overrides if available
   if (contextOverrides[contextKey] && contextOverrides[contextKey][tone]) {
