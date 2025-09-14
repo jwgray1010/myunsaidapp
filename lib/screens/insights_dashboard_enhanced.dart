@@ -632,130 +632,139 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Scaffold(
-      body: NestedScrollView(
-        controller: _scrollController,
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverAppBar(
-            pinned: true,
-            floating: false,
-            expandedHeight: 205, // Increased by 2.4 pixels
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsetsDirectional.only(
-                start: 16,
-                bottom: 72, // Increased padding
-              ),
-              title: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: UnsaidPalette.textPrimaryDark
-                            .withOpacity(0.2),
-                        child: Text(
-                          _userName.isNotEmpty
-                              ? _userName[0].toUpperCase()
-                              : '?',
-                          style: TextStyle(
-                            color: UnsaidPalette.textPrimaryDark,
-                            fontWeight: FontWeight.bold,
+    return UnsaidGradientScaffold(
+      body: SafeArea(
+        top: false, // Let SliverAppBar handle top spacing
+        child: NestedScrollView(
+          controller: _scrollController,
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            SliverAppBar(
+              pinned: true,
+              floating: false,
+              expandedHeight: 220, // Increased height to accommodate content properly
+              forceElevated: innerBoxIsScrolled,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              flexibleSpace: FlexibleSpaceBar(
+                titlePadding: EdgeInsetsDirectional.only(
+                  start: 16,
+                  bottom: 56, // Reduced bottom padding to prevent overflow
+                  top: MediaQuery.of(
+                    context,
+                  ).padding.top, // Add status bar padding
+                ),
+                title: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: UnsaidPalette.textPrimaryDark
+                              .withOpacity(0.2),
+                          child: Text(
+                            _userName.isNotEmpty
+                                ? _userName[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              color: UnsaidPalette.textPrimaryDark,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Welcome, $_userName',
-                        style: TextStyle(
-                          color: UnsaidPalette.textPrimaryDark,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.2,
-                          fontSize: 20,
+                        const SizedBox(width: 12),
+                        Text(
+                          'Welcome, $_userName',
+                          style: TextStyle(
+                            color: UnsaidPalette.textPrimaryDark,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                            fontSize: 20,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _StreakChip(streakDays: _computeStreakDays()),
-                ],
-              ),
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [colorScheme.primary, colorScheme.tertiary],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _StreakChip(streakDays: _computeStreakDays()),
+                  ],
                 ),
-                child: Align(
-                  alignment: Alignment.bottomRight,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.refresh,
-                        color: UnsaidPalette.textPrimaryDark,
+                background: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [colorScheme.primary, colorScheme.tertiary],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Align(
+                    alignment: Alignment.bottomRight,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.refresh,
+                          color: UnsaidPalette.textPrimaryDark,
+                        ),
+                        onPressed: _onRefreshAll,
+                        tooltip: 'Refresh all data',
                       ),
-                      onPressed: _onRefreshAll,
-                      tooltip: 'Refresh all data',
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
-        body: Column(
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              height: _showTabs ? kTextTabBarHeight : 0,
-              child: _showTabs
-                  ? Container(
-                      color: colorScheme.surface,
-                      child: TabBar(
-                        controller: _tabs,
-                        labelColor: Colors.black,
-                        unselectedLabelColor: Colors.black.withOpacity(0.7),
-                        indicatorColor: UnsaidPalette.blush,
-                        onTap: (_) => HapticFeedback.lightImpact(),
-                        tabs: const [
-                          Tab(text: 'Secure'),
-                          Tab(text: 'Analytics'),
-                          Tab(text: 'Therapy'),
-                          Tab(text: 'Settings'),
-                        ],
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabs,
-                children: [
-                  _secureTab(),
-                  _analyticsTab(),
-                  _therapyTab(),
-                  SettingsScreenProfessional(
-                    sensitivity: _sensitivity,
-                    onSensitivityChanged: (v) {
-                      setState(() => _sensitivity = v);
-                      _storage.storeSecureData(
-                        'analysis_sensitivity',
-                        v.toString(),
-                      );
-                    },
-                    tone: _tonePref,
-                    onToneChanged: (t) {
-                      setState(() => _tonePref = t);
-                      _storage.storeSecureData('default_tone', t);
-                    },
-                  ),
-                ],
-              ),
-            ),
           ],
+          body: Column(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: _showTabs ? kTextTabBarHeight : 0,
+                child: _showTabs
+                    ? Container(
+                        color: colorScheme.surface,
+                        child: TabBar(
+                          controller: _tabs,
+                          labelColor: Colors.black,
+                          unselectedLabelColor: Colors.black.withOpacity(0.7),
+                          indicatorColor: UnsaidPalette.blush,
+                          onTap: (_) => HapticFeedback.lightImpact(),
+                          tabs: const [
+                            Tab(text: 'Secure'),
+                            Tab(text: 'Analytics'),
+                            Tab(text: 'Therapy'),
+                            Tab(text: 'Settings'),
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabs,
+                  children: [
+                    _secureTab(),
+                    _analyticsTab(),
+                    _therapyTab(),
+                    SettingsScreenProfessional(
+                      sensitivity: _sensitivity,
+                      onSensitivityChanged: (v) {
+                        setState(() => _sensitivity = v);
+                        _storage.storeSecureData(
+                          'analysis_sensitivity',
+                          v.toString(),
+                        );
+                      },
+                      tone: _tonePref,
+                      onToneChanged: (t) {
+                        setState(() => _tonePref = t);
+                        _storage.storeSecureData('tone_preference', t);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

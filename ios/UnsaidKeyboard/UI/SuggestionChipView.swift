@@ -2,7 +2,8 @@
 //  SuggestionChipView.swift
 //  UnsaidKeyboard
 //
-//  Simple suggestion chip view
+//  Lightweight, accessible suggestion “chip” with expand/collapse,
+//  adaptive animations, and no “sparkles” icon in neutral state.
 //
 
 import UIKit
@@ -27,9 +28,9 @@ final class SuggestionChipView: UIControl {
     var onExpanded: (() -> Void)?
     var onDismiss: (() -> Void)?
     var onTimeout: (() -> Void)?
-    /// Optional “surfaced” hook if you want it (you referenced it in `present`)
+    /// Optional hook when the chip animates in
     var onSurfaced: (() -> Void)?
-    /// Optional extra dismiss hook (you referenced it in two places)
+    /// Optional hook when the chip finishes dismissal removal
     var onDismissed: (() -> Void)?
 
     // MARK: - State
@@ -49,7 +50,16 @@ final class SuggestionChipView: UIControl {
     private var compactConstraints: [NSLayoutConstraint] = []
     private var expandedConstraints: [NSLayoutConstraint] = []
 
-    // MARK: - Init
+    // Performance toggles
+    private var enableShadows: Bool {
+        // Prefer no heavy shadows when Low Power Mode is enabled
+        !ProcessInfo.processInfo.isLowPowerModeEnabled
+    }
+    private var shouldAnimate: Bool {
+        !UIAccessibility.isReduceMotionEnabled
+    }
+
+    // MARK: - Init / Deinit
     override init(frame: CGRect) {
         super.init(frame: frame)
         setup()
@@ -66,6 +76,8 @@ final class SuggestionChipView: UIControl {
 
     // MARK: - Public
 
+    /// Sets the collapsed preview content and visual tone.
+    /// Note: In **neutral** tone we intentionally hide the icon (no “sparkles”).
     func setPreview(text: String, tone: ToneStatus, textHash: String) {
         self.fullText = text
         self.textHash = textHash
@@ -75,14 +87,18 @@ final class SuggestionChipView: UIControl {
         textLabel.lineBreakMode = .byTruncatingTail
         applyTone(tone, animated: false)
 
-        // accessibility
+        // Accessibility
         isAccessibilityElement = true
         accessibilityTraits.insert(.button)
         accessibilityLabel = "Suggestion"
         accessibilityValue = text
         accessibilityHint = "Tap to expand"
+
+        // Prepare haptics for near-term interaction
+        haptic.prepare()
     }
 
+    /// Sets the fully expanded content layout.
     func setExpanded(fullText: String) {
         textLabel.text = fullText
         textLabel.numberOfLines = 0
@@ -91,19 +107,25 @@ final class SuggestionChipView: UIControl {
         accessibilityHint = "Swipe up or press close to dismiss"
     }
 
-    /// Adds (if needed) and animates the chip into view
+    /// Adds (if needed) and animates the chip into view.
     func present(in container: UIView, from _: Int = 0) {
         if superview == nil { container.addSubview(self) }
-        alpha = 0
-        transform = CGAffineTransform(translationX: 0, y: 6)
-        UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseOut]) {
-            self.alpha = 1
-            self.transform = .identity
+        if shouldAnimate {
+            alpha = 0
+            transform = CGAffineTransform(translationX: 0, y: 6)
+            UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseOut]) {
+                self.alpha = 1
+                self.transform = .identity
+            }
+        } else {
+            alpha = 1
+            transform = .identity
         }
         onSurfaced?()
         startAutoHideTimer()
     }
 
+    /// Dismiss the chip. If `animated` is false, removal is immediate.
     func dismiss(animated: Bool) {
         autoHideTimer?.invalidate()
         autoHideTimer = nil
@@ -114,8 +136,10 @@ final class SuggestionChipView: UIControl {
         }
         let done: (Bool) -> Void = { _ in
             self.removeFromSuperview()
+            self.onDismissed?()
         }
-        if animated {
+
+        if animated && shouldAnimate {
             UIView.animate(withDuration: 0.15, animations: work, completion: done)
         } else {
             work()
@@ -135,13 +159,19 @@ final class SuggestionChipView: UIControl {
         capsule.layer.cornerRadius = 18
         capsule.layer.cornerCurve = .continuous
         capsule.layer.masksToBounds = false
-        capsule.backgroundColor = UIColor.keyboardRose.withAlphaComponent(0.90) // default
+        // Use your brand color if available, otherwise fallback
+        let baseColor = (UIColor.keyboardRose ?? UIColor.systemPink).withAlphaComponent(0.90)
+        capsule.backgroundColor = baseColor
 
-        // Shadow (shadowPath set in layoutSubviews)
+        // Shadow (path set in layoutSubviews)
         capsule.layer.shadowColor = UIColor.black.withAlphaComponent(0.18).cgColor
-        capsule.layer.shadowOpacity = 1
+        capsule.layer.shadowOpacity = enableShadows ? 1 : 0
         capsule.layer.shadowOffset = CGSize(width: 0, height: 2)
         capsule.layer.shadowRadius = 6
+
+        // Rasterize for cheap shadow on static view
+        capsule.layer.shouldRasterize = true
+        capsule.layer.rasterizationScale = UIScreen.main.scale
 
         addSubview(capsule)
         NSLayoutConstraint.activate([
@@ -234,6 +264,7 @@ final class SuggestionChipView: UIControl {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        capsule.layer.shadowOpacity = enableShadows ? 1 : 0
         capsule.layer.shadowPath = UIBezierPath(roundedRect: capsule.bounds, cornerRadius: 18).cgPath
     }
 
@@ -249,17 +280,25 @@ final class SuggestionChipView: UIControl {
         autoHideTimer?.invalidate()
         autoHideTimer = nil
 
-        // Update chevron immediately
-        UIView.animate(withDuration: 0.18) {
-            self.chevronButton.transform = CGAffineTransform(rotationAngle: .pi/2)
+        // Rotate chevron and expand layout
+        let rotateChevron = {
+            self.chevronButton.transform = CGAffineTransform(rotationAngle: .pi / 2)
         }
 
-        // Animate layout change + reveal full text
-        UIView.animate(withDuration: 0.26, delay: 0, options: [.curveEaseInOut]) {
-            NSLayoutConstraint.deactivate(self.compactConstraints)
-            NSLayoutConstraint.activate(self.expandedConstraints)
-            self.setExpanded(fullText: self.fullText)
-            self.superview?.layoutIfNeeded()
+        if shouldAnimate {
+            UIView.animate(withDuration: 0.18, animations: rotateChevron)
+            UIView.animate(withDuration: 0.26, delay: 0, options: [.curveEaseInOut]) {
+                NSLayoutConstraint.deactivate(self.compactConstraints)
+                NSLayoutConstraint.activate(self.expandedConstraints)
+                self.setExpanded(fullText: self.fullText)
+                self.superview?.layoutIfNeeded()
+            }
+        } else {
+            rotateChevron()
+            NSLayoutConstraint.deactivate(compactConstraints)
+            NSLayoutConstraint.activate(expandedConstraints)
+            setExpanded(fullText: fullText)
+            superview?.layoutIfNeeded()
         }
     }
 
@@ -269,31 +308,47 @@ final class SuggestionChipView: UIControl {
         dismiss(animated: true)
     }
 
-    // MARK: - Tone styling
+    // MARK: - Tone styling (no sparkles in neutral)
 
     private func applyTone(_ tone: ToneStatus, animated: Bool) {
-        let (bg, icon, textColor, iconColor) = toneColors(tone)
+        let colors = toneColors(tone)
+
         let applyBlock = {
-            self.capsule.backgroundColor = bg
-            self.textLabel.textColor = textColor
-            self.iconView.image = UIImage(systemName: icon)
-            self.iconView.tintColor = iconColor
-            self.chevronButton.tintColor = iconColor
-            self.closeButton.tintColor = iconColor
+            self.capsule.backgroundColor = colors.bg
+            self.textLabel.textColor = colors.textColor
+            self.chevronButton.tintColor = colors.iconColor
+            self.closeButton.tintColor = colors.iconColor
+
+            if let sysName = colors.iconSystemName {
+                self.iconView.image = UIImage(systemName: sysName)
+                self.iconView.tintColor = colors.iconColor
+                self.iconView.isHidden = false
+            } else {
+                // Neutral tone: hide the icon entirely (removes “sparkles”)
+                self.iconView.image = nil
+                self.iconView.isHidden = true
+            }
         }
-        if animated {
+
+        if animated && shouldAnimate {
             UIView.transition(with: capsule, duration: 0.15, options: .transitionCrossDissolve, animations: applyBlock)
         } else {
             applyBlock()
         }
     }
 
-    private func toneColors(_ tone: ToneStatus) -> (UIColor, String, UIColor, UIColor) {
+    /// Returns colors and optional SF Symbol for each tone.
+    /// Note: **neutral** returns `iconSystemName = nil` to avoid the “sparkles” glyph.
+    private func toneColors(_ tone: ToneStatus) -> (bg: UIColor, iconSystemName: String?, textColor: UIColor, iconColor: UIColor) {
         switch tone {
-        case .neutral: return (UIColor.keyboardRose.withAlphaComponent(0.90), "sparkles", .white, .white)
-        case .alert:   return (UIColor.systemRed.withAlphaComponent(0.95), "exclamationmark.triangle.fill", .white, .white)
-        case .caution: return (UIColor.systemYellow.withAlphaComponent(0.95), "exclamationmark.triangle.fill", .black, .black)
-        case .clear:   return (UIColor.systemGreen.withAlphaComponent(0.92), "checkmark.seal.fill", .white, .white)
+        case .neutral:
+            return ((UIColor.keyboardRose ?? .systemPink).withAlphaComponent(0.90), nil, .white, .white)
+        case .alert:
+            return (UIColor.systemRed.withAlphaComponent(0.95), "exclamationmark.triangle.fill", .white, .white)
+        case .caution:
+            return (UIColor.systemYellow.withAlphaComponent(0.95), "exclamationmark.triangle.fill", .black, .black)
+        case .clear:
+            return (UIColor.systemGreen.withAlphaComponent(0.92), "checkmark.seal.fill", .white, .white)
         }
     }
 
@@ -311,7 +366,7 @@ final class SuggestionChipView: UIControl {
     }
 }
 
-// Optional: if you want the protocol available
+// MARK: - SuggestionChipPresenting
 extension SuggestionChipView: SuggestionChipPresenting {
     func presentSuggestion(_ text: String, tone: ToneStatus) {
         setPreview(text: text, tone: tone, textHash: String(text.hashValue))

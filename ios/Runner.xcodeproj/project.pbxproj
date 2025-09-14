@@ -23,7 +23,7 @@
 		D0ED47002E5910DC0094BD53 /* UnsaidKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D0ED46F92E5910DC0094BD53 /* UnsaidKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D0ED470D2E5911530094BD53 /* LightweightSpellChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47062E5911520094BD53 /* LightweightSpellChecker.swift */; };
 		D0ED470E2E5911530094BD53 /* ToneSuggestionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47072E5911520094BD53 /* ToneSuggestionCoordinator.swift */; };
-		E7B22F2ADBB74F07A3DB65DB /* ToneStreamClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B22F2ADBB74F07A3DB65DC /* ToneStreamClient.swift */; };
+
 		HD1234567890ABCDEF123456 /* HapticsDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = HD1234567890ABCDEF123457 /* HapticsDriver.swift */; };
 		TH1234567890ABCDEF123456 /* TimerHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = TH1234567890ABCDEF123457 /* TimerHub.swift */; };
 		D0ED470F2E5911530094BD53 /* SafeKeyboardDataStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47092E5911530094BD53 /* SafeKeyboardDataStorage.swift */; };
@@ -124,7 +124,7 @@
 		D0ED46FD2E5910DC0094BD53 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		D0ED47062E5911520094BD53 /* LightweightSpellChecker.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LightweightSpellChecker.swift; sourceTree = "<group>"; };
 		D0ED47072E5911520094BD53 /* ToneSuggestionCoordinator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ToneSuggestionCoordinator.swift; sourceTree = "<group>"; };
-		E7B22F2ADBB74F07A3DB65DC /* ToneStreamClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ToneStreamClient.swift; sourceTree = "<group>"; };
+
 		HD1234567890ABCDEF123457 /* HapticsDriver.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HapticsDriver.swift; sourceTree = "<group>"; };
 		TH1234567890ABCDEF123457 /* TimerHub.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TimerHub.swift; sourceTree = "<group>"; };
 		D0ED47082E5911530094BD53 /* UnsaidKeyboard-Bridging-Header.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = "UnsaidKeyboard-Bridging-Header.mm"; sourceTree = "<group>"; };
@@ -289,7 +289,6 @@
 				D0F701DB2E6AB78A00C3BE7D /* AppGroups.swift */,
 				D0B001242E6E95A500C8FB5C /* unsaid_logo.png */,
 				D0ED47072E5911520094BD53 /* ToneSuggestionCoordinator.swift */,
-				E7B22F2ADBB74F07A3DB65DC /* ToneStreamClient.swift */,
 				HD1234567890ABCDEF123457 /* HapticsDriver.swift */,
 				E0A12363 /* Managers */,
 				E0A12364 /* Services */,
@@ -613,7 +612,7 @@
 				D0ED47112E5911530094BD53 /* PersonalityDataBridge.swift in Sources */,
 				4FEAAD4224D44D13BA34AB95 /* PersonalityKeys.swift in Sources */,
 				D0ED470E2E5911530094BD53 /* ToneSuggestionCoordinator.swift in Sources */,
-				E7B22F2ADBB74F07A3DB65DB /* ToneStreamClient.swift in Sources */,
+
 				HD1234567890ABCDEF123456 /* HapticsDriver.swift in Sources */,
 				TH1234567890ABCDEF123456 /* TimerHub.swift in Sources */,
 				D0ED47102E5911530094BD53 /* KeyboardController.swift in Sources */,

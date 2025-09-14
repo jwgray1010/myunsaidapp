@@ -24,7 +24,57 @@ class UnsaidGradientScaffold extends StatelessWidget {
         appBar: appBar,
         floatingActionButton: floatingActionButton,
         bottomNavigationBar: bottomNavigationBar,
-        body: body,
+        body: Theme(
+          // Override theme for gradient backgrounds to use white text
+          data: Theme.of(context).copyWith(
+            textTheme: Theme.of(context).textTheme.copyWith(
+              titleLarge: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color:
+                    UnsaidPalette.textPrimaryDark, // White for gradient backgrounds
+                fontWeight: FontWeight.w700,
+              ),
+              titleMedium: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: UnsaidPalette.textPrimaryDark,
+                fontWeight: FontWeight.w600,
+              ),
+              titleSmall: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: UnsaidPalette.textPrimaryDark,
+                fontWeight: FontWeight.w500,
+              ),
+              bodyLarge: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: UnsaidPalette.textSecondaryDark,
+              ),
+              bodyMedium: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: UnsaidPalette.textSecondaryDark,
+              ),
+              bodySmall: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: UnsaidPalette.textTertiaryDark,
+              ),
+              labelLarge: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: UnsaidPalette.textPrimaryDark,
+              ),
+              labelMedium: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: UnsaidPalette.textSecondaryDark,
+              ),
+              labelSmall: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: UnsaidPalette.textTertiaryDark,
+              ),
+            ),
+            // Also override default text style
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              onSurface: UnsaidPalette.textPrimaryDark,
+              onSurfaceVariant: UnsaidPalette.textSecondaryDark,
+            ),
+          ),
+          child: DefaultTextStyle(
+            style: const TextStyle(
+              color: UnsaidPalette.textSecondaryDark,
+              fontSize: 14,
+              height: 1.4,
+            ),
+            child: body,
+          ),
+        ),
       ),
     );
   }
@@ -55,13 +105,23 @@ class UnsaidCard extends StatelessWidget {
         boxShadow: soft ? UnsaidPalette.cardShadow : UnsaidPalette.softShadow,
         border: Border.all(color: Colors.black.withValues(alpha: 0.04)),
       ),
-      child: DefaultTextStyle(
-        style: const TextStyle(
-          color: Colors.black87, // Dark text for white background
-          fontSize: 14,
-          height: 1.4,
+      child: Theme(
+        // Cards use default theme with dark text on white background
+        data: Theme.of(context).copyWith(
+          // Ensure colorScheme uses dark text for cards
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+            onSurface: UnsaidPalette.textPrimary,
+            onSurfaceVariant: UnsaidPalette.textSecondary,
+          ),
         ),
-        child: child,
+        child: DefaultTextStyle(
+          style: const TextStyle(
+            color: UnsaidPalette.textPrimary, // Dark text for white background
+            fontSize: 14,
+            height: 1.4,
+          ),
+          child: child,
+        ),
       ),
     );
   }

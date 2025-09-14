@@ -9,22 +9,52 @@
 import Foundation
 import Network
 
+// MARK: - Thread-safe, reusable connectivity
+actor Connectivity {
+    static let shared = Connectivity()
+    private let monitor = NWPathMonitor()
+    private(set) var isOnline = true
+    private(set) var isConstrained = false
+    private(set) var isExpensive = false
+
+    private init() {
+        let q = DispatchQueue(label: "net.connectivity")
+        monitor.pathUpdateHandler = { path in
+            Task { [isOn = (path.status == .satisfied),
+                    cons = path.isConstrained,
+                    exp = path.isExpensive] in
+                await Connectivity.shared.update(isOn: isOn, cons: cons, exp: exp)
+            }
+        }
+        monitor.start(queue: q)
+    }
+
+    private func update(isOn: Bool, cons: Bool, exp: Bool) {
+        isOnline = isOn; isConstrained = cons; isExpensive = exp
+    }
+}
+
+// MARK: - HTTP Method enum for type safety
+private enum HTTPMethod: String {
+    case GET, POST
+}
+
 @available(iOS 13.0, *)
-final class EnhancedCommunicatorService: ObservableObject {
+final class EnhancedCommunicatorService {
 
     // MARK: - Public DTOs (unchanged shapes)
-    struct EnhancedAnalysisRequest: Codable {
+    struct EnhancedAnalysisRequest: Codable, Sendable {
         let text: String
         let context: AnalysisContext?
         let personalityProfile: PersonalityProfile?
 
-        struct AnalysisContext: Codable {
+        struct AnalysisContext: Codable, Sendable {
             let relationshipPhase: String? // "new", "developing", "established", "strained"
             let stressLevel: String?       // "low", "moderate", "high"
             let messageType: String?       // "casual", "serious", "conflict", "support"
         }
 
-        struct PersonalityProfile: Codable {
+        struct PersonalityProfile: Codable, Sendable {
             let attachmentStyle: String
             let communicationStyle: String
             let personalityType: String
@@ -35,16 +65,16 @@ final class EnhancedCommunicatorService: ObservableObject {
             let isComplete: Bool
             let dataFreshness: Double
 
-            init(from bridge: PersonalityDataBridge) {
-                attachmentStyle = bridge.getAttachmentStyle()
-                communicationStyle = bridge.getCommunicationStyle()
-                personalityType = bridge.getPersonalityType()
-                emotionalState = bridge.getCurrentEmotionalState()
-                emotionalBucket = bridge.getCurrentEmotionalBucket()
-                isComplete = bridge.isPersonalityTestComplete()
-                dataFreshness = bridge.getDataFreshness()
+            init(from bridge: PersonalityDataBridge) async {
+                attachmentStyle = await bridge.getAttachmentStyle()
+                communicationStyle = await bridge.getCommunicationStyle()
+                personalityType = await bridge.getPersonalityType()
+                emotionalState = await bridge.getCurrentEmotionalState()
+                emotionalBucket = await bridge.getCurrentEmotionalBucket()
+                isComplete = await bridge.isPersonalityTestComplete()
+                dataFreshness = await bridge.getDataFreshness()
 
-                let full = bridge.getPersonalityProfile()
+                let full = await bridge.getPersonalityProfile()
                 personalityScores = full["personality_scores"] as? [String: Int]
 
                 if let prefs = full["communication_preferences"] as? [String: Any] {
@@ -61,12 +91,12 @@ final class EnhancedCommunicatorService: ObservableObject {
         }
     }
 
-    struct EnhancedAnalysisResponse: Codable {
+    struct EnhancedAnalysisResponse: Codable, Sendable {
         let ok: Bool
         let userId: String
         let analysis: AnalysisResult
 
-        struct AnalysisResult: Codable {
+        struct AnalysisResult: Codable, Sendable {
             let text: String
             let confidence: Double
             let attachmentScores: AttachmentScores
@@ -76,46 +106,46 @@ final class EnhancedCommunicatorService: ObservableObject {
             let contextualFactors: [String: Double]?
             let metadata: AnalysisMetadata
 
-            struct AttachmentScores: Codable {
+            struct AttachmentScores: Codable, Sendable {
                 let anxious: Double
                 let avoidant: Double
                 let secure: Double
                 let disorganized: Double
             }
 
-            struct MicroPattern: Codable {
+            struct MicroPattern: Codable, Sendable {
                 let type: String
                 let pattern: String
                 let weight: Double
                 let position: Int?
             }
 
-            struct LinguisticFeatures: Codable {
+            struct LinguisticFeatures: Codable, Sendable {
                 let punctuation: PunctuationFeatures?
                 let hesitation: HesitationFeatures?
                 let complexity: ComplexityFeatures?
                 let discourse: DiscourseFeatures?
 
-                struct PunctuationFeatures: Codable {
+                struct PunctuationFeatures: Codable, Sendable {
                     let patterns: [String: Int]
                     let emotionalScore: Double
                 }
-                struct HesitationFeatures: Codable {
+                struct HesitationFeatures: Codable, Sendable {
                     let patterns: [String: Int]
                     let uncertaintyScore: Double
                 }
-                struct ComplexityFeatures: Codable {
+                struct ComplexityFeatures: Codable, Sendable {
                     let score: Double
                     let avgWordsPerSentence: Double
                     let avgSyllablesPerWord: Double
                 }
-                struct DiscourseFeatures: Codable {
+                struct DiscourseFeatures: Codable, Sendable {
                     let markers: [String: Int]
                     let coherenceScore: Double
                 }
             }
 
-            struct AnalysisMetadata: Codable {
+            struct AnalysisMetadata: Codable, Sendable {
                 let analysisVersion: String
                 let accuracyTarget: String
                 let timestamp: String
@@ -123,20 +153,20 @@ final class EnhancedCommunicatorService: ObservableObject {
         }
     }
 
-    struct ObserveRequest: Codable {
+    struct ObserveRequest: Codable, Sendable {
         let text: String
         let meta: [String: String]?
         let personalityProfile: EnhancedAnalysisRequest.PersonalityProfile?
     }
 
-    struct ObserveResponse: Codable {
+    struct ObserveResponse: Codable, Sendable {
         let ok: Bool
         let userId: String
         let estimate: AttachmentEstimate
         let windowComplete: Bool
         let enhancedAnalysis: EnhancedAnalysisSummary?
 
-        struct AttachmentEstimate: Codable {
+        struct AttachmentEstimate: Codable, Sendable {
             let primary: String?
             let secondary: String?
             let scores: [String: Double]
@@ -145,14 +175,14 @@ final class EnhancedCommunicatorService: ObservableObject {
             let windowComplete: Bool
         }
 
-        struct EnhancedAnalysisSummary: Codable {
+        struct EnhancedAnalysisSummary: Codable, Sendable {
             let confidence: Double
             let detectedPatterns: Int
             let primaryPrediction: String
         }
     }
 
-    struct ProfileResponse: Codable {
+    struct ProfileResponse: Codable, Sendable {
         let ok: Bool
         let userId: String
         let estimate: ObserveResponse.AttachmentEstimate
@@ -161,7 +191,7 @@ final class EnhancedCommunicatorService: ObservableObject {
         let windowComplete: Bool
         let enhancedFeatures: EnhancedFeatures?
 
-        struct EnhancedFeatures: Codable {
+        struct EnhancedFeatures: Codable, Sendable {
             let advancedAnalysisAvailable: Bool
             let version: String
             let accuracyTarget: String
@@ -204,10 +234,7 @@ final class EnhancedCommunicatorService: ObservableObject {
     private let decoder: JSONDecoder
     private let userIdProvider: () -> String
     private let apiKeyProvider: () -> String?          // optional bearer token
-    private let networkMonitor: NWPathMonitor?
-
-    /// Simple reachability flag (monitored if monitor provided)
-    private var isOnline: Bool = true
+    private let onlineCheck: () async -> Bool
 
     // MARK: - Init
 
@@ -215,8 +242,8 @@ final class EnhancedCommunicatorService: ObservableObject {
     init(
         baseHost: String = "https://api.myunsaidapp.com",
         apiRoot: String = "/api/v1",
-    apiKeyProvider: @escaping () -> String? = { AppGroups.shared.string(forKey: "unsaid_api_key") },
-    userIdProvider: @escaping () -> String = { AppGroups.shared.string(forKey: "unsaid_user_id") ?? "anonymous" },
+        apiKeyProvider: @escaping () -> String? = { AppGroups.shared.string(forKey: "unsaid_api_key") },
+        userIdProvider: @escaping () -> String = { AppGroups.shared.string(forKey: "unsaid_user_id") ?? "anonymous" },
         monitorNetwork: Bool = true
     ) {
         // Base URL validation
@@ -228,8 +255,7 @@ final class EnhancedCommunicatorService: ObservableObject {
             self.userIdProvider = userIdProvider
             self.session = EnhancedCommunicatorService.makeEphemeralSession()
             (self.encoder, self.decoder) = EnhancedCommunicatorService.makeCoders()
-            self.networkMonitor = nil
-            self.isOnline = true
+            self.onlineCheck = { true }
             return
         }
         self.baseURL = url
@@ -241,21 +267,11 @@ final class EnhancedCommunicatorService: ObservableObject {
         (self.encoder, self.decoder) = EnhancedCommunicatorService.makeCoders()
 
         if monitorNetwork {
-            let monitor = NWPathMonitor()
-            self.networkMonitor = monitor
-            let queue = DispatchQueue(label: "com.unsaid.enhancedcomm.net")
-            monitor.pathUpdateHandler = { [weak self] path in
-                self?.isOnline = (path.status != .unsatisfied)
-            }
-            monitor.start(queue: queue)
+            _ = Connectivity.shared // start once
+            self.onlineCheck = { await Connectivity.shared.isOnline }
         } else {
-            self.networkMonitor = nil
-            self.isOnline = true
+            self.onlineCheck = { true }
         }
-    }
-
-    deinit {
-        networkMonitor?.cancel()
     }
 
     // MARK: - Public API (same behavior)
@@ -267,7 +283,7 @@ final class EnhancedCommunicatorService: ObservableObject {
         messageType: String = "casual"
     ) async throws -> EnhancedAnalysisResponse.AnalysisResult {
 
-        let personalityProfile = EnhancedAnalysisRequest.PersonalityProfile(from: personalityBridge)
+        let personalityProfile = await EnhancedAnalysisRequest.PersonalityProfile(from: personalityBridge)
 
         let req = EnhancedAnalysisRequest(
             text: text,
@@ -281,7 +297,7 @@ final class EnhancedCommunicatorService: ObservableObject {
 
         let res: EnhancedAnalysisResponse = try await request(
             path: "/communicator/analysis/detailed",
-            method: "POST",
+            method: HTTPMethod.POST,
             body: req
         )
         return res.analysis
@@ -292,7 +308,7 @@ final class EnhancedCommunicatorService: ObservableObject {
         relationshipPhase: String = "established",
         stressLevel: String = "moderate"
     ) async throws -> ObserveResponse {
-        let personalityProfile = EnhancedAnalysisRequest.PersonalityProfile(from: personalityBridge)
+        let personalityProfile = await EnhancedAnalysisRequest.PersonalityProfile(from: personalityBridge)
         let req = ObserveRequest(
             text: text,
             meta: [
@@ -304,14 +320,14 @@ final class EnhancedCommunicatorService: ObservableObject {
         )
         return try await request(
             path: "/communicator/observe",
-            method: "POST",
+            method: HTTPMethod.POST,
             body: req
         )
     }
 
     func getProfile() async throws -> ProfileResponse {
         let emptyBody: [String: String]? = nil
-        return try await request(path: "/communicator/profile", method: "GET", body: emptyBody)
+        return try await request(path: "/communicator/profile", method: HTTPMethod.GET, body: emptyBody)
     }
 
     func checkEnhancedCapabilities() async throws -> Bool {
@@ -327,7 +343,7 @@ final class EnhancedCommunicatorService: ObservableObject {
             return analysis.primaryStyle
         } catch {
             // graceful fallback to static assessment
-            return personalityBridge.getAttachmentStyle()
+            return await personalityBridge.getAttachmentStyle()
         }
     }
 
@@ -336,7 +352,7 @@ final class EnhancedCommunicatorService: ObservableObject {
             let analysis = try await performDetailedAnalysis(text: text)
             return analysis.confidence
         } catch {
-            return personalityBridge.isPersonalityTestComplete() ? 0.8 : 0.3
+            return await personalityBridge.isPersonalityTestComplete() ? 0.8 : 0.3
         }
     }
 
@@ -349,44 +365,47 @@ final class EnhancedCommunicatorService: ObservableObject {
         }
     }
 
-    func getCombinedPersonalityInsights() -> [String: Any] {
+    func getCombinedPersonalityInsights() async -> [String: Any] {
         var insights: [String: Any] = [:]
-        let profile = personalityBridge.getPersonalityProfile()
+        let profile = await personalityBridge.getPersonalityProfile()
         insights["personality_assessment"] = profile
         insights["enhanced_analysis_available"] = true
-        insights["data_freshness"] = personalityBridge.getDataFreshness()
-        insights["assessment_complete"] = personalityBridge.isPersonalityTestComplete()
-        insights["current_emotional_state"] = personalityBridge.getCurrentEmotionalState()
-        insights["current_emotional_bucket"] = personalityBridge.getCurrentEmotionalBucket()
+        insights["data_freshness"] = await personalityBridge.getDataFreshness()
+        insights["assessment_complete"] = await personalityBridge.isPersonalityTestComplete()
+        insights["current_emotional_state"] = await personalityBridge.getCurrentEmotionalState()
+        insights["current_emotional_bucket"] = await personalityBridge.getCurrentEmotionalBucket()
         return insights
     }
 
-    func hasRichPersonalityData() -> Bool {
-        personalityBridge.isPersonalityTestComplete() && personalityBridge.getDataFreshness() < 24
+    func hasRichPersonalityData() async -> Bool {
+        let isComplete = await personalityBridge.isPersonalityTestComplete()
+        let freshness = await personalityBridge.getDataFreshness()
+        return isComplete && freshness < 24
     }
 
     // MARK: - Private: Network Core
 
     private func request<T: Decodable, Body: Encodable>(
         path: String,
-        method: String,
+        method: HTTPMethod,
         body: Body? = nil,
         retry: Int = 1
     ) async throws -> T {
 
-        guard isOnline else { throw CommunicatorError.offline }
+        guard await onlineCheck() else { throw CommunicatorError.offline }
 
         let url = buildURL(path: path)
         guard let url else { throw CommunicatorError.invalidURL }
 
         var req = URLRequest(url: url, timeoutInterval: 8.0)
-        req.httpMethod = method
+        req.httpMethod = method.rawValue
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue("ios-keyboard-v2.1.0", forHTTPHeaderField: "User-Agent")
         req.setValue(userIdProvider(), forHTTPHeaderField: "X-User-Id")
 
         // Add idempotency key for non-GET requests to prevent duplicate server operations
-        if method != "GET" {
+        if method != .GET {
             req.setValue(UUID().uuidString, forHTTPHeaderField: "Idempotency-Key")
         }
 
@@ -399,7 +418,7 @@ final class EnhancedCommunicatorService: ObservableObject {
         }
         
         // Ensure GET requests have no body
-        if method == "GET" {
+        if method == .GET {
             req.httpBody = nil
         }
 
@@ -409,19 +428,18 @@ final class EnhancedCommunicatorService: ObservableObject {
 
             switch http.statusCode {
             case 200..<300:
-                do {
-                    return try decoder.decode(T.self, from: data)
+                do { 
+                    return try decoder.decode(T.self, from: data) 
                 } catch {
+                    #if DEBUG
+                    print("Decoding failed for \(T.self):", error, String(data: data, encoding: .utf8) ?? "<non-utf8>")
+                    #endif
                     throw CommunicatorError.decodingError
                 }
             case 408, 500, 502, 503, 504:
                 if retry > 0 {
-                    // Jittered exponential backoff with cap
-                    let origRetry = 1 // Original retry count
-                    let baseDelay = 200.0 * Double(1 << (origRetry - retry)) // Exponential backoff
-                    let cappedDelay = min(baseDelay, 1200.0) // Cap at 1.2 seconds
-                    let jitter = cappedDelay * (0.8 + Double.random(in: 0...0.4)) // ±20% jitter
-                    try await Task.sleep(nanoseconds: UInt64(jitter * 1_000_000))
+                    let attemptIndex = 1 - retry // 0 for first retry when retry==1
+                    try await sleepForBackoff(attempt: max(0, attemptIndex))
                     return try await request(path: path, method: method, body: body, retry: retry - 1)
                 }
                 throw CommunicatorError.serverError(http.statusCode)
@@ -433,24 +451,27 @@ final class EnhancedCommunicatorService: ObservableObject {
         } catch {
             // Retry once for transient network errors with jittered backoff
             if retry > 0 {
-                let origRetry = 1
-                let baseDelay = 200.0 * Double(1 << (origRetry - retry))
-                let cappedDelay = min(baseDelay, 1200.0)
-                let jitter = cappedDelay * (0.8 + Double.random(in: 0...0.4))
-                try await Task.sleep(nanoseconds: UInt64(jitter * 1_000_000))
+                let attemptIndex = 1 - retry
+                try await sleepForBackoff(attempt: max(0, attemptIndex))
                 return try await request(path: path, method: method, body: body, retry: retry - 1)
             }
             throw error
         }
     }
 
+    private func sleepForBackoff(attempt: Int, baseMs: Double = 200, capMs: Double = 1200) async throws {
+        // attempt: 0,1,...  (0 = first retry)
+        let exp = min(capMs, baseMs * pow(2, Double(attempt)))
+        let jitter = exp * (0.8 + Double.random(in: 0...0.4))
+        try await Task.sleep(nanoseconds: UInt64(jitter * 1_000_000))
+    }
+
     private func buildURL(path: String) -> URL? {
-        // Guaranteed: baseURL has no trailing slash; apiRoot should start with "/"
-        // Path should start with "/" relative to apiRoot.
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
-        let cleanedRoot = apiRoot.hasPrefix("/") ? apiRoot : "/\(apiRoot)"
-        let cleanedPath = path.hasPrefix("/") ? path : "/\(path)"
-        components?.path = cleanedRoot + cleanedPath
+        let basePath = components?.percentEncodedPath ?? ""
+        let root = apiRoot.hasPrefix("/") ? apiRoot : "/\(apiRoot)"
+        let leaf = path.hasPrefix("/") ? path : "/\(path)"
+        components?.percentEncodedPath = basePath + root + leaf
         return components?.url
     }
 
@@ -458,9 +479,36 @@ final class EnhancedCommunicatorService: ObservableObject {
 
     private static func makeCoders() -> (JSONEncoder, JSONDecoder) {
         let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
         let dec = JSONDecoder()
-        dec.dateDecodingStrategy = .iso8601
+        
+        // ISO8601 with fractional seconds for precise timing
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        enc.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(formatter.string(from: date))
+        }
+        
+        dec.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let string = try container.decode(String.self)
+            
+            // Try with fractional seconds first, fallback to standard
+            if let date = formatter.date(from: string) {
+                return date
+            }
+            
+            // Fallback for non-fractional ISO8601
+            let basicFormatter = ISO8601DateFormatter()
+            basicFormatter.formatOptions = [.withInternetDateTime]
+            if let date = basicFormatter.date(from: string) {
+                return date
+            }
+            
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date format: \(string)")
+        }
+        
         return (enc, dec)
     }
 

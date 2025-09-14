@@ -781,8 +781,45 @@ class _SettingsScreenProfessionalState
             ? VisualDensity.compact
             : VisualDensity.standard,
         listTileTheme: ListTileThemeData(
-          iconColor: _highContrast ? Colors.black : null,
-          textColor: _highContrast ? Colors.black : null,
+          iconColor:
+              Colors.black87, // Always dark icons on white card background
+          textColor:
+              Colors.black87, // Always dark text on white card background
+        ),
+        // Also override text theme for white card background
+        textTheme: Theme.of(context).textTheme.copyWith(
+          titleLarge: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(color: Colors.black87),
+          titleMedium: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(color: Colors.black87),
+          titleSmall: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(color: Colors.black87),
+          bodyLarge: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(color: Colors.black87),
+          bodyMedium: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: Colors.black87),
+          bodySmall: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+          labelLarge: Theme.of(
+            context,
+          ).textTheme.labelLarge?.copyWith(color: Colors.black87),
+          labelMedium: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(color: Colors.black87),
+          labelSmall: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: Colors.black54),
+        ),
+        // Override colorScheme for widgets that use theme colors
+        colorScheme: Theme.of(context).colorScheme.copyWith(
+          onSurface: Colors.black87,
+          onSurfaceVariant: Colors.black54,
         ),
       ),
       child: Padding(

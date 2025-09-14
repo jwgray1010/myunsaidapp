@@ -273,9 +273,18 @@ class ToneDetectors {
       if (r) this.intensifiers.push({ re: r, mult: m.mult });
     });
 
-    this.profanity = prof?.block || [];
+    // Extract all triggerWords from profanity lexicon categories
+    const profanityWords: string[] = [];
+    if (prof?.categories) {
+      prof.categories.forEach((category: any) => {
+        if (category.triggerWords && Array.isArray(category.triggerWords)) {
+          profanityWords.push(...category.triggerWords);
+        }
+      });
+    }
+    this.profanity = profanityWords;
 
-    logger.info(`ToneDetectors initialized with ${this.trigByLen.size} trigger word lengths`);
+    logger.info(`ToneDetectors initialized with ${this.trigByLen.size} trigger word lengths, ${this.profanity.length} profanity words`);
   }
 
   scanSurface(tokens: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number }[] { 
@@ -313,6 +322,7 @@ class ToneDetectors {
   }
   intensityBump(text: string) { let bump = 0; for (const {re,mult} of this.intensifiers) if (re.test(text)) bump += (mult - 1); return Math.max(0,bump); }
   containsProfanity(text: string) { const T = text.toLowerCase(); return this.profanity.some(w => T.includes(w)); }
+  getProfanityCount() { return this.profanity.length; }
 }
 
 const detectors = new ToneDetectors();
@@ -774,12 +784,35 @@ export class ToneAnalysisService {
       logger.info('Scoring tones');
       const { scores, intensity: baseIntensity } = this._scoreTones(fr, text, style, doc.contextLabel || options.context || 'general');
       const intensity = clamp01(baseIntensity + advBump + excl + q + caps);
+      
+      // 🔒 Hard-floor: profanity + 2nd-person targeting => angry
+      const T = text.toLowerCase();
+      const secondPerson = /\byou(r|'re|re|)\b/.test(T) || (fr.features?.lng_second ?? 0) > 0;
+      const hasProfanity = detectors.containsProfanity(text);
+      
+      logger.info(`Hard-floor check: text="${text}", hasProfanity=${hasProfanity}, secondPerson=${secondPerson}, profanityWords=${detectors.getProfanityCount()}`);
+      
+      if (hasProfanity && secondPerson) {
+        logger.info(`🔒 HARD-FLOOR TRIGGERED: profanity + 2nd-person => forcing angry tone`);
+        // Push anger way up so argmax is stable; dampen supportive/positive
+        scores.angry = Math.max(scores.angry ?? 0, 1.2);
+        scores.supportive = Math.max(0, (scores.supportive ?? 0) - 0.5);
+        scores.positive   = Math.max(0, (scores.positive   ?? 0) - 0.4);
+      }
+      
       logger.info('Tones scored', { scores, intensity });
 
       // Softmax
       const distribution = this._softmaxScores(scores);
       let classification = this._primaryFromDist(distribution);
       let confidence = distribution[classification] || 0.33;
+      
+      // Override for profanity + 2nd-person targeting
+      if (detectors.containsProfanity(text) && secondPerson) {
+        classification = 'angry';
+        confidence = Math.max(confidence, 0.75);
+      }
+      
       logger.info('Classification computed', { classification, confidence, distribution });
 
       // Guardrail: safety override

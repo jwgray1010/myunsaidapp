@@ -12,6 +12,17 @@ import os.log
 import AudioToolbox
 import UIKit
 
+// MARK: - Conditional Debug Logging
+#if DEBUG
+private func dbg(_ msg: @autoclosure () -> String) { 
+    let logger = Logger(subsystem: "com.example.unsaid.unsaid.UnsaidKeyboard", category: "KeyboardController")
+    let message = msg() // Evaluate the autoclosure immediately
+    logger.info("\(message)")
+}
+#else
+private func dbg(_ msg: @autoclosure () -> String) {}
+#endif
+
 // MARK: - Analysis Result for switch-in analysis
 struct AnalysisResult {
     let topSuggestion: String?
@@ -66,13 +77,17 @@ final class SpellCandidatesStrip: UIView {
 
     func setSuggestions(_ suggestions: [String], onTap: @escaping (String) -> Void) {
         self.onTap = onTap
-        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if suggestions.isEmpty {
-            isHidden = true
+            if !isHidden { isHidden = true; stack.arrangedSubviews.forEach { $0.removeFromSuperview() } }
             return
         }
         isHidden = false
-        for s in suggestions.prefix(3) { stack.addArrangedSubview(pill(s)) }
+        // If unchanged, do nothing
+        let current = stack.arrangedSubviews.compactMap { ($0 as? UIButton)?.title(for: .normal) }
+        let new = Array(suggestions.prefix(3))
+        guard current != new else { return }
+        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        new.forEach { stack.addArrangedSubview(pill($0)) }
     }
     
     func updateCandidates(_ suggestions: [String]) {
@@ -138,8 +153,32 @@ final class KeyboardController: UIInputView,
     
     // MARK: - Advanced Haptic Integration
     private var isHapticSessionStarted = false
-    private var hapticSessionTimer: Timer?
+    private var hapticIdleTimer: DispatchSourceTimer?
     private let hapticSessionTimeout: TimeInterval = 10.0 // Stop session after 10s of inactivity
+    
+    // MARK: - Debounce & Coalesce
+    private var analyzeTask: Task<Void, Never>?
+    
+    private func scheduleAnalysis(for text: String, urgent: Bool = false) {
+        analyzeTask?.cancel()
+        analyzeTask = Task { [weak self] in
+            if !urgent {
+                try? await Task.sleep(nanoseconds: 220_000_000) // 220ms idle pause
+            }
+            guard let self, let coordinator = self.coordinator else { return }
+            await MainActor.run {
+                self.logger.info("🧠 Debounced analyze: '\(text.prefix(60))…'")
+                coordinator.handleTextChange(text)
+            }
+        }
+    }
+    
+    private func triggerAnalysis(reason: String = "typing") {
+        let text = self.currentText
+        // Urgent if last char closes a sentence or user tapped the tone button
+        let urgent = text.last.map({ ".!?".contains($0) }) ?? false
+        scheduleAnalysis(for: text, urgent: urgent)
+    }
     
     // Unified haptic feedback method
     private func performHapticFeedback() {
@@ -157,18 +196,20 @@ final class KeyboardController: UIInputView,
     }
     
     private func resetHapticSessionTimer() {
-        hapticSessionTimer?.invalidate()
-        hapticSessionTimer = Timer.scheduledTimer(withTimeInterval: hapticSessionTimeout, repeats: false) { [weak self] _ in
-            self?.stopHapticSessionDueToInactivity()
-        }
+        hapticIdleTimer?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + hapticSessionTimeout, leeway: .milliseconds(200))
+        timer.setEventHandler { [weak self] in self?.stopHapticSessionDueToInactivity() }
+        timer.resume()
+        hapticIdleTimer = timer
     }
     
     private func stopHapticSessionDueToInactivity() {
         guard isHapticSessionStarted else { return }
         coordinator?.stopHapticSession()
         isHapticSessionStarted = false
-        hapticSessionTimer?.invalidate()
-        hapticSessionTimer = nil
+        hapticIdleTimer?.cancel()
+        hapticIdleTimer = nil
     }
     
     var enableInputClicksWhenVisible: Bool { true }
@@ -230,6 +271,7 @@ final class KeyboardController: UIInputView,
     
     // First-time user tutorial management
     private static let keyboardUsedKey = "UnsaidKeyboardHasBeenUsed"
+    private lazy var isFirstLaunch: Bool = { !AppGroups.shared.bool(forKey: Self.keyboardUsedKey) }()
 
     // Rows
     private let topRowKeys = ["q","w","e","r","t","y","u","i","o","p"]
@@ -245,6 +287,7 @@ final class KeyboardController: UIInputView,
     // Context refresh properties
     private var beforeContext: String = ""
     private var afterContext: String = ""
+    private var didInitialSwitchAnalyze = false
     
     // Safe area constraint management
     private var safeAreaBottomConstraint: NSLayoutConstraint?
@@ -293,9 +336,9 @@ final class KeyboardController: UIInputView,
         let extBundle = Bundle(for: KeyboardController.self)
         let baseURL = extBundle.object(forInfoDictionaryKey: "UNSAID_API_BASE_URL") as? String ?? "NOT FOUND"
         let apiKey = extBundle.object(forInfoDictionaryKey: "UNSAID_API_KEY") as? String ?? "NOT FOUND"
-        logger.info("🔧 API Config - Base URL: \(baseURL)")
-        logger.info("🔧 API Config - API Key: \(apiKey.prefix(10))...")
-        logger.info("🔧 Coordinator initialized: \(self.coordinator != nil)")
+        dbg("🔧 API Config - Base URL: \(baseURL)")
+        dbg("🔧 API Config - API Key: \(apiKey.prefix(10))...")
+        dbg("🔧 Coordinator initialized: \(self.coordinator != nil)")
         
         // Test network connectivity immediately
         coordinator?.forceImmediateAnalysis("ping")
@@ -303,7 +346,7 @@ final class KeyboardController: UIInputView,
     
     deinit {
         // Ensure haptic session is stopped when keyboard is deallocated
-        hapticSessionTimer?.invalidate()
+        hapticIdleTimer?.cancel()
         if isHapticSessionStarted {
             coordinator?.stopHapticSession()
         }
@@ -315,21 +358,21 @@ final class KeyboardController: UIInputView,
     }
 
     private func commonInit() {
-        logger.info("🔧 KeyboardController.commonInit() starting...")
+        dbg("🔧 KeyboardController.commonInit() starting...")
         
-        logger.info("🔧 Setting up delegates...")
+        dbg("🔧 Setting up delegates...")
         setupDelegates()
-        logger.info("✅ Delegates setup complete")
+        dbg("✅ Delegates setup complete")
         
-        logger.info("🔧 Setting up suggestion bar...")
+        dbg("🔧 Setting up suggestion bar...")
         setupSuggestionBar()    // create it first
-        logger.info("✅ Suggestion bar setup complete")
+        dbg("✅ Suggestion bar setup complete")
         
-        logger.info("🔧 Setting up keyboard layout...")
+        dbg("🔧 Setting up keyboard layout...")
         setupKeyboardLayout()   // then layout that pins to it
-        logger.info("✅ Keyboard layout setup complete")
+        dbg("✅ Keyboard layout setup complete")
         
-        logger.info("✅ KeyboardController.commonInit() completed successfully")
+        dbg("✅ KeyboardController.commonInit() completed successfully")
     }
     
     private func setupDelegates() {
@@ -353,16 +396,15 @@ final class KeyboardController: UIInputView,
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        // Trigger manager updates if needed
-        
-        if let bg = toneButtonBackground, let g = toneGradient {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true) // no implicit jumpy anims
-            g.frame = bg.bounds
-            g.cornerRadius = bg.bounds.height / 2
-            bg.layer.shadowPath = UIBezierPath(roundedRect: bg.bounds, cornerRadius: g.cornerRadius).cgPath
-            CATransaction.commit()
-        }
+        guard let bg = toneButtonBackground, let g = toneGradient else { return }
+        let newBounds = bg.bounds.integral
+        guard g.frame != newBounds else { return } // ✨ skip redundant work
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        g.frame = newBounds
+        g.cornerRadius = newBounds.height / 2
+        bg.layer.shadowPath = UIBezierPath(roundedRect: newBounds, cornerRadius: g.cornerRadius).cgPath
+        CATransaction.commit()
     }
 
     // MARK: - DeleteManagerDelegate
@@ -585,7 +627,8 @@ final class KeyboardController: UIInputView,
 
         // Add actions
         toneButton.addAction(UIAction { [weak self] _ in
-            self?.coordinator?.requestSuggestions()
+            // Keep 'force analyze' on the tone button as requested
+            self?.scheduleAnalysis(for: self?.currentText ?? "", urgent: true)
             self?.pressPop()
         }, for: .touchUpInside)
 
@@ -641,6 +684,16 @@ final class KeyboardController: UIInputView,
 
         // Start with neutral tone
         setToneStatus(.neutral)
+        
+        // Apply accessibility improvements
+        applyAccessibility()
+    }
+    
+    private func applyAccessibility() {
+        toneButton?.accessibilityTraits = [.button]
+        toneButton?.accessibilityLabel = "Analyze tone"
+        quickFixButton?.titleLabel?.adjustsFontForContentSizeCategory = true
+        suggestionBar.accessibilityTraits = [.staticText]
     }
 
     // MARK: - Logo Loading
@@ -648,36 +701,36 @@ final class KeyboardController: UIInputView,
     private func configureLogoImage(for button: UIButton) {
         let keyboardBundle = Bundle(for: KeyboardController.self)
 
-        // Method 1: Try direct PNG file in keyboard extension bundle (simple & reliable)
+        // Method 1: Try Asset Catalog first (automatically picks correct scale)
+        if let logoImage = UIImage(named: "unsaid_logo", in: keyboardBundle, compatibleWith: traitCollection) {
+            // Use original rendering mode (not template) so logo keeps its design
+            button.setImage(logoImage.withRenderingMode(.alwaysOriginal), for: .normal)
+            button.adjustsImageWhenHighlighted = false
+            dbg("✅ KeyboardController: Loaded from keyboard Asset Catalog with correct scale")
+            return
+        }
+
+        // Method 2: Try direct PNG file in keyboard extension bundle (simple & reliable)
         if let logoPath = keyboardBundle.path(forResource: "unsaid_logo", ofType: "png"),
            let logoImage = UIImage(contentsOfFile: logoPath) {
             // Use original rendering mode (not template) so logo keeps its design
             button.setImage(logoImage.withRenderingMode(.alwaysOriginal), for: .normal)
             button.adjustsImageWhenHighlighted = false
-            print("✅ KeyboardController: Loaded unsaid_logo.png directly from keyboard bundle")
-            return
-        }
-
-        // Method 2: Fallback to Asset Catalog in keyboard extension
-        if let logoImage = UIImage(named: "unsaid_logo", in: keyboardBundle, compatibleWith: nil) {
-            // Use original rendering mode (not template) so logo keeps its design
-            button.setImage(logoImage.withRenderingMode(.alwaysOriginal), for: .normal)
-            button.adjustsImageWhenHighlighted = false
-            print("✅ KeyboardController: Loaded from keyboard Asset Catalog")
+            dbg("✅ KeyboardController: Loaded unsaid_logo.png directly from keyboard bundle")
             return
         }
 
         // Method 3: Try main app bundle as last resort
-        if let logoImage = UIImage(named: "unsaid_logo", in: Bundle.main, compatibleWith: nil) {
+        if let logoImage = UIImage(named: "unsaid_logo", in: Bundle.main, compatibleWith: traitCollection) {
             // Use original rendering mode (not template) so logo keeps its design
             button.setImage(logoImage.withRenderingMode(.alwaysOriginal), for: .normal)
             button.adjustsImageWhenHighlighted = false
-            print("✅ KeyboardController: Loaded from main app bundle")
+            dbg("✅ KeyboardController: Loaded from main app bundle")
             return
         }
 
         // Method 4: Create a simple programmatic logo as backup
-        print("❌ KeyboardController: All methods failed, creating programmatic logo")
+        dbg("❌ KeyboardController: All methods failed, creating programmatic logo")
         let image = createSimpleLogoImage()
         button.setImage(image.withRenderingMode(.alwaysOriginal), for: .normal)
         button.adjustsImageWhenHighlighted = false
@@ -729,7 +782,7 @@ final class KeyboardController: UIInputView,
         currentTone = tone
 
         // Destination visual state
-        let (colors, baseColor): ([CGColor], UIColor) = gradientColors(for: tone)
+        let (colors, baseColor): ([CGColor], UIColor?) = gradientColors(for: tone)
         let targetAlpha: CGFloat = 1.0  // Always show background (white or colored)
         let targetScale: CGFloat = (tone == .alert) ? 1.06 : 1.0
         let targetShadow: Float = toneShadowOpacity  // Always show shadow for better contrast
@@ -767,7 +820,7 @@ final class KeyboardController: UIInputView,
                 g.add(anim, forKey: "colors")
             }
             g.colors = colors // final state
-        } else {
+        } else if let baseColor = baseColor {
             // fallback background if gradient missing
             bg.backgroundColor = baseColor
         }
@@ -805,26 +858,26 @@ final class KeyboardController: UIInputView,
         toneButtonBackground?.layer.removeAnimation(forKey: "alertPulse")
     }
 
-    private func gradientColors(for tone: ToneStatus) -> ([CGColor], UIColor) {
+    private func gradientColors(for tone: ToneStatus) -> ([CGColor], UIColor?) {
         switch tone {
         case .alert:
             let c1 = UIColor.systemRed
             let c2 = UIColor.systemRed.withAlphaComponent(0.85)
-            return ([c1.cgColor, c2.cgColor], c1)
+            return ([c1.cgColor, c2.cgColor], nil)
         case .caution:
             let c1 = UIColor.systemYellow
             let c2 = UIColor.systemOrange.withAlphaComponent(0.85)
-            return ([c1.cgColor, c2.cgColor], c1)
+            return ([c1.cgColor, c2.cgColor], nil)
         case .clear:
             let c1 = UIColor.systemGreen
             let c2 = UIColor.systemTeal.withAlphaComponent(0.85)
-            return ([c1.cgColor, c2.cgColor], c1)
+            return ([c1.cgColor, c2.cgColor], nil)
         case .neutral:
-            let c = UIColor.white  // Keep white background for neutral
-            return ([c.cgColor, c.cgColor], .white)
+            let c = UIColor.white
+            return ([c.cgColor, c.cgColor], UIColor.white)
         @unknown default:
             let c = UIColor.white
-            return ([c.cgColor, c.cgColor], .white)
+            return ([c.cgColor, c.cgColor], UIColor.white)
         }
     }
 
@@ -1034,8 +1087,7 @@ final class KeyboardController: UIInputView,
         
         // Auto-switch to letters mode after punctuation
         if [".", "!", "?", ",", ";", ":"].contains(title) && currentMode != .letters {
-            currentMode = .letters
-            updateKeyboardForCurrentMode()
+            setKeyboardMode(.letters)
         }
         
         // Auto-disable shift after typing a letter (but not caps lock)
@@ -1093,9 +1145,14 @@ final class KeyboardController: UIInputView,
     }
     
     @objc private func handleModeSwitch() {
-        currentMode = currentMode == .letters ? .numbers : .letters
-        updateKeyboardForCurrentMode()
+        setKeyboardMode(currentMode == .letters ? .numbers : .letters)
         performHapticFeedback()
+    }
+    
+    private func setKeyboardMode(_ mode: KeyboardMode) {
+        guard mode != currentMode else { return }
+        currentMode = mode
+        updateKeyboardForCurrentMode()
     }
     
     @objc private func handleSecureFix() {
@@ -1220,13 +1277,9 @@ final class KeyboardController: UIInputView,
         refreshContext()
         spellCheckerIntegration.refreshSpellCandidates(for: currentText)
         
-        // Trigger automatic tone analysis
-        if let coordinator = coordinator {
-            logger.info("📝 Text changed, triggering analysis: '\(self.currentText.prefix(50))...'")
-            coordinator.handleTextChange(self.currentText)
-        } else {
-            logger.error("❌ No coordinator available for tone analysis")
-        }
+        // Trigger debounced tone analysis
+        logger.info("📝 Text changed, triggering debounced analysis: '\(self.currentText.prefix(50))...'")
+        triggerAnalysis(reason: "typing")
     }
     
     private func updateCurrentText() {
@@ -1242,21 +1295,15 @@ final class KeyboardController: UIInputView,
     
     private func refreshContext() {
         guard let proxy = textDocumentProxy else { return }
-        beforeContext = proxy.documentContextBeforeInput ?? ""
-        afterContext = proxy.documentContextAfterInput ?? ""
-        
-        // Limit context length for performance
-        beforeContext = String(beforeContext.suffix(600))
-        afterContext = String(afterContext.prefix(200))
-        
-        // When switching from iOS keyboard, immediately analyze the existing text
-        let fullText = beforeContext + afterContext
-        if !fullText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            updateCurrentText()
-            if let coordinator = coordinator {
-                // Use forced immediate analysis when there's existing text (keyboard switch scenario)
-                coordinator.forceImmediateAnalysis(currentText)
-            }
+        beforeContext = String((proxy.documentContextBeforeInput ?? "").suffix(600))
+        afterContext  = String((proxy.documentContextAfterInput  ?? "").prefix(200))
+
+        let fullText = (beforeContext + afterContext).trimmingCharacters(in: .whitespacesAndNewlines)
+        updateCurrentText()
+
+        if !fullText.isEmpty, !didInitialSwitchAnalyze {
+            didInitialSwitchAnalyze = true
+            scheduleAnalysis(for: currentText, urgent: true)
         }
     }
 
@@ -1274,8 +1321,15 @@ final class KeyboardController: UIInputView,
     }
     
     private func replaceAllText(with newText: String, on proxy: UITextDocumentProxy) {
+        // For long messages, move to start before deleting to reduce proxy roundtrips
+        var deleteCount = 0
         while let before = proxy.documentContextBeforeInput, !before.isEmpty {
             proxy.deleteBackward()
+            deleteCount += 1
+            if deleteCount > 500 { // Safety limit for very long text
+                proxy.adjustTextPosition(byCharacterOffset: -1000)
+                break
+            }
         }
         proxy.insertText(newText)
     }
@@ -1289,17 +1343,10 @@ final class KeyboardController: UIInputView,
     }
     
     private func setUndoVisible(_ visible: Bool) {
-        guard let undoButton = undoButton else { return }
-        guard undoButton.isHidden == !visible else { return }
-        if visible {
-            undoButton.alpha = 0
-            undoButton.isHidden = false
-            UIView.animate(withDuration: 0.18) { undoButton.alpha = 1 }
-        } else {
-            UIView.animate(withDuration: 0.18, animations: { undoButton.alpha = 0 }) { _ in
-                undoButton.isHidden = true
-            }
-        }
+        guard let b = undoButton, b.isHidden == visible else { return }
+        // perform animation only when state changes
+        b.isHidden = !visible
+        UIView.animate(withDuration: 0.18) { b.alpha = visible ? 1 : 0 }
     }
 
     private func setToneStatusString(_ status: String) {
@@ -1337,10 +1384,11 @@ final class KeyboardController: UIInputView,
     // MARK: - First-time User Management
     
     private func markKeyboardAsUsed() {
+        guard isFirstLaunch else { return }
         AppGroups.shared.set(true, forKey: Self.keyboardUsedKey)
     }
 
     private func isFirstTimeUser() -> Bool {
-        return !AppGroups.shared.bool(forKey: Self.keyboardUsedKey)
+        return isFirstLaunch
     }
 }

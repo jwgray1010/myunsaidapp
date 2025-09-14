@@ -22,19 +22,27 @@ export const metaSchema = z.object({
   timestamp: z.string().datetime().optional().describe('Request timestamp'),
   user: z.string().optional().describe('User identifier'),
   locale: z.string().optional().describe('User locale (e.g., en-US)'),
-  context: z.string().optional().describe('Additional context information'),
+  sessionId: z.string().optional().describe('Session identifier for tracking'),
+  requestId: z.string().optional().describe('Unique request identifier'),
+  relationshipStage: z.string().optional().describe('Current relationship stage'),
+  conflictLevel: z.enum(['low', 'medium', 'high']).optional().describe('Current conflict level'),
 }).passthrough().describe('Optional metadata for tracing and UX decisions');
 
 // Main SuggestionRequest schema (matching JSON schema structure)
 export const suggestionRequestSchema = z.object({
   text: z.string()
-    .min(1, 'A valid message text (1–2000 characters) is required')
-    .max(2000, 'A valid message text (1–2000 characters) is required')
+    .min(1, 'A valid message text (1–5000 characters) is required')
+    .max(5000, 'A valid message text (1–5000 characters) is required')
     .describe('The message to analyze and provide therapy advice for'),
+  context: z.string().optional().describe('Optional hint about conversation context - system auto-detects from text if not provided'),
   toneOverride: toneOverrideSchema.optional().describe('Optional override for detected tone. Useful for testing or manual control'),
   attachmentStyle: attachmentStyleSchema.optional().describe('Optional user attachment-style override, if already known'),
   features: featuresSchema.describe('Feature flags to include in the response. Common values: advice, quick_fixes, evidence, emotional_support'),
   meta: metaSchema.optional().describe('Optional metadata for tracing and UX decisions'),
+  // Client sequencing fields (used by coordinators)
+  client_seq: z.number().optional().describe('Client sequence number for last-writer-wins'),
+  clientSeq: z.number().optional().describe('Alternative client sequence number field'),
+  requestId: z.string().optional().describe('Unique request identifier for tracing'),
 });
 
 export type SuggestionRequest = z.infer<typeof suggestionRequestSchema>;
@@ -80,6 +88,14 @@ export const suggestionResponseSchema = z.object({
   suggestions: z.array(suggestionItemSchema).describe('Array of generated suggestions'),
   original_analysis: originalAnalysisSchema.describe('Analysis of the original message'),
   metadata: responseMetadataSchema.describe('Response metadata'),
+  // ➕ Surface the same UI fields here for consistency with /tone responses
+  ui_tone: z.enum(['clear','caution','alert']).optional().describe('UI bucket for the pill color'),
+  ui_distribution: z.object({
+    clear: z.number().min(0).max(1),
+    caution: z.number().min(0).max(1),
+    alert: z.number().min(0).max(1),
+  }).partial().optional().describe('Bucket probabilities used to derive ui_tone'),
+  client_seq: z.number().optional().describe('Echoed client sequence for last-writer-wins'),
   success: z.boolean().default(true).describe('Whether the request was successful'),
   version: z.string().default('1.0.0').describe('API version used'),
 });
@@ -88,24 +104,28 @@ export type SuggestionResponse = z.infer<typeof suggestionResponseSchema>;
 
 // Validation schemas for different contexts
 export const conflictSuggestionRequestSchema = suggestionRequestSchema.extend({
-  meta: metaSchema.extend({
-    context: z.literal('conflict').describe('Conflict resolution context'),
-  }).optional(),
+  context: z.literal('conflict').describe('Conflict resolution context'),
 });
 
-export const romanticSuggestionRequestSchema = suggestionRequestSchema.extend({
-  meta: metaSchema.extend({
-    context: z.literal('romantic').describe('Romantic relationship context'),
-  }).optional(),
+export const repairSuggestionRequestSchema = suggestionRequestSchema.extend({
+  context: z.literal('repair').describe('Relationship repair context'),
+});
+
+export const boundarySuggestionRequestSchema = suggestionRequestSchema.extend({
+  context: z.literal('boundary').describe('Boundary setting context'),
 });
 
 export const professionalSuggestionRequestSchema = suggestionRequestSchema.extend({
-  meta: metaSchema.extend({
-    context: z.literal('professional').describe('Professional communication context'),
-  }).optional(),
+  context: z.literal('professional').describe('Professional communication context'),
+});
+
+export const generalSuggestionRequestSchema = suggestionRequestSchema.extend({
+  context: z.literal('general').describe('General communication context'),
 });
 
 // Export context-specific types
 export type ConflictSuggestionRequest = z.infer<typeof conflictSuggestionRequestSchema>;
-export type RomanticSuggestionRequest = z.infer<typeof romanticSuggestionRequestSchema>;
+export type RepairSuggestionRequest = z.infer<typeof repairSuggestionRequestSchema>;
+export type BoundarySuggestionRequest = z.infer<typeof boundarySuggestionRequestSchema>;
 export type ProfessionalSuggestionRequest = z.infer<typeof professionalSuggestionRequestSchema>;
+export type GeneralSuggestionRequest = z.infer<typeof generalSuggestionRequestSchema>;

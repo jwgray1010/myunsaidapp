@@ -3,8 +3,9 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { withCors, withMethods, withValidation, withErrorHandling, withLogging, withRateLimit } from '../_lib/wrappers';
 import { success } from '../_lib/http';
 import { suggestionRequestSchema } from '../_lib/schemas/suggestionRequest';
+import { toneRequestSchema } from '../_lib/schemas/toneRequest';
 import { suggestionsService } from '../_lib/services/suggestions';
-import { MLAdvancedToneAnalyzer } from '../_lib/services/toneAnalysis';
+import { MLAdvancedToneAnalyzer, mapToneToBuckets } from '../_lib/services/toneAnalysis';
 import { CommunicatorProfile } from '../_lib/services/communicatorProfile';
 import { logger } from '../_lib/logger';
 import { ensureBoot } from '../_lib/bootstrap';
@@ -23,10 +24,11 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
   
   logger.info('Processing advanced suggestions request', { 
     textLength: data.text.length,
-    contextHint: data.meta?.context, // Context comes from meta object in suggestionRequestSchema
+    context: data.context, // Context now comes from top-level field
     toneOverride: data.toneOverride,
     features: data.features,
-    userId
+    userId,
+    clientSeq: data.client_seq || data.clientSeq
   });
   
   try {
@@ -63,7 +65,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
         const result = await toneAnalyzer.analyzeTone(
           data.text,
           attachmentEstimate.primary || 'secure',
-          data.meta?.context || 'general', // Context from meta object
+          data.context || 'general', // Context from top-level field
           'general'
         );
         
@@ -87,7 +89,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     // Pass context hint (if provided) but let the system auto-detect from text
     logger.info('About to call suggestionsService.generateAdvancedSuggestions with:', {
       textLength: data.text.length,
-      context: data.meta?.context || 'general', // Context from meta object
+      context: data.context || 'general', // Context from top-level field
       userId,
       attachmentEstimate,
       toneResult,
@@ -105,7 +107,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     try {
       suggestionAnalysis = await suggestionsService.generateAdvancedSuggestions(
         data.text,
-        data.meta?.context || 'general', // Context from meta object
+        data.context || 'general', // Context from top-level field
         {
           id: userId,
           attachment: data.attachmentStyle || attachmentEstimate.primary || 'secure', // Default to secure during learning
@@ -133,8 +135,17 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     }
 
     // Use the auto-detected context for profile history (more accurate than hint)
-    const detectedContext = suggestionAnalysis.analysis?.context?.label || data.meta?.context || 'general';
+    const detectedContext = suggestionAnalysis.analysis?.context?.label || data.context || 'general';
     profile.addCommunication(data.text, detectedContext, toneResult?.classification || 'neutral');
+    
+    // Map tone → UI buckets so iOS pill can colorize immediately
+    const bucketed = mapToneToBuckets(
+      { classification: toneResult?.classification || 'neutral', confidence: toneResult?.confidence || 0.33 },
+      data.attachmentStyle || attachmentEstimate.primary || 'secure',
+      detectedContext || 'general'
+    );
+    const uiBuckets = bucketed?.buckets || { clear: 1/3, caution: 1/3, alert: 1/3 };
+    const ui_tone = (Object.entries(uiBuckets).sort((a,b)=> (b[1] as number) - (a[1] as number))[0][0]) as 'clear'|'caution'|'alert';
     
     const processingTime = Date.now() - startTime;
     
@@ -153,7 +164,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       context: suggestionAnalysis.context,
       attachmentEstimate,
       isNewUser,
-      suggestions: suggestionAnalysis.suggestions.map((s, index) => ({
+      suggestions: suggestionAnalysis.suggestions.map((s: any, index: number) => ({
         id: index + 1,
         text: s.text,
         type: s.type,
@@ -165,6 +176,10 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
         attachment_informed: s.attachment_informed
       })),
       analysis_meta: suggestionAnalysis.analysis_meta,
+      // ➕ UI fields to match /tone:
+      ui_tone,
+      ui_distribution: uiBuckets,
+      client_seq: data.client_seq || data.clientSeq,
       metadata: {
         processing_time_ms: processingTime,
         model_version: 'v1.0.0-advanced',

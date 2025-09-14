@@ -34,6 +34,10 @@ export const toneRequestSchema = z.object({
     .describe('The user\'s message text to analyze for tone'),
   context: z.string().optional().describe('Optional hint about conversation context - system auto-detects from text if not provided'),
   meta: metaSchema.optional().describe('Optional metadata about the request (platform, timestamp, user info)'),
+  // Client sequencing fields (used by ToneSuggestionCoordinator)
+  client_seq: z.number().optional().describe('Client sequence number for last-writer-wins'),
+  clientSeq: z.number().optional().describe('Alternative client sequence number field'),
+  requestId: z.string().optional().describe('Unique request identifier for tracing'),
   // Extended fields for enhanced functionality
   toneOverride: toneOverrideSchema.optional().describe('Optional override for detected tone'),
   attachmentStyle: attachmentStyleSchema.optional().describe('Optional user attachment style for personalized analysis'),
@@ -69,14 +73,24 @@ export type EmotionAnalysis = z.infer<typeof emotionAnalysisSchema>;
 export const toneResponseSchema = z.object({
   ok: z.boolean().describe('Whether the analysis was successful'),
   userId: z.string().describe('User identifier'),
-  text: z.string().describe('Original input text'),
-  attachmentEstimate: attachmentEstimateSchema.describe('Attachment style estimate'),
-  tone: z.enum(['alert', 'caution', 'clear']).describe('Detected tone classification'),
+  text: z.string().optional().describe('Original input text'),
+  attachmentEstimate: attachmentEstimateSchema.describe('Attachment style estimate').optional(),
+  // "tone" is the classifier label from the model (e.g., neutral/positive/negative/tentative/etc.)
+  // For UI, use ui_tone below.
+  tone: z.string().describe('Detected tone classification (model-level label)'),
   confidence: z.number().min(0).max(1).describe('Confidence level of tone detection'),
-  scores: z.record(z.number()).describe('Tone scores by category'),
-  context: z.string().describe('Context used for analysis'),
-  evidence: z.array(z.string()).describe('Evidence supporting the tone classification'),
-  rewritability: z.number().min(0).max(1).describe('How much the message could benefit from rewriting'),
+  scores: z.record(z.number()).optional().describe('Tone scores by category'),
+  context: z.string().optional().describe('Context used for analysis'),
+  evidence: z.array(z.string()).optional().describe('Evidence supporting the tone classification'),
+  rewritability: z.number().min(0).max(1).optional().describe('How much the message could benefit from rewriting'),
+  // ➕ UI fields used by the keyboard pill:
+  ui_tone: z.enum(['clear','caution','alert']).optional().describe('UI bucket for the pill color'),
+  ui_distribution: z.object({
+    clear: z.number().min(0).max(1),
+    caution: z.number().min(0).max(1),
+    alert: z.number().min(0).max(1),
+  }).partial().optional().describe('Bucket probabilities used to derive ui_tone'),
+  client_seq: z.number().optional().describe('Echoed client sequence for last-writer-wins'),
   // Enhanced response fields
   emotions: emotionAnalysisSchema.optional().describe('Emotion analysis results'),
   suggestions: z.array(z.object({
@@ -89,11 +103,11 @@ export const toneResponseSchema = z.object({
   metadata: z.object({
     processing_time_ms: z.number(),
     model_version: z.string(),
-    analysis_depth: z.enum(['basic', 'standard', 'deep']),
-    features_used: z.array(z.string()),
+    analysis_depth: z.enum(['basic', 'standard', 'deep']).optional().default('standard'),
+    features_used: z.array(z.string()).optional(),
   }).describe('Analysis metadata'),
   version: z.string().default('1.0.0').describe('API version'),
-  timestamp: z.string().datetime().describe('Response timestamp'),
+  timestamp: z.string().datetime().optional().describe('Response timestamp'),
 });
 
 export type ToneResponse = z.infer<typeof toneResponseSchema>;

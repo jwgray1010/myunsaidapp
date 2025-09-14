@@ -330,21 +330,21 @@ final class SafeKeyboardDataStorage {
         StoredInteraction(
             id: UUID().uuidString,
             timestamp: i.timestamp.timeIntervalSince1970,
-            textBeforeLength: i.textBefore.count,
-            textAfterLength: i.textAfter.count,
+            textBeforeLength: i.textLength, // Using textLength as approximation
+            textAfterLength: i.textLength, // Using textLength as approximation
             toneStatus: i.toneStatus.rawValue,
-            suggestionAccepted: i.suggestionAccepted,
-            userAcceptedSuggestion: i.userAcceptedSuggestion,
+            suggestionAccepted: i.wasAccepted,
+            userAcceptedSuggestion: i.wasAccepted,
             suggestionLength: i.suggestionText?.count ?? 0,
             analysisTime: i.analysisTime,
-            context: i.context,
+            context: "keyboard", // Default context since not available in struct
             interactionType: i.interactionType.rawValue,
             communicationPattern: i.communicationPattern.rawValue,
             attachmentStyle: i.attachmentStyleDetected.rawValue,
             relationshipContext: i.relationshipContext.rawValue,
-            sentimentScore: i.sentimentScore,
-            wordCount: i.wordCount,
-            appContext: i.appContext
+            sentimentScore: 0.0, // Default value since not available in struct
+            wordCount: max(1, i.textLength / 5), // Rough approximation: average word length ~5 chars
+            appContext: "unknown" // Default value since not available in struct
         )
     }
 

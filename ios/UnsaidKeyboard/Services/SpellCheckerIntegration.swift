@@ -20,25 +20,42 @@ final class SpellCheckerIntegration {
     private let spellChecker = LightweightSpellChecker.shared
     private let correctionBoundaries = Set<Character>([" ", "\n", ".", ",", "!", "?", ":", ";"])
     
-    init() {}
+    // Micro-optimizations to avoid redundant work
+    private var lastSuggestionsToken: String?
+    private let trailingWindowLimit = 512 // keep the async path cheap
     
+    init() {}
+
     // MARK: - Public Interface
     
     /// Refresh suggestions as the user types (mid-token).
     /// Uses a cheap async path and coalesces in the checker to keep the extension responsive.
-    func refreshSpellCandidates(for text: String) {
+    func refreshSpellCandidates(for fullText: String) {
+        // Only look at the trailing slice to bound work and string bridging
+        let text = fullText.suffix(trailingWindowLimit).description
+        
         guard let lastWord = LightweightSpellChecker.lastToken(in: text),
               !lastWord.isEmpty,
               shouldCheckSpelling(for: lastWord) else {
+            lastSuggestionsToken = nil
             delegate?.didUpdateSpellingSuggestions([])
             return
         }
+        
+        // If the token hasn't changed since the last call, skip the trip.
+        if lastSuggestionsToken == lastWord {
+            return
+        }
+        lastSuggestionsToken = lastWord
         
         // Lightweight async: the checker coalesces internally.
         spellChecker.quickSpellCheckAsync(text: text) { [weak self] suggestions in
             guard let self = self else { return }
             Task { @MainActor in
-                self.delegate?.didUpdateSpellingSuggestions(Array(suggestions.prefix(3)))
+                // Only publish if we're still looking at the same token
+                if self.lastSuggestionsToken == lastWord {
+                    self.delegate?.didUpdateSpellingSuggestions(Array(suggestions.prefix(3)))
+                }
             }
         }
     }
@@ -49,7 +66,7 @@ final class SpellCheckerIntegration {
               let lastWord = LightweightSpellChecker.lastToken(in: before),
               !lastWord.isEmpty else { return }
         
-        // Replace the last word
+        // Replace the last word (delete grapheme-by-grapheme; UITextDocumentProxy handles this safely)
         for _ in 0..<lastWord.count { proxy.deleteBackward() }
         proxy.insertText(candidate)
         
@@ -59,6 +76,9 @@ final class SpellCheckerIntegration {
         UndoManagerLite.shared.record(original: lastWord, corrected: candidate)
         
         delegate?.didApplySpellCorrection(candidate, original: lastWord)
+        
+        // New token context; reset suggestion token to avoid stale UI replays
+        lastSuggestionsToken = nil
     }
     
     /// Attempt commit-time autocorrect when the user types a boundary (space/punctuation/newline).
@@ -76,6 +96,7 @@ final class SpellCheckerIntegration {
             poppedBoundary = true
         }
         
+        // Re-read context after pop (cheap)
         let coreBefore = proxy.documentContextBeforeInput ?? ""
         guard let lastWord = LightweightSpellChecker.lastToken(in: coreBefore),
               !lastWord.isEmpty,
@@ -98,34 +119,47 @@ final class SpellCheckerIntegration {
         )
         
         guard decision.applyAuto, let replacement = decision.replacement, replacement != lastWord else {
-            // No auto — just put boundary back if we popped it
             if poppedBoundary { proxy.insertText(String(boundary)) }
             return
         }
         
-        // Replace the last word, then reinsert boundary
+        // Replace the last word, then reinsert boundary (if we popped it)
         for _ in 0..<lastWord.count { proxy.deleteBackward() }
         proxy.insertText(replacement)
         if poppedBoundary { proxy.insertText(String(boundary)) }
         
         // Track for undo / acceptance learning
         spellChecker.applyInlineCorrection(replacement, originalWord: lastWord)
-        spellChecker.recordAutocorrection(lastWord) // intentionally a no-op regarding "intentional"
+        spellChecker.recordAutocorrection(lastWord) // intentionally a no-op wrt "intentional"
         spellChecker.recordAcceptedCorrection(original: lastWord, corrected: replacement)
         UndoManagerLite.shared.record(original: lastWord, corrected: replacement)
         
         delegate?.didApplySpellCorrection(replacement, original: lastWord)
+        
+        // Fresh token context post-commit
+        lastSuggestionsToken = nil
+    }
+    
+    /// Forward traits -> checker (keeps behavior aligned with system prefs).
+    func syncTraits(from proxy: UITextDocumentProxy) {
+        spellChecker.syncFromTextTraits(proxy)
     }
     
     func undoLastCorrection(in proxy: UITextDocumentProxy) -> Bool {
-        return UndoManagerLite.shared.tryUndo(in: proxy)
+        let ok = UndoManagerLite.shared.tryUndo(in: proxy)
+        if ok {
+            // After undo, token definitely changed; clear suggestion cache key
+            lastSuggestionsToken = nil
+        }
+        return ok
     }
     
     // MARK: - Private Helpers
     
     private func shouldCheckSpelling(for word: String) -> Bool {
         let lower = word.lowercased()
-        // Skip URLs, mentions, hashtags, likely IDs/paths
+        // Skip URLs, mentions, hashtags, likely IDs/paths, and very short tokens
+        if lower.count < 2 { return false }
         if lower.hasPrefix("@") || lower.hasPrefix("#") || lower.contains("http") { return false }
         if lower.contains("/") || lower.contains("_") { return false }
         return true
@@ -133,7 +167,7 @@ final class SpellCheckerIntegration {
     
     private func shouldAutoCorrect(_ word: String) -> Bool {
         let lower = word.lowercased()
-        // Skip URLs, mentions, hashtags, likely IDs/paths
+        if lower.count < 2 { return false }
         if lower.hasPrefix("@") || lower.hasPrefix("#") || lower.contains("http") { return false }
         if lower.contains("/") || lower.contains("_") { return false }
         return true
@@ -143,7 +177,7 @@ final class SpellCheckerIntegration {
 // MARK: - UndoManagerLite for autocorrect undo
 final class UndoManagerLite {
     static let shared = UndoManagerLite()
-    private var last: (original: String, corrected: String, chars: Int)?
+    private var last: (original: String, corrected: String, correctedCount: Int)?
     
     private init() {}
     
@@ -152,11 +186,18 @@ final class UndoManagerLite {
     }
     
     /// Undo the most recent auto- or tap-applied correction.
-    /// Also marks the original word as "intentional", so if the user retypes it,
-    /// the spell checker will *not* autocorrect it again (iOS-like behavior).
+    /// Only performs if the current text suffix actually matches the corrected token,
+    /// to avoid deleting user input typed after the correction.
     func tryUndo(in proxy: UITextDocumentProxy) -> Bool {
         guard let l = last else { return false }
-        for _ in 0..<l.chars { proxy.deleteBackward() }
+        
+        let before = proxy.documentContextBeforeInput ?? ""
+        guard before.hasSuffix(l.corrected) else {
+            // Not in a safe state to undo (user likely typed more) — skip.
+            return false
+        }
+        
+        for _ in 0..<l.correctedCount { proxy.deleteBackward() }
         proxy.insertText(l.original)
         
         // Mark as intentional so subsequent re-entries won't autocorrect

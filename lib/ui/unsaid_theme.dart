@@ -22,28 +22,28 @@ class UnsaidPalette {
   static const surfaceDim = Color(0xFFF8FAFC); // Slate 50
   static const surfaceDark = Color(0xFF1E293B); // Slate 800
 
-  // Text colors that adapt to background - Updated for white text on blue background
+  // Text colors that adapt to background - Updated for dark text by default
   static const textPrimary = Color(
-    0xFFFFFFFF,
-  ); // White - for dark/blue backgrounds
+    0xFF0F172A,
+  ); // Dark text - for light backgrounds (default)
   static const textSecondary = Color(
-    0xFFF1F5F9,
-  ); // Very light gray - for dark/blue backgrounds
+    0xFF475569,
+  ); // Medium text - for light backgrounds (default)
   static const textTertiary = Color(
-    0xFFCBD5E1,
-  ); // Light gray - for dark/blue backgrounds
+    0xFF64748B,
+  ); // Light text - for light backgrounds (default)
 
   static const textPrimaryDark = Color(
-    0xFFF1F5F9,
-  ); // Slate 100 - for dark backgrounds
+    0xFFFFFFFF,
+  ); // White - for dark/gradient backgrounds
   static const textSecondaryDark = Color(
-    0xFFCBD5E1,
-  ); // Slate 300 - for dark backgrounds
+    0xFFF1F5F9,
+  ); // Very light gray - for dark/gradient backgrounds
   static const textTertiaryDark = Color(
-    0xFF64748B,
-  ); // Slate 500 - for dark backgrounds
+    0xFFCBD5E1,
+  ); // Light gray - for dark/gradient backgrounds
 
-  // For light backgrounds (cards, etc.)
+  // For light backgrounds (cards, etc.) - now redundant with primary colors but kept for consistency
   static const textPrimaryLight = Color(
     0xFF0F172A,
   ); // Dark text for light backgrounds
@@ -136,7 +136,7 @@ ThemeData buildUnsaidTheme() {
       onPrimary: UnsaidPalette.textPrimaryDark, // White text on primary color
       onSecondary:
           UnsaidPalette.textPrimaryDark, // White text on secondary color
-      onSurface: UnsaidPalette.textPrimary, // Dark text on surface
+      onSurface: UnsaidPalette.textPrimary, // Dark text on surface (cards) - now dark by default
     ),
   );
 
@@ -145,24 +145,53 @@ ThemeData buildUnsaidTheme() {
     textTheme: base.textTheme.copyWith(
       titleLarge: base.textTheme.titleLarge?.copyWith(
         fontWeight: FontWeight.w700,
-        color: UnsaidPalette.textPrimary,
+        color: UnsaidPalette
+            .textPrimary, // Dark text by default
         letterSpacing: -0.2,
       ),
+      titleMedium: base.textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: UnsaidPalette
+            .textPrimary, // Dark text by default
+        letterSpacing: -0.1,
+      ),
+      titleSmall: base.textTheme.titleSmall?.copyWith(
+        fontWeight: FontWeight.w500,
+        color: UnsaidPalette
+            .textPrimary, // Dark text by default
+      ),
+      bodyLarge: base.textTheme.bodyLarge?.copyWith(
+        color: UnsaidPalette
+            .textSecondary, // Medium dark text by default
+        height: 1.35,
+      ),
       bodyMedium: base.textTheme.bodyMedium?.copyWith(
-        color: UnsaidPalette.textSecondary,
+        color: UnsaidPalette
+            .textSecondary, // Medium dark text by default
         height: 1.35,
       ),
       bodySmall: base.textTheme.bodySmall?.copyWith(
+        color: UnsaidPalette
+            .textTertiary, // Light dark text by default
+      ),
+      labelLarge: base.textTheme.labelLarge?.copyWith(
+        color: UnsaidPalette.textPrimary,
+        fontWeight: FontWeight.w500,
+      ),
+      labelMedium: base.textTheme.labelMedium?.copyWith(
+        color: UnsaidPalette.textSecondary,
+      ),
+      labelSmall: base.textTheme.labelSmall?.copyWith(
         color: UnsaidPalette.textTertiary,
       ),
     ),
     appBarTheme: base.appBarTheme.copyWith(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      foregroundColor: UnsaidPalette.textPrimary,
+      foregroundColor: UnsaidPalette.textPrimaryDark, // White for gradient app bars
       titleTextStyle: base.textTheme.titleLarge?.copyWith(
         fontWeight: FontWeight.w700,
-        color: UnsaidPalette.textPrimary,
+        color: UnsaidPalette.textPrimaryDark, // White for gradient app bars
         letterSpacing: -0.2,
       ),
     ),
@@ -190,14 +219,17 @@ ThemeData buildUnsaidTheme() {
     ),
     chipTheme: base.chipTheme.copyWith(
       backgroundColor: UnsaidPalette.secondaryLight,
-      labelStyle: TextStyle(color: UnsaidPalette.textPrimary),
+      labelStyle: TextStyle(
+        color: UnsaidPalette.textPrimaryLight,
+      ), // Dark text for light chip background
       side: BorderSide(color: UnsaidPalette.secondary.withOpacity(0.2)),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ),
     tabBarTheme: base.tabBarTheme.copyWith(
-      labelColor: UnsaidPalette.primary,
-      unselectedLabelColor: UnsaidPalette.textTertiary,
-      indicatorColor: UnsaidPalette.primary,
+      labelColor: UnsaidPalette.textPrimary, // White for gradient backgrounds
+      unselectedLabelColor:
+          UnsaidPalette.textTertiary, // Light white for gradient backgrounds
+      indicatorColor: UnsaidPalette.textPrimary, // White indicator
     ),
     // Optional: global fade transitions to hide tiny route paint gaps
     pageTransitionsTheme: const PageTransitionsTheme(
