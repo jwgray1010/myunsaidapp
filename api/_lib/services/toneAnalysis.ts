@@ -14,6 +14,16 @@ import { dataLoader } from './dataLoader';
 import { processWithSpacy, processWithSpacySync } from './spacyBridge';
 
 // -----------------------------
+// Shared utility for safe array conversion
+// -----------------------------
+function arrify<T = any>(x: unknown): T[] {
+  if (x == null) return [];
+  if (Array.isArray(x)) return x as T[];
+  if (typeof x === 'object') return Object.values(x as Record<string, unknown>).flatMap(v => arrify<T>(v));
+  return [x as T];
+}
+
+// -----------------------------
 // Types
 // -----------------------------
 type Bucket = 'clear'|'caution'|'alert';
@@ -575,9 +585,9 @@ class ToneDetectors {
     }
 
     const safe = (p: string) => { try { return new RegExp(p, 'i'); } catch { return null; } };
-    (negP?.patterns || negP || []).forEach((p: string) => { const r = safe(String(p)); if (r) this.negRegexes.push(r); });
-    (sarc?.patterns || sarc || []).forEach((p: string) => { const r = safe(String(p)); if (r) this.sarcRegexes.push(r); });
-    (edges?.edges || edges || []).forEach((e: any) => { const r = safe(e.pattern); if (r) this.edgeRegexes.push({ re: r, cat: e.category || 'edge', weight: e.weight ?? 1 }); });
+    arrify(negP?.patterns ?? negP).forEach((p: string) => { const r = safe(String(p)); if (r) this.negRegexes.push(r); });
+    arrify(sarc?.patterns ?? sarc).forEach((p: string) => { const r = safe(String(p)); if (r) this.sarcRegexes.push(r); });
+    arrify(edges?.edges ?? edges).forEach((e: any) => { const r = safe(e.pattern); if (r) this.edgeRegexes.push({ re: r, cat: e.category || 'edge', weight: e.weight ?? 1 }); });
 
     // Support both flat and structured intensity modifiers
     const collectModifiers = () => {
@@ -605,8 +615,9 @@ class ToneDetectors {
     const profanityWords: string[] = [];
     logger.info(`Profanity lexicon debug: prof=`, prof);
     if (prof?.categories) {
-      logger.info(`Found ${prof.categories.length} profanity categories`);
-      prof.categories.forEach((category: any, index: number) => {
+      const categories = arrify(prof.categories);
+      logger.info(`Found ${categories.length} profanity categories`);
+      categories.forEach((category: any, index: number) => {
         logger.info(`Category ${index}: id=${category.id}, triggerWords=${category.triggerWords}`);
         if (category.triggerWords && Array.isArray(category.triggerWords)) {
           profanityWords.push(...category.triggerWords);
@@ -629,7 +640,7 @@ class ToneDetectors {
         // Add exact phrases & semanticVariants to Aho-Corasick
         if (p.type !== 'regex') {
           if (p.pattern) this.ahoCorasick.addPattern(this.normalizeText(p.pattern), bucket, w);
-          (p.semanticVariants || []).forEach((v: string) =>
+          arrify(p.semanticVariants).forEach((v: string) =>
             this.ahoCorasick.addPattern(this.normalizeText(v), bucket, Math.max(0.5, w * 0.95)));
         }
 
