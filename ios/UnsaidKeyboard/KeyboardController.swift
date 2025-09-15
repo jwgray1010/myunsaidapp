@@ -1077,12 +1077,17 @@ final class KeyboardController: UIInputView,
         mode.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
         modeButton = mode
 
-        // Globe
+        // Globe (super compact)
         let globe = KeyButtonFactory.makeControlButton(title: "🌐")
         globe.addTarget(self, action: #selector(handleGlobeKey), for: .touchUpInside)
         globe.addTarget(self, action: #selector(specialButtonTouchDown(_:)), for: .touchDown)
         globe.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
         globeButton = globe
+
+        // Make globe compact
+        globe.accessibilityLabel = "Next Keyboard"
+        globe.titleLabel?.font = .systemFont(ofSize: 13, weight: .regular)
+        globe.titleLabel?.adjustsFontForContentSizeCategory = false
 
         // Space (dominant)
         let space = KeyButtonFactory.makeSpaceButton()
@@ -1113,22 +1118,24 @@ final class KeyboardController: UIInputView,
         stack.addArrangedSubview(secureFix)
         stack.addArrangedSubview(returnBtn)
 
-        // Sizing rules - make all non-space buttons the same size
-        space.widthAnchor.constraint(greaterThanOrEqualToConstant: 170).isActive = true // Space bar minimum width
+        // Sizing rules - let space expand, but fixed widths for other controls
+        let standardWidth: CGFloat = 68
         
-        // Set equal width for ALL control buttons (mode, globe, secure fix, return)
-        let buttonWidth: CGFloat = 70 // Standard width for all control buttons
-        mode.widthAnchor.constraint(equalToConstant: buttonWidth).isActive = true
-        globe.widthAnchor.constraint(equalToConstant: buttonWidth).isActive = true
-        secureFix.widthAnchor.constraint(equalToConstant: buttonWidth).isActive = true
-        returnBtn.widthAnchor.constraint(equalToConstant: buttonWidth).isActive = true
+        // Space is the only flexible one
+        space.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
+        space.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        space.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        space.setContentHuggingPriority(UILayoutPriority.defaultLow, for: NSLayoutConstraint.Axis.horizontal)
-        space.setContentCompressionResistancePriority(UILayoutPriority.defaultLow, for: NSLayoutConstraint.Axis.horizontal)
+        // Fixed widths for non-space controls
+        mode.widthAnchor.constraint(equalToConstant: standardWidth).isActive = true
+        secureFix.widthAnchor.constraint(equalToConstant: standardWidth).isActive = true
+        returnBtn.widthAnchor.constraint(equalToConstant: standardWidth).isActive = true
+        // Globe is intentionally small
+        globe.widthAnchor.constraint(equalToConstant: 34).isActive = true
 
         [secureFix, mode, globe, returnBtn].forEach {
-            $0.setContentHuggingPriority(UILayoutPriority.required, for: NSLayoutConstraint.Axis.horizontal)
-            $0.setContentCompressionResistancePriority(UILayoutPriority.required, for: NSLayoutConstraint.Axis.horizontal)
+            $0.setContentHuggingPriority(.required, for: .horizontal)
+            $0.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
 
         return stack
