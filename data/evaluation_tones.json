@@ -1,0 +1,107 @@
+{
+  "version": "1.2",
+  "updated": "2025-09-14",
+
+  "platt": {
+    "general":   { "a": 1.00, "b": 0.00 },
+    "conflict":  { "a": 1.25, "b": -0.15 },
+    "repair":    { "a": 0.95, "b": 0.05 },
+    "planning":  { "a": 0.90, "b": 0.08 },
+    "escalation":{ "a": 1.35, "b": -0.20 },
+    "support":   { "a": 0.95, "b": 0.00 },
+    "safety":    { "a": 1.60, "b": -0.25 }
+  },
+
+  "thresholds": {
+    "primaryToneMin": 0.33,
+    "flagForReview":  0.75,
+    "low":   0.15,
+    "med":   0.35,
+    "high":  0.60
+  },
+
+  "priors": {
+    "general":   { "neutral": 0.40, "positive": 0.22, "supportive": 0.12, "anxious": 0.10, "angry": 0.08, "sad": 0.05, "assertive": 0.03 },
+    "conflict":  { "angry": 0.35, "frustrated": 0.20, "anxious": 0.12, "neutral": 0.12, "supportive": 0.10, "sad": 0.06, "positive": 0.05 },
+    "repair":    { "supportive": 0.35, "positive": 0.20, "neutral": 0.20, "anxious": 0.10, "sad": 0.08, "angry": 0.07 },
+    "planning":  { "neutral": 0.55, "assertive": 0.20, "supportive": 0.10, "positive": 0.10, "anxious": 0.05 }
+  },
+
+  "costs": {
+    "falseNegative": { "safety_concern": 5.0, "angry": 2.0, "escalation": 2.0 },
+    "falsePositive": { "angry": 1.5, "safety_concern": 2.0 }
+  },
+
+  "riskFloors": {
+    "angry":           { "minConfidence": 0.70, "actions": ["show_deescalation_tip"] },
+    "safety_concern":  { "minConfidence": 0.60, "actions": ["escalate_safety_flow"] }
+  },
+
+  "metricTargets": {
+    "eceMax": 0.06,
+    "macroF1Min": 0.65,
+    "angryRecallMin": 0.80,
+    "safetyRecallMin": 0.90
+  },
+
+  "drift": {
+    "alertIfPriorsShiftBy": 0.20,
+    "windowDays": 14
+  },
+
+  "labels": {
+    "angry": "Angry",
+    "frustrated": "Frustrated",
+    "anxious": "Anxious/Fear",
+    "sad": "Sadness",
+    "positive": "Positive",
+    "supportive": "Supportive",
+    "assertive": "Analytical/Assertive",
+    "neutral": "Neutral",
+    "safety_concern": "Safety Concern"
+  },
+
+  "tests": [
+    {
+      "id": "T-001",
+      "context": "conflict",
+      "text": "You never listen to me and I'm done.",
+      "expectPrimary": "angry",
+      "minConfidence": 0.55
+    },
+    {
+      "id": "T-002",
+      "context": "repair",
+      "text": "I hear you. That must have been hard—I'm sorry.",
+      "expectPrimary": "supportive",
+      "minConfidence": 0.50
+    },
+    {
+      "id": "T-003",
+      "context": "planning",
+      "text": "Can we reschedule to tomorrow at 3pm?",
+      "expectPrimary": "neutral",
+      "minConfidence": 0.40
+    },
+    {
+      "id": "T-004",
+      "context": "escalation",
+      "text": "This happens every time and I'm sick of it!",
+      "expectPrimary": "angry",
+      "minConfidence": 0.60
+    },
+    {
+      "id": "T-005",
+      "context": "safety",
+      "text": "I'm scared and don't feel safe right now.",
+      "expectPrimary": "safety_concern",
+      "minConfidence": 0.70
+    }
+  ],
+
+  "bucketHints": {
+    "angry":          { "alert": 0.10, "caution": 0.05 },
+    "supportive":     { "clear": 0.10 },
+    "safety_concern": { "alert": 0.15, "caution": 0.05 }
+  }
+}

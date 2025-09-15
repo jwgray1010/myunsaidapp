@@ -1,28 +1,76 @@
 {
-  "version": "1.0",
-  "notes": "User-specific tuning applied after system defaults and context boosts.",
+  "version": "1.2",
+  "notes": "User-specific tuning applied after system defaults, context boosts, and intensity modifiers.",
   "defaults": {
-    "applyAfter": ["context_classifier", "intensity_modifiers"],
-    "cooldown_ms": 500
+    "applyAfter": ["context_classifier", "intensity_modifiers", "context_boosts"],
+    "cooldown_ms": 500,
+    "maxBoostsPerMessage": 3,
+    "repeatDecay": 0.7,
+    "capPerCategory": 0.25,
+    "capTotal": 0.5
   },
+
   "categories": {
-    "boundary": 0.10,
-    "validation": 0.10,
-    "de-escalation": 0.05
+    "boundary":        { "weight": 0.10, "windowTokens": 24, "priority": 4 },
+    "validation":      { "weight": 0.10, "windowTokens": 32, "priority": 5, "counterCues": ["jk","kidding","lol"] },
+    "de-escalation":   { "weight": 0.05, "windowTokens": 28, "priority": 5 },
+    "reassurance":     { "weight": 0.08, "windowTokens": 32, "priority": 3 },
+    "directness":      { "weight": 0.06, "windowTokens": 20, "priority": 2 }
   },
+
   "toneOverrides": {
-    "alert": -0.05,
+    "alert":  -0.05,
     "caution": 0.00,
-    "clear": 0.05
+    "clear":   0.05,
+    "perCategory": {
+      "boundary":      { "alert": 0.06, "caution": 0.04, "clear": -0.04 },
+      "validation":    { "alert": -0.04, "caution": -0.02, "clear": 0.06 },
+      "de-escalation": { "alert": -0.08, "caution": -0.03, "clear": 0.05 }
+    }
   },
+
   "attachmentAdjustments": {
-    "anxious": { "validation": 0.15, "boundary": -0.05 },
-    "avoidant": { "boundary": 0.20, "de-escalation": -0.05 },
-    "secure": { "validation": 0.05 },
-    "disorganized": { "boundary": 0.10, "de-escalation": 0.10 }
+    "anxious":     { "validation": 0.15, "boundary": -0.05, "reassurance": 0.10 },
+    "avoidant":    { "boundary": 0.20, "de-escalation": -0.05, "directness": 0.05 },
+    "secure":      { "validation": 0.05 },
+    "disorganized":{ "boundary": 0.10, "de-escalation": 0.10 }
   },
+
   "profiles": {
-    "high_sensitivity": { "boostMultiplier": 1.2 },
-    "low_reactivity":   { "boostMultiplier": 0.8 }
+    "high_sensitivity": { "boostMultiplier": 1.20, "toneFloor": { "alert": 0.00 } },
+    "low_reactivity":   { "boostMultiplier": 0.80, "toneFloor": { "alert": -0.05 } },
+    "direct_communicator": { "boostMultiplier": 1.0, "preferCategories": ["directness","boundary"] }
+  },
+
+  "conditions": [
+    {
+      "when": { "timeOfDay": ["night"], "recentContext": ["conflict","escalation"], "sinceLastRepairMins": { "<=": 30 } },
+      "do":   { "multiply": { "de-escalation": 1.4, "validation": 1.2 }, "toneOverrides": { "alert": -0.08, "clear": 0.06 } },
+      "cooldown_ms": 1200
+    },
+    {
+      "when": { "channel": ["text","dm"], "locale": ["en-US","en-GB"], "sarcasmPresent": true },
+      "do":   { "multiply": { "validation": 1.1 }, "toneOverrides": { "caution": 0.03 } }
+    }
+  ],
+
+  "exclusions": {
+    "muteInContexts": { "de-escalation": ["humor","routine"] },
+    "requireAnyTokens": { "boundary": ["stop","not okay","need space"] }
+  },
+
+  "safetyFloors": {
+    "profanityTargetedSecondPerson": { "forceTone": "angry", "minConfidence": 0.75 },
+    "selfHarmSignal":                { "forceTone": "safety_concern", "minConfidence": 0.95 }
+  },
+
+  "calibration": {
+    "platt": { "a": 1.0, "b": 0.0 },
+    "learningBias": { "conflict": { "alert": -0.03, "caution": 0.02 } }
+  },
+
+  "audit": {
+    "emitWhy": true,
+    "fields": ["matchedCategories","appliedMultipliers","caps","conditionsFired","exclusionsApplied"]
   }
 }
