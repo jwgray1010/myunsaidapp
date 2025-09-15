@@ -39,6 +39,7 @@ final class SuggestionChipView: UIControl {
     private var autoHideTimer: Timer?
     private var textHash: String = ""
     private let haptic = UIImpactFeedbackGenerator(style: .light)
+    private var didNotifyDismiss = false
 
     // Layout
     private let collapsedHeight: CGFloat = 44
@@ -130,11 +131,27 @@ final class SuggestionChipView: UIControl {
         autoHideTimer?.invalidate()
         autoHideTimer = nil
 
+        // ✅ DEFENSIVE: Ensure we notify dismissal exactly once
+        if !didNotifyDismiss {
+            didNotifyDismiss = true
+            #if DEBUG
+            print("🗑️ ChipView: Dismissing chip, notifying manager")
+            #endif
+            onDismiss?()
+        } else {
+            #if DEBUG
+            print("⚠️ ChipView: Dismiss already notified, skipping")
+            #endif
+        }
+
         let work = {
             self.alpha = 0
             self.transform = CGAffineTransform(translationX: 0, y: -6)
         }
         let done: (Bool) -> Void = { _ in
+            #if DEBUG
+            print("🏁 ChipView: Animation complete, calling onDismissed")
+            #endif
             self.removeFromSuperview()
             self.onDismissed?()
         }

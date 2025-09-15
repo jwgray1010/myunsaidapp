@@ -652,14 +652,15 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
             SliverAppBar(
               pinned: true,
               floating: false,
-              expandedHeight: 118, // Reduced by additional 62px for more compact header
+              expandedHeight:
+                  90, // Further reduced height to fix scrolling pixel issues
               forceElevated: innerBoxIsScrolled,
               backgroundColor: Colors.transparent,
               elevation: 0,
               flexibleSpace: FlexibleSpaceBar(
                 titlePadding: EdgeInsetsDirectional.only(
                   start: 16,
-                  bottom: 20, // Reduced further to match much smaller header
+                  bottom: 16, // Adjusted for smaller header
                   top: MediaQuery.of(
                     context,
                   ).padding.top, // Add status bar padding
@@ -690,12 +691,13 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
                             color: UnsaidPalette.textPrimaryDark,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -0.2,
-                            fontSize: 20,
+                            fontSize:
+                                18, // Slightly smaller font for compact header
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8), // Reduced spacing
                     _StreakChip(streakDays: _computeStreakDays()),
                   ],
                 ),

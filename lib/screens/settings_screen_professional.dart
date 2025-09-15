@@ -667,7 +667,7 @@ class _SettingsScreenProfessionalState
                   SliverAppBar(
                     pinned: true,
                     expandedHeight:
-                        38, // Reduced by additional 62px for more compact header
+                        80, // Increased height to properly display "Settings" text
                     actions: [
                       IconButton(
                         tooltip: 'Search settings',

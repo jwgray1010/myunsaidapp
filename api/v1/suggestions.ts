@@ -1,6 +1,7 @@
 // api/v1/suggestions.ts
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { withCors, withMethods, withValidation, withErrorHandling, withLogging, withRateLimit } from '../_lib/wrappers';
+import { withCors, withMethods, withValidation, withErrorHandling, withLogging } from '../_lib/wrappers';
+import { suggestionsRateLimit } from '../_lib/rateLimit';
 import { success } from '../_lib/http';
 import { suggestionRequestSchema } from '../_lib/schemas/suggestionRequest';
 import { toneRequestSchema } from '../_lib/schemas/toneRequest';
@@ -196,14 +197,18 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
   }
 };
 
-export default withErrorHandling(
+const wrappedHandler = withErrorHandling(
   withLogging(
-    withRateLimit()(
-      withCors(
-        withMethods(['POST'], 
-          withValidation(suggestionRequestSchema, handler)
-        )
+    withCors(
+      withMethods(['POST'], 
+        withValidation(suggestionRequestSchema, handler)
       )
     )
   )
 );
+
+export default (req: VercelRequest, res: VercelResponse) => {
+  return suggestionsRateLimit(req, res, () => {
+    return wrappedHandler(req, res);
+  });
+};

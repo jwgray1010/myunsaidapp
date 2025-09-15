@@ -21,12 +21,22 @@ class KeyboardAnalyticsData {
   });
 
   factory KeyboardAnalyticsData.fromMap(Map<String, dynamic> data) {
+    // Safely convert any Map<Object?, Object?> to Map<String, dynamic>
+    final safeData = <String, dynamic>{};
+    data.forEach((key, value) {
+      safeData[key.toString()] = value;
+    });
+
     return KeyboardAnalyticsData(
-      interactions: List<Map<String, dynamic>>.from(data['interactions'] ?? []),
-      toneData: List<Map<String, dynamic>>.from(data['tone_data'] ?? []),
-      suggestions: List<Map<String, dynamic>>.from(data['suggestions'] ?? []),
-      analytics: List<Map<String, dynamic>>.from(data['analytics'] ?? []),
-      metadata: Map<String, dynamic>.from(data['metadata'] ?? {}),
+      interactions: List<Map<String, dynamic>>.from(
+        safeData['interactions'] ?? [],
+      ),
+      toneData: List<Map<String, dynamic>>.from(safeData['tone_data'] ?? []),
+      suggestions: List<Map<String, dynamic>>.from(
+        safeData['suggestions'] ?? [],
+      ),
+      analytics: List<Map<String, dynamic>>.from(safeData['analytics'] ?? []),
+      metadata: Map<String, dynamic>.from(safeData['metadata'] ?? {}),
       syncTimestamp: DateTime.now(),
     );
   }
@@ -49,8 +59,9 @@ class KeyboardAnalyticsData {
 /// Service for safely retrieving and processing keyboard extension data
 /// Uses native iOS bridge to get data from SafeKeyboardDataStorage
 class KeyboardDataService {
-  static const MethodChannel _channel =
-      MethodChannel('com.unsaid/keyboard_data_sync');
+  static const MethodChannel _channel = MethodChannel(
+    'com.unsaid/keyboard_data_sync',
+  );
 
   // Singleton pattern
   static final KeyboardDataService _instance = KeyboardDataService._internal();
@@ -66,8 +77,9 @@ class KeyboardDataService {
     try {
       debugPrint('[$_logTag] 🔄 Retrieving pending keyboard data...');
 
-      final Map<String, dynamic>? rawData =
-          await _channel.invokeMapMethod('getAllPendingKeyboardData');
+      final Map<String, dynamic>? rawData = await _channel.invokeMapMethod(
+        'getAllPendingKeyboardData',
+      );
 
       if (rawData == null) {
         debugPrint('[$_logTag] ✅ No pending keyboard data found');
@@ -80,7 +92,8 @@ class KeyboardDataService {
       return data;
     } on PlatformException catch (e) {
       debugPrint(
-          '[$_logTag] ❌ Platform error retrieving keyboard data: ${e.message}');
+        '[$_logTag] ❌ Platform error retrieving keyboard data: ${e.message}',
+      );
       return null;
     } catch (e) {
       debugPrint('[$_logTag] ❌ Unexpected error retrieving keyboard data: $e');
@@ -91,19 +104,22 @@ class KeyboardDataService {
   /// Get metadata about stored keyboard data without retrieving it
   Future<Map<String, dynamic>?> getKeyboardStorageMetadata() async {
     try {
-      final Map<String, dynamic>? metadata =
-          await _channel.invokeMapMethod('getKeyboardStorageMetadata');
+      final Map<String, dynamic>? metadata = await _channel.invokeMapMethod(
+        'getKeyboardStorageMetadata',
+      );
 
       if (metadata != null) {
         debugPrint('[$_logTag] 📊 Storage metadata: ${metadata.toString()}');
 
         // Validate metadata structure for safety
-        final hasRequiredFields = metadata.containsKey('total_items') &&
+        final hasRequiredFields =
+            metadata.containsKey('total_items') &&
             metadata.containsKey('has_pending_data');
 
         if (!hasRequiredFields) {
           debugPrint(
-              '[$_logTag] ⚠️ Metadata missing required fields, treating as no data');
+            '[$_logTag] ⚠️ Metadata missing required fields, treating as no data',
+          );
           return {
             'total_items': 0,
             'has_pending_data': false,
@@ -118,18 +134,15 @@ class KeyboardDataService {
         }
       } else {
         debugPrint(
-            '[$_logTag] ℹ️ No metadata available (new user or initialization needed)');
+          '[$_logTag] ℹ️ No metadata available (new user or initialization needed)',
+        );
       }
 
       return metadata;
     } on PlatformException catch (e) {
       debugPrint('[$_logTag] ❌ Error getting storage metadata: ${e.message}');
       // Return safe default for new users
-      return {
-        'total_items': 0,
-        'has_pending_data': false,
-        'error': e.message,
-      };
+      return {'total_items': 0, 'has_pending_data': false, 'error': e.message};
     } catch (e) {
       debugPrint('[$_logTag] ❌ Unexpected error getting metadata: $e');
       // Return safe default
@@ -147,8 +160,9 @@ class KeyboardDataService {
     try {
       debugPrint('[$_logTag] 🗑️ Clearing pending keyboard data...');
 
-      final bool? success =
-          await _channel.invokeMethod('clearAllPendingKeyboardData');
+      final bool? success = await _channel.invokeMethod(
+        'clearAllPendingKeyboardData',
+      );
 
       if (success == true) {
         debugPrint('[$_logTag] ✅ Successfully cleared pending keyboard data');
@@ -190,7 +204,8 @@ class KeyboardDataService {
 
   /// Process keyboard interaction data
   Future<void> _processInteractionData(
-      List<Map<String, dynamic>> interactions) async {
+    List<Map<String, dynamic>> interactions,
+  ) async {
     if (interactions.isEmpty) return;
 
     debugPrint('[$_logTag] 📝 Processing ${interactions.length} interactions');
@@ -207,7 +222,8 @@ class KeyboardDataService {
         // Store or process interaction data as needed
         // You can integrate with your existing analytics system here
         debugPrint(
-            '[$_logTag] 📊 Interaction: $interactionType, Tone: $toneStatus, Accepted: $suggestionAccepted');
+          '[$_logTag] 📊 Interaction: $interactionType, Tone: $toneStatus, Accepted: $suggestionAccepted',
+        );
       } catch (e) {
         debugPrint('[$_logTag] ⚠️ Error processing interaction: $e');
       }
@@ -227,7 +243,8 @@ class KeyboardDataService {
 
         // Process tone analysis data
         debugPrint(
-            '[$_logTag] 🎯 Tone: $toneValue (${(confidence * 100).toStringAsFixed(1)}% confidence)');
+          '[$_logTag] 🎯 Tone: $toneValue (${(confidence * 100).toStringAsFixed(1)}% confidence)',
+        );
       } catch (e) {
         debugPrint('[$_logTag] ⚠️ Error processing tone data: $e');
       }
@@ -236,11 +253,13 @@ class KeyboardDataService {
 
   /// Process suggestion interaction data
   Future<void> _processSuggestionData(
-      List<Map<String, dynamic>> suggestions) async {
+    List<Map<String, dynamic>> suggestions,
+  ) async {
     if (suggestions.isEmpty) return;
 
     debugPrint(
-        '[$_logTag] 💡 Processing ${suggestions.length} suggestion interactions');
+      '[$_logTag] 💡 Processing ${suggestions.length} suggestion interactions',
+    );
 
     for (final suggestion in suggestions) {
       try {
@@ -249,7 +268,8 @@ class KeyboardDataService {
 
         // Process suggestion data
         debugPrint(
-            '[$_logTag] 💡 Suggestion: ${accepted ? 'Accepted' : 'Rejected'} (Length: $suggestionLength)');
+          '[$_logTag] 💡 Suggestion: ${accepted ? 'Accepted' : 'Rejected'} (Length: $suggestionLength)',
+        );
       } catch (e) {
         debugPrint('[$_logTag] ⚠️ Error processing suggestion data: $e');
       }
@@ -258,7 +278,8 @@ class KeyboardDataService {
 
   /// Process general analytics data
   Future<void> _processAnalyticsData(
-      List<Map<String, dynamic>> analytics) async {
+    List<Map<String, dynamic>> analytics,
+  ) async {
     if (analytics.isEmpty) return;
 
     debugPrint('[$_logTag] 📈 Processing ${analytics.length} analytics events');
@@ -280,12 +301,14 @@ class KeyboardDataService {
     try {
       debugPrint('[$_logTag] 🔄 Getting API responses from shared storage...');
 
-      final Map<String, dynamic>? apiData =
-          await _channel.invokeMapMethod('getAPIData');
+      final Map<String, dynamic>? apiData = await _channel.invokeMapMethod(
+        'getAPIData',
+      );
 
       if (apiData != null && apiData.isNotEmpty) {
         debugPrint(
-            '[$_logTag] 📥 Retrieved API data: ${apiData.keys.join(', ')}');
+          '[$_logTag] 📥 Retrieved API data: ${apiData.keys.join(', ')}',
+        );
         return apiData;
       } else {
         debugPrint('[$_logTag] ✅ No API data found in shared storage');
@@ -305,12 +328,14 @@ class KeyboardDataService {
     try {
       debugPrint('[$_logTag] 🔄 Getting user data from shared storage...');
 
-      final Map<String, dynamic>? userData =
-          await _channel.invokeMapMethod('getUserData');
+      final Map<String, dynamic>? userData = await _channel.invokeMapMethod(
+        'getUserData',
+      );
 
       if (userData != null) {
         debugPrint(
-            '[$_logTag] 📥 Retrieved user data: ${userData.keys.join(', ')}');
+          '[$_logTag] 📥 Retrieved user data: ${userData.keys.join(', ')}',
+        );
         return userData;
       } else {
         debugPrint('[$_logTag] ✅ No user data found in shared storage');
@@ -346,7 +371,8 @@ class KeyboardDataService {
           final suggestion =
               apiData['latest_suggestion'] as Map<String, dynamic>;
           debugPrint(
-              '[$_logTag] 📥 Latest suggestion from API: ${suggestion['response']}');
+            '[$_logTag] 📥 Latest suggestion from API: ${suggestion['response']}',
+          );
         }
 
         // Process latest trial status
@@ -354,13 +380,15 @@ class KeyboardDataService {
           final trialStatus =
               apiData['latest_trial_status'] as Map<String, dynamic>;
           debugPrint(
-              '[$_logTag] 📥 Latest trial status from API: ${trialStatus['response']}');
+            '[$_logTag] 📥 Latest trial status from API: ${trialStatus['response']}',
+          );
         }
 
         return true;
       } else {
         debugPrint(
-            '[$_logTag] ⚠️ No API data found - keyboard extension may not have called APIs yet');
+          '[$_logTag] ⚠️ No API data found - keyboard extension may not have called APIs yet',
+        );
         return false;
       }
     } catch (e) {
@@ -399,7 +427,8 @@ class KeyboardDataService {
       final cleared = await clearPendingKeyboardData();
       if (!cleared) {
         debugPrint(
-            '[$_logTag] ⚠️ Failed to clear keyboard data after processing');
+          '[$_logTag] ⚠️ Failed to clear keyboard data after processing',
+        );
         return false;
       }
 

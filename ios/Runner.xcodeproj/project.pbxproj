@@ -25,6 +25,7 @@
 		D0ED470E2E5911530094BD53 /* ToneSuggestionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47072E5911520094BD53 /* ToneSuggestionCoordinator.swift */; };
 
 		HD1234567890ABCDEF123456 /* HapticsDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = HD1234567890ABCDEF123457 /* HapticsDriver.swift */; };
+		NG1234567890ABCDEF123455 /* NetGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = NG1234567890ABCDEF123456 /* NetGate.swift */; };
 		TH1234567890ABCDEF123456 /* TimerHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = TH1234567890ABCDEF123457 /* TimerHub.swift */; };
 		D0ED470F2E5911530094BD53 /* SafeKeyboardDataStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47092E5911530094BD53 /* SafeKeyboardDataStorage.swift */; };
 		D0ED47102E5911530094BD53 /* KeyboardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED470A2E5911530094BD53 /* KeyboardController.swift */; };
@@ -126,6 +127,7 @@
 		D0ED47072E5911520094BD53 /* ToneSuggestionCoordinator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ToneSuggestionCoordinator.swift; sourceTree = "<group>"; };
 
 		HD1234567890ABCDEF123457 /* HapticsDriver.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HapticsDriver.swift; sourceTree = "<group>"; };
+		NG1234567890ABCDEF123456 /* NetGate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NetGate.swift; sourceTree = "<group>"; };
 		TH1234567890ABCDEF123457 /* TimerHub.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TimerHub.swift; sourceTree = "<group>"; };
 		D0ED47082E5911530094BD53 /* UnsaidKeyboard-Bridging-Header.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = "UnsaidKeyboard-Bridging-Header.mm"; sourceTree = "<group>"; };
 		D0ED47092E5911530094BD53 /* SafeKeyboardDataStorage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SafeKeyboardDataStorage.swift; sourceTree = "<group>"; };
@@ -333,6 +335,7 @@
 		E0A12366 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				NG1234567890ABCDEF123456 /* NetGate.swift */,
 				TH1234567890ABCDEF123457 /* TimerHub.swift */,
 			);
 			path = Utils;
@@ -614,6 +617,7 @@
 				D0ED470E2E5911530094BD53 /* ToneSuggestionCoordinator.swift in Sources */,
 
 				HD1234567890ABCDEF123456 /* HapticsDriver.swift in Sources */,
+				NG1234567890ABCDEF123455 /* NetGate.swift in Sources */,
 				TH1234567890ABCDEF123456 /* TimerHub.swift in Sources */,
 				D0ED47102E5911530094BD53 /* KeyboardController.swift in Sources */,
 				D0ED470D2E5911530094BD53 /* LightweightSpellChecker.swift in Sources */,

@@ -38,15 +38,22 @@ class PersonalityDataBridge {
       if (!Platform.isIOS) return <String, dynamic>{};
 
       final data = await _channel.invokeMethod('getPersonalityData');
-      final typed = (data is Map)
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{};
-      if (kDebugMode) {
-        print(
-          '✅ PersonalityDataBridge: Retrieved personality data with ${typed.keys.length} keys',
-        );
+      if (data is Map) {
+        // Safely convert Map<Object?, Object?> to Map<String, dynamic>
+        final converted = <String, dynamic>{};
+        data.forEach((key, value) {
+          if (key != null) {
+            converted[key.toString()] = value;
+          }
+        });
+        if (kDebugMode) {
+          print(
+            '✅ PersonalityDataBridge: Retrieved personality data with ${converted.keys.length} keys',
+          );
+        }
+        return converted;
       }
-      return typed;
+      return <String, dynamic>{};
     } catch (e) {
       if (kDebugMode) {
         print('❌ PersonalityDataBridge: Error getting personality data: $e');
@@ -168,9 +175,17 @@ class PersonalityDataBridge {
       if (!Platform.isIOS) return <String, dynamic>{};
 
       final data = await _channel.invokeMethod('getPersonalityTestResults');
-      return (data is Map)
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{};
+      if (data is Map) {
+        // Safely convert Map<Object?, Object?> to Map<String, dynamic>
+        final converted = <String, dynamic>{};
+        data.forEach((key, value) {
+          if (key != null) {
+            converted[key.toString()] = value;
+          }
+        });
+        return converted;
+      }
+      return <String, dynamic>{};
     } catch (e) {
       if (kDebugMode) {
         print('❌ PersonalityDataBridge: Error getting test results: $e');
@@ -258,9 +273,17 @@ class PersonalityDataBridge {
       final result = await _channel.invokeMethod(
         'generatePersonalityContextDictionary',
       );
-      return (result is Map)
-          ? Map<String, dynamic>.from(result)
-          : <String, dynamic>{};
+      if (result is Map) {
+        // Safely convert Map<Object?, Object?> to Map<String, dynamic>
+        final converted = <String, dynamic>{};
+        result.forEach((key, value) {
+          if (key != null) {
+            converted[key.toString()] = value;
+          }
+        });
+        return converted;
+      }
+      return <String, dynamic>{};
     } catch (e) {
       if (kDebugMode) {
         print(

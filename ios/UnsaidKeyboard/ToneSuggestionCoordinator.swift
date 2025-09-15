@@ -12,12 +12,52 @@ import UIKit
 // Note: The specific file references ensure proper compilation order
 // in the UnsaidKeyboard target build sequence.
 
+// MARK: - API Error Types
+enum APIError: LocalizedError {
+    case authRequired
+    case paymentRequired
+    case serverError(Int)
+    case networkError
+    case unknown
+    
+    var errorDescription: String? {
+        switch self {
+        case .authRequired:
+            return "Authentication required - please sign in"
+        case .paymentRequired:
+            return "Trial expired - subscription required"
+        case .serverError(let code):
+            return "Server error: \(code)"
+        case .networkError:
+            return "Network connection error"
+        case .unknown:
+            return "Unknown error occurred"
+        }
+    }
+    
+    var recoverySuggestion: String? {
+        switch self {
+        case .authRequired:
+            return "Please sign in to continue using AI features"
+        case .paymentRequired:
+            return "Subscribe to Unsaid Premium to continue using AI coaching"
+        case .serverError:
+            return "Please try again later"
+        case .networkError:
+            return "Check your internet connection and try again"
+        case .unknown:
+            return "Please try again"
+        }
+    }
+}
+
 // MARK: - Delegate Protocol
 @MainActor
 protocol ToneSuggestionDelegate: AnyObject {
     func didUpdateSuggestions(_ suggestions: [String])
     func didUpdateToneStatus(_ tone: String)  // <- back to String for Xcode compatibility
     func didUpdateSecureFixButtonState()
+    func didReceiveAPIError(_ error: APIError)
     #if canImport(UIKit)
     func getTextDocumentProxy() -> UITextDocumentProxy?
     #endif
@@ -187,6 +227,9 @@ final class ToneSuggestionCoordinator {
     private var lastNotifiedSuggestions: [String] = []
     private var lastNotifiedToneStatus: String = "neutral"
     private var lastNotificationTime: Date = .distantPast
+    
+    // NEW: once we show a non-neutral tone, don't allow neutral again until the field is empty
+    private var neutralBlockActive = false
 
     // MARK: - Request Mgmt / Backoff / Client Sequence
     private var latestRequestID = UUID()
@@ -270,7 +313,7 @@ final class ToneSuggestionCoordinator {
     private func setEssentialHeaders(on request: inout URLRequest, clientSeq: UInt64) {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(self.apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("default-user", forHTTPHeaderField: "x-user-id") // getUserId() placeholder
+        request.setValue(getUserId(), forHTTPHeaderField: "x-user-id")
         request.setValue("\(clientSeq)", forHTTPHeaderField: "x-client-seq")
         
         // Only add user email if available (avoid expensive lookups)
@@ -308,7 +351,20 @@ final class ToneSuggestionCoordinator {
     }
     
     private func getUserId() -> String {
-        return "default-user"
+        let userIdKey = "unsaid_user_id"
+        let appGroupId = "group.com.example.unsaid"
+        
+        if let sharedDefaults = UserDefaults(suiteName: appGroupId),
+           let userId = sharedDefaults.string(forKey: userIdKey) {
+            return userId
+        }
+        
+        // Fallback to a UUID if somehow not set (shouldn't happen with proper initialization)
+        let fallbackId = UUID().uuidString
+        if let sharedDefaults = UserDefaults(suiteName: appGroupId) {
+            sharedDefaults.set(fallbackId, forKey: userIdKey)
+        }
+        return fallbackId
     }
     
     private func getUserEmail() -> String? {
@@ -582,6 +638,7 @@ final class ToneSuggestionCoordinator {
             self.currentText = ""
             self.lastAnalyzedText = ""
             self.currentToneStatus = "neutral"
+            self.neutralBlockActive = false   // ← reset latch on full reset
             self.suggestions = []
             self.consecutiveFailures = 0
             self.lastEscalationAt = .distantPast
@@ -647,6 +704,7 @@ final class ToneSuggestionCoordinator {
             self.currentText = ""
             self.lastAnalyzedText = ""
             self.currentToneStatus = "neutral"
+            self.neutralBlockActive = false   // ← reset latch here too
             self.suggestions = []
             self.lastNotifiedSuggestions = []
             self.lastNotifiedToneStatus = "neutral"
@@ -801,6 +859,7 @@ final class ToneSuggestionCoordinator {
                 self.lastAnalysisTime = Date()
                 self.suggestions.removeAll()
                 self.currentToneStatus = "neutral"
+                self.neutralBlockActive = false   // ← reset the policy when the field is empty
                 DispatchQueue.main.async {
                     self.delegate?.didUpdateSuggestions([])
                     self.delegate?.didUpdateToneStatus("neutral")
@@ -830,11 +889,22 @@ final class ToneSuggestionCoordinator {
 
             if let tone = toneResult {
                 self.throttledLog("🎯 API returned tone: '\(tone)', current: '\(self.currentToneStatus)'", category: "tone_debug")
+                
+                // Enforce the latch: while text is non-empty, never go back to neutral
+                let trimmed = self.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if tone == "neutral", self.neutralBlockActive, !trimmed.isEmpty {
+                    self.throttledLog("Neutral blocked by latch (still have text)", category: "tone_debug")
+                    return
+                }
+                
                 DispatchQueue.main.async {
                     if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: tone) {
                         self.throttledLog("🎯 Updating tone status from '\(self.currentToneStatus)' to '\(tone)'", category: "tone_debug")
                         self.currentToneStatus = tone
                         self.delegate?.didUpdateToneStatus(tone)  // Pass string directly
+                        
+                        // Once we've shown a non-neutral tone, activate the block
+                        if tone != "neutral" { self.neutralBlockActive = true }
                         
                         // KEY DEBUG LINE - this is the canary that shows UI update is called
                         self.throttledLog("UI tone set to \(tone) | raw=\(tone) seq=-1", category: "tone_debug")
@@ -846,7 +916,8 @@ final class ToneSuggestionCoordinator {
                     }
                 }
             } else {
-                self.throttledLog("🎯 API returned nil tone result", category: "tone_debug")
+                // No update on failure/skip — keep whatever is showing
+                self.throttledLog("toneResult nil → leaving pill as \(self.currentToneStatus)", category: "tone_debug")
             }
 
             // NEW: only observe when edit change is meaningful (>= 3 chars)
@@ -1062,6 +1133,8 @@ final class ToneSuggestionCoordinator {
                 DispatchQueue.main.async {
                     if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: uiTone) {
                         self.currentToneStatus = uiTone
+                        self.neutralBlockActive = true   // ← latch once we show non-neutral
+                        self.throttledLog("🎯 UI tone -> \(uiTone)", category: "tone_debug")
                         self.delegate?.didUpdateToneStatus(uiTone)  // Only send clamped UI tones
                         
                         // Extract confidence with defensive parsing
@@ -1259,7 +1332,7 @@ final class ToneSuggestionCoordinator {
 
     private func callToneAnalysisAPI(context: [String: Any], completion: @escaping (String?) -> Void) {
         guard isNetworkAvailable, isAPIConfigured, Date() >= netBackoffUntil else { 
-            completion("neutral")
+            completion(nil)  // Don't overwrite the UI on failures
             return 
         }
 
@@ -1273,15 +1346,20 @@ final class ToneSuggestionCoordinator {
 
         callEndpoint(path: "api/v1/tone", payload: payload) { [weak self] data in
             guard let self else { 
-                completion("neutral")  // Safe fallback
+                completion(nil)  // Don't overwrite UI on coordinator dealloc
                 return 
             }
             guard requestID == self.latestRequestID else { 
-                completion("neutral")  // Safe fallback
+                completion(nil)  // Don't overwrite UI with stale responses
                 return 
             }
 
-            let d = data ?? [:]
+            guard let d = data else {
+                self.throttledLog("🎯 Tone API returned nil data - keeping current pill state", category: "tone_debug")
+                completion(nil)  // Don't overwrite UI on API failures
+                return
+            }
+            
             self.throttledLog("🎯 Tone API response: \(String(describing: d).prefix(200))", category: "tone_debug")
 
             // Check client sequence for last-writer-wins
@@ -1479,10 +1557,30 @@ final class ToneSuggestionCoordinator {
                     }
                     
                     guard (200..<300).contains(http.statusCode), let data = data else {
-                        // Enhanced jittered backoff for different HTTP status codes
+                        // Handle specific error cases that should notify the UI
+                        switch http.statusCode {
+                        case 401:
+                            self.throttledLog("Authentication required (401)", category: "api")
+                            Task { @MainActor in
+                                self.delegate?.didReceiveAPIError(.authRequired)
+                            }
+                            completion(nil)
+                            return
+                        case 402:
+                            self.throttledLog("Payment required (402)", category: "api")
+                            Task { @MainActor in
+                                self.delegate?.didReceiveAPIError(.paymentRequired)
+                            }
+                            completion(nil)
+                            return
+                        default:
+                            break
+                        }
+                        
+                        // Enhanced jittered backoff for other HTTP status codes
                         let baseDelay: TimeInterval
                         switch http.statusCode {
-                        case 401, 403:
+                        case 403:
                             baseDelay = 60 // Auth errors: longer backoff
                         case 429:
                             baseDelay = min(pow(2.0, Double(self.consecutiveFailures)), 30) // Rate limiting: exponential
@@ -1496,7 +1594,7 @@ final class ToneSuggestionCoordinator {
                         let jitterMultiplier = Double.random(in: 0.8...1.2)
                         let finalDelay = baseDelay * jitterMultiplier
                         
-                        if http.statusCode == 401 || http.statusCode == 403 {
+                        if http.statusCode == 403 {
                             self.authBackoffUntil = Date().addingTimeInterval(finalDelay)
                         } else {
                             self.netBackoffUntil = Date().addingTimeInterval(finalDelay)
@@ -1633,6 +1731,12 @@ final class ToneSuggestionCoordinator {
                                         improvementDetected: Bool? = nil, improvementScore: Double? = nil) -> Bool {
         self.throttledLog("🎯 shouldUpdateToneStatus: '\(current)' -> '\(new)'", category: "tone_debug")
         
+        // NEW: latch policy - prevent neutral when text exists and latch is active
+        if new == "neutral", neutralBlockActive, !currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throttledLog("🎯 shouldUpdateToneStatus: neutral blocked by latch", category: "tone_debug")
+            return false
+        }
+        
         if new == current { 
             self.throttledLog("🎯 Same tone, skipping update", category: "tone_debug")
             return false 
@@ -1729,9 +1833,13 @@ final class ToneSuggestionCoordinator {
     private func applyEnhancedSpacyAnalysis() {
         guard let analysis = enhancedAnalysisResults else { return }
         if let toneStr = (analysis["ui_tone"] as? String) ?? (analysis["tone_status"] as? String) ?? (analysis["tone"] as? String) {
-            DispatchQueue.main.async {
-                if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: toneStr) {
+            // Respect the latch policy
+            if toneStr == "neutral", neutralBlockActive, !currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                throttledLog("SpaCy: neutral blocked by latch", category: "tone_debug")
+            } else if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: toneStr) {
+                DispatchQueue.main.async {
                     self.currentToneStatus = toneStr
+                    if toneStr != "neutral" { self.neutralBlockActive = true }
                     self.delegate?.didUpdateToneStatus(toneStr)
                 }
             }

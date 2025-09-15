@@ -1,6 +1,7 @@
 // api/v1/tone.ts
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { withCors, withMethods, withValidation, withErrorHandling, withLogging, withRateLimit } from '../_lib/wrappers';
+import { withCors, withMethods, withValidation, withErrorHandling, withLogging } from '../_lib/wrappers';
+import { toneAnalysisRateLimit } from '../_lib/rateLimit';
 import { success } from '../_lib/http';
 import { toneRequestSchema } from '../_lib/schemas/toneRequest';
 import { toneAnalysisService, mapToneToBuckets } from '../_lib/services/toneAnalysis';
@@ -173,14 +174,18 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
   }
 };
 
-export default withErrorHandling(
+const wrappedHandler = withErrorHandling(
   withLogging(
-    withRateLimit()(
-      withCors(
-        withMethods(['POST'], 
-          withValidation(toneRequestSchema, handler)
-        )
+    withCors(
+      withMethods(['POST'], 
+        withValidation(toneRequestSchema, handler)
       )
     )
   )
 );
+
+export default (req: VercelRequest, res: VercelResponse) => {
+  return toneAnalysisRateLimit(req, res, () => {
+    return wrappedHandler(req, res);
+  });
+};

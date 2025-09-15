@@ -153,20 +153,12 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
           assessmentResult.scores,
           assessmentResult.routing,
         );
-      }
-
-      // Navigate to results with new data
-      if (mounted) {
-        Navigator.pushReplacementNamed(
-          context,
-          '/personality_results',
-          arguments: {
-            'config': mergedConfig,
-            'scores': assessmentResult.scores,
-            'routing': assessmentResult.routing,
-            'responses': widget.responses,
-          },
-        );
+      } else {
+        // Skip results screen - navigate directly to tone tutorial
+        // Personality results are still calculated and stored internally
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/tone_tutorial');
+        }
       }
     } catch (e) {
       print('Error completing assessment: $e');

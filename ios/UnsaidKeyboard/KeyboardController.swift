@@ -160,6 +160,10 @@ final class KeyboardController: UIInputView,
     private var hapticIdleTimer: DispatchSourceTimer?
     private let hapticSessionTimeout: TimeInterval = 10.0 // Stop session after 10s of inactivity
     
+    // Haptic debouncing to prevent double-buzz
+    private var lastHapticAt: CFTimeInterval = 0
+    private let hapticMinGap: CFTimeInterval = 0.06 // 60ms
+    
     // Instant feedback generator for crisp tap response
     private let instantFeedback = UIImpactFeedbackGenerator(style: .light)
     
@@ -189,20 +193,20 @@ final class KeyboardController: UIInputView,
     
     // Unified haptic feedback method with instant micro-haptics
     private func performHapticFeedback() {
-        // IMMEDIATE micro-haptic for crisp touch response
+        let now = CACurrentMediaTime()
+        if now - lastHapticAt < hapticMinGap { return }   // debounce
+        lastHapticAt = now
+
+        // Prepare right before play (improves latency/jitter)
+        instantFeedback.prepare()
         instantFeedback.impactOccurred(intensity: 0.8)
         
-        // Ensure haptic session is started for the typing run
+        // Keep session timer behavior as-is (optional)
         if !isHapticSessionStarted {
             coordinator?.startHapticSession()
             isHapticSessionStarted = true
         }
-        
-        // Reset the session timeout timer
         resetHapticSessionTimer()
-        
-        // The continuous haptic feedback is now handled by tone updates
-        // No per-keystroke start/stop needed
     }
     
     private func resetHapticSessionTimer() {
@@ -337,6 +341,17 @@ final class KeyboardController: UIInputView,
         // Mark keyboard as accessed (disable first-time tutorial messages)
         markKeyboardAsUsed()
         
+        // Ensure tone button is visible immediately after configuration
+        DispatchQueue.main.async { [weak self] in
+            if let button = self?.toneButton {
+                button.isHidden = false
+                button.alpha = 1.0
+                #if DEBUG
+                self?.logger.info("ToneButton: post-config state -> visible, alpha=\(button.alpha), hidden=\(button.isHidden)")
+                #endif
+            }
+        }
+        
         // App Group sanity check
     let test = AppGroups.shared
     test.set(true, forKey: "groupRoundtrip")
@@ -351,8 +366,20 @@ final class KeyboardController: UIInputView,
         dbg("🔧 API Config - API Key: \(apiKey.prefix(10))...")
         dbg("🔧 Coordinator initialized: \(self.coordinator != nil)")
         
-        // Test network connectivity immediately
+        // Test network connectivity immediately (don't let this affect UI visibility)
         coordinator?.forceImmediateAnalysis("ping")
+        
+        // Manual tone indicator test for debugging
+        #if DEBUG
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            self?.testToneIndicatorManually()
+        }
+        
+        // Test API with debug text to force non-neutral response
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            self?.coordinator?.testToneAPIWithDebugText()
+        }
+        #endif
     }
     
     deinit {
@@ -400,7 +427,10 @@ final class KeyboardController: UIInputView,
     
     override func willMove(toSuperview newSuperview: UIView?) {
         super.willMove(toSuperview: newSuperview)
-        // Keyboard setup handled in commonInit
+        // Ensure tone button is visible when moving to superview
+        if newSuperview != nil {
+            ensureToneButtonVisible()
+        }
     }
     
     override func removeFromSuperview() {
@@ -410,6 +440,10 @@ final class KeyboardController: UIInputView,
     
     override func layoutSubviews() {
         super.layoutSubviews()
+        
+        // Ensure tone button remains visible after layout
+        ensureToneButtonVisible()
+        
         guard let bg = toneButtonBackground, let g = toneGradient else { return }
         let newBounds = bg.bounds.integral
         guard g.frame != newBounds else { return } // ✨ skip redundant work
@@ -614,23 +648,34 @@ final class KeyboardController: UIInputView,
         sep.backgroundColor = .separator
         pBar.addSubview(sep)
 
-        // Create tone button background (circular, white for better contrast)
+        // Create tone button background (circular, smaller than logo for glow-through effect)
         let toneButtonBackground = UIView()
         toneButtonBackground.translatesAutoresizingMaskIntoConstraints = false
         toneButtonBackground.backgroundColor = .white  // White background for better contrast
-        toneButtonBackground.layer.cornerRadius = 25  // Increased for 50x50 logo
-        toneButtonBackground.clipsToBounds = true
+        toneButtonBackground.layer.cornerRadius = 18  // Smaller circle (36pt diameter)
+        toneButtonBackground.clipsToBounds = false  // Allow shadow to show
+        toneButtonBackground.layer.masksToBounds = false  // Allow shadow to show
         pBar.addSubview(toneButtonBackground)
 
-        // Create tone button (logo)
+        // Create tone button (logo) - larger than background for glow-through
         let toneButton = UIButton(type: .custom)
         toneButton.translatesAutoresizingMaskIntoConstraints = false
         toneButton.backgroundColor = .clear
-        toneButton.contentEdgeInsets = UIEdgeInsets(top: 2, left: 2, bottom: 2, right: 2) // Minimal padding for 50x50 logo
+        toneButton.contentEdgeInsets = UIEdgeInsets(top: 2, left: 2, bottom: 2, right: 2) // Minimal padding for 65x65 logo
         toneButton.imageView?.contentMode = .scaleAspectFit
-        toneButton.layer.cornerRadius = 25  // Increased for 50x50 logo
+        toneButton.layer.cornerRadius = 32.5  // Half of 65pt
         toneButton.clipsToBounds = true
+        
+        // ✅ CRITICAL: Ensure button is always visible from creation
+        toneButton.isHidden = false
+        toneButton.alpha = 1.0
+        
         pBar.addSubview(toneButton)
+        
+        // Debug logging for button lifecycle
+        #if DEBUG
+        logger.info("ToneButton: willAdd - button created and about to be added to view")
+        #endif
 
         // Create undo button
         let undoButton = UIButton(type: .system)
@@ -651,16 +696,30 @@ final class KeyboardController: UIInputView,
         self.toneButtonBackground = toneButtonBackground
         self.toneButton = toneButton
         self.undoButton = undoButton
+        
+        // Debug logging for button lifecycle
+        #if DEBUG
+        logger.info("ToneButton: didAdd - button added to view hierarchy")
+        logger.info("ToneButton: state -> visible, alpha=\(toneButton.alpha), hidden=\(toneButton.isHidden)")
+        #endif
+
+        // Add long press gesture for debug testing
+        #if DEBUG
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(testToneIndicatorManually))
+        longPress.minimumPressDuration = 2.0
+        toneButton.addGestureRecognizer(longPress)
+        #endif
 
         // ✅ CRITICAL: Configure chip manager with suggestion bar so chips anchor properly
         self.suggestionChipManager.configure(suggestionBar: pBar)
 
-        // Create gradient layer
+        // Create gradient layer for smaller background circle
         let g = CAGradientLayer()
         g.startPoint = CGPoint(x: 0, y: 0)
         g.endPoint = CGPoint(x: 1, y: 1)
-        g.cornerRadius = 25  // Updated for larger logo
+        g.cornerRadius = 18  // Match smaller background circle
         g.masksToBounds = true
+        g.colors = [UIColor.white.cgColor, UIColor.white.cgColor]  // Start with white visible
         toneButtonBackground.layer.insertSublayer(g, at: 0)
         toneGradient = g
 
@@ -675,6 +734,13 @@ final class KeyboardController: UIInputView,
             // Keep 'force analyze' on the tone button as requested
             self?.scheduleAnalysis(for: self?.currentText ?? "", urgent: true)
             self?.pressPop()
+            
+            // DEBUG: Test tone indicator on tap (remove this after testing)
+            #if DEBUG
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.forceToneTest("alert")
+            }
+            #endif
         }, for: .touchUpInside)
 
         undoButton.addAction(UIAction { [weak self] _ in
@@ -695,17 +761,17 @@ final class KeyboardController: UIInputView,
             sep.trailingAnchor.constraint(equalTo: pBar.trailingAnchor),
             sep.heightAnchor.constraint(equalToConstant: 1.0 / UIScreen.main.scale),
 
-            // Tone button background (circular, behind logo)
+            // Tone button background (smaller circle for glow-through effect)
             toneButtonBackground.leadingAnchor.constraint(equalTo: pBar.leadingAnchor, constant: 12),
             toneButtonBackground.centerYAnchor.constraint(equalTo: pBar.centerYAnchor),
-            toneButtonBackground.widthAnchor.constraint(equalToConstant: 44),
-            toneButtonBackground.heightAnchor.constraint(equalToConstant: 44),
+            toneButtonBackground.widthAnchor.constraint(equalToConstant: 36),   // Smaller background
+            toneButtonBackground.heightAnchor.constraint(equalToConstant: 36),
 
-            // Tone button (logo)
+            // Tone button (logo) - larger, overlays background for glow-through
             toneButton.centerXAnchor.constraint(equalTo: toneButtonBackground.centerXAnchor),
             toneButton.centerYAnchor.constraint(equalTo: toneButtonBackground.centerYAnchor),
-            toneButton.widthAnchor.constraint(equalToConstant: 44),
-            toneButton.heightAnchor.constraint(equalToConstant: 44),
+            toneButton.widthAnchor.constraint(equalToConstant: 65),             // Larger logo
+            toneButton.heightAnchor.constraint(equalToConstant: 65),
 
             // Undo button
             undoButton.trailingAnchor.constraint(equalTo: pBar.trailingAnchor, constant: -12),
@@ -732,8 +798,38 @@ final class KeyboardController: UIInputView,
             self?.applySpellCorrection(correction)
         }
 
-        // Start with neutral tone
+        // Start with neutral tone - ensure button is visible
         setToneStatus(.neutral)
+        
+        // Force immediate visibility check
+        if let button = self.toneButton {
+            button.isHidden = false
+            button.alpha = 1.0
+            #if DEBUG
+            logger.info("ToneButton: initial state -> visible, alpha=\(button.alpha), hidden=\(button.isHidden)")
+            #endif
+        }
+        
+        // Force layout pass to ensure gradient frame is correct
+        DispatchQueue.main.async { [weak self] in
+            self?.setToneStatus(self?.currentTone ?? .neutral, animated: false)
+            
+            // Double-check visibility after layout
+            if let button = self?.toneButton {
+                button.isHidden = false
+                button.alpha = 1.0
+                #if DEBUG
+                self?.logger.info("ToneButton: post-layout state -> visible, alpha=\(button.alpha), hidden=\(button.isHidden)")
+                #endif
+            }
+        }
+        
+        // Debug UI state after setup
+        #if DEBUG
+        DispatchQueue.main.async { [weak self] in
+            self?.debugToneUIState()
+        }
+        #endif
         
         // Apply accessibility improvements
         applyAccessibility()
@@ -832,12 +928,25 @@ final class KeyboardController: UIInputView,
             logger.warning("🎯 No tone button background found!")
             return
         }
-        guard tone != currentTone || bg.alpha == 0.0 else {
+        guard tone != currentTone || bg.alpha == 0.0 || (toneGradient?.colors == nil) else {
             logger.info("🎯 Skipping redundant tone update")
             return
-        } // skip redundant work
+        } // skip redundant work, but allow first real change
         currentTone = tone
         logger.info("🎯 Updating tone button to: \(String(describing: tone))")
+
+        // Ensure background is definitely visible
+        bg.isHidden = false
+        bg.alpha = max(bg.alpha, 1.0)
+        
+        // Ensure tone button itself is also visible
+        if let button = toneButton {
+            button.isHidden = false
+            button.alpha = max(button.alpha, 1.0)
+            #if DEBUG
+            logger.info("ToneButton: state -> visible, alpha=\(button.alpha), hidden=\(button.isHidden)")
+            #endif
+        }
 
         // Destination visual state
         let gradientResult = gradientColors(for: tone)
@@ -846,6 +955,13 @@ final class KeyboardController: UIInputView,
         let targetScale: CGFloat = (tone == .alert) ? CGFloat(1.06) : CGFloat(1.0)
         let targetShadow: Float = toneShadowOpacity  // Always show shadow for better contrast
 
+        // Fix white-on-white: clear background for non-neutral so gradient shows through
+        if tone == .neutral {
+            bg.backgroundColor = .white
+        } else {
+            bg.backgroundColor = .clear  // Let gradient be the visible color
+        }
+
         // Ensure gradient layer exists
         if toneGradient == nil {
             let g = CAGradientLayer()
@@ -853,9 +969,15 @@ final class KeyboardController: UIInputView,
             g.endPoint = CGPoint(x: 1, y: 1)
             g.cornerRadius = bg.bounds.height / 2.0
             g.frame = bg.bounds
+            g.colors = [UIColor.white.cgColor, UIColor.white.cgColor]  // Start with white visible
+            g.masksToBounds = true  // Keep gradient within circle bounds
             bg.layer.insertSublayer(g, at: 0)
             toneGradient = g
         }
+        
+        // Ensure shadows can render (background allows overflow, gradient stays bounded)
+        bg.clipsToBounds = false
+        toneGradient?.masksToBounds = true
 
         // Animate with a single property animator for smoothness + interruptibility
         self.toneAnimator?.stopAnimation(true)
@@ -879,6 +1001,9 @@ final class KeyboardController: UIInputView,
                 g.add(anim, forKey: "colors")
             }
             g.colors = colors // final state
+            
+            // Instrument gradient updates to prove they're happening
+            dbg("🎨 tone=\(tone) colors=\(String(describing: g.colors)) frame=\(g.frame)")
         } else if let baseColor = baseColor {
             // fallback background if gradient missing
             bg.backgroundColor = baseColor
@@ -905,7 +1030,7 @@ final class KeyboardController: UIInputView,
         guard let bg = toneButtonBackground else { return }
         let pulse = CABasicAnimation(keyPath: "transform.scale")
         pulse.fromValue = 1.0
-        pulse.toValue = 1.08
+        pulse.toValue = 1.15   // Bigger pulse to shine behind logo
         pulse.duration = 0.9
         pulse.autoreverses = true
         pulse.repeatCount = .infinity
@@ -925,7 +1050,7 @@ final class KeyboardController: UIInputView,
             return ([c1.cgColor, c2.cgColor], nil)
         case .caution:
             let c1 = UIColor.systemYellow
-            let c2 = UIColor.systemOrange.withAlphaComponent(0.85)
+            let c2 = UIColor.systemYellow.withAlphaComponent(0.85)
             return ([c1.cgColor, c2.cgColor], nil)
         case .clear:
             let c1 = UIColor.systemGreen
@@ -1078,7 +1203,7 @@ final class KeyboardController: UIInputView,
         modeButton = mode
 
         // Globe (super compact)
-        let globe = KeyButtonFactory.makeControlButton(title: "🌐")
+        let globe = KeyButtonFactory.makeGlobeButton()     
         globe.addTarget(self, action: #selector(handleGlobeKey), for: .touchUpInside)
         globe.addTarget(self, action: #selector(specialButtonTouchDown(_:)), for: .touchDown)
         globe.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
@@ -1120,16 +1245,18 @@ final class KeyboardController: UIInputView,
 
         // Sizing rules - let space expand, but fixed widths for other controls
         let standardWidth: CGFloat = 68
+        let returnButtonWidth: CGFloat = 51  // 25% smaller than standard
+        let secureButtonWidth: CGFloat = 61  // 10% smaller than standard
         
         // Space is the only flexible one
-        space.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
+        space.widthAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true  // Reduced minimum
         space.setContentHuggingPriority(.defaultLow, for: .horizontal)
         space.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         // Fixed widths for non-space controls
         mode.widthAnchor.constraint(equalToConstant: standardWidth).isActive = true
-        secureFix.widthAnchor.constraint(equalToConstant: standardWidth).isActive = true
-        returnBtn.widthAnchor.constraint(equalToConstant: standardWidth).isActive = true
+        secureFix.widthAnchor.constraint(equalToConstant: secureButtonWidth).isActive = true
+        returnBtn.widthAnchor.constraint(equalToConstant: returnButtonWidth).isActive = true
         // Globe is intentionally small
         globe.widthAnchor.constraint(equalToConstant: 34).isActive = true
 
@@ -1153,7 +1280,6 @@ final class KeyboardController: UIInputView,
         }
         
         proxy.insertText(textToInsert)
-        performHapticFeedback()
         
         // Auto-switch to letters mode after punctuation
         if [".", "!", "?", ",", ";", ":"].contains(title) && currentMode != .letters {
@@ -1175,13 +1301,11 @@ final class KeyboardController: UIInputView,
     
     @objc private func handleSpaceKey() {
         spaceHandler.handleSpaceKey()
-        performHapticFeedback()
     }
     
     @objc private func handleReturnKey() {
         guard let proxy = textDocumentProxy else { return }
         proxy.insertText("\n")
-        performHapticFeedback()
         textDidChange() // This will call updateShiftForContext
     }
     
@@ -1246,7 +1370,6 @@ final class KeyboardController: UIInputView,
     // MARK: - SecureFix enhanced feedback
     @objc private func secureFixTouchDown(_ button: UIButton) {
         // No-op; move brand animation into isHighlighted if needed
-        performHapticFeedback()
     }
     
     @objc private func secureFixTouchUp(_ button: UIButton) {
@@ -1342,6 +1465,9 @@ final class KeyboardController: UIInputView,
 
     // MARK: - Text change handling
     func textDidChange() {
+        // Ensure tone button is visible when text changes (analysis may update it)
+        ensureToneButtonVisible()
+        
         handleTextChange()
         updateShiftForContext()
     }
@@ -1457,35 +1583,161 @@ final class KeyboardController: UIInputView,
         logger.info("🎯 Current tone button exists: \((self.toneButton != nil))")
         logger.info("🎯 Current tone background exists: \((self.toneButtonBackground != nil))")
         
-        // Belt-and-suspenders: clamp any leaked raw tones to UI tones
-        let mapped: String
-        switch tone.lowercased() {
-        case "alert", "caution", "clear", "neutral": 
-            mapped = tone.lowercased()
-        case "angry", "toxic", "abusive":          
-            mapped = "alert"
-        case "frustrated", "anxious", "sad", "tense", "passive_aggressive":
-            mapped = "caution"
-        default:                                 
-            mapped = "clear"
+        // Ensure UI updates happen on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Use the new ToneStatus extension for safe mapping
+            let toneStatus = ToneStatus(from: tone)
+            self.currentUITone = toneStatus
+            self.setToneStatus(toneStatus)
+            
+            // Update string for legacy compatibility where needed
+            self.lastToneStatusString = toneStatus.rawValue
+            
+            self.logger.info("🎯 Mapped '\(tone)' to '\(toneStatus.rawValue)' -> \(String(describing: toneStatus))")
+            self.logger.info("ToneButton: state -> \(toneStatus.rawValue), button visible: \((self.toneButton?.isHidden == false))")
+        }
+    }
+    
+    // MARK: - Tone Button Management
+    
+    /// Ensures the tone button is always visible and properly configured
+    private func ensureToneButtonVisible() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            if let button = self.toneButton {
+                button.isHidden = false
+                button.alpha = 1.0
+                #if DEBUG
+                self.logger.info("ToneButton: ensured visible - alpha=\(button.alpha), hidden=\(button.isHidden)")
+                #endif
+            }
+            
+            if let background = self.toneButtonBackground {
+                background.isHidden = false
+                background.alpha = 1.0
+            }
+            
+            // Set to neutral state if no current tone
+            if self.currentTone == .neutral {
+                self.setToneStatus(.neutral, animated: false)
+            }
+        }
+    }
+    
+    // MARK: - Debug Testing
+    #if DEBUG
+    @objc private func testToneIndicatorManually() {
+        // Test all tones in sequence for visual verification
+        logger.info("🧪 Testing tone indicator manually...")
+        
+        DispatchQueue.main.async { [weak self] in
+            self?.didUpdateToneStatus("alert") // Should turn red & pulse
         }
         
-        // Convert clamped string to ToneStatus for internal use
-        let toneStatus = ToneStatus(rawValue: mapped) ?? .neutral
-        currentUITone = toneStatus
-        setToneStatus(toneStatus)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.didUpdateToneStatus("caution") // Should turn yellow
+        }
         
-        // Update string for legacy compatibility where needed
-        lastToneStatusString = mapped
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            self?.didUpdateToneStatus("clear") // Should turn green
+        }
         
-        logger.info("🎯 Mapped '\(tone)' to '\(mapped)' -> \(String(describing: toneStatus))")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+            self?.didUpdateToneStatus("neutral") // Should turn white
+        }
     }
+    
+    // Quick manual test - call this from anywhere to test a specific tone
+    func testSpecificTone(_ tone: String) {
+        logger.info("🧪 Manual tone test: \(tone)")
+        didUpdateToneStatus(tone)
+    }
+    
+    // Test if the UI components exist and are properly configured
+    func debugToneUIState() {
+        logger.info("🔍 Tone UI Debug State:")
+        logger.info("  - toneButton exists: \(self.toneButton != nil)")
+        logger.info("  - toneButtonBackground exists: \(self.toneButtonBackground != nil)")
+        logger.info("  - toneGradient exists: \(self.toneGradient != nil)")
+        logger.info("  - currentTone: \(String(describing: self.currentTone))")
+        
+        if let bg = self.toneButtonBackground {
+            logger.info("  - background alpha: \(String(describing: bg.alpha))")
+            logger.info("  - background frame: \(String(describing: bg.frame))")
+            logger.info("  - background transform: \(String(describing: bg.transform))")
+        }
+        
+        if let gradient = self.toneGradient {
+            logger.info("  - gradient frame: \(String(describing: gradient.frame))")
+            logger.info("  - gradient colors count: \(String(describing: gradient.colors?.count ?? 0))")
+        }
+    }
+    
+    // Force immediate tone test - bypasses all analysis
+    func forceToneTest(_ tone: String) {
+        logger.info("🔥 Force tone test: \(tone)")
+        DispatchQueue.main.async { [weak self] in
+            self?.didUpdateToneStatus(tone)
+        }
+    }
+    #endif
 
     func didUpdateSecureFixButtonState() {
         let remaining = secureFixManager.getRemainingSecureFixUses()
         let hasAdvice = secureFixManager.hasAdviceBeenShown()
         let alpha: CGFloat = (remaining > 0 && hasAdvice) ? 1.0 : 0.5
         quickFixButton?.alpha = alpha
+    }
+    
+    func didReceiveAPIError(_ error: APIError) {
+        logger.error("🚨 API Error received: \(error.localizedDescription)")
+        
+        // Handle different error types with appropriate UI feedback
+        switch error {
+        case .authRequired:
+            // Show authentication required message
+            showErrorMessage("Sign in required to use AI features")
+            
+        case .paymentRequired:
+            // Show payment required message with upgrade prompt
+            showErrorMessage("Your trial has expired. Subscribe to continue using AI coaching.")
+            
+        case .serverError(let code):
+            // Show generic server error
+            showErrorMessage("Server error (\(code)). Please try again later.")
+            
+        case .networkError:
+            // Show network error
+            showErrorMessage("Network connection error. Please check your internet connection.")
+            
+        case .unknown:
+            // Show generic unknown error
+            showErrorMessage("An unexpected error occurred. Please try again.")
+        }
+    }
+    
+    // MARK: - Error Handling
+    
+    /// Shows an error message to the user via a temporary overlay or alert
+    private func showErrorMessage(_ message: String) {
+        logger.info("📢 Showing error message: \(message)")
+        
+        // For now, we'll use the suggestion chip to show the error message
+        // This provides immediate feedback to the user
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Show error in suggestion chip with neutral tone
+            self.suggestionChipManager.showSuggestion(text: message, tone: .neutral)
+            
+            // Also log to console for debugging
+            #if DEBUG
+            print("🚨 Keyboard API Error: \(message)")
+            #endif
+        }
     }
     
     // MARK: - First-time User Management

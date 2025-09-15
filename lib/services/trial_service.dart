@@ -8,7 +8,7 @@ class TrialService extends ChangeNotifier {
   TrialService._internal();
 
   // DEVELOPMENT MODE - Set to false when ready for production
-  static const bool _developmentMode = true;
+  static const bool _developmentMode = kDebugMode;
 
   static const String _trialStartKey = 'trial_start_date';
   static const String _trialActiveKey = 'trial_active';
@@ -47,20 +47,17 @@ class TrialService extends ChangeNotifier {
 
   /// Whether the user has access to the app (trial, subscription, admin mode, or returning user)
   bool get hasAccess =>
-      _developmentMode ||
-      _isTrialActive ||
-      _hasSubscription ||
-      _isAdminMode ||
-      _isReturningUser;
+      _developmentMode || _isTrialActive || _hasSubscription || _isAdminMode;
 
   /// Daily secure fixes used today
   int get dailySecureFixesUsed => _dailySecureFixesUsed;
 
   /// Daily secure fixes remaining
-  int get dailySecureFixesRemaining => _isAdminMode || _hasSubscription
-      ? 999
-      : (_dailySecureFixesLimit - _dailySecureFixesUsed)
-          .clamp(0, _dailySecureFixesLimit);
+  int get dailySecureFixesRemaining {
+    if (_isAdminMode || _hasSubscription) return 999;
+    final remaining = _dailySecureFixesLimit - _dailySecureFixesUsed;
+    return remaining < 0 ? 0 : remaining;
+  }
 
   /// Whether the user has dismissed the expiring trial banner
   bool get isExpiringBannerDismissed => _expiringBannerDismissed;
@@ -85,20 +82,22 @@ class TrialService extends ChangeNotifier {
     if (_trialStartDate == null || !_isTrialActive) return 0;
 
     final now = DateTime.now();
-    final trialEnd =
-        _trialStartDate!.add(const Duration(days: _trialDurationDays));
-    final remaining = trialEnd.difference(now).inDays;
-
-    return remaining > 0 ? remaining : 0;
+    final trialEnd = _trialStartDate!.add(
+      const Duration(days: _trialDurationDays),
+    );
+    final secs = trialEnd.difference(now).inSeconds;
+    final days = (secs / Duration.secondsPerDay).ceil();
+    return days > 0 ? days : 0;
   }
 
   /// Hours remaining in trial (for more precise tracking)
   int get hoursRemaining {
     if (_trialStartDate == null || !_isTrialActive) return 0;
 
-    final now = DateTime.now();
-    final trialEnd =
-        _trialStartDate!.add(const Duration(days: _trialDurationDays));
+    final now = DateTime.now().toUtc();
+    final trialEnd = _trialStartDate!.add(
+      const Duration(days: _trialDurationDays),
+    );
     final remaining = trialEnd.difference(now).inHours;
 
     return remaining > 0 ? remaining : 0;
@@ -109,9 +108,10 @@ class TrialService extends ChangeNotifier {
     if (_developmentMode) return false; // Never expire in development
     if (_trialStartDate == null) return false;
 
-    final now = DateTime.now();
-    final trialEnd =
-        _trialStartDate!.add(const Duration(days: _trialDurationDays));
+    final now = DateTime.now().toUtc();
+    final trialEnd = _trialStartDate!.add(
+      const Duration(days: _trialDurationDays),
+    );
 
     return now.isAfter(trialEnd) && !_hasSubscription;
   }
@@ -143,8 +143,8 @@ class TrialService extends ChangeNotifier {
 
   /// Check if daily limits need to be reset
   Future<void> _checkDailyReset() async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final now = DateTime.now().toUtc();
+    final today = DateTime.utc(now.year, now.month, now.day);
 
     if (_lastResetDate == null || _lastResetDate!.isBefore(today)) {
       await _resetDailyLimits();
@@ -154,8 +154,8 @@ class TrialService extends ChangeNotifier {
   /// Reset daily limits (called automatically at midnight)
   Future<void> _resetDailyLimits() async {
     final prefs = await SharedPreferences.getInstance();
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final now = DateTime.now().toUtc();
+    final today = DateTime.utc(now.year, now.month, now.day);
 
     _dailySecureFixesUsed = 0;
     _lastResetDate = today;
@@ -174,7 +174,7 @@ class TrialService extends ChangeNotifier {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
 
     _trialStartDate = now;
     _isTrialActive = true;
@@ -291,9 +291,10 @@ class TrialService extends ChangeNotifier {
   Future<void> _checkTrialStatus() async {
     if (_trialStartDate == null) return;
 
-    final now = DateTime.now();
-    final trialEnd =
-        _trialStartDate!.add(const Duration(days: _trialDurationDays));
+    final now = DateTime.now().toUtc();
+    final trialEnd = _trialStartDate!.add(
+      const Duration(days: _trialDurationDays),
+    );
 
     if (now.isAfter(trialEnd) && !_hasSubscription) {
       // Trial has expired and no subscription
@@ -310,7 +311,7 @@ class TrialService extends ChangeNotifier {
   double getTrialProgress() {
     if (_trialStartDate == null) return 0.0;
 
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     final trialStart = _trialStartDate!;
     final trialEnd = trialStart.add(const Duration(days: _trialDurationDays));
 
@@ -318,12 +319,12 @@ class TrialService extends ChangeNotifier {
     final elapsed = now.difference(trialStart).inMilliseconds;
 
     final progress = elapsed / totalDuration;
-    return progress.clamp(0.0, 1.0);
+    return (progress < 0.0 ? 0.0 : (progress > 1.0 ? 1.0 : progress));
   }
 
   /// Check if user should see subscription prompt
   bool shouldShowSubscriptionPrompt() {
-    if (_hasSubscription) return false;
+    if (_hasSubscription || _isReturningUser) return false;
     if (!_isTrialActive) return true;
     if (_expiringBannerDismissed) return false;
 
@@ -384,6 +385,7 @@ class TrialService extends ChangeNotifier {
 
   /// Enable admin mode (bypasses all trial restrictions)
   Future<void> enableAdminMode() async {
+    if (!kDebugMode) return; // noop in release builds
     final prefs = await SharedPreferences.getInstance();
 
     _isAdminMode = true;

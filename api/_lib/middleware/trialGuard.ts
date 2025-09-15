@@ -58,15 +58,15 @@ const trialManager = new TrialManager();
  * Usage: Apply to any API endpoint that requires payment after trial
  */
 export function withTrialGuard(config: TrialGuardConfig = {}) {
-  return function(handler: (req: VercelRequest, res: VercelResponse) => Promise<void>) {
-    return async function(req: VercelRequest, res: VercelResponse) {
-      const userId = req.headers['x-user-id'] as string || 
+  return function(handler: (req: VercelRequest, res: VercelResponse, auth?: any) => Promise<void>) {
+    return async function(req: VercelRequest, res: VercelResponse, auth?: any) {
+      const userId = auth?.userId || req.headers['x-user-id'] as string || 
                     req.query.userId as string || 
                     'anonymous';
 
       // Allow bypass for specific users (testing)
       if (config.bypassUsers?.includes(userId)) {
-        return handler(req, res);
+        return handler(req, res, auth);
       }
 
       // Check if anonymous users are allowed
@@ -113,7 +113,7 @@ export function withTrialGuard(config: TrialGuardConfig = {}) {
         feature: config.feature 
       });
       
-      return handler(req, res);
+      return handler(req, res, auth);
     };
   };
 }

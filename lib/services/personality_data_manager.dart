@@ -29,7 +29,13 @@ class PersonalityDataManager {
         'getAllPendingKeyboardData',
       );
       if (data is Map) {
-        final analytics = Map<String, dynamic>.from(data);
+        // Safely convert Map<Object?, Object?> to Map<String, dynamic>
+        final analytics = <String, dynamic>{};
+        data.forEach((key, value) {
+          if (key != null) {
+            analytics[key.toString()] = value;
+          }
+        });
         if (kDebugMode) {
           print(
             '✅ Collected keyboard analytics - ${analytics['metadata']?['total_items'] ?? 0} total items',
@@ -52,7 +58,13 @@ class PersonalityDataManager {
         'getKeyboardStorageMetadata',
       );
       if (meta is Map) {
-        final m = Map<String, dynamic>.from(meta);
+        // Safely convert Map<Object?, Object?> to Map<String, dynamic>
+        final m = <String, dynamic>{};
+        meta.forEach((key, value) {
+          if (key != null) {
+            m[key.toString()] = value;
+          }
+        });
         if (kDebugMode) {
           print('📊 Storage metadata: ${m['total_items']} items across queues');
         }
@@ -93,7 +105,17 @@ class PersonalityDataManager {
     try {
       if (!Platform.isIOS) return null;
       final ud = await _keyboardChannel.invokeMethod('getUserData');
-      return (ud is Map) ? Map<String, dynamic>.from(ud) : null;
+      if (ud is Map) {
+        // Safely convert Map<Object?, Object?> to Map<String, dynamic>
+        final converted = <String, dynamic>{};
+        ud.forEach((key, value) {
+          if (key != null) {
+            converted[key.toString()] = value;
+          }
+        });
+        return converted;
+      }
+      return null;
     } catch (e) {
       if (kDebugMode) {
         print('❌ Error getting keyboard user data: $e');
@@ -106,7 +128,17 @@ class PersonalityDataManager {
     try {
       if (!Platform.isIOS) return null;
       final api = await _keyboardChannel.invokeMethod('getAPIData');
-      return (api is Map) ? Map<String, dynamic>.from(api) : null;
+      if (api is Map) {
+        // Safely convert Map<Object?, Object?> to Map<String, dynamic>
+        final converted = <String, dynamic>{};
+        api.forEach((key, value) {
+          if (key != null) {
+            converted[key.toString()] = value;
+          }
+        });
+        return converted;
+      }
+      return null;
     } catch (e) {
       if (kDebugMode) {
         print('❌ Error getting keyboard API data: $e');

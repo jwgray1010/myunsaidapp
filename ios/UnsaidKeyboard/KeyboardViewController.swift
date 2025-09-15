@@ -39,10 +39,21 @@ class KeyboardViewController: UIInputViewController {
         logger.info("✅ Debug label added")
         
         // Test App Group access early
-    // App Group test (AppGroups.shared already handles fallback)
-    AppGroups.shared.set("test_value", forKey: "debug_test")
-    let retrieved = AppGroups.shared.string(forKey: "debug_test")
-    logger.info("✅ App Group test successful: \(retrieved ?? "nil")")
+        let appGroupId = "group.com.example.unsaid"
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupId) else {
+            logger.error("❌ App Group not accessible: \(appGroupId)")
+            debugLabel.text = "App Group Error"
+            debugLabel.backgroundColor = .systemRed
+            return
+        }
+        
+        // App Group test
+        sharedDefaults.set("test_value", forKey: "debug_test")
+        let retrieved = sharedDefaults.string(forKey: "debug_test")
+        logger.info("✅ App Group test successful: \(retrieved ?? "nil")")
+        
+        // Initialize durable user ID for API access
+        initializeUserId()
         
         // Initialize the custom keyboard controller
         logger.info("🔧 Creating KeyboardController...")
@@ -97,6 +108,31 @@ class KeyboardViewController: UIInputViewController {
         super.textWillChange(textInput)
         logger.debug("📝 KeyboardViewController.textWillChange")
         // KeyboardController will get the textDocumentProxy changes automatically
+    }
+    
+    // MARK: - User ID Initialization
+    
+    /// Initialize a durable user ID for API access
+    /// This ensures we never send 'anonymous' as userId to the trial guard
+    private func initializeUserId() {
+        let userIdKey = "unsaid_user_id"
+        let appGroupId = "group.com.example.unsaid"
+        
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupId) else {
+            logger.error("❌ Failed to access shared UserDefaults with suite: \(appGroupId)")
+            return
+        }
+        
+        // Check if we already have a user ID
+        if sharedDefaults.string(forKey: userIdKey) == nil {
+            // Generate and store a new UUID
+            let newUserId = UUID().uuidString
+            sharedDefaults.set(newUserId, forKey: userIdKey)
+            logger.info("🆔 Generated new user ID: \(newUserId)")
+        } else {
+            let existingUserId = sharedDefaults.string(forKey: userIdKey) ?? "unknown"
+            logger.info("🆔 Using existing user ID: \(existingUserId)")
+        }
     }
     
     override func textDidChange(_ textInput: UITextInput?) {

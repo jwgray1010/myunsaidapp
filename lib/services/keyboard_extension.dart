@@ -76,9 +76,21 @@ class UnsaidKeyboardExtension {
         'relationshipContext': relationshipContext ?? 'general',
       };
 
-      final result =
-          await _channel.invokeMethod('requestToneAnalysis', payload);
-      return result != null ? Map<String, dynamic>.from(result) : null;
+      final result = await _channel.invokeMethod(
+        'requestToneAnalysis',
+        payload,
+      );
+      if (result is Map) {
+        // Safely convert Map<Object?, Object?> to Map<String, dynamic>
+        final converted = <String, dynamic>{};
+        result.forEach((key, value) {
+          if (key != null) {
+            converted[key.toString()] = value;
+          }
+        });
+        return converted;
+      }
+      return null;
     } on PlatformException catch (e) {
       print('Error requesting tone analysis: ${e.message}');
       return null;
@@ -140,7 +152,7 @@ class UnsaidKeyboardExtension {
       'useless',
       'abandoning',
       'rejecting',
-      'ignoring'
+      'ignoring',
     ];
 
     // Caution indicators (yellow)
@@ -155,7 +167,7 @@ class UnsaidKeyboardExtension {
       'prove',
       'guarantee',
       'always',
-      'never'
+      'never',
     ];
 
     // Positive indicators (green)
@@ -169,7 +181,7 @@ class UnsaidKeyboardExtension {
       'support',
       'i feel',
       'i need',
-      'can we'
+      'can we',
     ];
 
     String status = 'neutral';
@@ -184,7 +196,7 @@ class UnsaidKeyboardExtension {
       suggestions = [
         'This message might feel hurtful',
         'Consider using "I" statements',
-        'Try expressing your feelings instead'
+        'Try expressing your feelings instead',
       ];
       autoFix = _generateAutoFix(text, 'alert');
     } else if (cautionWords.any((word) => lowercaseText.contains(word))) {
@@ -193,7 +205,7 @@ class UnsaidKeyboardExtension {
       suggestions = [
         'This could come across as demanding',
         'Try softening with "please"',
-        'Consider the other person\'s perspective'
+        'Consider the other person\'s perspective',
       ];
       autoFix = _generateAutoFix(text, 'caution');
     } else if (positiveWords.any((word) => lowercaseText.contains(word))) {
@@ -201,12 +213,12 @@ class UnsaidKeyboardExtension {
       color = 'green';
       suggestions = [
         'Great! This sounds supportive',
-        'Your tone is clear and kind'
+        'Your tone is clear and kind',
       ];
     } else {
       suggestions = [
         'Consider adding warmth to your message',
-        'How might the other person receive this?'
+        'How might the other person receive this?',
       ];
     }
 
@@ -236,8 +248,10 @@ class UnsaidKeyboardExtension {
       };
 
       replacements.forEach((harsh, gentle) {
-        improved =
-            improved.replaceAll(RegExp(harsh, caseSensitive: false), gentle);
+        improved = improved.replaceAll(
+          RegExp(harsh, caseSensitive: false),
+          gentle,
+        );
       });
 
       // Add "I feel" if not present
@@ -258,7 +272,9 @@ class UnsaidKeyboardExtension {
 
       replacements.forEach((demanding, polite) {
         improved = improved.replaceAll(
-            RegExp(demanding, caseSensitive: false), polite);
+          RegExp(demanding, caseSensitive: false),
+          polite,
+        );
       });
 
       // Add please if missing
@@ -319,10 +335,18 @@ class UnsaidKeyboardExtension {
   /// Gets the current keyboard status (enabled, permissions, etc.).
   static Future<Map<String, dynamic>> getKeyboardStatus() async {
     try {
-      final Map<dynamic, dynamic>? result = await _channel.invokeMethod(
-        'getKeyboardStatus',
-      );
-      return Map<String, dynamic>.from(result ?? {});
+      final result = await _channel.invokeMethod('getKeyboardStatus');
+      if (result is Map) {
+        // Safely convert Map<Object?, Object?> to Map<String, dynamic>
+        final converted = <String, dynamic>{};
+        result.forEach((key, value) {
+          if (key != null) {
+            converted[key.toString()] = value;
+          }
+        });
+        return converted;
+      }
+      return {};
     } on PlatformException catch (e) {
       print('Error getting keyboard status: ${e.message}');
       return {};
@@ -385,8 +409,10 @@ class UnsaidKeyboardExtension {
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
 
-      final String? result =
-          await _channel.invokeMethod('processTextWithContext', payload);
+      final String? result = await _channel.invokeMethod(
+        'processTextWithContext',
+        payload,
+      );
       return result ?? text;
     } on PlatformException catch (e) {
       print('Error processing text with context: ${e.message}');

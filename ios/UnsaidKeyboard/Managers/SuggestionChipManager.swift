@@ -29,29 +29,61 @@ final class SuggestionChipManager {
     }
 
     func showSuggestion(text: String, tone: ToneStatus) {
+        #if DEBUG
+        print("📨 ChipManager: showSuggestion called with text: '\(text)', tone: \(tone)")
+        #endif
+        
         guard let containerView = containerView else { return }
 
-        // ✅ COALESCE DUPLICATES: Don't re-show the same chip, just refresh tone styling
-        if let active = activeChip, active.getCurrentSuggestion() == text {
-            // Optionally update tone color in-place instead of re-presenting
-            active.presentSuggestion(text, tone: tone)  // just refresh styling
-            return
-        }
-
-        // ✅ SEQUENCE ANIMATIONS: If there is an active chip, dismiss and present the new one after animation
-        if let old = activeChip {
-            old.onDismissed = { [weak self] in
-                self?.presentNewChip(text: text, tone: tone, in: containerView)
+        // ✅ DEFENSIVE COALESCING: Only coalesce if the chip is actually visible on screen
+        if let active = activeChip {
+            let isOnscreen = (active.superview != nil) && (active.window != nil) && (active.alpha > 0.01)
+            let isSameText = active.getCurrentSuggestion() == text
+            
+            #if DEBUG
+            print("🔍 ChipManager: Active chip found - onscreen: \(isOnscreen), sameText: \(isSameText), text: '\(text)'")
+            #endif
+            
+            if isSameText && isOnscreen {
+                // Chip is visible and has same text - just refresh styling
+                #if DEBUG
+                print("🔄 ChipManager: Refreshing existing chip")
+                #endif
+                active.presentSuggestion(text, tone: tone)
+                return
+            } else if isSameText && !isOnscreen {
+                // Chip has same text but is off-screen - clean up and create new one
+                #if DEBUG
+                print("🧹 ChipManager: Cleaning up off-screen chip")
+                #endif
+                activeChip = nil
+                // Fall through to create new chip
+            } else if !isSameText {
+                // Different text - dismiss old chip and create new one
+                #if DEBUG
+                print("🔄 ChipManager: Dismissing old chip for new text")
+                #endif
+                active.onDismissed = { [weak self] in
+                    self?.presentNewChip(text: text, tone: tone, in: containerView)
+                }
+                active.dismiss(animated: true)
+                activeChip = nil
+                return
             }
-            old.dismiss(animated: true)
-            activeChip = nil
-            return
         }
 
+        // Create new chip
+        #if DEBUG
+        print("🆕 ChipManager: Creating new chip for text: '\(text)'")
+        #endif
         presentNewChip(text: text, tone: tone, in: containerView)
     }
 
     private func presentNewChip(text: String, tone: ToneStatus, in containerView: UIView) {
+        #if DEBUG
+        print("🎯 ChipManager: Presenting new chip, clearing any existing active chip")
+        #endif
+        
         let chip = SuggestionChipView()
         chip.setPreview(text: text, tone: tone, textHash: String(text.hashValue))
         
@@ -63,7 +95,26 @@ final class SuggestionChipManager {
         chip.onDismiss = { [weak self, weak chip] in
             guard let self, let chip else { return }
             self.delegate?.suggestionChipDidDismiss(chip)
-            self.activeChip = nil
+            if self.activeChip === chip { 
+                #if DEBUG
+                print("🗑️ ChipManager: Clearing active chip reference (user dismissed)")
+                #endif
+                self.activeChip = nil 
+            }
+        }
+        chip.onTimeout = { [weak self, weak chip] in
+            guard let self, let chip else { return }
+            #if DEBUG
+            print("⏰ ChipManager: Clearing active chip reference (timeout)")
+            #endif
+            if self.activeChip === chip { self.activeChip = nil }
+        }
+        chip.onDismissed = { [weak self, weak chip] in
+            guard let self, let chip else { return }
+            #if DEBUG
+            print("🏁 ChipManager: Chip fully dismissed, clearing reference")
+            #endif
+            if self.activeChip === chip { self.activeChip = nil }
         }
 
         containerView.addSubview(chip) // layout first
@@ -84,6 +135,9 @@ final class SuggestionChipManager {
         }
         
         activeChip = chip
+        #if DEBUG
+        print("✅ ChipManager: Set new active chip")
+        #endif
         chip.present(in: containerView)
     }
 
@@ -98,21 +152,11 @@ final class SuggestionChipManager {
             return
         }
         
-        showSuggestion(text: text, tone: tone(from: toneString))
+        showSuggestion(text: text, tone: ToneStatus(from: toneString))
         
         // Mark tutorial as shown if this was a tutorial message
         if isTutorialMessage(text) {
             markTutorialAsShown()
-        }
-    }
-    
-    // ✅ CENTRALIZED TONE MAPPING: Single source of truth for string→ToneStatus conversion
-    private func tone(from s: String) -> ToneStatus {
-        switch s.lowercased() {
-        case "alert": return .alert
-        case "caution": return .caution
-        case "clear": return .clear
-        default: return .neutral
         }
     }
     

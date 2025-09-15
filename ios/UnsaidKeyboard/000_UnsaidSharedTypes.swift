@@ -2,7 +2,15 @@
 //  000_UnsaidSharedTypes.swift
 //  Unsaid
 //
-//  Essential shared types and enums used across keyboard modules
+//  Essential share    /// SF Symbol name to use for the tone (nil for neutral).
+    var symbolName: String? {
+        switch self {
+        case .neutral: return nil
+        case .alert:   return nil
+        case .caution: return nil
+        case .clear:   return nil  // No checkmark either
+        }
+    }nd enums used across keyboard modules
 //  Cleaned up to include only actively used types
 //
 //  Created by John Gray on 7/11/25.
@@ -25,7 +33,7 @@ protocol ToneStreamDelegate: AnyObject {
 // MARK: - Core Essential Types
 
 /// Represents different tone statuses - ACTIVELY USED
-enum ToneStatus: String, CaseIterable, Codable {
+public enum ToneStatus: String, CaseIterable, Codable, Sendable {
     case clear = "clear"
     case caution = "caution"
     case alert = "alert"
@@ -58,6 +66,36 @@ enum ToneStatus: String, CaseIterable, Codable {
         }
     }
     #endif
+}
+
+// MARK: - ToneStatus Extensions
+
+public extension ToneStatus {
+    /// Neutral intentionally shows no icon.
+    var showsIcon: Bool { self != .neutral }
+
+    /// SF Symbol name to use for the tone (nil for neutral).
+    var symbolName: String? {
+        switch self {
+        case .neutral: return nil
+        case .alert:   return nil  // Just use color, no triangle
+        case .caution: return nil  // Just use color, no triangle
+        case .clear:   return nil  // No checkmark either
+        }
+    }
+
+    /// Safe mapping from arbitrary strings (e.g. server/UI) to enum.
+    /// Returns nil for unknown/invalid strings instead of defaulting to .neutral
+    static func fromString(_ string: String?) -> ToneStatus? {
+        guard let string = string?.lowercased() else { return nil }
+        return ToneStatus(rawValue: string)
+    }
+
+    /// Safe mapping from arbitrary strings (e.g. server/UI) to enum.
+    /// Defaults to .neutral for unknown strings (for backward compatibility)
+    init(from string: String?) {
+        self = ToneStatus(rawValue: (string ?? "").lowercased()) ?? .neutral
+    }
 }
 
 /// Represents different attachment styles - ACTIVELY USED

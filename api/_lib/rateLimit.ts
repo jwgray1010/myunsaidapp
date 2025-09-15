@@ -1,4 +1,44 @@
 // api/_lib/ratelimit.ts
+/**
+ * IMPROVED RATE LIMITING FOR UNSAID API
+ * 
+ * Key improvements:
+ * - User + IP based keys (prevents mobile throttling)
+ * - Proper failure skipping (401/402/4xx don't consume quota)
+ * - Reasonable limits for chatty endpoints
+ * - Automatic skipping of OPTIONS/health requests
+ * - Retry-After headers for better client handling
+ * 
+ * USAGE EXAMPLES:
+ * 
+ * // Tone analysis endpoint (chatty, needs permissive limits)
+ * import { toneAnalysisRateLimit } from '../_lib/rateLimit';
+ * import { withAuth } from '../_lib/auth';
+ * 
+ * export default toneAnalysisRateLimit(async (req, res) => {
+ *   return withAuth(async (req, res, auth) => {
+ *     // Your tone analysis logic here
+ *     return res.json({ tone: 'clear' });
+ *   })(req, res);
+ * });
+ * 
+ * // Suggestions endpoint
+ * import { suggestionsRateLimit } from '../_lib/rateLimit';
+ * 
+ * export default suggestionsRateLimit(async (req, res) => {
+ *   return withAuth(async (req, res, auth) => {
+ *     // Your suggestions logic here
+ *     return res.json({ suggestions: [] });
+ *   })(req, res);
+ * });
+ * 
+ * WHY THIS PREVENTS UI BLOCKING:
+ * - Failed auth (401) doesn't consume quota
+ * - Failed trial (402) doesn't consume quota  
+ * - Anonymous users get separate buckets
+ * - Mobile users don't throttle each other
+ * - Reasonable limits prevent keyboard spam from hitting limits
+ */
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { logger } from './logger';
 
@@ -35,20 +75,29 @@ setInterval(() => {
   });
 }, 60000); // Cleanup every minute
 
+// Helper: Extract first IP from x-forwarded-for or fallback
+function firstIp(req: VercelRequest): string {
+  const xff = (req.headers['x-forwarded-for'] as string) || '';
+  const ip = xff.split(',')[0]?.trim() || 
+             (req.headers['x-real-ip'] as string) ||
+             (req.socket?.remoteAddress ?? '');
+  return ip || 'ip:unknown';
+}
+
+// Improved key generator: user + IP to prevent IP-based throttling issues
+const defaultKeyGenerator = (req: VercelRequest) => {
+  const user = (req.headers['x-user-id'] as string)?.trim() || 'user:anon';
+  return `${user}:${firstIp(req)}`;
+};
+
 export function createRateLimit(config: RateLimitConfig) {
   const {
     windowMs = 15 * 60 * 1000, // 15 minutes
     maxRequests = 100,
-    keyGenerator = (req) => {
-      // Better key generation matching Express patterns
-      return req.headers['x-forwarded-for'] as string || 
-             req.headers['x-real-ip'] as string ||
-             req.connection?.remoteAddress || 
-             'unknown';
-    },
+    keyGenerator = defaultKeyGenerator,
     skipSuccessfulRequests = false,
     skipFailedRequests = false,
-    skip = () => false,
+    skip = (req) => req.method === 'OPTIONS' || req.url === '/api/health',
     standardHeaders = true,
     legacyHeaders = false,
     message = 'Too many requests, please try again later.'
@@ -96,6 +145,7 @@ export function createRateLimit(config: RateLimitConfig) {
         res.setHeader('RateLimit-Limit', maxRequests);
         res.setHeader('RateLimit-Remaining', 0);
         res.setHeader('RateLimit-Reset', new Date(entry.resetTime).toISOString());
+        res.setHeader('Retry-After', timeUntilReset);
       }
 
       // Set legacy headers for backwards compatibility
@@ -130,17 +180,24 @@ export function createRateLimit(config: RateLimitConfig) {
     entry.count++;
 
     // Track the response to potentially skip counting
-    const originalSend = res.send;
-    res.send = function(body) {
-      const statusCode = res.statusCode;
-      
-      // Optionally skip counting based on response
-      if ((skipSuccessfulRequests && statusCode < 400) ||
-          (skipFailedRequests && statusCode >= 400)) {
-        entry.count--; // Decrement since we don't want to count this
+    const originalJson = res.json.bind(res);
+    const originalEnd = res.end.bind(res);
+    
+    const maybeDecrement = () => {
+      const status = res.statusCode;
+      if ((skipSuccessfulRequests && status < 400) ||
+          (skipFailedRequests && status >= 400)) {
+        entry.count = Math.max(0, entry.count - 1);
       }
-      
-      return originalSend.call(this, body);
+    };
+
+    res.json = (body: any) => { 
+      maybeDecrement(); 
+      return originalJson(body); 
+    };
+    res.end = (chunk?: any, encoding?: any, cb?: any) => { 
+      maybeDecrement(); 
+      return originalEnd(chunk, encoding as any, cb); 
     };
 
     // Set rate limit headers
@@ -190,6 +247,24 @@ export const apiRateLimit = createRateLimit({
   message: 'API rate limit exceeded. Please upgrade your plan for higher limits.',
   skipSuccessfulRequests: false,
   skipFailedRequests: true // Don't count failed requests against the limit
+});
+
+// Tone analysis - more permissive for chatty keyboard usage
+export const toneAnalysisRateLimit = createRateLimit({
+  windowMs: 10 * 1000, // 10 seconds - shorter window
+  maxRequests: 20, // 20 requests per 10 seconds
+  message: 'Tone analysis rate limit exceeded. Please wait a moment before continuing.',
+  skipSuccessfulRequests: false,
+  skipFailedRequests: true
+});
+
+// Suggestions - moderate limits
+export const suggestionsRateLimit = createRateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  maxRequests: 60, // 60 requests per minute
+  message: 'Suggestions rate limit exceeded. Please wait before requesting more suggestions.',
+  skipSuccessfulRequests: false,
+  skipFailedRequests: true
 });
 
 export const uploadRateLimit = createRateLimit({

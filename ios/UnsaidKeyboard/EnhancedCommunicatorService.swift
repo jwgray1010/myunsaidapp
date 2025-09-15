@@ -203,6 +203,8 @@ final class EnhancedCommunicatorService {
         case invalidURL
         case invalidResponse
         case serverError(Int)
+        case authRequired
+        case paymentRequired
         case decodingError
         case offline
         case cancelled
@@ -212,6 +214,8 @@ final class EnhancedCommunicatorService {
             case .invalidURL: return "Invalid URL"
             case .invalidResponse: return "Invalid response"
             case .serverError(let code): return "Server error: \(code)"
+            case .authRequired: return "Authentication required"
+            case .paymentRequired: return "Payment required - trial expired"
             case .decodingError: return "Failed to decode response"
             case .offline: return "No network connection"
             case .cancelled: return "Request cancelled"
@@ -242,8 +246,26 @@ final class EnhancedCommunicatorService {
     init(
         baseHost: String = "https://api.myunsaidapp.com",
         apiRoot: String = "/api/v1",
-        apiKeyProvider: @escaping () -> String? = { AppGroups.shared.string(forKey: "unsaid_api_key") },
-        userIdProvider: @escaping () -> String = { AppGroups.shared.string(forKey: "unsaid_user_id") ?? "anonymous" },
+        apiKeyProvider: @escaping () -> String? = { 
+            let appGroupId = "group.com.example.unsaid"
+            return UserDefaults(suiteName: appGroupId)?.string(forKey: "unsaid_api_key")
+        },
+        userIdProvider: @escaping () -> String = { 
+            let userIdKey = "unsaid_user_id"
+            let appGroupId = "group.com.example.unsaid"
+            
+            if let sharedDefaults = UserDefaults(suiteName: appGroupId),
+               let userId = sharedDefaults.string(forKey: userIdKey) {
+                return userId
+            }
+            
+            // Fallback to a UUID if somehow not set
+            let fallbackId = UUID().uuidString
+            if let sharedDefaults = UserDefaults(suiteName: appGroupId) {
+                sharedDefaults.set(fallbackId, forKey: userIdKey)
+            }
+            return fallbackId
+        },
         monitorNetwork: Bool = true
     ) {
         // Base URL validation
@@ -436,6 +458,10 @@ final class EnhancedCommunicatorService {
                     #endif
                     throw CommunicatorError.decodingError
                 }
+            case 401:
+                throw CommunicatorError.authRequired
+            case 402:
+                throw CommunicatorError.paymentRequired
             case 408, 500, 502, 503, 504:
                 if retry > 0 {
                     let attemptIndex = 1 - retry // 0 for first retry when retry==1
