@@ -13,6 +13,7 @@ class SubscriptionService extends ChangeNotifier {
   final InAppPurchase _inAppPurchase = InAppPurchase.instance;
   StreamSubscription<List<PurchaseDetails>>? _subscription; // Made nullable
   bool _initialized = false; // Track initialization state
+  Timer? _pendingPurchaseTimer; // Timer to clear stuck pending state
 
   // Product IDs - these should match your App Store Connect/Google Play Console setup
   static const String monthlySubscriptionId = 'unsaid_monthly_subscription';
@@ -20,7 +21,8 @@ class SubscriptionService extends ChangeNotifier {
 
   List<ProductDetails> _products = [];
   final List<PurchaseDetails> _purchases = [];
-  bool _isAvailable = false;
+  bool _isStoreAvailable = false;
+  bool _areProductsLoaded = false;
   bool _purchasePending = false;
   bool _loading = true;
   String? _queryProductError;
@@ -28,7 +30,10 @@ class SubscriptionService extends ChangeNotifier {
   // Getters
   List<ProductDetails> get products => _products;
   List<PurchaseDetails> get purchases => _purchases;
-  bool get isAvailable => _isAvailable;
+  bool get isStoreAvailable => _isStoreAvailable;
+  bool get areProductsLoaded => _areProductsLoaded;
+  bool get isAvailable =>
+      _isStoreAvailable && _areProductsLoaded; // Overall availability
   bool get purchasePending => _purchasePending;
   bool get loading => _loading;
   String? get queryProductError => _queryProductError;
@@ -41,11 +46,14 @@ class SubscriptionService extends ChangeNotifier {
     // Check if in-app purchase is available
     final bool available = await _inAppPurchase.isAvailable();
     if (!available) {
-      _isAvailable = false;
+      _isStoreAvailable = false;
+      _areProductsLoaded = false;
       _loading = false;
       notifyListeners();
       return;
     }
+
+    _isStoreAvailable = true;
 
     // Listen to purchase updates (cancel any existing subscription first)
     _subscription?.cancel();
@@ -65,7 +73,7 @@ class SubscriptionService extends ChangeNotifier {
     await _loadProducts();
     await _loadPastPurchases();
 
-    _isAvailable = true;
+    _areProductsLoaded = true;
     _loading = false;
     notifyListeners();
   }
@@ -78,6 +86,7 @@ class SubscriptionService extends ChangeNotifier {
 
       if (productDetailResponse.error != null) {
         _queryProductError = productDetailResponse.error!.message;
+        _areProductsLoaded = false;
         print('Error loading products: ${productDetailResponse.error}');
         return;
       }
@@ -85,14 +94,17 @@ class SubscriptionService extends ChangeNotifier {
       if (productDetailResponse.productDetails.isEmpty) {
         _queryProductError =
             'No products found. Check your product IDs in App Store Connect/Google Play Console.';
+        _areProductsLoaded = false;
         print('Warning: No products found for IDs: $_productIds');
         return;
       }
 
       _products = productDetailResponse.productDetails;
       _queryProductError = null;
+      _areProductsLoaded = true;
     } catch (e) {
       _queryProductError = 'Failed to load products: $e';
+      _areProductsLoaded = false;
       print('Exception loading products: $e');
     }
   }
@@ -112,7 +124,25 @@ class SubscriptionService extends ChangeNotifier {
   Future<void> _handlePurchaseUpdate(
     List<PurchaseDetails> purchaseDetailsList,
   ) async {
-    for (final purchaseDetails in purchaseDetailsList) {
+    // First, deduplicate purchases by purchaseID
+    final Map<String, PurchaseDetails> deduplicatedPurchases = {};
+    for (final purchase in purchaseDetailsList) {
+      final purchaseId = purchase.purchaseID;
+      if (purchaseId == null) continue; // Skip purchases without ID
+
+      final existing = deduplicatedPurchases[purchaseId];
+      if (existing == null || purchase.status != PurchaseStatus.pending) {
+        // Keep the most recent non-pending status, or any pending if no other exists
+        deduplicatedPurchases[purchaseId] = purchase;
+      }
+    }
+
+    // Update the purchases list with deduplicated data
+    _purchases.clear();
+    _purchases.addAll(deduplicatedPurchases.values);
+
+    // Process each unique purchase
+    for (final purchaseDetails in deduplicatedPurchases.values) {
       print(
         '📱 Purchase update: ${purchaseDetails.productID} - ${purchaseDetails.status}',
       );
@@ -120,21 +150,25 @@ class SubscriptionService extends ChangeNotifier {
       switch (purchaseDetails.status) {
         case PurchaseStatus.pending:
           // Purchase is in progress, show loading state
+          _purchasePending = true;
           print('⏳ Purchase pending: ${purchaseDetails.productID}');
           break;
 
         case PurchaseStatus.purchased:
         case PurchaseStatus.restored:
           // Verify purchase with backend before activating
+          _purchasePending = false;
           await _verifyPurchase(purchaseDetails);
           break;
 
         case PurchaseStatus.error:
+          _purchasePending = false;
           print('❌ Purchase error: ${purchaseDetails.error?.message}');
           break;
 
         case PurchaseStatus.canceled:
-          // User canceled the purchase, no action needed
+          // User canceled the purchase, clear pending state
+          _purchasePending = false;
           print('🚫 Purchase canceled by user: ${purchaseDetails.productID}');
           break;
       }
@@ -144,6 +178,8 @@ class SubscriptionService extends ChangeNotifier {
         await InAppPurchase.instance.completePurchase(purchaseDetails);
       }
     }
+
+    notifyListeners();
   }
 
   /// Verify purchase with backend (CRITICAL for trial guard compatibility)
@@ -160,12 +196,13 @@ class SubscriptionService extends ChangeNotifier {
         'platform': defaultTargetPlatform == TargetPlatform.iOS
             ? 'ios'
             : 'android',
-        'userId': 'current_user_id', // TODO: Get from your auth service
       };
 
-      // Send to your backend for verification
+      // Get the API base URL from environment or use default
+      final apiBaseUrl =
+          'https://your-api-endpoint.com'; // TODO: Get from environment
       final response = await http.post(
-        Uri.parse('https://your-api-endpoint.com/verify-receipt'),
+        Uri.parse('$apiBaseUrl/api/v1/verify-receipt'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer your-api-key', // TODO: Add proper auth
@@ -174,9 +211,17 @@ class SubscriptionService extends ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        // Backend confirmed the purchase - now activate locally
-        await _activateSubscription(purchaseDetails);
-        print('✅ Purchase verified with backend: ${purchaseDetails.productID}');
+        final responseData = jsonDecode(response.body);
+        if (responseData['success'] == true) {
+          // Backend confirmed the purchase - now activate locally
+          await _activateSubscription(purchaseDetails);
+          print(
+            '✅ Purchase verified with backend: ${purchaseDetails.productID}',
+          );
+        } else {
+          print('❌ Backend verification failed: ${responseData['message']}');
+          // TODO: Handle verification failure (retry, alert user, etc.)
+        }
       } else {
         print(
           '❌ Backend verification failed: ${response.statusCode} - ${response.body}',
@@ -231,9 +276,23 @@ class SubscriptionService extends ChangeNotifier {
       _purchasePending = true;
       notifyListeners();
 
+      // Set a timeout to clear pending state if purchase doesn't complete
+      _pendingPurchaseTimer?.cancel();
+      _pendingPurchaseTimer = Timer(const Duration(seconds: 60), () {
+        if (_purchasePending) {
+          print('⚠️ Purchase timeout - clearing pending state');
+          _purchasePending = false;
+          notifyListeners();
+        }
+      });
+
       final bool success = await _inAppPurchase.buyNonConsumable(
         purchaseParam: purchaseParam,
       );
+
+      // Cancel the timeout timer since purchase completed
+      _pendingPurchaseTimer?.cancel();
+      _pendingPurchaseTimer = null;
 
       if (!success) {
         _purchasePending = false;
@@ -242,6 +301,10 @@ class SubscriptionService extends ChangeNotifier {
 
       return success;
     } catch (e) {
+      // Cancel the timeout timer on error
+      _pendingPurchaseTimer?.cancel();
+      _pendingPurchaseTimer = null;
+
       print('Error purchasing subscription: $e');
       _purchasePending = false;
       notifyListeners();
@@ -286,6 +349,7 @@ class SubscriptionService extends ChangeNotifier {
   @override
   void dispose() {
     _subscription?.cancel();
+    _pendingPurchaseTimer?.cancel();
     super.dispose();
   }
 }

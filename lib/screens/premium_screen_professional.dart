@@ -726,7 +726,11 @@ class _PremiumScreenProfessionalState extends State<PremiumScreenProfessional>
                                           ),
                                           SizedBox(height: AppTheme.spacing.xs),
                                           Text(
-                                            'Your subscription will automatically renew at ${_subscriptionService?.subscriptionPrice ?? '\$2.99'}/month after the 7-day trial unless cancelled in your iPhone Settings.',
+                                            _subscriptionService
+                                                        ?.subscriptionPrice !=
+                                                    null
+                                                ? 'Your subscription will automatically renew at ${_subscriptionService!.subscriptionPrice}/month after the 7-day trial unless cancelled in your iPhone Settings.'
+                                                : 'Your subscription will automatically renew after the 7-day trial unless cancelled in your iPhone Settings.',
                                             style: theme.textTheme.bodySmall
                                                 ?.copyWith(
                                                   color: Colors.black54,
@@ -1154,7 +1158,9 @@ class _PremiumScreenProfessionalState extends State<PremiumScreenProfessional>
                 ),
                 SizedBox(height: AppTheme.spacing.sm),
                 Text(
-                  'Then ${_subscriptionService?.subscriptionPrice ?? '\$2.99'}/month (auto-renewing)',
+                  _subscriptionService?.subscriptionPrice != null
+                      ? 'Then ${_subscriptionService!.subscriptionPrice}/month (auto-renewing)'
+                      : 'Then auto-renewing subscription',
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: Colors.white.withValues(alpha: 0.9),
                     fontWeight: FontWeight.w600,

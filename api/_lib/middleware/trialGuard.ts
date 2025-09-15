@@ -13,9 +13,12 @@ interface TrialGuardConfig {
   bypassUsers?: string[]; // Users who bypass payment (for testing)
 }
 
+// In-memory store for subscription status (replace with database in production)
+const subscriptionStore: { [userId: string]: { active: boolean; expiresAt?: string } } = {};
+
 class TrialManager {
   checkApiAccess(userId: string): { hasAccess: boolean; reason?: string; paymentUrl?: string } {
-    // Mock premium status check
+    // Check premium subscription first
     const hasPremiumSubscription = this.checkPremiumStatus(userId);
     const trialStatus = this.getTrialStatus(userId);
     
@@ -25,13 +28,31 @@ class TrialManager {
     
     return {
       hasAccess: false,
-      reason: 'Trial expired. Premium subscription ($3.99/month) required.',
+      reason: 'Trial expired. Premium subscription required.',
       paymentUrl: this.generatePaymentUrl(userId)
     };
   }
 
   private checkPremiumStatus(userId: string): boolean {
-    // Test users with premium access
+    // Check global subscription store first
+    const globalStore = (global as any).subscriptionStore || {};
+    const subscription = globalStore[userId];
+    if (subscription?.active) {
+      // Check if subscription is still valid
+      if (subscription.expiresAt) {
+        const expiresAt = new Date(subscription.expiresAt);
+        if (expiresAt > new Date()) {
+          return true;
+        } else {
+          // Subscription expired, remove from store
+          delete globalStore[userId];
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // Fallback to test users (for development)
     const premiumUsers = ['premium_user', 'paid_user_123', 'subscriber_001'];
     return premiumUsers.includes(userId);
   }
