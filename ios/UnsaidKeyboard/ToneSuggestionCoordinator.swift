@@ -451,7 +451,7 @@ final class ToneSuggestionCoordinator {
         
         // Guard against empty/unchanged text (don't fire network calls)
         guard shouldEnqueueAnalysis() else {
-            throttledLog("skip enqueue (timing / unchanged / short / empty)", category: "analysis")
+            throttledLog("🚫 Skipping analysis - shouldEnqueueAnalysis returned false for text: '\(text.prefix(50))'", category: "analysis")
             return
         }
         
@@ -1007,8 +1007,8 @@ final class ToneSuggestionCoordinator {
                 self.storeAPIResponseInSharedStorage(endpoint: "suggestions", request: payload, response: d)
             }
 
-            // Update tone with defensive parsing - prioritize ui_tone from enhanced endpoint
-            let toneStatus = safeString(from: d, keys: ["ui_tone", "tone", "toneStatus", "primaryTone"], fallback: "neutral")
+            // Update tone with defensive parsing - prioritize ui_bucket from enhanced endpoint
+            let toneStatus = safeString(from: d, keys: ["ui_bucket", "ui_tone", "tone", "toneStatus", "primaryTone"], fallback: "neutral")
             if !toneStatus.isEmpty && toneStatus != "neutral" {
                 DispatchQueue.main.async {
                     if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: toneStatus) {
@@ -1083,7 +1083,8 @@ final class ToneSuggestionCoordinator {
             
             // Prefer server-provided UI bucket so the pill color matches server mapping
             let detectedTone =
-                (d["ui_tone"] as? String)
+                (d["ui_bucket"] as? String)        // ← PRIMARY: Backend returns ui_bucket
+                ?? (d["ui_tone"] as? String)       // ← Fallback: Previous expected field
                 ?? (d["tone"] as? String)
                 ?? (d["primaryTone"] as? String)
                 ?? ((d["analysis"] as? [String: Any])?["tone"] as? String)
