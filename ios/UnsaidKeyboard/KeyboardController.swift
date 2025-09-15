@@ -1100,11 +1100,13 @@ final class KeyboardController: UIInputView,
         stack.addArrangedSubview(secureFix)
         stack.addArrangedSubview(returnBtn)
 
-        // Sizing rules - make secure fix and return buttons the same size
-        space.widthAnchor.constraint(greaterThanOrEqualToConstant: 170).isActive = true // Increased to compensate for smaller action buttons
+        // Sizing rules - make all non-space buttons the same size
+        space.widthAnchor.constraint(greaterThanOrEqualToConstant: 170).isActive = true // Space bar minimum width
         
-        // Set equal width for secure fix and return buttons (made smaller)
-        let buttonWidth: CGFloat = 70 // Reduced from 85 to 70 for more compact layout
+        // Set equal width for ALL control buttons (mode, globe, secure fix, return)
+        let buttonWidth: CGFloat = 70 // Standard width for all control buttons
+        mode.widthAnchor.constraint(equalToConstant: buttonWidth).isActive = true
+        globe.widthAnchor.constraint(equalToConstant: buttonWidth).isActive = true
         secureFix.widthAnchor.constraint(equalToConstant: buttonWidth).isActive = true
         returnBtn.widthAnchor.constraint(equalToConstant: buttonWidth).isActive = true
 
