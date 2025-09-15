@@ -729,7 +729,7 @@ final class ToneSuggestionCoordinator {
         // Guard: empty text doesn't fire network calls
         if trimmed.isEmpty && lastAnalyzedText.isEmpty { return false }
         
-        if trimmed.count < 5, !trimmed.isEmpty { return false }
+        if trimmed.count < 2, !trimmed.isEmpty { return false }
         if trimmed.isEmpty, !lastAnalyzedText.isEmpty { return true }
         if now.timeIntervalSince(lastAnalysisTime) < 0.1 { return false }
 
@@ -1311,7 +1311,7 @@ final class ToneSuggestionCoordinator {
                         }
                         
                         // Main-thread UI apply + last-writer-wins: Update tone indicator only if response's client_seq matches latest input
-                        let responseClientSeq = responseDict["client_seq"] as? UInt64 ?? currentClientSeq
+                        let responseClientSeq = (responseDict["client_seq"] as? NSNumber)?.uint64Value ?? currentClientSeq
                         
                         self.logMetrics(clientSeq: currentClientSeq, inputLength: inputLength, latencyMs: latencyMs, error: nil)
                         
