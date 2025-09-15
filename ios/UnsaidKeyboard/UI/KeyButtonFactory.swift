@@ -179,7 +179,23 @@ final class KeyButtonFactory {
         applyBrandKeyStyle(to: b, brandBackground: .keyboardRose)
         return b
     }
+    
+static func makeGlobeButton() -> UIButton {
+    let b = GlobeButton(type: .system)
+    commonKeySetup(b, hPad: 2, vPad: 2)
+    b.setTitle("🌐", for: .normal)
+    b.accessibilityLabel = "Next Keyboard"
+    b.titleLabel?.font = .systemFont(ofSize: 13, weight: .regular)
+    b.titleLabel?.adjustsFontForContentSizeCategory = false
+    b.titleLabel?.adjustsFontSizeToFitWidth = true
+    b.titleLabel?.minimumScaleFactor = 0.8
 
+    applySpecialKeyStyle(to: b, background: .systemGray5, text: .label)
+
+    // Intentionally small (below 44pt per your request)
+    b.widthAnchor.constraint(equalToConstant: 34).isActive = true
+    return b
+}
     // MARK: Styling
 
     private static func commonKeySetup(_ button: UIButton, hPad: CGFloat, vPad: CGFloat) {
@@ -346,7 +362,14 @@ final class KeyButtonFactory {
 /// Space bar: even larger hit area + cheap shadow path
 final class ExtendedSpaceButton: UIButton {
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        bounds.insetBy(dx: -12, dy: -8).contains(point)
+        // Expand ONLY to the left; keep right tight to avoid overlapping Secure/Return
+        let expandLeft: CGFloat  = 28   // generous toward globe
+        let expandRight: CGFloat = 0    // do NOT expand toward Secure/Return
+        let expandVert: CGFloat  = 10
+
+        let expanded = bounds.insetBy(dx: -expandRight, dy: -expandVert)
+                            .offsetBy(dx: -expandLeft + expandRight, dy: 0)
+        return expanded.contains(point)
     }
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -386,6 +409,13 @@ final class ExtendedTouchButton: UIButton {
                 self.alpha = a
             }
         }
+    }
+}
+/// Tiny globe with strict hit area (no expansion)
+final class GlobeButton: UIButton {
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        // Exact bounds only — prevents overlap with space bar's hit area
+        return bounds.contains(point)
     }
 }
 
