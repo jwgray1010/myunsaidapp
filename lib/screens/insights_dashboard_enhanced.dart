@@ -652,14 +652,14 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
             SliverAppBar(
               pinned: true,
               floating: false,
-              expandedHeight: 180, // Reduced from 206 to make header smaller
+              expandedHeight: 118, // Reduced by additional 62px for more compact header
               forceElevated: innerBoxIsScrolled,
               backgroundColor: Colors.transparent,
               elevation: 0,
               flexibleSpace: FlexibleSpaceBar(
                 titlePadding: EdgeInsetsDirectional.only(
                   start: 16,
-                  bottom: 36, // Reduced from 42 to match smaller header
+                  bottom: 20, // Reduced further to match much smaller header
                   top: MediaQuery.of(
                     context,
                   ).padding.top, // Add status bar padding
