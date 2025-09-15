@@ -15,10 +15,18 @@ final class KeyButton: UIButton {
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        // Precision hit-testing: minimize overlaps while maintaining 44x44 minimum
         let bounds = self.bounds
+        
+        // Only expand if our visual bounds are smaller than 44x44
         let widthToAdd  = max(minTapSize.width - bounds.width, 0)
         let heightToAdd = max(minTapSize.height - bounds.height, 0)
-        let hitRect = bounds.insetBy(dx: -widthToAdd/2, dy: -heightToAdd/2)
+        
+        // Conservative expansion to prevent overlap conflicts
+        let conservativeWidthAdd = min(widthToAdd, 4.0)  // Max 2pt each side
+        let conservativeHeightAdd = min(heightToAdd, 4.0) // Max 2pt each side
+        
+        let hitRect = bounds.insetBy(dx: -conservativeWidthAdd/2, dy: -conservativeHeightAdd/2)
         return hitRect.contains(point)
     }
 }

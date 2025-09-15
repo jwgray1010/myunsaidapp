@@ -4,17 +4,19 @@ import Network
 #if canImport(UIKit)
 import UIKit
 #endif
-// Ensure shared types (ToneStatus, InteractionType, KeyboardInteraction, etc.) are compiled in this target.
-// If the file name differs, adjust the import path via project settings. This comment documents the dependency.
+
+// Import shared types for ToneStatus, InteractionType, KeyboardInteraction, etc.
+// This ensures proper compilation order in the UnsaidKeyboard target build sequence.
 
 // Import additional dependencies used by ToneSuggestionCoordinator
 // Note: The specific file references ensure proper compilation order
 // in the UnsaidKeyboard target build sequence.
 
 // MARK: - Delegate Protocol
+@MainActor
 protocol ToneSuggestionDelegate: AnyObject {
     func didUpdateSuggestions(_ suggestions: [String])
-    func didUpdateToneStatus(_ status: String)
+    func didUpdateToneStatus(_ tone: String)  // <- back to String for Xcode compatibility
     func didUpdateSecureFixButtonState()
     #if canImport(UIKit)
     func getTextDocumentProxy() -> UITextDocumentProxy?
@@ -352,10 +354,13 @@ final class ToneSuggestionCoordinator {
         os_log("🔧 Network available: %{public}@", log: self.netLog, type: .info, String(self.isNetworkAvailable))
         os_log("🔧 Current text length: %d", log: self.netLog, type: .info, self.currentText.count)
         
-        // Trigger immediate analysis if there's text (force analyze functionality)
-        if !currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        // Only trigger analysis if there's real text (not just testing ping)
+        let currentTextTrimmed = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !currentTextTrimmed.isEmpty {
             os_log("🔧 Triggering force analyze for current text", log: self.netLog, type: .info)
-            forceImmediateAnalysis(currentText)
+            forceImmediateAnalysis(currentTextTrimmed)
+        } else {
+            os_log("🔧 No current text - skipping force analyze to avoid test pollution", log: self.netLog, type: .info)
         }
     }
     
@@ -369,6 +374,37 @@ final class ToneSuggestionCoordinator {
         
         throttledLog("force analyze triggered", category: "analysis")
         forceImmediateAnalysis(text)
+    }
+    
+    // MARK: - Debug Test Function for UI Updates
+    func testToneAPIWithDebugText() {
+        throttledLog("🧪 Testing tone API with debug text", category: "test")
+        let testText = "I'm so frustrated with this situation"
+        updateCurrentText(testText)
+        
+        var context: [String: Any] = [
+            "text": testText,
+            "context": "general",
+            "meta": [
+                "platform": "ios_keyboard",
+                "timestamp": isoTimestamp(),
+                "test_mode": true
+            ]
+        ]
+        context.merge(personalityPayload()) { _, new in new }
+        
+        callToneAnalysisAPI(context: context) { [weak self] toneResult in
+            guard let self = self else { return }
+            self.throttledLog("🧪 Test API result: '\(toneResult ?? "nil")'", category: "test")
+            
+            if let tone = toneResult {
+                DispatchQueue.main.async {
+                    self.currentToneStatus = tone
+                    self.delegate?.didUpdateToneStatus(tone)
+                    self.throttledLog("🧪 Test UI tone set to \(tone)", category: "test")
+                }
+            }
+        }
     }
 
     // MARK: - Init/Deinit
@@ -393,9 +429,11 @@ final class ToneSuggestionCoordinator {
         // debugPrint(" - New User: \(personalityBridge.isNewUser())")
         // debugPrint(" - Learning Days Remaining: \(personalityBridge.learningDaysRemaining())")
         
-        // Health ping to verify API configuration
+        // Health ping to verify API configuration - only if no real text to avoid overwriting tone
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            self.debugPing()
+            if self.currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                self.debugPing()
+            }
         }
         #endif
     }
@@ -712,14 +750,21 @@ final class ToneSuggestionCoordinator {
         let t2Clean = t2.replacingOccurrences(of: "[^a-z0-9\\s]", with: "", options: .regularExpression)
         if t1Clean == t2Clean { return true }
         
-        // Minor word additions/removals (< 20% change)
+        // For short texts (< 25 chars), be more aggressive about detecting changes
+        // This catches critical tone flips like "ok" → "ok!!" or "fine" → "not fine"
+        if max(t1.count, t2.count) < 25 {
+            return false  // Always analyze short text changes
+        }
+        
+        // For longer texts, use raised similarity threshold to catch more meaningful changes
         let words1 = t1.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
         let words2 = t2.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
         let maxWords = max(words1.count, words2.count)
         let commonWords = Set(words1).intersection(Set(words2)).count
         let similarity = maxWords > 0 ? Double(commonWords) / Double(maxWords) : 1.0
         
-        return similarity > 0.8
+        // Raised from 0.8 to 0.92 to catch more tone-changing edits
+        return similarity > 0.92
     }
 
     private func shouldEnqueueAnalysis() -> Bool {
@@ -789,7 +834,10 @@ final class ToneSuggestionCoordinator {
                     if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: tone) {
                         self.throttledLog("🎯 Updating tone status from '\(self.currentToneStatus)' to '\(tone)'", category: "tone_debug")
                         self.currentToneStatus = tone
-                        self.delegate?.didUpdateToneStatus(tone)
+                        self.delegate?.didUpdateToneStatus(tone)  // Pass string directly
+                        
+                        // KEY DEBUG LINE - this is the canary that shows UI update is called
+                        self.throttledLog("UI tone set to \(tone) | raw=\(tone) seq=-1", category: "tone_debug")
                         
                         // Update haptic feedback (throttled to 10 Hz)
                         self.updateHapticFeedback(for: tone)
@@ -1007,19 +1055,19 @@ final class ToneSuggestionCoordinator {
                 self.storeAPIResponseInSharedStorage(endpoint: "suggestions", request: payload, response: d)
             }
 
-            // Update tone with defensive parsing - prioritize ui_tone from enhanced endpoint
-            let toneStatus = safeString(from: d, keys: ["ui_tone", "tone", "toneStatus", "primaryTone"], fallback: "neutral")
-            if !toneStatus.isEmpty && toneStatus != "neutral" {
+            // Update tone with defensive parsing - NOW with UI tone bucketing like tone endpoint
+            let uiTone = self.uiToneString(from: d)
+            
+            if uiTone != "neutral" {
                 DispatchQueue.main.async {
-                    if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: toneStatus) {
-                        self.currentToneStatus = toneStatus
-                        self.delegate?.didUpdateToneStatus(toneStatus)
+                    if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: uiTone) {
+                        self.currentToneStatus = uiTone
+                        self.delegate?.didUpdateToneStatus(uiTone)  // Only send clamped UI tones
                         
                         // Extract confidence with defensive parsing
                         let confidence = self.safeDouble(from: d, keys: ["confidence"], fallback: 0.0)
                         if confidence > 0.0 {
-                            // Note: ToneStatus enum not available, using string for now
-                            self.storeToneAnalysisResult(data: d, status: toneStatus, confidence: confidence)
+                            self.storeToneAnalysisResult(data: d, status: uiTone, confidence: confidence)
                         }
                     }
                 }
@@ -1063,8 +1111,157 @@ final class ToneSuggestionCoordinator {
         return nil
     }
 
+    // MARK: - Tone Parsing Helpers (Unified across all endpoints)
+    
+    // Copilot: 'neutral' is a valid pill state. Do not coerce it to 'clear'.
+    /// Safety normalizer (prevents "angry" from blanking the UI)
+    private func normalizeToneLabel(_ s: String) -> String {
+        switch s.lowercased() {
+        case "alert", "caution", "clear", "neutral": return s
+        case "angry", "hostile", "toxic": return "alert"
+        case "frustrated", "anxious", "sad": return "caution"
+        default: return "clear"
+        }
+    }
+    
+    // Always drive the pill from ui_tone when provided.
+    // Fall back to ui_distribution (or legacy 'buckets') if ui_tone missing.
+    // 'angry' and similar raw labels must never directly set the pill.
+    /// Convert server response to clamped UI tone string (alert|caution|clear|neutral only)
+    private func uiToneString(from response: [String: Any]) -> String {
+        // FIRST: Check for direct ui_tone field (this is what the API returns!)
+        let directUITone = safeString(from: response, keys: ["ui_tone", "uiTone"], fallback: "")
+        if !directUITone.isEmpty {
+            let normalized = normalizeToneLabel(directUITone)
+            throttledLog("🎯 Found direct ui_tone: '\(directUITone)' -> normalized: '\(normalized)'", category: "tone_debug")
+            return normalized
+        }
+        
+        // SECOND: Try explicit ui_distribution buckets (including neutral)
+        if let buckets = response["ui_distribution"] as? [String: Double] {
+            let scored: [(String, Double)] = [
+                ("alert",   buckets["alert"]   ?? 0),
+                ("caution", buckets["caution"] ?? 0),
+                ("clear",   buckets["clear"]   ?? 0),
+                ("neutral", buckets["neutral"] ?? 0)
+            ]
+            if let maxPair = scored.max(by: { $0.1 < $1.1 }), maxPair.1 > 0.1 {
+                throttledLog("🎯 Using ui_distribution bucket: '\(maxPair.0)' with score: \(maxPair.1)", category: "tone_debug")
+                return maxPair.0
+            }
+        }
+        
+        // THIRD: Fallback to legacy buckets field
+        if let buckets = response["buckets"] as? [String: Double] {
+            let scored: [(String, Double)] = [
+                ("alert",   buckets["alert"]   ?? 0),
+                ("caution", buckets["caution"] ?? 0),
+                ("clear",   buckets["clear"]   ?? 0),
+                ("neutral", buckets["neutral"] ?? 0)
+            ]
+            if let maxPair = scored.max(by: { $0.1 < $1.1 }), maxPair.1 > 0.1 {
+                throttledLog("🎯 Using legacy buckets: '\(maxPair.0)' with score: \(maxPair.1)", category: "tone_debug")
+                return maxPair.0
+            }
+        }
+
+        // LAST: Fallback mapping from raw tone analysis
+        var raw = ""
+        // Try nested analysis object first
+        if let analysis = response["analysis"] as? [String: Any] {
+            raw = safeString(from: analysis, keys: ["primary_tone", "primaryTone"], fallback: "")
+        }
+        // Fallback to top-level keys
+        if raw.isEmpty {
+            raw = safeString(from: response, keys: ["primary_tone", "classification", "tone"], fallback: "")
+        }
+        raw = raw.lowercased()
+        let intense = safeDouble(from: response, keys: ["intensity"], fallback: 0.0) >= 0.55
+        throttledLog("🎯 Fallback mapping from raw tone: '\(raw)' intense: \(intense)", category: "tone_debug")
+        
+        // Check for targeted profanity flag
+        var targeted = false
+        if let flags = response["flags"] as? [String: Any] {
+            targeted = flags["targetedProfanity"] as? Bool ?? false
+        }
+        if let profanity = response["profanity"] as? [String: Any] {
+            targeted = targeted || (profanity["hasTargetedSecondPerson"] as? Bool ?? false)
+        }
+
+        switch raw {
+        case "angry":
+            return (targeted || intense) ? "alert" : "caution"
+        case "frustrated", "anxious", "sad", "negative", "tense", "passive_aggressive":
+            return "caution"
+        case "happy", "positive", "calm", "confident", "supportive":
+            return "clear"
+        default:
+            return "neutral"
+        }
+    }
+    
+    /// Map server variants into the 4 UI tone buckets with smart classification fallback
+    /// @deprecated Use uiToneString instead for cleaner clamping
+    private func parseUITone(from response: [String: Any]) -> String {
+        // First try direct UI tone field
+        let rawUITone = safeString(from: response, keys: [
+            "ui_tone","uiTone","tone_status","toneStatus","tone","primaryTone"
+        ], fallback: "")
+        
+        // Check if it's already a valid UI bucket
+        let normalized = rawUITone.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        switch normalized {
+        case "alert": return "alert"
+        case "caution": return "caution"  
+        case "clear": return "clear"
+        case "neutral": return "neutral"
+        case "warning", "warn": return "caution"
+        case "danger", "negative", "error", "red": return "alert"
+        case "ok", "positive", "green", "safe", "secure", "good": return "clear"
+        default: break
+        }
+        
+        // Fallback: use buckets if available
+        if let buckets = response["buckets"] as? [String: Double] {
+            let pairs: [(String, Double)] = [
+                ("alert",   buckets["alert"] ?? 0),
+                ("caution", buckets["caution"] ?? 0),
+                ("clear",   buckets["clear"] ?? 0),
+                ("neutral", buckets["neutral"] ?? 0)
+            ]
+            if let maxPair = pairs.max(by: { $0.1 < $1.1 }), maxPair.1 > 0.1 {
+                return maxPair.0
+            }
+        }
+        
+        // Final fallback: map raw classification with intensity/flags
+        let rawClassification = safeString(from: response, keys: ["classification"], fallback: "").lowercased()
+        let intensity = safeDouble(from: response, keys: ["intensity"], fallback: 0.0)
+        let intense = intensity >= 0.55
+        
+        // Check for targeted profanity flag
+        var targeted = false
+        if let flags = response["flags"] as? [String: Any] {
+            targeted = flags["targetedProfanity"] as? Bool ?? false
+        }
+        
+        switch rawClassification {
+        case "angry": 
+            return (targeted || intense) ? "alert" : "caution"
+        case "frustrated", "anxious", "sad", "negative", "tense", "passive_aggressive":
+            return "caution"
+        case "happy", "positive", "calm", "confident", "supportive":
+            return "clear"
+        default:
+            return "neutral"
+        }
+    }
+
     private func callToneAnalysisAPI(context: [String: Any], completion: @escaping (String?) -> Void) {
-        guard isNetworkAvailable, isAPIConfigured, Date() >= netBackoffUntil else { completion(nil); return }
+        guard isNetworkAvailable, isAPIConfigured, Date() >= netBackoffUntil else { 
+            completion("neutral")
+            return 
+        }
 
         let requestID = UUID()
         latestRequestID = requestID
@@ -1075,23 +1272,41 @@ final class ToneSuggestionCoordinator {
         payload["userEmail"] = getUserEmail()
 
         callEndpoint(path: "api/v1/tone", payload: payload) { [weak self] data in
-            guard let self else { completion(nil); return }
-            guard requestID == self.latestRequestID else { completion(nil); return }
+            guard let self else { 
+                completion("neutral")  // Safe fallback
+                return 
+            }
+            guard requestID == self.latestRequestID else { 
+                completion("neutral")  // Safe fallback
+                return 
+            }
 
             let d = data ?? [:]
             self.throttledLog("🎯 Tone API response: \(String(describing: d).prefix(200))", category: "tone_debug")
-            
-            // Prefer server-provided UI bucket so the pill color matches server mapping
-            let detectedTone =
-                (d["ui_tone"] as? String)          // ← PRIMARY: Backend returns ui_tone
-                ?? (d["tone"] as? String)
-                ?? (d["primaryTone"] as? String)
-                ?? ((d["analysis"] as? [String: Any])?["tone"] as? String)
-                ?? ((d["extras"] as? [String: Any])?["tone"] as? String)
-                ?? ((d["extras"] as? [String: Any])?["tone"] as? String)
 
-            self.throttledLog("🎯 Extracted tone: '\(detectedTone ?? "nil")'", category: "tone_debug")
-            completion(detectedTone)
+            // Check client sequence for last-writer-wins
+            let responseClientSeq = d["client_seq"] as? Int ?? -1
+            self.throttledLog("🎯 Response client_seq: \(responseClientSeq), current coordinator seq: \(self.clientSequence)", category: "tone_debug")
+
+            // Use new clamped tone string function - only returns alert|caution|clear|neutral
+            let uiTone = self.uiToneString(from: d)
+
+            #if DEBUG
+            // Guardrail: never leak raw labels to UI
+            assert(["alert", "caution", "clear", "neutral"].contains(uiTone))
+            #endif
+
+            // Get raw analysis for debugging
+            var rawTone = "unknown"
+            if let analysis = d["analysis"] as? [String: Any] {
+                rawTone = self.safeString(from: analysis, keys: ["primary_tone", "primaryTone"], fallback: "unknown")
+            }
+            if rawTone == "unknown" {
+                rawTone = self.safeString(from: d, keys: ["primary_tone", "tone"], fallback: "unknown")
+            }
+            
+            self.throttledLog("🎯 Extracted UI tone: '\(uiTone)' | raw=\(rawTone) seq=\(responseClientSeq)", category: "tone_debug")
+            completion(uiTone)
         }
     }
 

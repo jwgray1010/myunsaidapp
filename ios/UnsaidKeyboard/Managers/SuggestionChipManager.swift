@@ -31,28 +31,43 @@ final class SuggestionChipManager {
     func showSuggestion(text: String, tone: ToneStatus) {
         guard let containerView = containerView else { return }
 
-        // Dismiss existing chip if any
-        dismissCurrentChip()
+        // ✅ COALESCE DUPLICATES: Don't re-show the same chip, just refresh tone styling
+        if let active = activeChip, active.getCurrentSuggestion() == text {
+            // Optionally update tone color in-place instead of re-presenting
+            active.presentSuggestion(text, tone: tone)  // just refresh styling
+            return
+        }
 
-        // Create new chip
+        // ✅ SEQUENCE ANIMATIONS: If there is an active chip, dismiss and present the new one after animation
+        if let old = activeChip {
+            old.onDismissed = { [weak self] in
+                self?.presentNewChip(text: text, tone: tone, in: containerView)
+            }
+            old.dismiss(animated: true)
+            activeChip = nil
+            return
+        }
+
+        presentNewChip(text: text, tone: tone, in: containerView)
+    }
+
+    private func presentNewChip(text: String, tone: ToneStatus, in containerView: UIView) {
         let chip = SuggestionChipView()
         chip.setPreview(text: text, tone: tone, textHash: String(text.hashValue))
-
+        
         // Avoid retain cycles: the chip owns these closures
-        chip.onExpanded = { [weak self, weak chip] in
-            guard let self, let chip = chip else { return }
+        chip.onExpanded = { [weak self, weak chip] in 
+            guard let self, let chip else { return }
             self.delegate?.suggestionChipDidExpand(chip)
         }
         chip.onDismiss = { [weak self, weak chip] in
-            guard let self, let chip = chip else { return }
+            guard let self, let chip else { return }
             self.delegate?.suggestionChipDidDismiss(chip)
-            // Note: chip dismisses itself, no need for extra dismissCurrentChip() call
             self.activeChip = nil
         }
 
-        containerView.addSubview(chip)
-        activeChip = chip
-
+        containerView.addSubview(chip) // layout first
+        
         // Position chip - prefer under suggestion bar, fallback to bottom
         if let bar = suggestionBar {
             NSLayoutConstraint.activate([
@@ -61,14 +76,14 @@ final class SuggestionChipManager {
                 chip.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8)
             ])
         } else {
-            // Fallback to bottom positioning with larger inset for home indicator
             NSLayoutConstraint.activate([
                 chip.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
                 chip.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
                 chip.bottomAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.bottomAnchor, constant: -16)
             ])
         }
-
+        
+        activeChip = chip
         chip.present(in: containerView)
     }
 
@@ -83,18 +98,21 @@ final class SuggestionChipManager {
             return
         }
         
-        let tone: ToneStatus
-        switch toneString.lowercased() {
-        case "alert": tone = .alert
-        case "caution": tone = .caution
-        case "clear": tone = .clear
-        default: tone = .neutral
-        }
-        showSuggestion(text: text, tone: tone)
+        showSuggestion(text: text, tone: tone(from: toneString))
         
         // Mark tutorial as shown if this was a tutorial message
         if isTutorialMessage(text) {
             markTutorialAsShown()
+        }
+    }
+    
+    // ✅ CENTRALIZED TONE MAPPING: Single source of truth for string→ToneStatus conversion
+    private func tone(from s: String) -> ToneStatus {
+        switch s.lowercased() {
+        case "alert": return .alert
+        case "caution": return .caution
+        case "clear": return .clear
+        default: return .neutral
         }
     }
     
@@ -107,7 +125,8 @@ final class SuggestionChipManager {
                lowercased.contains("run tone analysis")
     }
 
-    func configure(suggestionBar: UIView, toneButton: UIButton) {
+    // ✅ CLEANUP: Remove unused toneButton parameter to avoid confusion
+    func configure(suggestionBar: UIView) {
         self.suggestionBar = suggestionBar
     }
     

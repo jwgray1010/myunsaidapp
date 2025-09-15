@@ -160,6 +160,9 @@ final class KeyboardController: UIInputView,
     private var hapticIdleTimer: DispatchSourceTimer?
     private let hapticSessionTimeout: TimeInterval = 10.0 // Stop session after 10s of inactivity
     
+    // Instant feedback generator for crisp tap response
+    private let instantFeedback = UIImpactFeedbackGenerator(style: .light)
+    
     // MARK: - Debounce & Coalesce
     private var analyzeTask: Task<Void, Never>?
     
@@ -171,7 +174,7 @@ final class KeyboardController: UIInputView,
             }
             guard let self, let coordinator = self.coordinator else { return }
             await MainActor.run {
-                self.logger.info("🧠 Debounced analyze: '\(String(text.prefix(60)), privacy: .public)…'")
+                self.logger.info("🧠 Debounced analyze: '\(String(text.prefix(60)))…'")
                 coordinator.handleTextChange(text)
             }
         }
@@ -184,8 +187,11 @@ final class KeyboardController: UIInputView,
         scheduleAnalysis(for: text, urgent: urgent)
     }
     
-    // Unified haptic feedback method
+    // Unified haptic feedback method with instant micro-haptics
     private func performHapticFeedback() {
+        // IMMEDIATE micro-haptic for crisp touch response
+        instantFeedback.impactOccurred(intensity: 0.8)
+        
         // Ensure haptic session is started for the typing run
         if !isHapticSessionStarted {
             coordinator?.startHapticSession()
@@ -267,6 +273,7 @@ final class KeyboardController: UIInputView,
     
     // Tone tracking for SecureFix gating
     private var lastToneStatusString: String = "neutral"
+    private var currentUITone: ToneStatus = .neutral
 
     // Layout constants
     private let verticalSpacing: CGFloat = 8
@@ -334,7 +341,7 @@ final class KeyboardController: UIInputView,
     let test = AppGroups.shared
     test.set(true, forKey: "groupRoundtrip")
     let ok = test.bool(forKey: "groupRoundtrip")
-        logger.info("App Group roundtrip ok: \(ok, privacy: .public)")
+        logger.info("App Group roundtrip ok: \(ok)")
         
         // Debug API configuration
         let extBundle = Bundle(for: KeyboardController.self)
@@ -363,6 +370,9 @@ final class KeyboardController: UIInputView,
 
     private func commonInit() {
         dbg("🔧 KeyboardController.commonInit() starting...")
+        
+        // Prepare instant haptic feedback for crisp response
+        instantFeedback.prepare()
         
         dbg("🔧 Setting up delegates...")
         setupDelegates()
@@ -516,7 +526,7 @@ final class KeyboardController: UIInputView,
         performHapticFeedback()
         
         // Log the correction
-        logger.info("📝 Applied spell correction: '\(lastWord, privacy: .public)' → '\(correction, privacy: .public)'")
+        logger.info("📝 Applied spell correction: '\(lastWord)' → '\(correction)'")
         
         // Notify spell checker delegate - applyCorrection method not available
         // The spell checker integration handles corrections automatically
@@ -547,7 +557,7 @@ final class KeyboardController: UIInputView,
     }
     
     func showUsageLimitAlert(message: String) {
-        suggestionChipManager.showSuggestionChip(text: message, toneString: "caution")
+        suggestionChipManager.showSuggestion(text: message, tone: .caution)  // Type-safe
     }
 
     // MARK: - Host Traits Sync
@@ -641,6 +651,9 @@ final class KeyboardController: UIInputView,
         self.toneButtonBackground = toneButtonBackground
         self.toneButton = toneButton
         self.undoButton = undoButton
+
+        // ✅ CRITICAL: Configure chip manager with suggestion bar so chips anchor properly
+        self.suggestionChipManager.configure(suggestionBar: pBar)
 
         // Create gradient layer
         let g = CAGradientLayer()
@@ -814,7 +827,7 @@ final class KeyboardController: UIInputView,
     // MARK: - Tone Status Management
 
     private func setToneStatus(_ tone: ToneStatus, animated: Bool = true) {
-        logger.info("🎯 setToneStatus called with: \(String(describing: tone), privacy: .public), animated: \(animated, privacy: .public)")
+        logger.info("🎯 setToneStatus called with: \(String(describing: tone)), animated: \(animated)")
         guard let bg = toneButtonBackground else {
             logger.warning("🎯 No tone button background found!")
             return
@@ -824,7 +837,7 @@ final class KeyboardController: UIInputView,
             return
         } // skip redundant work
         currentTone = tone
-        logger.info("🎯 Updating tone button to: \(String(describing: tone), privacy: .public)")
+        logger.info("🎯 Updating tone button to: \(String(describing: tone))")
 
         // Destination visual state
         let gradientResult = gradientColors(for: tone)
@@ -1225,17 +1238,19 @@ final class KeyboardController: UIInputView,
     
     // MARK: - SecureFix enhanced feedback
     @objc private func secureFixTouchDown(_ button: UIButton) {
-        KeyButtonFactory.animateSecureFixPress(button)
+        // No-op; move brand animation into isHighlighted if needed
+        performHapticFeedback()
     }
     
     @objc private func secureFixTouchUp(_ button: UIButton) {
-        // SecureFix animation handled in touch down
+        // No-op
     }
 
     // MARK: - Visual feedback
     @objc private func buttonTouchDown(_ button: UIButton) {
-        KeyButtonFactory.animateButtonPress(button)
+        // Keep only preview; let KeyButton's isHighlighted drive animation
         keyPreviewManager.showKeyPreview(for: button)
+        performHapticFeedback()
     }
     
     @objc private func buttonTouchUp(_ button: UIButton) {
@@ -1243,12 +1258,14 @@ final class KeyboardController: UIInputView,
     }
     
     @objc private func specialButtonTouchDown(_ button: UIButton) {
-        KeyButtonFactory.animateSpecialButtonPress(button)
+        // No-op; rely on button.isHighlighted animation in the subclass
+        performHapticFeedback()
     }
     
     @objc private func specialButtonTouchUp(_ button: UIButton) {
-        // No special handling needed
+        // No-op
     }
+
 
     // MARK: - State updates
     private func updateShiftButtonAppearance() {
@@ -1328,7 +1345,7 @@ final class KeyboardController: UIInputView,
         spellCheckerIntegration.refreshSpellCandidates(for: currentText)
         
         // Trigger debounced tone analysis
-        logger.info("📝 Text changed, triggering debounced analysis: '\(String(self.currentText.prefix(50)), privacy: .public)...'")
+        logger.info("📝 Text changed, triggering debounced analysis: '\(String(self.currentText.prefix(50)))...'")
         triggerAnalysis(reason: "typing")
     }
     
@@ -1401,7 +1418,7 @@ final class KeyboardController: UIInputView,
 
     private func setToneStatusString(_ status: String) {
         // Keep logger interpolation simple and fully typed
-        logger.info("🎯 Setting tone status: \(status, privacy: .public)")
+        logger.info("🎯 Setting tone status: \(status)")
 
         switch status.lowercased() {
         case "alert":   setToneStatus(.alert)
@@ -1416,24 +1433,45 @@ final class KeyboardController: UIInputView,
         }
 
         // Disambiguate enum-to-string for os.Logger
-        logger.info("🎯 Tone status set to: \(String(describing: self.currentTone), privacy: .public)")
+        logger.info("🎯 Tone status set to: \(String(describing: self.currentTone))")
     }
 
     // MARK: - ToneSuggestionDelegate
     func didUpdateSuggestions(_ suggestions: [String]) {
-        logger.info("💡 Received suggestions: \(String(describing: suggestions), privacy: .public)")
+        logger.info("💡 Received suggestions: \(String(describing: suggestions))")
         guard let first = suggestions.first else { return }
-        suggestionChipManager.showSuggestionChip(text: first, toneString: lastToneStatusString)
-        secureFixManager.markAdviceShown(toneString: lastToneStatusString)
+        suggestionChipManager.showSuggestion(text: first, tone: currentUITone)  // Type-safe
+        secureFixManager.markAdviceShown(toneString: String(describing: currentUITone))
         quickFixButton?.alpha = 1.0
     }
 
-    func didUpdateToneStatus(_ status: String) {
-        logger.info("🎯 Received tone status: \(status, privacy: .public)")
-        logger.info("🎯 Current tone button exists: \((self.toneButton != nil), privacy: .public)")
-        logger.info("🎯 Current tone background exists: \((self.toneButtonBackground != nil), privacy: .public)")
-        lastToneStatusString = status
-        setToneStatusString(status)
+    func didUpdateToneStatus(_ tone: String) {
+        logger.info("🎯 Received tone status: \(tone)")
+        logger.info("🎯 Current tone button exists: \((self.toneButton != nil))")
+        logger.info("🎯 Current tone background exists: \((self.toneButtonBackground != nil))")
+        
+        // Belt-and-suspenders: clamp any leaked raw tones to UI tones
+        let mapped: String
+        switch tone.lowercased() {
+        case "alert", "caution", "clear", "neutral": 
+            mapped = tone.lowercased()
+        case "angry", "toxic", "abusive":          
+            mapped = "alert"
+        case "frustrated", "anxious", "sad", "tense", "passive_aggressive":
+            mapped = "caution"
+        default:                                 
+            mapped = "clear"
+        }
+        
+        // Convert clamped string to ToneStatus for internal use
+        let toneStatus = ToneStatus(rawValue: mapped) ?? .neutral
+        currentUITone = toneStatus
+        setToneStatus(toneStatus)
+        
+        // Update string for legacy compatibility where needed
+        lastToneStatusString = mapped
+        
+        logger.info("🎯 Mapped '\(tone)' to '\(mapped)' -> \(String(describing: toneStatus))")
     }
 
     func didUpdateSecureFixButtonState() {
@@ -1453,4 +1491,4 @@ final class KeyboardController: UIInputView,
     private func isFirstTimeUser() -> Bool {
         return isFirstLaunch
     }
-}
+                                }

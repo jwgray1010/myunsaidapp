@@ -13,6 +13,17 @@ import * as path from 'path';
 // Pin the function near your users for lower RTT
 export const config = { regions: ['iad1'] };
 
+type Bucket = 'clear'|'caution'|'alert';
+function pickUiTone(b: Record<Bucket, number>): Bucket | 'neutral' {
+  const vals = [b.clear ?? 0, b.caution ?? 0, b.alert ?? 0].sort((x,y)=>y-x);
+  const top = vals[0], mid = vals[1], low = vals[2];
+  // neutral only if all three are within 0.05
+  return (Math.abs(top - mid) <= 0.05 && Math.abs(top - low) <= 0.05)
+    ? 'neutral'
+    : (b.alert >= b.caution && b.alert >= b.clear) ? 'alert'
+    : (b.caution >= b.clear ? 'caution' : 'clear');
+}
+
 // Fire immediately at cold start
 const bootPromise = (async () => {
   await ensureBoot();              // loads JSON into memory
@@ -80,21 +91,41 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     // Add communication to profile history
     // profile.addCommunication(data.text, data.context, result.primary_tone);
     
-    // Map classifier → UI buckets used by the keyboard pill
-    const bucketed = mapToneToBuckets(
+    // Copilot: Final pill color must be 'alert' | 'caution' | 'clear' | 'neutral'.
+    // - Never set from raw labels like "angry"; labels only influence ui_distribution.
+    // - Use pickUiTone(ui_distribution) which returns 'neutral' only if all three buckets are within 0.05.
+    // - Always include { ui_tone, ui_distribution, buckets } in the response.
+    
+    // Map classifier → starting buckets (hint only; NOT the decider)
+    const baseMap = mapToneToBuckets(
       { classification: result.primary_tone, confidence: result.confidence },
-      // If you later surface attachment estimate, pass it; default to 'secure' for now.
       'secure',
       data.context || 'general'
     );
-    const uiBuckets = bucketed?.buckets || { clear: 1/3, caution: 1/3, alert: 1/3 };
-    const ui_tone = (Object.entries(uiBuckets).sort((a,b)=> (b[1] as number) - (a[1] as number))[0][0]) as 'clear'|'caution'|'alert';
+    let uiBuckets = baseMap?.buckets || { clear: 1/3, caution: 1/3, alert: 1/3 };
+
+    // Optional nudges from analysis context severity if present
+    const sev = (result as any).contextSeverity || { clear: 0, caution: 0, alert: 0 };
+    uiBuckets = {
+      clear: Math.max(0, (uiBuckets.clear ?? 0) + (sev.clear || 0)),
+      caution: Math.max(0, (uiBuckets.caution ?? 0) + (sev.caution || 0)),
+      alert: Math.max(0, (uiBuckets.alert ?? 0) + (sev.alert || 0)),
+    };
+    // Normalize
+    {
+      const s = uiBuckets.clear + uiBuckets.caution + uiBuckets.alert || 1;
+      uiBuckets.clear /= s; uiBuckets.caution /= s; uiBuckets.alert /= s;
+    }
+
+    // Final pill color via 3-way tie rule (neutral only when all three within .05)
+    const ui_tone = pickUiTone(uiBuckets);
 
     const processingTime = Date.now() - startTime;    logger.info('Advanced tone analysis completed', { 
       processingTime,
       tone: result.primary_tone,
       confidence: result.confidence,
       userId,
+      ui_tone,
       // attachment: attachmentEstimate.primary,
       // isNewUser
     });
@@ -111,6 +142,11 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       // ➕ UI fields used by the iOS pill:
       ui_tone,
       ui_distribution: uiBuckets,
+      buckets: uiBuckets,            // legacy alias for old clients
+      version: '1.0.0',
+      timestamp: new Date().toISOString(),
+      context: data.context || 'general',
+      intensity: result.intensity,   // helps clients smooth if they want
       // Echo client sequence for last-writer-wins on device (optional but helpful)
       client_seq: clientSeq,
       analysis: {

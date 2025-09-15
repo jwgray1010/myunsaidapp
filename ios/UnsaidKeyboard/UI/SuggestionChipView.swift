@@ -342,7 +342,8 @@ final class SuggestionChipView: UIControl {
     private func toneColors(_ tone: ToneStatus) -> (bg: UIColor, iconSystemName: String?, textColor: UIColor, iconColor: UIColor) {
         switch tone {
         case .neutral:
-            return ((UIColor.keyboardRose ?? .systemPink).withAlphaComponent(0.90), nil, .white, .white)
+            // ✅ NEUTRAL POLISH: Dimmed slightly to differentiate "FYI" from "fix this" states
+            return ((UIColor.keyboardRose ?? .systemPink).withAlphaComponent(0.82), nil, .white, .white)
         case .alert:
             return (UIColor.systemRed.withAlphaComponent(0.95), "exclamationmark.triangle.fill", .white, .white)
         case .caution:

@@ -667,7 +667,7 @@ class _SettingsScreenProfessionalState
                   SliverAppBar(
                     pinned: true,
                     expandedHeight:
-                        130, // Increased from 110 to prevent overflow
+                        100, // Reduced from 116 to make header smaller
                     actions: [
                       IconButton(
                         tooltip: 'Search settings',
@@ -1153,10 +1153,10 @@ class _StickyHeader extends SliverPersistentHeaderDelegate {
   final Widget child;
 
   @override
-  double get minExtent => 48;
+  double get minExtent => 44; // Reduced from 48
 
   @override
-  double get maxExtent => 56;
+  double get maxExtent => 52; // Reduced from 56
 
   @override
   Widget build(
@@ -1170,7 +1170,10 @@ class _StickyHeader extends SliverPersistentHeaderDelegate {
       elevation: shrink > 0.1 ? 1 : 0,
       child: Container(
         height: maxExtent,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 6,
+        ), // Reduced from 8
         alignment: Alignment.centerLeft,
         decoration: BoxDecoration(
           border: shrink > 0.1

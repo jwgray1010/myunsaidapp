@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/keyboard_manager.dart';
 import '../services/secure_storage_service.dart';
 import '../services/personality_data_manager.dart';
+import '../services/auth_service.dart';
 import '../ui/unsaid_theme.dart';
 import '../ui/unsaid_widgets.dart';
 import 'settings_screen_professional.dart';
@@ -108,8 +109,18 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
         if (name != null && name.isNotEmpty) {
           _userName = name;
         } else {
-          // Keep "Friend" as fallback - could also try Firebase Auth here
-          _userName = 'Friend';
+          // Try Firebase Auth as fallback
+          try {
+            final currentUser = AuthService.instance.user;
+            if (currentUser?.displayName != null &&
+                currentUser!.displayName!.isNotEmpty) {
+              _userName = currentUser.displayName!;
+            } else {
+              _userName = 'Friend';
+            }
+          } catch (_) {
+            _userName = 'Friend';
+          }
         }
         final s = double.tryParse(sens ?? '');
         if (s != null) _sensitivity = s;
@@ -641,15 +652,14 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
             SliverAppBar(
               pinned: true,
               floating: false,
-              expandedHeight:
-                  220, // Increased height to accommodate content properly
+              expandedHeight: 180, // Reduced from 206 to make header smaller
               forceElevated: innerBoxIsScrolled,
               backgroundColor: Colors.transparent,
               elevation: 0,
               flexibleSpace: FlexibleSpaceBar(
                 titlePadding: EdgeInsetsDirectional.only(
                   start: 16,
-                  bottom: 56, // Reduced bottom padding to prevent overflow
+                  bottom: 36, // Reduced from 42 to match smaller header
                   top: MediaQuery.of(
                     context,
                   ).padding.top, // Add status bar padding
@@ -685,7 +695,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 16),
                     _StreakChip(streakDays: _computeStreakDays()),
                   ],
                 ),
@@ -720,6 +730,9 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
               AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 height: _showTabs ? kTextTabBarHeight : 0,
+                clipBehavior:
+                    Clip.hardEdge, // Prevent overflow during animation
+                decoration: const BoxDecoration(),
                 child: _showTabs
                     ? Container(
                         color: colorScheme.surface,

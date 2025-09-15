@@ -8,6 +8,14 @@
 import Foundation
 import UIKit
 
+// MARK: - Array Extension for uniqued()
+extension Array where Element: Hashable {
+    func uniqued() -> [Element] {
+        var seen = Set<Element>()
+        return filter { seen.insert($0).inserted }
+    }
+}
+
 protocol SpellCheckerIntegrationDelegate: AnyObject {
     func didUpdateSpellingSuggestions(_ suggestions: [String])
     func didApplySpellCorrection(_ correction: String, original: String)
@@ -29,7 +37,7 @@ final class SpellCheckerIntegration {
     // MARK: - Public Interface
     
     /// Refresh suggestions as the user types (mid-token).
-    /// Uses a cheap async path and coalesces in the checker to keep the extension responsive.
+    /// Uses completions for correct words, corrections for misspelled words - just like iOS.
     func refreshSpellCandidates(for fullText: String) {
         // Only look at the trailing slice to bound work and string bridging
         let text = fullText.suffix(trailingWindowLimit).description
@@ -48,13 +56,26 @@ final class SpellCheckerIntegration {
         }
         lastSuggestionsToken = lastWord
         
-        // Lightweight async: the checker coalesces internally.
-        spellChecker.quickSpellCheckAsync(text: text) { [weak self] suggestions in
-            guard let self = self else { return }
-            Task { @MainActor in
-                // Only publish if we're still looking at the same token
-                if self.lastSuggestionsToken == lastWord {
-                    self.delegate?.didUpdateSpellingSuggestions(Array(suggestions.prefix(3)))
+        // ✅ iOS-STYLE BEHAVIOR: If the token is currently *correct*, show completions; otherwise show corrections
+        if spellChecker.isWordCorrect(lastWord) {
+            spellChecker.quickCompletionsAsync(prefix: lastWord) { [weak self] comps in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    if self.lastSuggestionsToken == lastWord {
+                        self.delegate?.didUpdateSpellingSuggestions(Array(comps.prefix(3)))
+                    }
+                }
+            }
+        } else {
+            // For misspelled tokens, show corrections with "Keep" behavior
+            spellChecker.quickSpellCheckAsync(text: text) { [weak self] suggestions in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    if self.lastSuggestionsToken == lastWord {
+                        // ✅ CANDIDATE STRIP POLISH: Prepend original token as "Keep" option
+                        let uniq = Array([lastWord] + suggestions).uniqued().prefix(3)
+                        self.delegate?.didUpdateSpellingSuggestions(Array(uniq))
+                    }
                 }
             }
         }
@@ -104,15 +125,20 @@ final class SpellCheckerIntegration {
             if poppedBoundary { proxy.insertText(String(boundary)) }
             return
         }
-        
-        // Peek "next" token for bigram scoring if present (often empty at commit)
+
+        // ✅ CONTEXT-AWARE: Compute prev token (text before the last word)
+        let prevContextEnd = coreBefore.index(coreBefore.endIndex, offsetBy: -(lastWord.count), limitedBy: coreBefore.startIndex) ?? coreBefore.startIndex
+        let prevContext = String(coreBefore[..<prevContextEnd])
+        let prevToken = LightweightSpellChecker.lastToken(in: prevContext)
+
+        // Next token (usually empty at commit)
         let after = proxy.documentContextAfterInput ?? ""
         let nextToken = LightweightSpellChecker.lastToken(in: after)
-        
+
         // Unified decision: Apple-like behavior at commit boundary
         let decision = spellChecker.decide(
             for: lastWord,
-            prev: nil,
+            prev: prevToken,
             next: nextToken,
             langOverride: nil,
             isOnCommitBoundary: true

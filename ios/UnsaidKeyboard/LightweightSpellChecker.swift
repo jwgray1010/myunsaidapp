@@ -501,27 +501,70 @@ final class LightweightSpellChecker {
         return localCorrections(for: word).first
     }
 
-    // PATCH #1: allow short common fixes (e.g., Yoi → You)
-    func shouldAutoCorrect(_ word: String) -> Bool {
-        guard word.count >= 3 else { return false }
-        let w = word
-        if w == w.uppercased() { return false }
-        if w.prefix(1) == w.prefix(1).uppercased(), w.dropFirst() == w.dropFirst().lowercased() {
-            if FAST_TYPOS[w.lowercased()] == nil { return false }
-        }
-        if allowedWords().contains(word.lowercased()) { return false }
-        if isIntentionallyTyped(word) { return false }
-        guard !isWordCorrect(word) else { return false }
-        let corrections = localCorrections(for: word)
-        guard let first = corrections.first else { return false }
+    // ✅ iOS-STYLE COMPLETIONS: Show completions mid-word, corrections only when misspelled
+    #if canImport(UIKit)
+    func completions(forPartialWord prefix: String, language: String? = nil) -> [String] {
+        guard !prefix.isEmpty else { return [] }
+        let lang = resolvedLanguage(language)
+        let ns = prefix as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        let raw = textChecker.completions(forPartialWordRange: range, in: prefix, language: lang) ?? []
+        // Drop identical echo, preserve user casing
+        return raw
+            .filter { $0.caseInsensitiveCompare(prefix) != .orderedSame }
+            .prefix(3)
+            .map { matchCasing(of: prefix, to: $0) }
+    }
+    #else
+    func completions(forPartialWord prefix: String, language: String? = nil) -> [String] {
+        return []
+    }
+    #endif
 
-        // Acceptance learning fast path
-        let key = "\(word.lowercased())->\(first.lowercased())"
+    // Async helper (coalesced like quickSpellCheckAsync)
+    func quickCompletionsAsync(prefix: String, completion: @escaping ([String]) -> Void) {
+        workQueue.coalesced({
+            self.completions(forPartialWord: prefix)
+        }, deliver: completion)
+    }
+
+    // ✅ CONTEXT-AWARE AUTOCORRECT: Native iOS-like decisions with bigram scoring
+    func shouldAutoCorrect(_ word: String, prev: String? = nil, next: String? = nil) -> Bool {
+        let w = word
+        let lw = w.lowercased()
+        let len = lw.count
+
+        // Hard skips
+        if len < 3 { return false }
+        if allowedWords().contains(lw) || isIntentionallyTyped(w) || isWordCorrect(w) { return false }
+        if w == w.uppercased() { return false }             // ALLCAPS
+        if w.first?.isUppercase == true && len >= 3 { return false } // Likely ProperNoun
+
+        // Get best local correction
+        guard let best = localCorrections(for: w).first else { return false }
+        let bl = best.lowercased()
+        let d = editDistance(lw, bl)
+        let tapSlip = isLikelyTapSlip(lw, bl)
+        let isCommonTypo = FAST_TYPOS[lw] != nil
+        let ctxScore = bgScorer.score(prev: prev, cand: bl, next: next) // your tiny bigram table
+
+        // Native-like rules:
+        //  - Always allow 1-edit if it's a neighbor tap slip or known common typo.
+        if d == 1, (tapSlip || isCommonTypo) { return true }
+
+        //  - Allow some 2-edit on longer words when context supports it strongly.
+        if len >= 6, d == 2, ctxScore >= 10 { return true }
+
+        //  - Respect user acceptance history (your fast path)
+        let key = "\(lw)->\(bl)"
         if acceptanceCounts[key, default: 0] >= acceptanceBoostThreshold { return true }
 
-        let editDist = editDistance(word.lowercased(), first.lowercased())
-        let isCommonTypo = FAST_TYPOS[word.lowercased()] != nil
-        return editDist == 1 && isCommonTypo
+        return false
+    }
+
+    // Legacy overload for compatibility
+    func shouldAutoCorrect(_ word: String) -> Bool {
+        return shouldAutoCorrect(word, prev: nil, next: nil)
     }
 
     func requestSuggestions(for text: String, range: NSRange, completion: @escaping ([String]?) -> Void) {
@@ -565,8 +608,20 @@ final class LightweightSpellChecker {
         return e.count >= 1
     }
     private func markAutocorrected(_ word: String) { /* no-op by design */ }
+    
+    // ✅ STICKY REJECTION LEARNING: Remember repeated rejections like iOS
     private func markIntentional(_ word: String) {
-        intentionalWords[word.lowercased()] = IntentionalEntry(count: 1, lastSeen: CFAbsoluteTimeGetCurrent())
+        let key = word.lowercased()
+        var e = intentionalWords[key] ?? IntentionalEntry(count: 0, lastSeen: 0)
+        e.count += 1
+        e.lastSeen = CFAbsoluteTimeGetCurrent()
+        intentionalWords[key] = e
+
+        // After 3 rejections in the TTL window, ignore like iOS does
+        if e.count >= 3 {
+            userLex.ignore(key)               // persist in User Dictionary
+            intentionalWords.removeValue(forKey: key)
+        }
     }
 
     // MARK: - Capitalization / punctuation
@@ -1013,6 +1068,12 @@ final class LightweightSpellChecker {
         guard traitsWantsAutocorrect else { return Decision(replacement: nil, suggestions: [], applyAuto: false) }
         setDocumentPrimaryLanguage(langOverride)
 
+        // ✅ CODE CONTEXT GUARD: Don't autocorrect in code-like contexts
+        let fullContext = "\(prev ?? "") \(currentWord) \(next ?? "")"
+        if inCodeyContext(fullContext) {
+            return Decision(replacement: nil, suggestions: [], applyAuto: false)
+        }
+
         if isWordKnownByUser(currentWord) || allowedWords().contains(currentWord.lowercased()) {
             return Decision(replacement: nil, suggestions: [], applyAuto: false)
         }
@@ -1021,13 +1082,19 @@ final class LightweightSpellChecker {
             return Decision(replacement: multi.correction, suggestions: [multi.correction], applyAuto: true)
         }
 
-        let autoOkay = isOnCommitBoundary ? shouldAutoCorrect(currentWord) : false
+        let autoOkay = isOnCommitBoundary ? shouldAutoCorrect(currentWord, prev: prev, next: next) : false
         if autoOkay, let auto = getAutoCorrection(for: currentWord) {
             return Decision(replacement: auto, suggestions: [auto], applyAuto: true)
         }
 
         let enhanced = performEnhancedSpellCheck(text: currentWord, previousWord: prev, nextWord: next)
         return Decision(replacement: nil, suggestions: enhanced.map { $0.word }, applyAuto: false)
+    }
+
+    // ✅ DOMAIN GUARDS: Code/inline text detection
+    private func inCodeyContext(_ text: String) -> Bool {
+        let tail = text.suffix(20).lowercased()
+        return tail.contains("`") || tail.contains("```") || tail.contains("->") || tail.contains("::")
     }
 
     // MARK: - Utilities

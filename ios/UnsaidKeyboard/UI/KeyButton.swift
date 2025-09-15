@@ -21,12 +21,17 @@ final class KeyButton: UIButton {
         )
     }
     
-    // MARK: - Expanded Hit Area
+    // MARK: - Precision Hit Testing (Performance Optimized)
     
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        // Expand hit area by 8pt horizontally, 4pt vertically for better touch experience
-        let expandedBounds = bounds.insetBy(dx: -8, dy: -4)
-        return expandedBounds.contains(point)
+        // First check: Is this within our actual bounds?
+        guard bounds.contains(point) else { 
+            // Second check: Allow minimal edge extension for thumb-friendly taps
+            let edgeExtension: CGFloat = 2.0  // Reduced from 8pt to prevent overlaps
+            let expandedBounds = bounds.insetBy(dx: -edgeExtension, dy: -1)
+            return expandedBounds.contains(point)
+        }
+        return true  // Inside our real bounds = always accept
     }
     
     // MARK: - Performance Optimization
@@ -39,10 +44,15 @@ final class KeyButton: UIButton {
         }
     }
     
-    // MARK: - Touch Feedback
+    // MARK: - Touch Feedback (Performance Optimized)
     
     override var isHighlighted: Bool {
         didSet {
+            // Performance: Disable rasterization during animation to prevent hitches
+            if isHighlighted != oldValue {
+                layer.shouldRasterize = false
+            }
+            
             // Subtle press animation for tactile feedback
             let transform: CGAffineTransform = isHighlighted ? CGAffineTransform(scaleX: 0.96, y: 0.96) : .identity
             let alpha: CGFloat = isHighlighted ? 0.92 : 1.0
@@ -52,6 +62,12 @@ final class KeyButton: UIButton {
                            options: [.curveEaseInOut, .allowUserInteraction, .beginFromCurrentState]) {
                 self.transform = transform
                 self.alpha = alpha
+            } completion: { finished in
+                // Re-enable rasterization after animation completes for memory efficiency
+                if finished && !self.isHighlighted {
+                    self.layer.shouldRasterize = true
+                    self.layer.rasterizationScale = UIScreen.main.scale
+                }
             }
         }
     }
