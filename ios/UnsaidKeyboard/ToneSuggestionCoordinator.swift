@@ -784,15 +784,21 @@ final class ToneSuggestionCoordinator {
             self.consecutiveFailures = 0
 
             if let tone = toneResult {
+                self.throttledLog("🎯 API returned tone: '\(tone)', current: '\(self.currentToneStatus)'", category: "tone_debug")
                 DispatchQueue.main.async {
                     if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: tone) {
+                        self.throttledLog("🎯 Updating tone status from '\(self.currentToneStatus)' to '\(tone)'", category: "tone_debug")
                         self.currentToneStatus = tone
                         self.delegate?.didUpdateToneStatus(tone)
                         
                         // Update haptic feedback (throttled to 10 Hz)
                         self.updateHapticFeedback(for: tone)
+                    } else {
+                        self.throttledLog("🎯 Skipped tone update - shouldUpdateToneStatus returned false", category: "tone_debug")
                     }
                 }
+            } else {
+                self.throttledLog("🎯 API returned nil tone result", category: "tone_debug")
             }
 
             // NEW: only observe when edit change is meaningful (>= 3 chars)
@@ -1073,6 +1079,8 @@ final class ToneSuggestionCoordinator {
             guard requestID == self.latestRequestID else { completion(nil); return }
 
             let d = data ?? [:]
+            self.throttledLog("🎯 Tone API response: \(String(describing: d).prefix(200))", category: "tone_debug")
+            
             // Prefer server-provided UI bucket so the pill color matches server mapping
             let detectedTone =
                 (d["ui_tone"] as? String)
@@ -1081,6 +1089,7 @@ final class ToneSuggestionCoordinator {
                 ?? ((d["analysis"] as? [String: Any])?["tone"] as? String)
                 ?? ((d["extras"] as? [String: Any])?["tone"] as? String)
 
+            self.throttledLog("🎯 Extracted tone: '\(detectedTone ?? "nil")'", category: "tone_debug")
             completion(detectedTone)
         }
     }
@@ -1406,7 +1415,13 @@ final class ToneSuggestionCoordinator {
     // MARK: - Decisioning
     private func shouldUpdateToneStatus(from current: String, to new: String,
                                         improvementDetected: Bool? = nil, improvementScore: Double? = nil) -> Bool {
-        if new == current { return false }
+        self.throttledLog("🎯 shouldUpdateToneStatus: '\(current)' -> '\(new)'", category: "tone_debug")
+        
+        if new == current { 
+            self.throttledLog("🎯 Same tone, skipping update", category: "tone_debug")
+            return false 
+        }
+        
         func severity(_ s: String) -> Int {
             switch s {
             case "neutral": return 0
@@ -1417,14 +1432,34 @@ final class ToneSuggestionCoordinator {
             default: return 0
             }
         }
+        
         let cur = severity(current), nxt = severity(new)
-        if nxt > cur { lastEscalationAt = Date(); return true }
+        if nxt > cur { 
+            lastEscalationAt = Date()
+            self.throttledLog("🎯 Escalation detected (\(cur) -> \(nxt)), allowing update", category: "tone_debug")
+            return true 
+        }
+        
         let dwell: TimeInterval = 3.0
         if current == "alert" || current == "caution" {
-            if Date().timeIntervalSince(lastEscalationAt) < dwell { return false }
+            let timeSinceEscalation = Date().timeIntervalSince(lastEscalationAt)
+            if timeSinceEscalation < dwell { 
+                self.throttledLog("🎯 Dwell period active (\(String(format: "%.1f", timeSinceEscalation))s < \(dwell)s), skipping update", category: "tone_debug")
+                return false 
+            }
         }
-        if let imp = improvementDetected, imp, (improvementScore ?? 0) > 0.3 { return true }
-        if currentText.count + 3 < lastAnalyzedText.count { return true }
+        
+        if let imp = improvementDetected, imp, (improvementScore ?? 0) > 0.3 { 
+            self.throttledLog("🎯 Improvement detected, allowing update", category: "tone_debug")
+            return true 
+        }
+        
+        if currentText.count + 3 < lastAnalyzedText.count { 
+            self.throttledLog("🎯 Significant text reduction, allowing update", category: "tone_debug")
+            return true 
+        }
+        
+        self.throttledLog("🎯 Default case, allowing update", category: "tone_debug")
         return true
     }
 
