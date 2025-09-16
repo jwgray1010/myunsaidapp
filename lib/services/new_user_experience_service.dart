@@ -1,8 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'keyboard_manager.dart';
 import 'keyboard_data_service.dart';
+import 'trial_service.dart';
 
 /// Service to detect and manage new user experience across the app
+///
+/// IMPORTANT USAGE NOTES FOR UI DEVELOPERS:
+/// - Use hasToneAnalysisAccessSync() for initial UI rendering to prevent flickering
+/// - Use hasToneAnalysisAccess() for final validation before enabling features
+/// - Call refreshUserStatus() after user's first keyboard interaction
+/// - Tone button visibility should be gated by trial access, not just "new user" status
 class NewUserExperienceService extends ChangeNotifier {
   static final NewUserExperienceService _instance =
       NewUserExperienceService._internal();
@@ -14,16 +21,60 @@ class NewUserExperienceService extends ChangeNotifier {
   DateTime? _lastDataCheck;
 
   /// Checks if user is new (has no keyboard data)
-  bool get isNewUser => _isNewUser ?? true;
+  /// Defaults to false (optimistic) to prevent UI flickering
+  bool get isNewUser => _isNewUser ?? false;
 
   /// Gets total interactions from keyboard
   int get totalInteractions => _totalInteractions;
 
+  /// Check if user should have access to tone analysis features
+  /// This considers both trial/subscription status AND user data
+  Future<bool> hasToneAnalysisAccess() async {
+    // First check if user has trial/subscription access
+    final trialService = TrialService();
+    if (!trialService.hasToneAnalysisAccess) {
+      return false;
+    }
+
+    // If user has paid access, they can use tone analysis regardless of data
+    if (trialService.hasSubscription || trialService.isAdminMode) {
+      return true;
+    }
+
+    // For trial users, check if they have keyboard data (have actually used it)
+    await checkUserHasData();
+    return !isNewUser; // Only allow if they've generated some data
+  }
+
+  /// Synchronous check for tone analysis access (optimistic for UI)
+  /// Use this for initial UI rendering to avoid async delays
+  bool hasToneAnalysisAccessSync() {
+    final trialService = TrialService();
+
+    // If no trial access, definitely no access
+    if (!trialService.hasToneAnalysisAccess) {
+      return false;
+    }
+
+    // If user has paid access, they can use tone analysis
+    if (trialService.hasSubscription || trialService.isAdminMode) {
+      return true;
+    }
+
+    // For trial users, be optimistic - assume access unless we know they're new
+    // This prevents UI flickering while the async check completes
+    if (_isNewUser == null) {
+      return true; // Optimistic default
+    }
+
+    return !_isNewUser!;
+  }
+
   /// Check if user has started generating keyboard data
   Future<bool> checkUserHasData() async {
-    // Cache check for 30 seconds to avoid repeated calls
+    // Cache check for 5 seconds to reduce UI delay while preventing spam
     if (_lastDataCheck != null &&
-        DateTime.now().difference(_lastDataCheck!).inSeconds < 30) {
+        DateTime.now().difference(_lastDataCheck!).inSeconds < 5) {
       return !isNewUser;
     }
 
@@ -42,9 +93,10 @@ class NewUserExperienceService extends ChangeNotifier {
         interactions += ((meta['api_trial_count'] as num?) ?? 0).toInt();
       }
 
-      // 2) Fallback to local app history
+      // 2) Fallback to local app history using shared singleton
       if (interactions == 0) {
-        final km = KeyboardManager();
+        final km =
+            KeyboardManager(); // This correctly gets the singleton instance
         interactions = km.analysisHistory.length;
       }
 
@@ -142,5 +194,11 @@ class NewUserExperienceService extends ChangeNotifier {
   /// Clear cache to force fresh check
   void clearCache() {
     _lastDataCheck = null;
+  }
+
+  /// Force refresh user data status (useful after first keyboard usage)
+  Future<void> refreshUserStatus() async {
+    clearCache();
+    await checkUserHasData();
   }
 }

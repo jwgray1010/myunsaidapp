@@ -665,9 +665,12 @@ class _SettingsScreenProfessionalState
             : CustomScrollView(
                 slivers: [
                   SliverAppBar(
-                    pinned: true,
+                    pinned:
+                        false, // Allow header to disappear when scrolling down
+                    floating: true, // Reappear when scrolling up
+                    snap: false,
                     expandedHeight:
-                        80, // Increased height to properly display "Settings" text
+                        120, // Increased height for better visibility at top
                     actions: [
                       IconButton(
                         tooltip: 'Search settings',
@@ -691,16 +694,25 @@ class _SettingsScreenProfessionalState
                       child: Align(
                         alignment: Alignment.bottomLeft,
                         child: Padding(
-                          padding: const EdgeInsets.all(AppTheme.spaceLG),
+                          padding: const EdgeInsets.only(
+                            left: AppTheme.spaceLG,
+                            right: AppTheme.spaceLG,
+                            bottom:
+                                AppTheme.spaceLG +
+                                10, // Extra bottom padding for larger header
+                            top: AppTheme.spaceLG,
+                          ),
                           child: Row(
                             children: [
                               const Icon(Icons.settings, color: Colors.white),
                               const SizedBox(width: 12),
                               Text(
                                 'Settings',
-                                style: theme.textTheme.headlineSmall?.copyWith(
+                                style: theme.textTheme.headlineMedium?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
+                                  fontSize:
+                                      28, // Increased font size for larger header
                                 ),
                               ),
                             ],

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'admin_service.dart';
 
 /// Service to manage the 7-day free trial period
 class TrialService extends ChangeNotifier {
@@ -121,6 +122,32 @@ class TrialService extends ChangeNotifier {
     await _loadTrialState();
     await _checkTrialStatus();
     await _checkDailyReset();
+
+    // Automatically enable admin mode for admin users
+    await _checkAndEnableAdminMode();
+  }
+
+  /// Check if current user is an admin and automatically enable admin mode
+  Future<void> _checkAndEnableAdminMode() async {
+    try {
+      // Refresh admin status from AdminService
+      await AdminService.instance.refreshAdminStatus();
+
+      // If user is an admin, enable admin mode
+      if (AdminService.instance.isCurrentUserAdmin && !_isAdminMode) {
+        await enableAdminMode();
+        if (kDebugMode) {
+          print(
+            '🔧 Admin user detected - automatically enabled admin mode for: ${AdminService.instance.getCurrentUserEmail()}',
+          );
+        }
+      }
+    } catch (e) {
+      // Silently fail - admin mode is not critical for app functionality
+      if (kDebugMode) {
+        print('⚠️ Failed to check admin status: $e');
+      }
+    }
   }
 
   /// Use one secure fix (decrements daily count)

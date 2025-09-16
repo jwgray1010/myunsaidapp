@@ -139,6 +139,12 @@ class TrialManager {
 
   // Mock premium status check - in production would integrate with Stripe/payment processor
   private checkPremiumStatus(userId: string, userEmail?: string | null): boolean {
+    // Admin users always have premium access
+    const adminEmails = ['jwgray165@gmail.com', 'jwgray4219425@gmail.com'];
+    if (userEmail && adminEmails.includes(userEmail.toLowerCase().trim())) {
+      return true;
+    }
+
     // Mock: For demo purposes, let's say users with email containing "premium" have paid
     // In production, this would check your payment processor (Stripe, etc.)
     if (userEmail && userEmail.includes('premium')) {

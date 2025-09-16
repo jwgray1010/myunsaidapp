@@ -6,7 +6,10 @@ import Flutter
   // Dedicated engine so SceneDelegate can always attach a view controller.
   lazy var flutterEngine: FlutterEngine = {
     let engine = FlutterEngine(name: "primary_engine")
+
+    // Run the engine with default configuration
     engine.run()
+
     // Register generated plugins directly with the engine.
     GeneratedPluginRegistrant.register(with: engine)
     // Register custom bridges on the engine.

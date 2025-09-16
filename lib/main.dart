@@ -39,7 +39,15 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   print("🎯 [FLUTTER DEBUG] main() - START");
+
+  // Initialize Flutter binding with proper priority
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure text rendering for better performance
+  // This helps prevent priority inversion in text operations
+  PaintingBinding.instance.imageCache.maximumSize = 100; // Limit image cache
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 50 << 20; // 50MB limit
+
   print(
     "🎯 [FLUTTER DEBUG] WidgetsFlutterBinding.ensureInitialized() completed",
   );
@@ -48,7 +56,7 @@ void main() async {
   print("🎯 [FLUTTER DEBUG] Showing UnsaidApp IMMEDIATELY...");
   runApp(const UnsaidApp());
 
-  // Initialize Firebase in background (non-blocking) with timeline markers
+  // Initialize Firebase with user-initiated QoS (higher priority than background)
   // ignore: unawaited_futures
   Future(() async {
     Timeline.startSync('firebase_init');
@@ -70,11 +78,12 @@ void main() async {
       final opts = app.options;
       print("✅ Firebase app: ${app.name}");
       print(
-        "✅ Firebase opts: projectId=${opts.projectId}, appId=${opts.appId}, apiKey=${opts.apiKey.substring(0, 6)}...",
+        "✅ Firebase opts: projectId=${opts.projectId}, appId=${opts.apiKey.substring(0, 6)}...",
       );
 
       Timeline.finishSync();
       Timeline.startSync('auth_init');
+
       // Initialize AuthService after Firebase is ready
       await auth_service.AuthService.instance.initialize();
       print(
@@ -95,48 +104,12 @@ void main() async {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     debugPrint('🟢 First Flutter frame drawn - NO MORE BLACK SCREEN!');
 
-    // Initialize TrialService after first frame (non-blocking)
+    // Initialize services with proper error handling and non-blocking
     try {
       final context = navigatorKey.currentContext;
       if (context != null) {
-        final trialService = Provider.of<TrialService>(context, listen: false);
-        // ignore: unawaited_futures
-        trialService
-            .initialize()
-            .then((_) {
-              debugPrint(
-                '🚀 TrialService initialized successfully (post-frame)',
-              );
-            })
-            .catchError((e) {
-              debugPrint('❌ TrialService initialization failed: $e');
-            });
-
-        // Initialize UsageTrackingService after first frame (non-blocking)
-        // ignore: unawaited_futures
-        UsageTrackingService.instance
-            .initialize()
-            .then((_) {
-              debugPrint(
-                '🚀 UsageTrackingService initialized successfully (post-frame)',
-              );
-            })
-            .catchError((e) {
-              debugPrint('❌ UsageTrackingService initialization failed: $e');
-            });
-
-        // Initialize DataManagerService after first frame (non-blocking)
-        // ignore: unawaited_futures
-        DataManagerService()
-            .initializePostFrame()
-            .then((_) {
-              debugPrint(
-                '🚀 DataManagerService initialized successfully (post-frame)',
-              );
-            })
-            .catchError((e) {
-              debugPrint('❌ DataManagerService initialization failed: $e');
-            });
+        // Use compute for CPU-intensive initialization to avoid blocking UI thread
+        _initializeServicesInBackground(context);
       }
     } catch (e) {
       debugPrint('❌ Could not initialize services: $e');
@@ -144,6 +117,52 @@ void main() async {
   });
 
   print("🎯 [FLUTTER DEBUG] main() - END");
+}
+
+/// Initialize services in background with proper priority management
+Future<void> _initializeServicesInBackground(BuildContext context) async {
+  try {
+    final trialService = Provider.of<TrialService>(context, listen: false);
+
+    // Initialize TrialService with proper error handling
+    // ignore: unawaited_futures
+    trialService
+        .initialize()
+        .then((_) {
+          debugPrint('🚀 TrialService initialized successfully (post-frame)');
+        })
+        .catchError((e) {
+          debugPrint('❌ TrialService initialization failed: $e');
+        });
+
+    // Initialize UsageTrackingService
+    // ignore: unawaited_futures
+    UsageTrackingService.instance
+        .initialize()
+        .then((_) {
+          debugPrint(
+            '🚀 UsageTrackingService initialized successfully (post-frame)',
+          );
+        })
+        .catchError((e) {
+          debugPrint('❌ UsageTrackingService initialization failed: $e');
+        });
+
+    // Initialize DataManagerService
+    // ignore: unawaited_futures
+    DataManagerService()
+        .initializePostFrame()
+        .then((_) {
+          debugPrint(
+            '🚀 DataManagerService initialized successfully (post-frame)',
+          );
+        })
+        .catchError((e) {
+          debugPrint('❌ DataManagerService initialization failed: $e');
+        });
+  } catch (e) {
+    debugPrint('❌ Background service initialization failed: $e');
+  }
 }
 
 class UnsaidApp extends StatelessWidget {

@@ -6,6 +6,10 @@
 	<string>group.com.example.unsaid</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>UIApplicationPreferredContentSizeCategory</key>
+	<string>UICTContentSizeCategoryLarge</string>
+	<key>UIThreadPriority</key>
+	<integer>1</integer>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

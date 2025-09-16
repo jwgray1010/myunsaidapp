@@ -893,31 +893,32 @@ final class ToneSuggestionCoordinator {
                 // Enforce the latch: while text is non-empty, never go back to neutral
                 let trimmed = self.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
                 if tone == "neutral", self.neutralBlockActive, !trimmed.isEmpty {
-                    self.throttledLog("Neutral blocked by latch (still have text)", category: "tone_debug")
+                    self.throttledLog("🎯 NEUTRAL BLOCKED: latch active + text exists", category: "tone_debug")
                     return
                 }
                 
                 DispatchQueue.main.async {
                     if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: tone) {
-                        self.throttledLog("🎯 Updating tone status from '\(self.currentToneStatus)' to '\(tone)'", category: "tone_debug")
+                        self.throttledLog("🎯 ✅ UPDATING TONE: '\(self.currentToneStatus)' -> '\(tone)'", category: "tone_debug")
                         self.currentToneStatus = tone
+                        self.throttledLog("🎯 🔄 CALLING DELEGATE: didUpdateToneStatus('\(tone)')", category: "tone_debug")
                         self.delegate?.didUpdateToneStatus(tone)  // Pass string directly
                         
                         // Once we've shown a non-neutral tone, activate the block
                         if tone != "neutral" { self.neutralBlockActive = true }
                         
                         // KEY DEBUG LINE - this is the canary that shows UI update is called
-                        self.throttledLog("UI tone set to \(tone) | raw=\(tone) seq=-1", category: "tone_debug")
+                        self.throttledLog("🎯 ✅ UI TONE SET: \(tone)", category: "tone_debug")
                         
                         // Update haptic feedback (throttled to 10 Hz)
                         self.updateHapticFeedback(for: tone)
                     } else {
-                        self.throttledLog("🎯 Skipped tone update - shouldUpdateToneStatus returned false", category: "tone_debug")
+                        self.throttledLog("🎯 ❌ BLOCKED: shouldUpdateToneStatus returned false", category: "tone_debug")
                     }
                 }
             } else {
                 // No update on failure/skip — keep whatever is showing
-                self.throttledLog("toneResult nil → leaving pill as \(self.currentToneStatus)", category: "tone_debug")
+                self.throttledLog("🎯 ❌ NIL RESULT: leaving pill as \(self.currentToneStatus)", category: "tone_debug")
             }
 
             // NEW: only observe when edit change is meaningful (>= 3 chars)
@@ -1733,12 +1734,12 @@ final class ToneSuggestionCoordinator {
         
         // NEW: latch policy - prevent neutral when text exists and latch is active
         if new == "neutral", neutralBlockActive, !currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throttledLog("🎯 shouldUpdateToneStatus: neutral blocked by latch", category: "tone_debug")
+            throttledLog("🎯 ❌ NEUTRAL LATCH: blocked (text exists, latch active)", category: "tone_debug")
             return false
         }
         
         if new == current { 
-            self.throttledLog("🎯 Same tone, skipping update", category: "tone_debug")
+            self.throttledLog("🎯 ❌ SAME TONE: skipping update", category: "tone_debug")
             return false 
         }
         
@@ -1756,7 +1757,7 @@ final class ToneSuggestionCoordinator {
         let cur = severity(current), nxt = severity(new)
         if nxt > cur { 
             lastEscalationAt = Date()
-            self.throttledLog("🎯 Escalation detected (\(cur) -> \(nxt)), allowing update", category: "tone_debug")
+            self.throttledLog("🎯 ✅ ESCALATION: (\(cur) -> \(nxt)) allowing update", category: "tone_debug")
             return true 
         }
         
@@ -1764,22 +1765,22 @@ final class ToneSuggestionCoordinator {
         if current == "alert" || current == "caution" {
             let timeSinceEscalation = Date().timeIntervalSince(lastEscalationAt)
             if timeSinceEscalation < dwell { 
-                self.throttledLog("🎯 Dwell period active (\(String(format: "%.1f", timeSinceEscalation))s < \(dwell)s), skipping update", category: "tone_debug")
+                self.throttledLog("🎯 ❌ DWELL: \(String(format: "%.1f", timeSinceEscalation))s < \(dwell)s", category: "tone_debug")
                 return false 
             }
         }
         
         if let imp = improvementDetected, imp, (improvementScore ?? 0) > 0.3 { 
-            self.throttledLog("🎯 Improvement detected, allowing update", category: "tone_debug")
+            self.throttledLog("🎯 ✅ IMPROVEMENT: detected, allowing update", category: "tone_debug")
             return true 
         }
         
         if currentText.count + 3 < lastAnalyzedText.count { 
-            self.throttledLog("🎯 Significant text reduction, allowing update", category: "tone_debug")
+            self.throttledLog("🎯 ✅ TEXT REDUCTION: significant change, allowing update", category: "tone_debug")
             return true 
         }
         
-        self.throttledLog("🎯 Default case, allowing update", category: "tone_debug")
+        self.throttledLog("🎯 ✅ DEFAULT: allowing update", category: "tone_debug")
         return true
     }
 
@@ -1853,18 +1854,14 @@ final class ToneSuggestionCoordinator {
         }
     }
 
-    // MARK: - ToneStreamDelegate (commented out for compilation)
-    /*
-    func onToneData(_ intensity: Float, _ sharpness: Float) {
-        isStreamEnabled = true
-        
-        // TODO: Implement when dependencies are available
+    // MARK: - Debug Methods
+    #if DEBUG
+    /// Public method to trigger tone analysis for debugging
+    func debugTriggerToneAnalysis() {
+        throttledLog("🔍 Debug: Manually triggering tone analysis", category: "debug")
+        performTextUpdate()
     }
-    
-    func onToneEnd() {
-        isStreamEnabled = false
-    }
-    */
+    #endif
 }
 
 /*

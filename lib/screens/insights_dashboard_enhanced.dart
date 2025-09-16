@@ -650,20 +650,21 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
           controller: _scrollController,
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             SliverAppBar(
-              pinned: true,
-              floating: false,
+              pinned: false, // Allow header to disappear when scrolling down
+              floating: true, // Reappear when scrolling up
+              snap: false,
               expandedHeight:
-                  90, // Further reduced height to fix scrolling pixel issues
+                  140, // Increased height for better visibility at top
               forceElevated: innerBoxIsScrolled,
               backgroundColor: Colors.transparent,
               elevation: 0,
               flexibleSpace: FlexibleSpaceBar(
                 titlePadding: EdgeInsetsDirectional.only(
                   start: 16,
-                  bottom: 16, // Adjusted for smaller header
-                  top: MediaQuery.of(
-                    context,
-                  ).padding.top, // Add status bar padding
+                  bottom: 20, // Increased bottom padding for larger header
+                  top:
+                      MediaQuery.of(context).padding.top +
+                      10, // Add more top padding for larger header
                 ),
                 title: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -692,7 +693,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
                             fontWeight: FontWeight.w700,
                             letterSpacing: -0.2,
                             fontSize:
-                                18, // Slightly smaller font for compact header
+                                22, // Increased font size for larger header
                           ),
                         ),
                       ],

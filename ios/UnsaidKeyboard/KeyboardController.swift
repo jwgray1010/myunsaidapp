@@ -708,6 +708,11 @@ final class KeyboardController: UIInputView,
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(testToneIndicatorManually))
         longPress.minimumPressDuration = 2.0
         toneButton.addGestureRecognizer(longPress)
+        
+        // Add double tap for manual tone analysis trigger
+        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(debugTriggerAnalysis))
+        doubleTap.numberOfTapsRequired = 2
+        toneButton.addGestureRecognizer(doubleTap)
         #endif
 
         // ✅ CRITICAL: Configure chip manager with suggestion bar so chips anchor properly
@@ -924,6 +929,9 @@ final class KeyboardController: UIInputView,
 
     private func setToneStatus(_ tone: ToneStatus, animated: Bool = true) {
         logger.info("🎯 setToneStatus called with: \(String(describing: tone)), animated: \(animated)")
+        logger.info("🎯 Current tone button: exists=\(self.toneButton != nil), visible=\(self.toneButton?.isHidden == false)")
+        logger.info("🎯 Current tone background: exists=\(self.toneButtonBackground != nil), visible=\(self.toneButtonBackground?.isHidden == false)")
+        
         guard let bg = toneButtonBackground else {
             logger.warning("🎯 No tone button background found!")
             return
@@ -1629,6 +1637,11 @@ final class KeyboardController: UIInputView,
     
     // MARK: - Debug Testing
     #if DEBUG
+    @objc private func debugTriggerAnalysis() {
+        logger.info("🔍 Debug: Double-tap detected, triggering manual tone analysis")
+        debugTriggerToneAnalysis()
+    }
+    
     @objc private func testToneIndicatorManually() {
         // Test all tones in sequence for visual verification
         logger.info("🧪 Testing tone indicator manually...")
@@ -1684,6 +1697,32 @@ final class KeyboardController: UIInputView,
         }
     }
     #endif
+
+    // MARK: - Debug Methods
+    #if DEBUG
+    /// Manually trigger tone analysis for debugging
+    func debugTriggerToneAnalysis() {
+        logger.info("🔍 Debug: Manually triggering tone analysis")
+        coordinator?.debugTriggerToneAnalysis()
+    }
+    
+    /// Force a specific tone for testing
+    func debugForceTone(_ tone: String) {
+        logger.info("🔥 Debug: Forcing tone to '\(tone)'")
+        DispatchQueue.main.async { [weak self] in
+            self?.didUpdateToneStatus(tone)
+        }
+    }
+    #endif
+
+    // MARK: - Tone Analysis Integration
+    
+    /// Bridge method to call updateToneFromAnalysis on the coordinator
+    /// This allows the KeyboardViewController to trigger tone updates from shared storage data
+    func updateToneFromAnalysis(_ analysis: [String: Any]) {
+        logger.info("🎯 KeyboardController: Bridging tone analysis update to coordinator")
+        coordinator?.updateToneFromAnalysis(analysis)
+    }
 
     func didUpdateSecureFixButtonState() {
         let remaining = secureFixManager.getRemainingSecureFixUses()
@@ -1750,4 +1789,4 @@ final class KeyboardController: UIInputView,
     private func isFirstTimeUser() -> Bool {
         return isFirstLaunch
     }
-                                }
+}

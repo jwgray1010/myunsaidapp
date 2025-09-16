@@ -17,7 +17,13 @@ interface TrialGuardConfig {
 const subscriptionStore: { [userId: string]: { active: boolean; expiresAt?: string } } = {};
 
 class TrialManager {
-  checkApiAccess(userId: string): { hasAccess: boolean; reason?: string; paymentUrl?: string } {
+  checkApiAccess(userId: string, userEmail?: string | null): { hasAccess: boolean; reason?: string; paymentUrl?: string } {
+    // Admin users always have access
+    const adminEmails = ['jwgray165@gmail.com', 'jwgray4219425@gmail.com'];
+    if (userEmail && adminEmails.includes(userEmail.toLowerCase().trim())) {
+      return { hasAccess: true };
+    }
+
     // Check premium subscription first
     const hasPremiumSubscription = this.checkPremiumStatus(userId);
     const trialStatus = this.getTrialStatus(userId);
@@ -84,6 +90,7 @@ export function withTrialGuard(config: TrialGuardConfig = {}) {
       const userId = auth?.userId || req.headers['x-user-id'] as string || 
                     req.query.userId as string || 
                     'anonymous';
+      const userEmail = auth?.userEmail;
 
       // Allow bypass for specific users (testing)
       if (config.bypassUsers?.includes(userId)) {
@@ -101,7 +108,7 @@ export function withTrialGuard(config: TrialGuardConfig = {}) {
       }
 
       // Check trial/payment status
-      const accessCheck = trialManager.checkApiAccess(userId);
+      const accessCheck = trialManager.checkApiAccess(userId, userEmail);
       
       if (!accessCheck.hasAccess) {
         logger.warn('API access denied - trial expired, payment required', { 

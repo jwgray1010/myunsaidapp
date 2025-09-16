@@ -2,15 +2,7 @@
 //  000_UnsaidSharedTypes.swift
 //  Unsaid
 //
-//  Essential share    /// SF Symbol name to use for the tone (nil for neutral).
-    var symbolName: String? {
-        switch self {
-        case .neutral: return nil
-        case .alert:   return nil
-        case .caution: return nil
-        case .clear:   return nil  // No checkmark either
-        }
-    }nd enums used across keyboard modules
+//  Essential shared types and enums used across keyboard modules
 //  Cleaned up to include only actively used types
 //
 //  Created by John Gray on 7/11/25.
