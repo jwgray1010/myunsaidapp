@@ -46,8 +46,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
   final _keyboard = KeyboardManager();
   final _personality = PersonalityDataManager.shared;
   final _scrollController = ScrollController();
-  bool _showTabs = true;
-  double _lastScrollPosition = 0.0;
+  bool _showTabs = true; // Always show tabs with pinned header
 
   String _userName = 'Friend';
   double _sensitivity = 0.5;
@@ -625,17 +624,11 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
   }
 
   void _onScroll() {
-    final currentPosition = _scrollController.position.pixels;
-    final delta = currentPosition - _lastScrollPosition;
-
-    // Show tabs when scrolling up, hide when scrolling down
-    if (delta > 10 && _showTabs) {
-      setState(() => _showTabs = false);
-    } else if (delta < -10 && !_showTabs) {
+    // With pinned header, we can simplify scroll behavior
+    // Keep tabs always visible since header stays at top
+    if (!_showTabs) {
       setState(() => _showTabs = true);
     }
-
-    _lastScrollPosition = currentPosition;
   }
 
   @override
@@ -650,78 +643,81 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
           controller: _scrollController,
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             SliverAppBar(
-              pinned: false, // Allow header to disappear when scrolling down
-              floating: true, // Reappear when scrolling up
+              pinned: true, // Keep header pinned at top - no scrolling away
+              floating: false, // Don't float back in when scrolling up
               snap: false,
               expandedHeight:
                   140, // Increased height for better visibility at top
               forceElevated: innerBoxIsScrolled,
               backgroundColor: Colors.transparent,
               elevation: 0,
-              flexibleSpace: FlexibleSpaceBar(
-                titlePadding: EdgeInsetsDirectional.only(
-                  start: 16,
-                  bottom: 20, // Increased bottom padding for larger header
-                  top:
-                      MediaQuery.of(context).padding.top +
-                      10, // Add more top padding for larger header
-                ),
-                title: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: UnsaidPalette.textPrimaryDark
-                              .withOpacity(0.2),
-                          child: Text(
-                            _userName.isNotEmpty
-                                ? _userName[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              color: UnsaidPalette.textPrimaryDark,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Welcome, $_userName',
-                          style: TextStyle(
-                            color: UnsaidPalette.textPrimaryDark,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.2,
-                            fontSize:
-                                22, // Increased font size for larger header
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8), // Reduced spacing
-                    _StreakChip(streakDays: _computeStreakDays()),
-                  ],
-                ),
-                background: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [colorScheme.primary, colorScheme.tertiary],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+              flexibleSpace: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [colorScheme.primary, colorScheme.tertiary],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  child: Align(
-                    alignment: Alignment.bottomRight,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: IconButton(
-                        icon: Icon(
-                          Icons.refresh,
-                          color: UnsaidPalette.textPrimaryDark,
+                ),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    backgroundColor: UnsaidPalette
+                                        .textPrimaryDark
+                                        .withOpacity(0.2),
+                                    child: Text(
+                                      _userName.isNotEmpty
+                                          ? _userName[0].toUpperCase()
+                                          : '?',
+                                      style: TextStyle(
+                                        color: UnsaidPalette.textPrimaryDark,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Welcome, $_userName',
+                                      style: TextStyle(
+                                        color: UnsaidPalette.textPrimaryDark,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.2,
+                                        fontSize: 22,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                Icons.refresh,
+                                color: UnsaidPalette.textPrimaryDark,
+                              ),
+                              onPressed: _onRefreshAll,
+                              tooltip: 'Refresh all data',
+                            ),
+                          ],
                         ),
-                        onPressed: _onRefreshAll,
-                        tooltip: 'Refresh all data',
-                      ),
+                        const SizedBox(height: 8),
+                        _StreakChip(streakDays: _computeStreakDays()),
+                      ],
                     ),
                   ),
                 ),
@@ -730,30 +726,22 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
           ],
           body: Column(
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                height: _showTabs ? kTextTabBarHeight : 0,
-                clipBehavior:
-                    Clip.hardEdge, // Prevent overflow during animation
-                decoration: const BoxDecoration(),
-                child: _showTabs
-                    ? Container(
-                        color: colorScheme.surface,
-                        child: TabBar(
-                          controller: _tabs,
-                          labelColor: Colors.black,
-                          unselectedLabelColor: Colors.black.withOpacity(0.7),
-                          indicatorColor: UnsaidPalette.blush,
-                          onTap: (_) => HapticFeedback.lightImpact(),
-                          tabs: const [
-                            Tab(text: 'Secure'),
-                            Tab(text: 'Analytics'),
-                            Tab(text: 'Therapy'),
-                            Tab(text: 'Settings'),
-                          ],
-                        ),
-                      )
-                    : const SizedBox.shrink(),
+              Container(
+                height: kTextTabBarHeight,
+                color: colorScheme.surface,
+                child: TabBar(
+                  controller: _tabs,
+                  labelColor: Colors.black,
+                  unselectedLabelColor: Colors.black.withOpacity(0.7),
+                  indicatorColor: UnsaidPalette.blush,
+                  onTap: (_) => HapticFeedback.lightImpact(),
+                  tabs: const [
+                    Tab(text: 'Secure'),
+                    Tab(text: 'Analytics'),
+                    Tab(text: 'Therapy'),
+                    Tab(text: 'Settings'),
+                  ],
+                ),
               ),
               Expanded(
                 child: TabBarView(
@@ -799,7 +787,12 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 100, // Add generous bottom padding to prevent overflow
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -810,6 +803,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
             _quickActions(),
             const SizedBox(height: 16),
             _toneSummaryCard(),
+            const SizedBox(height: 40), // Extra space at bottom
           ],
         ),
       ),
@@ -1248,7 +1242,12 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
     final history = _keyboard.analysisHistory;
     if (history.isEmpty) {
       return SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 100, // Add generous bottom padding to prevent overflow
+        ),
         child: Column(
           children: [
             UnsaidCard(
@@ -1341,7 +1340,12 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
     }
     final recent = history.take(20).toList();
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: 100, // Add generous bottom padding to prevent overflow
+      ),
       itemCount: recent.length,
       itemBuilder: (ctx, i) {
         final m = recent[i];
@@ -1444,7 +1448,12 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
 
   // Therapy Tab
   Widget _therapyTab() => SingleChildScrollView(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.only(
+      left: 16,
+      right: 16,
+      top: 16,
+      bottom: 100, // Add generous bottom padding to prevent overflow
+    ),
     child: Column(
       children: [
         UnsaidCard(
