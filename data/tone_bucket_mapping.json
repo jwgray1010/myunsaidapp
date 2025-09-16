@@ -1,6 +1,6 @@
 {
   "version": "2.1.0",
-  "notes": "Production-hardened: explicit apply order, threshold modes, normalization, premium fallbacks, diversity/cooldown, sampling, telemetry, and validation constraints. Backward compatible with v2.0.",
+  "notes": "Production-hardened and backward compatible. toneBuckets/base feeds AdviceEngine.resolveToneBucket. bucketPolicies holds alert/caution/clear suggestion rules. Context overrides and intensity shifts included for stability.",
   "defaultBucket": "general_support",
 
   "engine": {
@@ -15,12 +15,12 @@
       "topk_sampling"
     ],
     "combination": {
-      "contextMode": "additive",           
-      "attachmentMode": "additive",      
-      "normalizeMode": "l1"               
+      "contextMode": "additive",
+      "attachmentMode": "additive",
+      "normalizeMode": "l1"
     },
     "thresholds": {
-      "mode": "soft"                     
+      "mode": "soft"
     },
     "premium": {
       "nonPremiumFallbacks": {
@@ -31,13 +31,13 @@
     },
     "sampling": {
       "topK": 3,
-      "temperature": 0.25,                  
-      "minWeight": 0.02                    
+      "temperature": 0.25,
+      "minWeight": 0.02
     },
     "diversity": {
       "cooldownMs": 30000,
       "historyWindow": 5,
-      "repeatPenalty": 0.15,                
+      "repeatPenalty": 0.15,
       "dedupeByAdviceTag": true
     },
     "telemetry": {
@@ -58,25 +58,41 @@
     }
   },
 
-  "default": {
-    "angry":        { "clear": 0.10, "caution": 0.30, "alert": 0.60 },
-    "frustrated":   { "clear": 0.15, "caution": 0.45, "alert": 0.40 },
-    "anxious":      { "clear": 0.20, "caution": 0.60, "alert": 0.20 },
-    "sad":          { "clear": 0.25, "caution": 0.60, "alert": 0.15 },
-    "assertive":    { "clear": 0.40, "caution": 0.40, "alert": 0.20 },
-    "positive":     { "clear": 0.80, "caution": 0.15, "alert": 0.05 },
-    "supportive":   { "clear": 0.85, "caution": 0.12, "alert": 0.03 },
-    "neutral":      { "clear": 0.50, "caution": 0.30, "alert": 0.20 },
-    "tentative":    { "clear": 0.30, "caution": 0.60, "alert": 0.10 },
-    "confident":    { "clear": 0.60, "caution": 0.25, "alert": 0.15 },
-    "negative":     { "clear": 0.20, "caution": 0.50, "alert": 0.30 },
-    "safety_concern": { "clear": 0.05, "caution": 0.25, "alert": 0.70 }
+  "toneBuckets": {
+    "angry":        { "base": { "clear": 0.10, "caution": 0.30, "alert": 0.60 } },
+    "frustrated":   { "base": { "clear": 0.15, "caution": 0.45, "alert": 0.40 } },
+    "anxious":      { "base": { "clear": 0.20, "caution": 0.60, "alert": 0.20 } },
+    "sad":          { "base": { "clear": 0.25, "caution": 0.60, "alert": 0.15 } },
+    "assertive":    { "base": { "clear": 0.40, "caution": 0.40, "alert": 0.20 } },
+    "positive":     { "base": { "clear": 0.80, "caution": 0.15, "alert": 0.05 } },
+    "supportive":   { "base": { "clear": 0.85, "caution": 0.12, "alert": 0.03 } },
+    "neutral":      { "base": { "clear": 0.50, "caution": 0.30, "alert": 0.20 } },
+    "tentative":    { "base": { "clear": 0.30, "caution": 0.60, "alert": 0.10 } },
+    "confident":    { "base": { "clear": 0.60, "caution": 0.25, "alert": 0.15 } },
+    "negative":     { "base": { "clear": 0.20, "caution": 0.50, "alert": 0.30 } },
+    "safety_concern": { "base": { "clear": 0.05, "caution": 0.25, "alert": 0.70 } }
   },
 
-  "toneBuckets": {
+  "contextOverrides": {
+    "conflict": {
+      "angry": { "alert": 0.03, "caution": -0.02 }
+    },
+    "repair": {
+      "sad": { "clear": 0.02, "caution": 0.01 }
+    }
+  },
+
+  "intensityShifts": {
+    "thresholds": { "low": 0.15, "med": 0.35, "high": 0.60 },
+    "low":  { "clear": 0.01, "caution": 0.00, "alert": -0.01 },
+    "med":  { "clear": -0.01, "caution": 0.02, "alert": -0.01 },
+    "high": { "clear": -0.03, "caution": 0.00, "alert": 0.03 }
+  },
+
+  "bucketPolicies": {
     "alert": {
       "confidenceThreshold": 0.25,
-      "thresholdMode": "inherit",           
+      "thresholdMode": "inherit",
       "intensityFactor": 1.20,
       "categories": ["conflict", "rupture", "anger", "shutdown"],
       "suggestionBuckets": [
@@ -155,7 +171,6 @@
     "affirmation":        { "description": "Promotes praise, reassurance, or secure affirmations", "adviceTags": ["praise","affirmation"], "rewriteStyles": ["add_affection","highlight_strength"] },
     "expansion":          { "description": "Promotes curiosity and expanding the dialogue", "adviceTags": ["curiosity","openness"], "rewriteStyles": ["add_question","invite_deeper"] },
     "secure_fix":         { "description": "Default secure attachment rewrite bucket", "adviceTags": ["secure","balanced"], "rewriteStyles": ["direct_secure_fix"] },
-
     "reassurance":        { "description": "Addresses insecurity directly with stable reassurance", "adviceTags": ["reassure"], "rewriteStyles": ["direct_reassure"] },
     "autonomy_respect":   { "description": "Signals respect for space/independence", "adviceTags": ["autonomy","respect"], "rewriteStyles": ["acknowledge_space"] },
     "containment":        { "description": "Contain emotional flooding with concise structure", "adviceTags": ["contain","structure"], "rewriteStyles": ["tighten_message"] },
@@ -163,7 +178,6 @@
     "grounding":          { "description": "Nervous-system downshift before repair", "adviceTags": ["ground","self_regulate"], "rewriteStyles": ["breath_then_text"] },
     "direct_repair":      { "description": "Secure, direct repair attempt", "adviceTags": ["repair","secure"], "rewriteStyles": ["direct_apology"] },
     "gratitude":          { "description": "Name specific appreciations", "adviceTags": ["gratitude"], "rewriteStyles": ["add_specific_thanks"] },
-    "praise":             { "description": "Noticing strengths & efforts", "adviceTags": ["praise"], "rewriteStyles": ["call_out_strength"]
-    }
+    "praise":             { "description": "Noticing strengths & efforts", "adviceTags": ["praise"], "rewriteStyles": ["call_out_strength"] }
   }
 }

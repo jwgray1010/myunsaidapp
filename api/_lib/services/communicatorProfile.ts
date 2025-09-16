@@ -20,6 +20,7 @@ export interface ProfileData {
     timestamp: Date;
   }>;
   learningSignals: Record<string, any>;
+  learningSignalConfigs: Record<string, any>;
   preferences: {
     contexts: string[];
     suggestionTypes: string[];
@@ -40,6 +41,7 @@ export class CommunicatorProfile {
       userId: this.userId,
       communicationHistory: [],
       learningSignals: {},
+      learningSignalConfigs: {},
       preferences: {
         contexts: ['general'],
         suggestionTypes: ['advice', 'empathy'],
@@ -60,10 +62,16 @@ export class CommunicatorProfile {
       const learningSignalsData = dataLoader.getLearningSignals();
       const learningSignals = learningSignalsData?.signals || [];
       
-      this.data.learningSignals = learningSignals.reduce((acc: Record<string, any>, signal: any) => {
+      // Store signal configurations separately from user counters
+      this.data.learningSignalConfigs = learningSignals.reduce((acc: Record<string, any>, signal: any) => {
         acc[signal.signalType] = signal;
         return acc;
       }, {} as Record<string, any>);
+      
+      // Initialize user counters with zeros (separate from configs)
+      const baseCounters = { anxious: 0, avoidant: 0, disorganized: 0, secure: 0, daysObserved: 0 };
+      const raw = dataLoader.getLearningSignals(); // allow { counters?: {…} } in your JSON
+      this.data.learningSignals = { ...baseCounters, ...(raw?.counters || {}) };
 
       logger.info('CommunicatorProfile initialized', { 
         userId: this.userId,

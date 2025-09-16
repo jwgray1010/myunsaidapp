@@ -173,34 +173,33 @@ final class KeyboardController: UIInputView,
     // MARK: - Debounce & Coalesce
     private var analyzeTask: Task<Void, Never>?
     
-    // Performance Optimization #6: Guard analysis scheduling during backoff
-    private func shouldEnqueueAnalysis() -> Bool {
-        guard let coordinator = coordinator else { return false }
-        return coordinator.shouldAttemptAnalysis()
+    // MARK: - Router Pattern for Sentence-Aware Analysis
+    
+    /// Captures the full text snapshot from the document proxy
+    private func snapshotFullText() -> String {
+        guard let proxy = textDocumentProxy else { return "" }
+        let before = proxy.documentContextBeforeInput ?? ""
+        let after = proxy.documentContextAfterInput ?? ""
+        return before + after
     }
     
-    private func scheduleAnalysis(for text: String, urgent: Bool = false) {
-        // Don't even queue work if network is in backoff
-        guard shouldEnqueueAnalysis() else { return }
+    /// Router method that calls the new sentence-aware coordinator API
+    private func scheduleAnalysisRouter(lastInserted: String? = nil, isDeletion: Bool = false, urgent: Bool = false) {
+        guard let coordinator = coordinator else { return }
         
         analyzeTask?.cancel()
         analyzeTask = Task { [weak self] in
             if !urgent {
                 try? await Task.sleep(nanoseconds: 220_000_000) // 220ms idle pause
             }
-            guard let self, let coordinator = self.coordinator else { return }
+            guard let self = self else { return }
+            
             await MainActor.run {
-                self.logger.info("🧠 Debounced analyze: '\(String(text.prefix(60)))…'")
-                coordinator.handleTextChange(text)
+                let fullText = self.snapshotFullText()
+                self.logger.info("🔄 Router analysis: '\(String(fullText.prefix(60)))…' inserted='\(lastInserted ?? "none")' deletion=\(isDeletion)")
+                coordinator.onTextChanged(fullText: fullText, lastInserted: lastInserted, isDeletion: isDeletion)
             }
         }
-    }
-    
-    private func triggerAnalysis(reason: String = "typing") {
-        let text = self.currentText
-        // Urgent if last char closes a sentence or user tapped the tone button
-        let urgent = text.last.map({ ".!?".contains($0) }) ?? false
-        scheduleAnalysis(for: text, urgent: urgent)
     }
     
     // Unified haptic feedback method with instant micro-haptics
@@ -480,13 +479,15 @@ final class KeyboardController: UIInputView,
         
         proxy.deleteBackward()
         performHapticFeedback()
-        textDidChange()
+        // Use router pattern for sentence-aware analysis after deletion
+        scheduleAnalysisRouter(lastInserted: nil, isDeletion: true, urgent: false)
     }
     
     func performDeleteTick() {
         guard let proxy = textDocumentProxy else { return }
         proxy.deleteBackward()
-        textDidChange()
+        // Use router pattern for sentence-aware analysis after deletion
+        scheduleAnalysisRouter(lastInserted: nil, isDeletion: true, urgent: false)
     }
     
     func hapticLight() {
@@ -567,8 +568,8 @@ final class KeyboardController: UIInputView,
         }
         proxy.insertText(correction)
         
-        // Update our text state
-        handleTextChange()
+        // Update our text state using router pattern
+        scheduleAnalysisRouter(lastInserted: correction, isDeletion: false, urgent: true)
         
         // Trigger haptic feedback
         performHapticFeedback()
@@ -792,8 +793,8 @@ final class KeyboardController: UIInputView,
             self?.applySpellCorrection(correction)
         }
 
-        // Start with neutral tone - ensure button is visible
-        setToneStatus(.neutral)
+        // Don't set initial neutral - let coordinator emit first real tone
+        // setToneStatus(.neutral) // REMOVED: was forcing neutral on startup
         
         // Force immediate visibility check
         if let button = self.toneButton {
@@ -1305,17 +1306,22 @@ final class KeyboardController: UIInputView,
             updateKeycaps()
         }
         
-        textDidChange()
+        // Use router pattern for sentence-aware analysis
+        let urgent = ".!?".contains(title) // Urgent if punctuation that might end sentence
+        scheduleAnalysisRouter(lastInserted: textToInsert, isDeletion: false, urgent: urgent)
     }
     
     @objc private func handleSpaceKey() {
         spaceHandler.handleSpaceKey()
+        // Use router pattern for sentence-aware analysis after space insertion
+        scheduleAnalysisRouter(lastInserted: " ", isDeletion: false, urgent: false)
     }
     
     @objc private func handleReturnKey() {
         guard let proxy = textDocumentProxy else { return }
         proxy.insertText("\n")
-        textDidChange() // This will call updateShiftForContext
+        // Use router pattern for sentence-aware analysis after return insertion
+        scheduleAnalysisRouter(lastInserted: "\n", isDeletion: false, urgent: true) // Urgent for new line
     }
     
     @objc private func handleGlobeKey() {
@@ -1477,19 +1483,12 @@ final class KeyboardController: UIInputView,
         // Ensure tone button is visible when text changes (analysis may update it)
         ensureToneButtonVisible()
         
-        handleTextChange()
+        // Use router pattern for sentence-aware analysis
+        scheduleAnalysisRouter(lastInserted: nil, isDeletion: false, urgent: false)
         updateShiftForContext()
     }
     
-    private func handleTextChange() {
-        updateCurrentText()
-        refreshContext()
-        spellCheckerIntegration.refreshSpellCandidates(for: currentText)
-        
-        // Trigger debounced tone analysis
-        logger.info("📝 Text changed, triggering debounced analysis: '\(String(self.currentText.prefix(50)))...'")
-        triggerAnalysis(reason: "typing")
-    }
+
     
     private func updateCurrentText() {
         guard let proxy = textDocumentProxy else {
@@ -1512,7 +1511,7 @@ final class KeyboardController: UIInputView,
 
         if !fullText.isEmpty, !didInitialSwitchAnalyze {
             didInitialSwitchAnalyze = true
-            scheduleAnalysis(for: currentText, urgent: true)
+            scheduleAnalysisRouter(lastInserted: nil, isDeletion: false, urgent: true)
         }
     }
 
@@ -1566,7 +1565,9 @@ final class KeyboardController: UIInputView,
         case "alert":   setToneStatus(.alert)
         case "caution": setToneStatus(.caution)
         case "clear":   setToneStatus(.clear)
-        default:        setToneStatus(.neutral)
+        default:        
+            // Don't force neutral on unknown status - retain last tone
+            dbg("[tone_debug] Unknown status '\(status)' - retaining current tone")
         }
 
         // Avoid optional-chain interpolation ambiguity; assign plainly
@@ -1748,8 +1749,8 @@ final class KeyboardController: UIInputView,
         // Always give crisp feedback
         pressPop()
 
-        // Kick an immediate analysis
-        scheduleAnalysis(for: currentText, urgent: true)
+        // Kick an immediate analysis using router pattern
+        scheduleAnalysisRouter(lastInserted: nil, isDeletion: false, urgent: true)
 
         // If tone is risky, fetch suggestions too
         if currentTone == .alert || currentTone == .caution {
