@@ -122,7 +122,6 @@ final class KeyboardController: UIInputView,
                                 UIInputViewAudioFeedback,
                                 UIGestureRecognizerDelegate,
                                 DeleteManagerDelegate,
-                                SuggestionChipManagerDelegate,
                                 SpaceHandlerDelegate,
                                 SpellCheckerIntegrationDelegate,
                                 SecureFixManagerDelegate {
@@ -136,7 +135,7 @@ final class KeyboardController: UIInputView,
     private let keyPreviewManager = KeyPreviewManager()
     private let spaceHandler = SpaceHandler()
     private let secureFixManager = SecureFixManager()
-    private lazy var suggestionChipManager = SuggestionChipManager(containerView: self)
+    private lazy var suggestionChipManager = SuggestionChipManager(keyboardController: self)
     
     // Services (Logic, async, networking)
     private let spellCheckerIntegration = SpellCheckerIntegration()
@@ -174,7 +173,7 @@ final class KeyboardController: UIInputView,
         analyzeTask?.cancel()
         analyzeTask = Task { [weak self] in
             if !urgent {
-                try? await Task.sleep(nanoseconds: 220_000_000) // 220ms idle pause
+                try? await Task.sleep(nanoseconds: 150_000_000) // 150ms idle pause (reduced from 220ms)
             }
             guard let self, let coordinator = self.coordinator else { return }
             await MainActor.run {
@@ -185,10 +184,24 @@ final class KeyboardController: UIInputView,
     }
     
     private func triggerAnalysis(reason: String = "typing") {
-        let text = self.currentText
-        // Urgent if last char closes a sentence or user tapped the tone button
-        let urgent = text.last.map({ ".!?".contains($0) }) ?? false
-        scheduleAnalysis(for: text, urgent: urgent)
+        let text = self.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let previousText = self.previousTextForDeletion.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Trigger analysis after every word (when space is added) or sentence ending
+        let wordCount = text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
+        let previousWordCount = previousText.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
+        let hasSentenceEnding = text.contains(where: { ".!?".contains($0) })
+        
+        // Detect word deletion: fewer words than before
+        let wordDeleted = previousWordCount > wordCount && previousWordCount > 0
+
+        // Analyze when we have at least 1 complete word, sentence ending, or word was deleted
+        let shouldAnalyze = wordCount >= 1 || hasSentenceEnding || wordDeleted
+
+        if shouldAnalyze {
+            let urgent = hasSentenceEnding || wordDeleted // Urgent for sentence endings and deletions
+            scheduleAnalysis(for: self.currentText, urgent: urgent)
+        }
     }
     
     // Unified haptic feedback method with instant micro-haptics
@@ -274,6 +287,7 @@ final class KeyboardController: UIInputView,
 
     // Text cache
     private var currentText: String = ""
+    private var previousTextForDeletion: String = ""  // Track previous text to detect deletions
     
     // Tone tracking for SecureFix gating
     private var lastToneStatusString: String = "neutral"
@@ -368,18 +382,6 @@ final class KeyboardController: UIInputView,
         
         // Test network connectivity immediately (don't let this affect UI visibility)
         coordinator?.forceImmediateAnalysis("ping")
-        
-        // Manual tone indicator test for debugging
-        #if DEBUG
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            self?.testToneIndicatorManually()
-        }
-        
-        // Test API with debug text to force non-neutral response
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
-            self?.coordinator?.testToneAPIWithDebugText()
-        }
-        #endif
     }
     
     deinit {
@@ -419,7 +421,6 @@ final class KeyboardController: UIInputView,
     private func setupDelegates() {
         // Setup all manager delegates
         deleteManager.delegate = self
-        suggestionChipManager.delegate = self
         spaceHandler.delegate = self
         spellCheckerIntegration.delegate = self
         secureFixManager.delegate = self
@@ -478,10 +479,9 @@ final class KeyboardController: UIInputView,
     func hapticLight() {
         performHapticFeedback()
     }
-
-    // MARK: - SuggestionChipManagerDelegate
-    func suggestionChipDidExpand(_ chip: SuggestionChipView) {
-        // Handle expansion analytics
+    
+    // MARK: - Suggestion Chip Methods
+    func performHapticForChipExpansion() {
         performHapticFeedback()
     }
     
@@ -703,18 +703,6 @@ final class KeyboardController: UIInputView,
         logger.info("ToneButton: state -> visible, alpha=\(toneButton.alpha), hidden=\(toneButton.isHidden)")
         #endif
 
-        // Add long press gesture for debug testing
-        #if DEBUG
-        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(testToneIndicatorManually))
-        longPress.minimumPressDuration = 2.0
-        toneButton.addGestureRecognizer(longPress)
-        
-        // Add double tap for manual tone analysis trigger
-        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(debugTriggerAnalysis))
-        doubleTap.numberOfTapsRequired = 2
-        toneButton.addGestureRecognizer(doubleTap)
-        #endif
-
         // ✅ CRITICAL: Configure chip manager with suggestion bar so chips anchor properly
         self.suggestionChipManager.configure(suggestionBar: pBar)
 
@@ -736,16 +724,9 @@ final class KeyboardController: UIInputView,
 
         // Add actions
         toneButton.addAction(UIAction { [weak self] _ in
-            // Keep 'force analyze' on the tone button as requested
-            self?.scheduleAnalysis(for: self?.currentText ?? "", urgent: true)
+            // Request suggestions when tone button is tapped
+            self?.coordinator?.requestSuggestions()
             self?.pressPop()
-            
-            // DEBUG: Test tone indicator on tap (remove this after testing)
-            #if DEBUG
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.forceToneTest("alert")
-            }
-            #endif
         }, for: .touchUpInside)
 
         undoButton.addAction(UIAction { [weak self] _ in
@@ -828,13 +809,6 @@ final class KeyboardController: UIInputView,
                 #endif
             }
         }
-        
-        // Debug UI state after setup
-        #if DEBUG
-        DispatchQueue.main.async { [weak self] in
-            self?.debugToneUIState()
-        }
-        #endif
         
         // Apply accessibility improvements
         applyAccessibility()
@@ -1481,6 +1455,9 @@ final class KeyboardController: UIInputView,
     }
     
     private func handleTextChange() {
+        // Store previous text before updating for deletion detection
+        previousTextForDeletion = currentText
+        
         updateCurrentText()
         refreshContext()
         spellCheckerIntegration.refreshSpellCandidates(for: currentText)
@@ -1635,86 +1612,6 @@ final class KeyboardController: UIInputView,
         }
     }
     
-    // MARK: - Debug Testing
-    #if DEBUG
-    @objc private func debugTriggerAnalysis() {
-        logger.info("🔍 Debug: Double-tap detected, triggering manual tone analysis")
-        debugTriggerToneAnalysis()
-    }
-    
-    @objc private func testToneIndicatorManually() {
-        // Test all tones in sequence for visual verification
-        logger.info("🧪 Testing tone indicator manually...")
-        
-        DispatchQueue.main.async { [weak self] in
-            self?.didUpdateToneStatus("alert") // Should turn red & pulse
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.didUpdateToneStatus("caution") // Should turn yellow
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
-            self?.didUpdateToneStatus("clear") // Should turn green
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
-            self?.didUpdateToneStatus("neutral") // Should turn white
-        }
-    }
-    
-    // Quick manual test - call this from anywhere to test a specific tone
-    func testSpecificTone(_ tone: String) {
-        logger.info("🧪 Manual tone test: \(tone)")
-        didUpdateToneStatus(tone)
-    }
-    
-    // Test if the UI components exist and are properly configured
-    func debugToneUIState() {
-        logger.info("🔍 Tone UI Debug State:")
-        logger.info("  - toneButton exists: \(self.toneButton != nil)")
-        logger.info("  - toneButtonBackground exists: \(self.toneButtonBackground != nil)")
-        logger.info("  - toneGradient exists: \(self.toneGradient != nil)")
-        logger.info("  - currentTone: \(String(describing: self.currentTone))")
-        
-        if let bg = self.toneButtonBackground {
-            logger.info("  - background alpha: \(String(describing: bg.alpha))")
-            logger.info("  - background frame: \(String(describing: bg.frame))")
-            logger.info("  - background transform: \(String(describing: bg.transform))")
-        }
-        
-        if let gradient = self.toneGradient {
-            logger.info("  - gradient frame: \(String(describing: gradient.frame))")
-            logger.info("  - gradient colors count: \(String(describing: gradient.colors?.count ?? 0))")
-        }
-    }
-    
-    // Force immediate tone test - bypasses all analysis
-    func forceToneTest(_ tone: String) {
-        logger.info("🔥 Force tone test: \(tone)")
-        DispatchQueue.main.async { [weak self] in
-            self?.didUpdateToneStatus(tone)
-        }
-    }
-    #endif
-
-    // MARK: - Debug Methods
-    #if DEBUG
-    /// Manually trigger tone analysis for debugging
-    func debugTriggerToneAnalysis() {
-        logger.info("🔍 Debug: Manually triggering tone analysis")
-        coordinator?.debugTriggerToneAnalysis()
-    }
-    
-    /// Force a specific tone for testing
-    func debugForceTone(_ tone: String) {
-        logger.info("🔥 Debug: Forcing tone to '\(tone)'")
-        DispatchQueue.main.async { [weak self] in
-            self?.didUpdateToneStatus(tone)
-        }
-    }
-    #endif
-
     // MARK: - Tone Analysis Integration
     
     /// Bridge method to call updateToneFromAnalysis on the coordinator

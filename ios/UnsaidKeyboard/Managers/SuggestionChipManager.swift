@@ -9,14 +9,8 @@ import UIKit
 import Foundation
 
 @MainActor
-protocol SuggestionChipManagerDelegate: AnyObject {
-    func suggestionChipDidExpand(_ chip: SuggestionChipView)
-    func suggestionChipDidDismiss(_ chip: SuggestionChipView)
-}
-
-@MainActor
 final class SuggestionChipManager {
-    weak var delegate: SuggestionChipManagerDelegate?
+    private weak var keyboardController: KeyboardController?
     private weak var containerView: UIView?
     private weak var suggestionBar: UIView?
     private var activeChip: SuggestionChipView?
@@ -24,8 +18,9 @@ final class SuggestionChipManager {
     // First-time user tutorial management
     private static let tutorialShownKey = "UnsaidKeyboardTutorialShown"
 
-    init(containerView: UIView) {
+    init(containerView: UIView, keyboardController: KeyboardController) {
         self.containerView = containerView
+        self.keyboardController = keyboardController
     }
 
     func showSuggestion(text: String, tone: ToneStatus) {
@@ -90,11 +85,11 @@ final class SuggestionChipManager {
         // Avoid retain cycles: the chip owns these closures
         chip.onExpanded = { [weak self, weak chip] in 
             guard let self, let chip else { return }
-            self.delegate?.suggestionChipDidExpand(chip)
+            self.keyboardController?.suggestionChipDidExpand(chip)
         }
         chip.onDismiss = { [weak self, weak chip] in
             guard let self, let chip else { return }
-            self.delegate?.suggestionChipDidDismiss(chip)
+            self.keyboardController?.suggestionChipDidDismiss(chip)
             if self.activeChip === chip { 
                 #if DEBUG
                 print("🗑️ ChipManager: Clearing active chip reference (user dismissed)")

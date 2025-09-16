@@ -670,7 +670,7 @@ class _SettingsScreenProfessionalState
                     floating: true, // Reappear when scrolling up
                     snap: false,
                     expandedHeight:
-                        120, // Increased height for better visibility at top
+                        100, // Reduced height for more compact header
                     actions: [
                       IconButton(
                         tooltip: 'Search settings',
@@ -691,31 +691,29 @@ class _SettingsScreenProfessionalState
                           colors: [Color(0xFF7B61FF), Color(0xFF9C27B0)],
                         ),
                       ),
-                      child: Align(
-                        alignment: Alignment.bottomLeft,
+                      child: SafeArea(
                         child: Padding(
-                          padding: const EdgeInsets.only(
-                            left: AppTheme.spaceLG,
-                            right: AppTheme.spaceLG,
-                            bottom:
-                                AppTheme.spaceLG +
-                                10, // Extra bottom padding for larger header
-                            top: AppTheme.spaceLG,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppTheme.spaceLG,
+                            vertical: 12,
                           ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.settings, color: Colors.white),
-                              const SizedBox(width: 12),
-                              Text(
-                                'Settings',
-                                style: theme.textTheme.headlineMedium?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize:
-                                      28, // Increased font size for larger header
+                          child: Align(
+                            alignment: Alignment.bottomLeft,
+                            child: Row(
+                              children: [
+                                const Icon(Icons.settings, color: Colors.white),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Settings',
+                                  style: theme.textTheme.headlineMedium
+                                      ?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 28,
+                                      ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -726,7 +724,13 @@ class _SettingsScreenProfessionalState
                   // About & version footer
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      padding: const EdgeInsets.only(
+                        left: AppTheme.spaceLG,
+                        right: AppTheme.spaceLG,
+                        top: 24,
+                        bottom:
+                            100, // Add generous bottom padding to prevent overflow
+                      ),
                       child: Center(
                         child: InkWell(
                           onLongPress: () => Clipboard.setData(
@@ -835,7 +839,11 @@ class _SettingsScreenProfessionalState
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppTheme.spaceLG),
+        padding: const EdgeInsets.only(
+          left: AppTheme.spaceLG,
+          right: AppTheme.spaceLG,
+          bottom: 20, // Add bottom margin to sections to prevent overflow
+        ),
         child: Card(
           elevation: 2,
           shape: RoundedRectangleBorder(

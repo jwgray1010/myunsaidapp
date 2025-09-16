@@ -154,6 +154,15 @@ final class ToneSuggestionCoordinator {
         }
         let configured = !apiBaseURL.isEmpty && !apiKey.isEmpty
         print("🔧 API configured: \(configured) - URL: '\(apiBaseURL)', Key: '\(apiKey.prefix(10))...'")
+        
+        // Additional debug: Check if API config is missing entirely
+        if apiBaseURL.isEmpty {
+            print("🚨 CRITICAL: API Base URL is EMPTY! Check Info.plist for UNSAID_API_BASE_URL")
+        }
+        if apiKey.isEmpty {
+            print("🚨 CRITICAL: API Key is EMPTY! Check Info.plist for UNSAID_API_KEY")
+        }
+        
         return configured
     }
 
@@ -432,37 +441,6 @@ final class ToneSuggestionCoordinator {
         forceImmediateAnalysis(text)
     }
     
-    // MARK: - Debug Test Function for UI Updates
-    func testToneAPIWithDebugText() {
-        throttledLog("🧪 Testing tone API with debug text", category: "test")
-        let testText = "I'm so frustrated with this situation"
-        updateCurrentText(testText)
-        
-        var context: [String: Any] = [
-            "text": testText,
-            "context": "general",
-            "meta": [
-                "platform": "ios_keyboard",
-                "timestamp": isoTimestamp(),
-                "test_mode": true
-            ]
-        ]
-        context.merge(personalityPayload()) { _, new in new }
-        
-        callToneAnalysisAPI(context: context) { [weak self] toneResult in
-            guard let self = self else { return }
-            self.throttledLog("🧪 Test API result: '\(toneResult ?? "nil")'", category: "test")
-            
-            if let tone = toneResult {
-                DispatchQueue.main.async {
-                    self.currentToneStatus = tone
-                    self.delegate?.didUpdateToneStatus(tone)
-                    self.throttledLog("🧪 Test UI tone set to \(tone)", category: "test")
-                }
-            }
-        }
-    }
-
     // MARK: - Init/Deinit
     init() {
         setupWorkQueueIdentification()
@@ -543,6 +521,17 @@ final class ToneSuggestionCoordinator {
         updateCurrentText(text)
         lastKeyStrokeTime = Date()
         
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // IMMEDIATE handling for empty text (user deleted everything)
+        if trimmed.isEmpty && !lastAnalyzedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throttledLog("🚀 IMMEDIATE: Text became empty, resetting to neutral", category: "analysis")
+            pendingWorkItem?.cancel()
+            cancelInFlightRequestsForCurrentField()
+            performTextUpdate()
+            return
+        }
+        
         // Guard against empty/unchanged text (don't fire network calls)
         guard shouldEnqueueAnalysis() else {
             throttledLog("🚫 Skipping analysis - shouldEnqueueAnalysis returned false for text: '\(text.prefix(50))'", category: "analysis")
@@ -577,9 +566,17 @@ final class ToneSuggestionCoordinator {
     // Force immediate text analysis (useful when switching from iOS keyboard)
     func forceImmediateAnalysis(_ text: String) {
         updateCurrentText(text)
-        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            pendingWorkItem?.cancel()
-            cancelInFlightRequestsForCurrentField()
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Always perform immediate analysis - performTextUpdate handles empty text correctly
+        pendingWorkItem?.cancel()
+        cancelInFlightRequestsForCurrentField()
+        
+        if trimmed.isEmpty {
+            // Handle empty text immediately without network call
+            performTextUpdate()
+        } else {
+            // Handle non-empty text with potential network call
             let work = DispatchWorkItem { [weak self] in self?.performTextUpdate() }
             pendingWorkItem = work
             workQueue.async(execute: work)
@@ -832,12 +829,13 @@ final class ToneSuggestionCoordinator {
         // Guard: empty text doesn't fire network calls
         if trimmed.isEmpty && lastAnalyzedText.isEmpty { return false }
         
-        if trimmed.count < 2, !trimmed.isEmpty { return false }
+        // Allow analysis for very short text (changed from < 2 to < 1)
+        if trimmed.count < 1, !trimmed.isEmpty { return false }
         if trimmed.isEmpty, !lastAnalyzedText.isEmpty { return true }
         if now.timeIntervalSince(lastAnalysisTime) < 0.1 { return false }
 
-        // NEW: skip micro deltas within 500ms (user still mid-token)
-        if now.timeIntervalSince(lastAnalysisTime) < 0.5,
+        // Reduced debounce: skip micro deltas within 300ms instead of 500ms (user still mid-token)
+        if now.timeIntervalSince(lastAnalysisTime) < 0.3,
            abs(trimmed.count - lastAnalyzedText.count) <= 1 {
             return false
         }
@@ -860,6 +858,13 @@ final class ToneSuggestionCoordinator {
                 self.suggestions.removeAll()
                 self.currentToneStatus = "neutral"
                 self.neutralBlockActive = false   // ← reset the policy when the field is empty
+                self.suggestionSnapshot = nil     // ← clear suggestion snapshot for complete restart
+                self.consecutiveFailures = 0      // ← reset error state for fresh start
+                self.lastEscalationAt = .distantPast  // ← reset escalation timing
+                self.clientSequence = 0           // ← reset sequence counter for fresh start
+                self.pendingClientSeq = 0         // ← reset pending sequence
+                self.inFlightRequestHashes.removeAll()  // ← clear request deduplication
+                self.lastNotifiedSuggestions.removeAll() // ← clear notification history
                 DispatchQueue.main.async {
                     self.delegate?.didUpdateSuggestions([])
                     self.delegate?.didUpdateToneStatus("neutral")
@@ -1024,15 +1029,18 @@ final class ToneSuggestionCoordinator {
         var textToAnalyze = snapshot.isEmpty ? currentText : snapshot
         if textToAnalyze.count > 1000 { textToAnalyze = String(textToAnalyze.suffix(1000)) }
 
+        // FIXED: Match the working curl format exactly
         var context: [String: Any] = [
             "text": textToAnalyze,
-            "userId": getUserId(),
-            "userEmail": getUserEmail() ?? NSNull(),
-            "features": ["advice", "evidence"], // Only advice, not rewrite
+            "context": "general",  // Top-level context field (required!)
+            "includeAttachmentInsights": true,
+            "deepAnalysis": true,
+            "userProfile": [
+                "id": getUserId()
+            ],
             "meta": [
                 "source": "keyboard_manual",
                 "request_type": "suggestion",
-                "context": "general", // Server expects meta.context for working context
                 "timestamp": isoTimestamp()
             ]
         ]
@@ -1064,12 +1072,16 @@ final class ToneSuggestionCoordinator {
         var textToAnalyze = snapshot.isEmpty ? currentText : snapshot
         if textToAnalyze.count > 1000 { textToAnalyze = String(textToAnalyze.suffix(1000)) }
 
+        // FIXED: Match the working curl format exactly
         var context: [String: Any] = [
             "text": textToAnalyze,
-            "userId": getUserId(),
-            "userEmail": getUserEmail() ?? NSNull(),
+            "context": "general",  // Top-level context field (required!)
+            "includeAttachmentInsights": true,
+            "deepAnalysis": true,
             "toneOverride": tone,
-            "features": ["advice"], // Only advice for tone-specific requests
+            "userProfile": [
+                "id": getUserId()
+            ],
             "meta": [
                 "source": "keyboard_tone_specific",
                 "requested_tone": tone,
@@ -1110,12 +1122,30 @@ final class ToneSuggestionCoordinator {
         let requestID = UUID()
         latestRequestID = requestID
 
-        var payload = context
-        payload["requestId"] = requestID.uuidString
-        payload["userId"] = getUserId()
-        payload["userEmail"] = getUserEmail()
-        payload.merge(personalityPayload()) { _, new in new }
-        payload["conversationHistory"] = exportConversationHistoryForAPI(withCurrentText: snapshot)
+        // FIXED: Use minimal working payload format matching your curl example
+        var payload: [String: Any] = [
+            "text": context["text"] ?? "",
+            "context": context["context"] ?? "general",
+            "userProfile": [
+                "id": getUserId()
+            ]
+        ]
+        
+        // Add optional fields only if present in context
+        if let includeAttachmentInsights = context["includeAttachmentInsights"] {
+            payload["includeAttachmentInsights"] = includeAttachmentInsights
+        }
+        if let deepAnalysis = context["deepAnalysis"] {
+            payload["deepAnalysis"] = deepAnalysis
+        }
+        if let toneOverride = context["toneOverride"] {
+            payload["toneOverride"] = toneOverride
+        }
+        if let limit = context["limit"] {
+            payload["limit"] = limit
+        } else {
+            payload["limit"] = 3  // Default limit
+        }
 
         callEndpoint(path: "api/v1/suggestions", payload: payload) { [weak self] data in
             guard let self else { completion(nil); return }
@@ -1130,19 +1160,17 @@ final class ToneSuggestionCoordinator {
             // Update tone with defensive parsing - NOW with UI tone bucketing like tone endpoint
             let uiTone = self.uiToneString(from: d)
             
-            if uiTone != "neutral" {
-                DispatchQueue.main.async {
-                    if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: uiTone) {
-                        self.currentToneStatus = uiTone
-                        self.neutralBlockActive = true   // ← latch once we show non-neutral
-                        self.throttledLog("🎯 UI tone -> \(uiTone)", category: "tone_debug")
-                        self.delegate?.didUpdateToneStatus(uiTone)  // Only send clamped UI tones
-                        
-                        // Extract confidence with defensive parsing
-                        let confidence = self.safeDouble(from: d, keys: ["confidence"], fallback: 0.0)
-                        if confidence > 0.0 {
-                            self.storeToneAnalysisResult(data: d, status: uiTone, confidence: confidence)
-                        }
+            DispatchQueue.main.async {
+                if self.shouldUpdateToneStatus(from: self.currentToneStatus, to: uiTone) {
+                    self.currentToneStatus = uiTone
+                    if uiTone != "neutral" { self.neutralBlockActive = true }
+                    self.throttledLog("🎯 UI tone -> \(uiTone)", category: "tone_debug")
+                    self.delegate?.didUpdateToneStatus(uiTone)  // Only send clamped UI tones
+                    
+                    // Extract confidence with defensive parsing
+                    let confidence = self.safeDouble(from: d, keys: ["confidence"], fallback: 0.0)
+                    if confidence > 0.0 {
+                        self.storeToneAnalysisResult(data: d, status: uiTone, confidence: confidence)
                     }
                 }
             }
@@ -1190,11 +1218,13 @@ final class ToneSuggestionCoordinator {
     // Copilot: 'neutral' is a valid pill state. Do not coerce it to 'clear'.
     /// Safety normalizer (prevents "angry" from blanking the UI)
     private func normalizeToneLabel(_ s: String) -> String {
-        switch s.lowercased() {
-        case "alert", "caution", "clear", "neutral": return s
-        case "angry", "hostile", "toxic": return "alert"
-        case "frustrated", "anxious", "sad": return "caution"
-        default: return "clear"
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch t {
+        case "alert", "warning", "danger", "red", "hostile", "toxic", "angry": return "alert"
+        case "caution", "warn", "yellow", "frustrated", "anxious", "sad", "negative", "tense", "passive_aggressive": return "caution"
+        case "clear", "ok", "positive", "green", "safe", "secure", "good", "happy", "calm", "confident", "supportive": return "clear"
+        case "neutral": return "neutral"
+        default: return "neutral"
         }
     }
     
@@ -1211,7 +1241,42 @@ final class ToneSuggestionCoordinator {
             return normalized
         }
         
-        // SECOND: Try explicit ui_distribution buckets (including neutral)
+        // SECOND: Check nested analysis object for ui_tone/buckets
+        if let analysis = response["analysis"] as? [String: Any] {
+            // nested ui_tone / tone_status
+            let nestedUITone = safeString(from: analysis, keys: ["ui_tone","uiTone","tone_status","toneStatus"], fallback: "")
+            if !nestedUITone.isEmpty { 
+                let normalized = normalizeToneLabel(nestedUITone)
+                throttledLog("🎯 Found nested ui_tone: '\(nestedUITone)' -> normalized: '\(normalized)'", category: "tone_debug")
+                return normalized
+            }
+
+            // nested ui_distribution
+            if let buckets = analysis["ui_distribution"] as? [String: Double] {
+                let scored: [(String, Double)] = [("alert", buckets["alert"] ?? 0),
+                                                  ("caution", buckets["caution"] ?? 0),
+                                                  ("clear", buckets["clear"] ?? 0),
+                                                  ("neutral", buckets["neutral"] ?? 0)]
+                if let maxPair = scored.max(by: { $0.1 < $1.1 }), maxPair.1 > 0.1 { 
+                    throttledLog("🎯 Using nested ui_distribution bucket: '\(maxPair.0)' with score: \(maxPair.1)", category: "tone_debug")
+                    return maxPair.0 
+                }
+            }
+
+            // nested legacy buckets
+            if let buckets = analysis["buckets"] as? [String: Double] {
+                let scored: [(String, Double)] = [("alert", buckets["alert"] ?? 0),
+                                                  ("caution", buckets["caution"] ?? 0),
+                                                  ("clear", buckets["clear"] ?? 0),
+                                                  ("neutral", buckets["neutral"] ?? 0)]
+                if let maxPair = scored.max(by: { $0.1 < $1.1 }), maxPair.1 > 0.1 { 
+                    throttledLog("🎯 Using nested legacy buckets: '\(maxPair.0)' with score: \(maxPair.1)", category: "tone_debug")
+                    return maxPair.0 
+                }
+            }
+        }
+        
+        // THIRD: Try explicit ui_distribution buckets (including neutral)
         if let buckets = response["ui_distribution"] as? [String: Double] {
             let scored: [(String, Double)] = [
                 ("alert",   buckets["alert"]   ?? 0),
@@ -1225,7 +1290,7 @@ final class ToneSuggestionCoordinator {
             }
         }
         
-        // THIRD: Fallback to legacy buckets field
+        // FOURTH: Fallback to legacy buckets field
         if let buckets = response["buckets"] as? [String: Double] {
             let scored: [(String, Double)] = [
                 ("alert",   buckets["alert"]   ?? 0),
@@ -1495,12 +1560,25 @@ final class ToneSuggestionCoordinator {
 
             // Enhanced payload with client sequence
             var enhancedPayload = payload
-            enhancedPayload["client_seq"] = currentClientSeq
-            enhancedPayload["input_length"] = inputLength
-            enhancedPayload["timestamp"] = self.isoTimestamp()
+            // Only add telemetry for non-suggestions endpoints
+            if !path.contains("suggestions") {
+                enhancedPayload["client_seq"] = currentClientSeq
+                enhancedPayload["input_length"] = inputLength
+                enhancedPayload["timestamp"] = self.isoTimestamp()
+            }
 
             do {
                 req.httpBody = try JSONSerialization.data(withJSONObject: enhancedPayload, options: [])
+                
+                // DEBUG: Log the exact request being sent for 400 debugging
+                if path.contains("suggestions") {
+                    self.throttledLog("🚀 Suggestions API request:", category: "api_debug")
+                    self.throttledLog("   URL: \(url)", category: "api_debug")
+                    self.throttledLog("   Headers: Content-Type=application/json, X-User-Id=\(self.getUserId())", category: "api_debug")
+                    if let bodyData = req.httpBody, let bodyString = String(data: bodyData, encoding: .utf8) {
+                        self.throttledLog("   Body: \(bodyString)", category: "api_debug")
+                    }
+                }
             } catch {
                 let latencyMs = Date().timeIntervalSince(startTime) * 1000
                 self.throttledLog("payload serialization failed: \(error.localizedDescription)", category: "api")
@@ -1581,6 +1659,13 @@ final class ToneSuggestionCoordinator {
                         // Enhanced jittered backoff for other HTTP status codes
                         let baseDelay: TimeInterval
                         switch http.statusCode {
+                        case 400:
+                            // DEBUG: 400 Bad Request - log details for debugging
+                            if let bodyData = data, let bodyString = String(data: bodyData, encoding: .utf8) {
+                                self.throttledLog("🚨 400 Bad Request details:", category: "api_debug")
+                                self.throttledLog("   Response: \(bodyString)", category: "api_debug")
+                            }
+                            baseDelay = 2 // Short backoff for validation errors
                         case 403:
                             baseDelay = 60 // Auth errors: longer backoff
                         case 429:
@@ -1738,6 +1823,12 @@ final class ToneSuggestionCoordinator {
             return false
         }
         
+        // IMPORTANT: Allow escalations even with latch active (alert/caution should always work)
+        if new == "alert" || new == "caution" {
+            throttledLog("🎯 ✅ HIGH PRIORITY TONE: '\(new)' - bypassing latch checks", category: "tone_debug")
+            return true
+        }
+        
         if new == current { 
             self.throttledLog("🎯 ❌ SAME TONE: skipping update", category: "tone_debug")
             return false 
@@ -1854,14 +1945,6 @@ final class ToneSuggestionCoordinator {
         }
     }
 
-    // MARK: - Debug Methods
-    #if DEBUG
-    /// Public method to trigger tone analysis for debugging
-    func debugTriggerToneAnalysis() {
-        throttledLog("🔍 Debug: Manually triggering tone analysis", category: "debug")
-        performTextUpdate()
-    }
-    #endif
 }
 
 /*
