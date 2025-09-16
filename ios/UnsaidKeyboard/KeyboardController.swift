@@ -101,10 +101,13 @@ final class SpellCandidatesStrip: UIView {
     private func pill(_ title: String) -> UIButton {
         // Use KeyButtonFactory for consistent styling
         let button = KeyButtonFactory.makeControlButton(title: title, background: .systemGray6, text: .label)
-        button.addAction(UIAction { [weak self] _ in
-            self?.onTap?(title)
-        }, for: .touchUpInside)
+        button.addTarget(self, action: #selector(pillButtonPressed(_:)), for: .touchUpInside)
         return button
+    }
+    
+    @objc private func pillButtonPressed(_ sender: UIButton) {
+        guard let title = sender.title(for: .normal) else { return }
+        onTap?(title)
     }
 }
 
@@ -170,7 +173,16 @@ final class KeyboardController: UIInputView,
     // MARK: - Debounce & Coalesce
     private var analyzeTask: Task<Void, Never>?
     
+    // Performance Optimization #6: Guard analysis scheduling during backoff
+    private func shouldEnqueueAnalysis() -> Bool {
+        guard let coordinator = coordinator else { return false }
+        return coordinator.shouldAttemptAnalysis()
+    }
+    
     private func scheduleAnalysis(for text: String, urgent: Bool = false) {
+        // Don't even queue work if network is in backoff
+        guard shouldEnqueueAnalysis() else { return }
+        
         analyzeTask?.cancel()
         analyzeTask = Task { [weak self] in
             if !urgent {
@@ -279,6 +291,14 @@ final class KeyboardController: UIInputView,
     private var lastToneStatusString: String = "neutral"
     private var currentUITone: ToneStatus = .neutral
 
+    // Performance optimization state
+    private var lastSuggestionFetchTime: TimeInterval = 0
+    private var activeSuggestionTask: Task<Void, Never>?
+    
+    // Neutral idle gate to prevent immediate snap-back
+    private var lastToneChangeAt = CACurrentMediaTime()
+    private let clearNeutralIdleMs: CFTimeInterval = 1.2
+
     // Layout constants
     private let verticalSpacing: CGFloat = 8
     private let horizontalSpacing: CGFloat = 6
@@ -366,20 +386,14 @@ final class KeyboardController: UIInputView,
         dbg("🔧 API Config - API Key: \(apiKey.prefix(10))...")
         dbg("🔧 Coordinator initialized: \(self.coordinator != nil)")
         
-        // Test network connectivity immediately (don't let this affect UI visibility)
-        coordinator?.forceImmediateAnalysis("ping")
+        // Note: Removed immediate analysis ping to prevent any startup tone changes
+        // coordinator?.forceImmediateAnalysis("ping")
         
-        // Manual tone indicator test for debugging
-        #if DEBUG
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            self?.testToneIndicatorManually()
-        }
+        // NOTE: Removed automatic tone cycling for better UX
+        // Manual tone test still available via long press on tone button
         
-        // Test API with debug text to force non-neutral response
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
-            self?.coordinator?.testToneAPIWithDebugText()
-        }
-        #endif
+        // Note: Removed DEBUG testToneAPIWithDebugText() call to prevent
+        // automatic tone cycling when keyboard opens
     }
     
     deinit {
@@ -703,18 +717,6 @@ final class KeyboardController: UIInputView,
         logger.info("ToneButton: state -> visible, alpha=\(toneButton.alpha), hidden=\(toneButton.isHidden)")
         #endif
 
-        // Add long press gesture for debug testing
-        #if DEBUG
-        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(testToneIndicatorManually))
-        longPress.minimumPressDuration = 2.0
-        toneButton.addGestureRecognizer(longPress)
-        
-        // Add double tap for manual tone analysis trigger
-        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(debugTriggerAnalysis))
-        doubleTap.numberOfTapsRequired = 2
-        toneButton.addGestureRecognizer(doubleTap)
-        #endif
-
         // ✅ CRITICAL: Configure chip manager with suggestion bar so chips anchor properly
         self.suggestionChipManager.configure(suggestionBar: pBar)
 
@@ -735,22 +737,9 @@ final class KeyboardController: UIInputView,
         toneButtonBackground.layer.shadowOpacity = 0
 
         // Add actions
-        toneButton.addAction(UIAction { [weak self] _ in
-            // Keep 'force analyze' on the tone button as requested
-            self?.scheduleAnalysis(for: self?.currentText ?? "", urgent: true)
-            self?.pressPop()
-            
-            // DEBUG: Test tone indicator on tap (remove this after testing)
-            #if DEBUG
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.forceToneTest("alert")
-            }
-            #endif
-        }, for: .touchUpInside)
+        toneButton.addTarget(self, action: #selector(toneButtonPressed(_:)), for: .touchUpInside)
 
-        undoButton.addAction(UIAction { [weak self] _ in
-            self?.undoButtonTapped()
-        }, for: .touchUpInside)
+        undoButton.addTarget(self, action: #selector(undoButtonPressed(_:)), for: .touchUpInside)
 
         // Layout constraints
         NSLayoutConstraint.activate([
@@ -815,9 +804,9 @@ final class KeyboardController: UIInputView,
             #endif
         }
         
-        // Force layout pass to ensure gradient frame is correct
+        // Force layout pass to ensure gradient frame is correct  
         DispatchQueue.main.async { [weak self] in
-            self?.setToneStatus(self?.currentTone ?? .neutral, animated: false)
+            // Removed redundant setToneStatus call - already set on line 796
             
             // Double-check visibility after layout
             if let button = self?.toneButton {
@@ -829,12 +818,6 @@ final class KeyboardController: UIInputView,
             }
         }
         
-        // Debug UI state after setup
-        #if DEBUG
-        DispatchQueue.main.async { [weak self] in
-            self?.debugToneUIState()
-        }
-        #endif
         
         // Apply accessibility improvements
         applyAccessibility()
@@ -928,19 +911,30 @@ final class KeyboardController: UIInputView,
     // MARK: - Tone Status Management
 
     private func setToneStatus(_ tone: ToneStatus, animated: Bool = true) {
+        print("🎯 🎨 SET_TONE_STATUS CALLED: \(String(describing: tone)), animated: \(animated)")
         logger.info("🎯 setToneStatus called with: \(String(describing: tone)), animated: \(animated)")
         logger.info("🎯 Current tone button: exists=\(self.toneButton != nil), visible=\(self.toneButton?.isHidden == false)")
         logger.info("🎯 Current tone background: exists=\(self.toneButtonBackground != nil), visible=\(self.toneButtonBackground?.isHidden == false)")
         
         guard let bg = toneButtonBackground else {
+            print("🎯 ❌ CRITICAL ERROR: No tone button background found!")
             logger.warning("🎯 No tone button background found!")
             return
         }
-        guard tone != currentTone || bg.alpha == 0.0 || (toneGradient?.colors == nil) else {
-            logger.info("🎯 Skipping redundant tone update")
+        
+        // Better visual state detection for re-application
+        let visualOutOfSync =
+            (toneGradient == nil) ||
+            (toneGradient?.colors == nil) ||
+            (bg.layer.animation(forKey: "alertPulse") == nil && tone == .alert)
+        
+        guard tone != currentTone || bg.alpha < 0.99 || visualOutOfSync else {
+            print("🎯 ⚠️ SKIPPING REDUNDANT: current=\(String(describing: currentTone)), new=\(String(describing: tone))")
+            logger.info("🎯 Skipping tone update; visually up-to-date")
             return
-        } // skip redundant work, but allow first real change
-        currentTone = tone
+        } // skip redundant work, but allow refresh when visual state is stale
+        
+        print("🎯 🔄 PROCEEDING WITH TONE UPDATE: \(String(describing: currentTone)) -> \(String(describing: tone))")
         logger.info("🎯 Updating tone button to: \(String(describing: tone))")
 
         // Ensure background is definitely visible
@@ -1032,6 +1026,9 @@ final class KeyboardController: UIInputView,
         } else {
             stopAlertPulse()
         }
+        
+        // Set currentTone only after visual updates complete to avoid logical/visual drift
+        currentTone = tone
     }
 
     private func startAlertPulse() {
@@ -1051,26 +1048,30 @@ final class KeyboardController: UIInputView,
     }
 
     private func gradientColors(for tone: ToneStatus) -> ([CGColor], UIColor?) {
+        let result: ([CGColor], UIColor?)
         switch tone {
         case .alert:
             let c1 = UIColor.systemRed
             let c2 = UIColor.systemRed.withAlphaComponent(0.85)
-            return ([c1.cgColor, c2.cgColor], nil)
+            result = ([c1.cgColor, c2.cgColor], nil)
         case .caution:
             let c1 = UIColor.systemYellow
             let c2 = UIColor.systemYellow.withAlphaComponent(0.85)
-            return ([c1.cgColor, c2.cgColor], nil)
+            result = ([c1.cgColor, c2.cgColor], nil)
         case .clear:
             let c1 = UIColor.systemGreen
             let c2 = UIColor.systemTeal.withAlphaComponent(0.85)
-            return ([c1.cgColor, c2.cgColor], nil)
+            result = ([c1.cgColor, c2.cgColor], nil)
         case .neutral:
             let c = UIColor.white
-            return ([c.cgColor, c.cgColor], UIColor.white)
+            result = ([c.cgColor, c.cgColor], UIColor.white)
         @unknown default:
             let c = UIColor.white
-            return ([c.cgColor, c.cgColor], UIColor.white)
+            result = ([c.cgColor, c.cgColor], UIColor.white)
         }
+        
+        print("🎯 🎨 GRADIENT COLORS FOR \(String(describing: tone)): \(result.0.count) colors")
+        return result
     }
 
     // MARK: - Animation
@@ -1203,8 +1204,8 @@ final class KeyboardController: UIInputView,
         stack.spacing = horizontalSpacing
         stack.distribution = .fill
 
-        // Mode (123/ABC)
-        let mode = KeyButtonFactory.makeControlButton(title: currentMode == .letters ? "123" : "ABC")
+        // Mode (123/ABC) - reduced font and size by 40%
+        let mode = KeyButtonFactory.makeModeButton(title: currentMode == .letters ? "123" : "ABC")
         mode.addTarget(self, action: #selector(handleModeSwitch), for: .touchUpInside)
         mode.addTarget(self, action: #selector(specialButtonTouchDown(_:)), for: .touchDown)
         mode.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
@@ -1252,12 +1253,12 @@ final class KeyboardController: UIInputView,
         stack.addArrangedSubview(returnBtn)
 
         // Sizing rules - let space expand, but fixed widths for other controls
-        let standardWidth: CGFloat = 68
-        let returnButtonWidth: CGFloat = 51  // 25% smaller than standard
-        let secureButtonWidth: CGFloat = 61  // 10% smaller than standard
+        let standardWidth: CGFloat = 68  // Back to original size
+        let returnButtonWidth: CGFloat = 51  // Back to original size  
+        let secureButtonWidth: CGFloat = 61  // Back to original size
         
-        // Space is the only flexible one
-        space.widthAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true  // Reduced minimum
+        // Space is the only flexible one - increased minimum width to fill space from smaller mode button
+        space.widthAnchor.constraint(greaterThanOrEqualToConstant: 140).isActive = true  // Increased from 120
         space.setContentHuggingPriority(.defaultLow, for: .horizontal)
         space.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
@@ -1266,7 +1267,7 @@ final class KeyboardController: UIInputView,
         secureFix.widthAnchor.constraint(equalToConstant: secureButtonWidth).isActive = true
         returnBtn.widthAnchor.constraint(equalToConstant: returnButtonWidth).isActive = true
         // Globe is intentionally small
-        globe.widthAnchor.constraint(equalToConstant: 34).isActive = true
+        globe.widthAnchor.constraint(equalToConstant: 34).isActive = true  // Back to original size
 
         [secureFix, mode, globe, returnBtn].forEach {
             $0.setContentHuggingPriority(.required, for: .horizontal)
@@ -1579,33 +1580,53 @@ final class KeyboardController: UIInputView,
 
     // MARK: - ToneSuggestionDelegate
     func didUpdateSuggestions(_ suggestions: [String]) {
-        logger.info("💡 Received suggestions: \(String(describing: suggestions))")
-        guard let first = suggestions.first else { return }
-        suggestionChipManager.showSuggestion(text: first, tone: currentUITone)  // Type-safe
-        secureFixManager.markAdviceShown(toneString: String(describing: currentUITone))
-        quickFixButton?.alpha = 1.0
+        logger.info("💡 suggestions.count=\(suggestions.count)")
+        guard let first = suggestions.first, !first.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            logger.info("💡 No suggestions to show")
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.suggestionChipManager.showSuggestion(text: first, tone: self.currentUITone)
+            self.secureFixManager.markAdviceShown(toneString: self.currentUITone.rawValue)
+            self.quickFixButton?.alpha = 1.0
+        }
+    }
+
+    // MARK: - Neutral Idle Gate
+    private func shouldAllowNeutralNow() -> Bool {
+        let dt = CACurrentMediaTime() - lastToneChangeAt
+        return dt >= clearNeutralIdleMs
+    }
+    
+    private func sentenceLikelyEnded(_ text: String) -> Bool {
+        guard let last = text.trimmingCharacters(in: .whitespaces).last else { return false }
+        return ".!?".contains(last)
     }
 
     func didUpdateToneStatus(_ tone: String) {
-        logger.info("🎯 Received tone status: \(tone)")
-        logger.info("🎯 Current tone button exists: \((self.toneButton != nil))")
-        logger.info("🎯 Current tone background exists: \((self.toneButtonBackground != nil))")
-        
-        // Ensure UI updates happen on main thread
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            
-            // Use the new ToneStatus extension for safe mapping
-            let toneStatus = ToneStatus(from: tone)
-            self.currentUITone = toneStatus
-            self.setToneStatus(toneStatus)
-            
-            // Update string for legacy compatibility where needed
-            self.lastToneStatusString = toneStatus.rawValue
-            
-            self.logger.info("🎯 Mapped '\(tone)' to '\(toneStatus.rawValue)' -> \(String(describing: toneStatus))")
-            self.logger.info("ToneButton: state -> \(toneStatus.rawValue), button visible: \((self.toneButton?.isHidden == false))")
+        // Performance Optimization #1: Fast guard for redundant tone updates
+        let normalizedTone = tone.lowercased()
+        if lastToneStatusString == normalizedTone {
+            return // Skip redundant update - tone hasn't actually changed
         }
+        
+        logger.info("🎯 🔥 KEYBOARD RECEIVED TONE: '\(tone)'")
+        let toneStatus = ToneStatus(from: tone)
+        
+        // Gate neutral to avoid flicker + spam
+        if toneStatus == .neutral && !shouldAllowNeutralNow() && !sentenceLikelyEnded(currentText) {
+            logger.info("🎯 Neutral suppressed by idle gate (no sentence boundary)")
+            return
+        }
+        
+        currentUITone = toneStatus
+        setToneStatus(toneStatus)
+        if toneStatus != .neutral {    // only mark when "real" tone lands
+            lastToneChangeAt = CACurrentMediaTime()
+        }
+        lastToneStatusString = normalizedTone
+        logger.info("🎯 ✅ TONE UPDATE COMPLETE: '\(tone)' -> \(String(describing: toneStatus))")
     }
     
     // MARK: - Tone Button Management
@@ -1628,76 +1649,11 @@ final class KeyboardController: UIInputView,
                 background.alpha = 1.0
             }
             
-            // Set to neutral state if no current tone
-            if self.currentTone == .neutral {
-                self.setToneStatus(.neutral, animated: false)
-            }
+            // Removed: Don't force neutral from visibility helper - causes spam
+            // Visibility should not set tone state
         }
     }
     
-    // MARK: - Debug Testing
-    #if DEBUG
-    @objc private func debugTriggerAnalysis() {
-        logger.info("🔍 Debug: Double-tap detected, triggering manual tone analysis")
-        debugTriggerToneAnalysis()
-    }
-    
-    @objc private func testToneIndicatorManually() {
-        // Test all tones in sequence for visual verification
-        logger.info("🧪 Testing tone indicator manually...")
-        
-        DispatchQueue.main.async { [weak self] in
-            self?.didUpdateToneStatus("alert") // Should turn red & pulse
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.didUpdateToneStatus("caution") // Should turn yellow
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
-            self?.didUpdateToneStatus("clear") // Should turn green
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
-            self?.didUpdateToneStatus("neutral") // Should turn white
-        }
-    }
-    
-    // Quick manual test - call this from anywhere to test a specific tone
-    func testSpecificTone(_ tone: String) {
-        logger.info("🧪 Manual tone test: \(tone)")
-        didUpdateToneStatus(tone)
-    }
-    
-    // Test if the UI components exist and are properly configured
-    func debugToneUIState() {
-        logger.info("🔍 Tone UI Debug State:")
-        logger.info("  - toneButton exists: \(self.toneButton != nil)")
-        logger.info("  - toneButtonBackground exists: \(self.toneButtonBackground != nil)")
-        logger.info("  - toneGradient exists: \(self.toneGradient != nil)")
-        logger.info("  - currentTone: \(String(describing: self.currentTone))")
-        
-        if let bg = self.toneButtonBackground {
-            logger.info("  - background alpha: \(String(describing: bg.alpha))")
-            logger.info("  - background frame: \(String(describing: bg.frame))")
-            logger.info("  - background transform: \(String(describing: bg.transform))")
-        }
-        
-        if let gradient = self.toneGradient {
-            logger.info("  - gradient frame: \(String(describing: gradient.frame))")
-            logger.info("  - gradient colors count: \(String(describing: gradient.colors?.count ?? 0))")
-        }
-    }
-    
-    // Force immediate tone test - bypasses all analysis
-    func forceToneTest(_ tone: String) {
-        logger.info("🔥 Force tone test: \(tone)")
-        DispatchQueue.main.async { [weak self] in
-            self?.didUpdateToneStatus(tone)
-        }
-    }
-    #endif
-
     // MARK: - Debug Methods
     #if DEBUG
     /// Manually trigger tone analysis for debugging
@@ -1717,12 +1673,8 @@ final class KeyboardController: UIInputView,
 
     // MARK: - Tone Analysis Integration
     
-    /// Bridge method to call updateToneFromAnalysis on the coordinator
-    /// This allows the KeyboardViewController to trigger tone updates from shared storage data
-    func updateToneFromAnalysis(_ analysis: [String: Any]) {
-        logger.info("🎯 KeyboardController: Bridging tone analysis update to coordinator")
-        coordinator?.updateToneFromAnalysis(analysis)
-    }
+    // Note: Tone analysis is now handled entirely by ToneSuggestionCoordinator
+    // No bridge methods needed - coordinator calls didUpdateToneStatus() directly
 
     func didUpdateSecureFixButtonState() {
         let remaining = secureFixManager.getRemainingSecureFixUses()
@@ -1788,5 +1740,53 @@ final class KeyboardController: UIInputView,
 
     private func isFirstTimeUser() -> Bool {
         return isFirstLaunch
+    }
+    
+    // MARK: - Selector Methods
+    
+    @objc private func toneButtonPressed(_ sender: UIButton) {
+        // Always give crisp feedback
+        pressPop()
+
+        // Kick an immediate analysis
+        scheduleAnalysis(for: currentText, urgent: true)
+
+        // If tone is risky, fetch suggestions too
+        if currentTone == .alert || currentTone == .caution {
+            guard let textBefore = textDocumentProxy?.documentContextBeforeInput?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !textBefore.isEmpty else {
+                logger.info("🎯 No text available for suggestions")
+                return
+            }
+            
+            // Performance Optimization #2: Single-flight + tap throttling (0.8s)
+            let now = CFAbsoluteTimeGetCurrent()
+            if now - lastSuggestionFetchTime < 0.8 {
+                return // Throttle rapid taps
+            }
+            
+            // Cancel any in-flight suggestion request
+            activeSuggestionTask?.cancel()
+            
+            lastSuggestionFetchTime = now
+            activeSuggestionTask = Task { // @MainActor context here
+                let suggestions = await coordinator?.fetchSuggestionsAsync(for: textBefore) ?? []
+                guard !Task.isCancelled else { return }
+                
+                guard let first = suggestions.first else {
+                    logger.info("🎯 No suggestions received")
+                    return
+                }
+                suggestionChipManager.showSuggestion(text: first, tone: currentTone)
+                secureFixManager.markAdviceShown(toneString: currentTone.rawValue)
+                quickFixButton?.alpha = 1.0
+                activeSuggestionTask = nil
+            }
+        }
+    }
+    
+    @objc private func undoButtonPressed(_ sender: UIButton) {
+        undoButtonTapped()
     }
 }

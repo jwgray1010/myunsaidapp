@@ -142,6 +142,24 @@ export function withRateLimit(windowMs: number = 15 * 60 * 1000, maxRequests: nu
   };
 }
 
+// Response validation wrapper
+export function withResponseNormalization<T>(
+  normalizer: (raw: unknown) => T,
+  handler: (req: VercelRequest, res: VercelResponse) => Promise<T> | T
+): Handler {
+  return async (req: VercelRequest, res: VercelResponse) => {
+    try {
+      const result = await handler(req, res);
+      const normalized = normalizer(result);
+      
+      res.status(200).json(normalized);
+    } catch (err) {
+      logger.error('Response normalization error:', err);
+      throw err; // Let error handling wrapper handle it
+    }
+  };
+}
+
 export function compose(...wrappers: ((handler: Handler) => Handler)[]): (handler: Handler) => Handler {
   return (handler: Handler): Handler => {
     return wrappers.reduceRight((wrapped, wrapper) => wrapper(wrapped), handler);

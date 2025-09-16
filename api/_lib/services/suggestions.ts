@@ -33,6 +33,8 @@ import type {
   EvaluationTone,
   UserPreference
 } from '../types/dataTypes';
+import { adjustToneByAttachment } from './utils/attachmentToneAdjust';
+import { matchSemanticBackbone, applySemanticBias, type SemanticBackboneResult } from './utils/semanticBackbone';
 
 // ============================
 // Interfaces (keep identical to your original)
@@ -131,6 +133,8 @@ async function ensureDataLoaded(): Promise<void> {
     'guardrail_config.json',
     'profanity_lexicons.json',
     'attachment_overrides.json',
+    'attachment_tone_weights.json',
+    'semantic_thesaurus.json',
     'learning_signals.json',
     'evaluation_tones.json',
     'user_preference.json'
@@ -632,6 +636,14 @@ class AnalysisOrchestrator {
       }
     }
 
+    // Apply semantic backbone analysis
+    const semanticThesaurus = this.loader.get('semanticThesaurus');
+    const semanticResult = matchSemanticBackbone(
+      text, 
+      attachmentStyle || 'secure', 
+      semanticThesaurus
+    );
+
     return {
       tone: toneResult!,
       context: spacyResult.context || { label: contextHint || 'general', score: 0.5 },
@@ -644,7 +656,8 @@ class AnalysisOrchestrator {
         phraseEdgeHits: spacyResult.phraseEdges || []
       },
       features: fullAnalysis.features || {},
-      mlGenerated
+      mlGenerated,
+      semanticBackbone: semanticResult
     };
   }
 }
@@ -675,8 +688,13 @@ class AdviceEngine {
     return { ...this.baseWeights, ...(mods?.byContext?.[contextLabel] ?? {}) };
   }
 
-  // Probabilistic bucket mapping from JSON
-  resolveToneBucket(toneLabel: string, contextLabel: string, intensityScore: number = 0): ToneBucketResult {
+  // Probabilistic bucket mapping from JSON with semantic backbone integration
+  resolveToneBucket(
+    toneLabel: string, 
+    contextLabel: string, 
+    intensityScore: number = 0,
+    semanticResult?: SemanticBackboneResult
+  ): ToneBucketResult {
     const map = this.loader.get('toneBucketMapping') || this.loader.get('toneBucketMap') || {};
     
     // Use JSON as source of truth for base distributions
@@ -687,7 +705,13 @@ class AdviceEngine {
     const ctxOv = map?.contextOverrides?.[contextLabel]?.[toneLabel];
     if (ctxOv) dist = { ...dist, ...ctxOv };
     
-    // Normalize after overrides
+    // Apply semantic backbone bias if available
+    if (semanticResult) {
+      const semanticThesaurus = this.loader.get('semanticThesaurus');
+      dist = applySemanticBias(dist, semanticResult, semanticThesaurus);
+    }
+    
+    // Normalize after overrides and semantic bias
     let sum = Object.values(dist).reduce((a:number,b:any)=>a+(Number(b)||0),0) || 1;
     dist = { clear:(Number(dist.clear)||0)/sum, caution:(Number(dist.caution)||0)/sum, alert:(Number(dist.alert)||0)/sum };
 
@@ -820,6 +844,31 @@ class AdviceEngine {
 
       // Attachment overrides boost
       if ((it as any).__boost) s += (it as any).__boost;
+
+      // Apply attachment-style category multipliers from tone weights
+      const attachmentToneConfig = dataLoader.getAttachmentToneWeights();
+      const categoryMultipliers = attachmentToneConfig?.overrides?.[signals.attachmentStyle]?.category_multipliers ?? {};
+      let categoryBoost = 1.0;
+      
+      // Check both single 'category' and array 'categories' fields
+      const categories = new Set<string>();
+      if (Array.isArray((it as any).categories)) {
+        (it as any).categories.forEach((c: string) => categories.add(c));
+      }
+      if ((it as any).category) {
+        categories.add((it as any).category);
+      }
+      
+      // Apply multipliers for each matching category
+      for (const category of categories) {
+        const categoryKey = String(category).toLowerCase();
+        if (categoryMultipliers[categoryKey] != null) {
+          categoryBoost *= Number(categoryMultipliers[categoryKey]) || 1.0;
+        }
+      }
+      
+      // Apply the category boost as a multiplier after all additive scoring
+      s *= categoryBoost;
 
       // Tier
       if (signals.tier === 'premium') s += W.premiumBoost;
@@ -1366,7 +1415,12 @@ class SuggestionsService {
     const calibrated = picked.map(it => ({ ...it, __calib: calibrate(it.ltrScore || 0.5, contextLabel) }));
 
     // 9) Build tone bucket dist for response header (from toneKeyNorm)
-    const { primary, dist } = this.adviceEngine.resolveToneBucket(toneKeyNorm, contextLabel, intensityScore);
+    const { primary, dist } = this.adviceEngine.resolveToneBucket(
+      toneKeyNorm, 
+      contextLabel, 
+      intensityScore,
+      (analysis as any).semanticBackbone
+    );
 
     // 10) Assemble response (no fallbacks)
     const finalSuggestions = calibrated.map(({ advice, categories, ltrScore, id, __calib }) => ({

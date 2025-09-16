@@ -12,8 +12,6 @@ class KeyboardViewController: UIInputViewController {
     
     private var keyboardController: KeyboardController?
     private let logger = Logger(subsystem: "com.example.unsaid.UnsaidKeyboard", category: "KeyboardViewController")
-    private var toneAnalysisTimer: Timer?
-    private var lastToneAnalysisTimestamp: TimeInterval = 0
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -77,8 +75,8 @@ class KeyboardViewController: UIInputViewController {
                 debugLabel.removeFromSuperview()
                 self.logger.info("✅ KeyboardViewController setup complete!")
                 
-                // Start monitoring for tone analysis data from Flutter
-                self.startToneAnalysisMonitoring()
+                // Tone analysis is now handled entirely by ToneSuggestionCoordinator
+                // No need for separate monitoring here
             }
         } else {
             logger.error("❌ KeyboardController is nil - setup failed")
@@ -149,88 +147,7 @@ class KeyboardViewController: UIInputViewController {
     // MARK: - Tone Analysis Monitoring
     
     /// Start monitoring for tone analysis data from Flutter app
-    private func startToneAnalysisMonitoring() {
-        logger.info("🎯 Starting tone analysis monitoring")
-        
-        // Check immediately for any pending data
-        checkForToneAnalysisData()
-        
-        // Set up timer to check every 0.5 seconds
-        toneAnalysisTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            self?.checkForToneAnalysisData()
-        }
-    }
-    
-    /// Check shared UserDefaults for new tone analysis data from Flutter
-    private func checkForToneAnalysisData() {
-        let appGroupId = "group.com.example.unsaid"
-        guard let sharedDefaults = UserDefaults(suiteName: appGroupId) else {
-            logger.error("❌ Cannot access shared UserDefaults for tone analysis")
-            return
-        }
-        
-        // Check for tone analysis timestamp
-        let timestamp = sharedDefaults.double(forKey: "tone_analysis_timestamp")
-        if timestamp > lastToneAnalysisTimestamp {
-            lastToneAnalysisTimestamp = timestamp
-            logger.info("🎯 New tone analysis data detected at timestamp: \(timestamp)")
-            
-            // Get the tone analysis data
-            if let toneData = sharedDefaults.dictionary(forKey: "latest_tone_analysis") {
-                processToneAnalysisData(toneData)
-            }
-        }
-        
-        // Also check for other analysis types
-        checkForOtherAnalysisData(sharedDefaults)
-    }
-    
-    /// Process tone analysis data received from Flutter
-    private func processToneAnalysisData(_ data: [String: Any]) {
-        logger.info("🎯 Processing tone analysis data: \(data)")
-        
-        // Extract tone information
-        if let analysis = data["analysis"] as? [String: Any],
-           let tone = analysis["dominant_tone"] as? String {
-            logger.info("🎯 Extracted tone: \(tone)")
-            
-            // Trigger tone update in keyboard controller
-            DispatchQueue.main.async { [weak self] in
-                self?.keyboardController?.updateToneFromAnalysis(analysis)
-            }
-        } else if let tone = data["tone"] as? String {
-            logger.info("🎯 Direct tone: \(tone)")
-            
-            // Trigger tone update in keyboard controller
-            DispatchQueue.main.async { [weak self] in
-                self?.keyboardController?.updateToneFromAnalysis(["dominant_tone": tone])
-            }
-        }
-    }
-    
-    /// Check for other types of analysis data
-    private func checkForOtherAnalysisData(_ sharedDefaults: UserDefaults) {
-        // Check for co-parenting analysis
-        if let coParentingData = sharedDefaults.dictionary(forKey: "latest_sendCoParentingAnalysis") {
-            logger.info("👨‍👩‍👧‍👦 Co-parenting analysis data received")
-            // Process co-parenting data if needed
-        }
-        
-        // Check for EQ coaching
-        if let eqData = sharedDefaults.dictionary(forKey: "latest_sendEQCoaching") {
-            logger.info("🧠 EQ coaching data received")
-            // Process EQ data if needed
-        }
-        
-        // Check for child development analysis
-        if let childData = sharedDefaults.dictionary(forKey: "latest_sendChildDevelopmentAnalysis") {
-            logger.info("👶 Child development analysis data received")
-            // Process child development data if needed
-        }
-    }
-    
     deinit {
-        toneAnalysisTimer?.invalidate()
         logger.info("🗑️ KeyboardViewController deinitialized")
     }
 }

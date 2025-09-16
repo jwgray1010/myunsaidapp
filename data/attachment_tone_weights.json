@@ -1,0 +1,246 @@
+{
+    "version": "1.0.0",
+    "notes": "Attachment-style tone weighting applied after base tone bucket resolution. Offsets are additive to tone logits; multipliers scale post-offset. Category multipliers apply to ranking scores. Values are tuned to bias detection toward each style's communication patterns while preserving overall tone accuracy.",
+    "applyOrder": [
+        "tone_offsets",
+        "tone_multipliers", 
+        "context_boosts",
+        "intensity_blend",
+        "threshold_shift",
+        "cap_limits"
+    ],
+    "blending": {
+        "toneOffsetMode": "additive",
+        "toneMultiplierMode": "multiplicative", 
+        "contextMode": "additive",
+        "intensityMode": "weighted_average"
+    },
+    "defaults": {
+        "tone_offsets": {
+            "alert": 0.00,
+            "caution": 0.00,
+            "clear": 0.00
+        },
+        "tone_multipliers": {
+            "alert": 1.00,
+            "caution": 1.00,
+            "clear": 1.00
+        },
+        "category_multipliers": {
+            "profanity": 1.00,
+            "insult": 1.00,
+            "threat": 1.00,
+            "escalation": 1.00,
+            "uncertainty": 1.00,
+            "hedge": 1.00,
+            "concern": 1.00,
+            "repair": 1.00,
+            "boundary": 1.00,
+            "solution": 1.00,
+            "agreement": 1.00
+        },
+        "context_boosts": {
+            "CTX_CONFLICT": {
+                "alert": 0.00,
+                "caution": 0.00,
+                "clear": 0.00
+            },
+            "CTX_PLANNING": {
+                "alert": 0.00,
+                "caution": 0.00,
+                "clear": 0.00
+            },
+            "CTX_BOUNDARY": {
+                "alert": 0.00,
+                "caution": 0.00,
+                "clear": 0.00
+            },
+            "CTX_REPAIR": {
+                "alert": 0.00,
+                "caution": 0.00,
+                "clear": 0.00
+            }
+        },
+        "intensity_blend": {
+            "weight": 0.20
+        },
+        "threshold_shift": {
+            "alert": 0.00,
+            "caution": 0.00,
+            "clear": 0.00
+        },
+        "cap_limits": {
+            "per_tone_offset_max": 0.35,
+            "per_tone_multiplier_max": 1.40
+        }
+    },
+    "overrides": {
+        "anxious": {
+            "tone_offsets": {
+                "alert": -0.03,
+                "caution": 0.08,
+                "clear": 0.00
+            },
+            "tone_multipliers": {
+                "alert": 0.98,
+                "caution": 1.06,
+                "clear": 1.00
+            },
+            "category_multipliers": {
+                "uncertainty": 1.08,
+                "hedge": 1.06,
+                "concern": 1.04,
+                "repair": 1.03,
+                "escalation": 1.02
+            },
+            "context_boosts": {
+                "CTX_CONFLICT": {
+                    "alert": -0.02,
+                    "caution": 0.03,
+                    "clear": 0.00
+                },
+                "CTX_REPAIR": {
+                    "alert": -0.01,
+                    "caution": 0.04,
+                    "clear": 0.02
+                }
+            },
+            "intensity_blend": {
+                "weight": 0.25
+            },
+            "threshold_shift": {
+                "alert": 0.01,
+                "caution": -0.02,
+                "clear": 0.00
+            }
+        },
+        "avoidant": {
+            "tone_offsets": {
+                "alert": 0.00,
+                "caution": 0.03,
+                "clear": 0.08
+            },
+            "tone_multipliers": {
+                "alert": 0.99,
+                "caution": 1.02,
+                "clear": 1.06
+            },
+            "category_multipliers": {
+                "boundary": 1.04,
+                "solution": 1.03,
+                "agreement": 1.02,
+                "escalation": 0.98
+            },
+            "context_boosts": {
+                "CTX_PLANNING": {
+                    "alert": 0.00,
+                    "caution": 0.02,
+                    "clear": 0.03
+                },
+                "CTX_BOUNDARY": {
+                    "alert": 0.00,
+                    "caution": 0.02,
+                    "clear": 0.03
+                }
+            },
+            "intensity_blend": {
+                "weight": 0.18
+            },
+            "threshold_shift": {
+                "alert": 0.01,
+                "caution": 0.00,
+                "clear": -0.02
+            }
+        },
+        "disorganized": {
+            "tone_offsets": {
+                "alert": 0.06,
+                "caution": 0.06,
+                "clear": 0.00
+            },
+            "tone_multipliers": {
+                "alert": 1.05,
+                "caution": 1.04,
+                "clear": 1.00
+            },
+            "category_multipliers": {
+                "escalation": 1.04,
+                "threat": 1.03,
+                "uncertainty": 1.03,
+                "repair": 1.02
+            },
+            "context_boosts": {
+                "CTX_CONFLICT": {
+                    "alert": 0.03,
+                    "caution": 0.02,
+                    "clear": 0.00
+                },
+                "CTX_REPAIR": {
+                    "alert": 0.00,
+                    "caution": 0.02,
+                    "clear": 0.01
+                }
+            },
+            "intensity_blend": {
+                "weight": 0.28
+            },
+            "threshold_shift": {
+                "alert": -0.01,
+                "caution": -0.01,
+                "clear": 0.00
+            }
+        },
+        "secure": {
+            "tone_offsets": {
+                "alert": 0.00,
+                "caution": 0.00,
+                "clear": 0.10
+            },
+            "tone_multipliers": {
+                "alert": 1.00,
+                "caution": 1.00,
+                "clear": 1.08
+            },
+            "category_multipliers": {
+                "repair": 1.06,
+                "solution": 1.04,
+                "agreement": 1.03,
+                "boundary": 1.03,
+                "escalation": 0.96
+            },
+            "context_boosts": {
+                "CTX_REPAIR": {
+                    "alert": -0.02,
+                    "caution": 0.02,
+                    "clear": 0.04
+                },
+                "CTX_PLANNING": {
+                    "alert": 0.00,
+                    "caution": 0.00,
+                    "clear": 0.02
+                }
+            },
+            "intensity_blend": {
+                "weight": 0.15
+            },
+            "threshold_shift": {
+                "alert": 0.02,
+                "caution": 0.00,
+                "clear": -0.02
+            }
+        }
+    },
+    "integration": {
+        "scoreFormula": "final_tone = normalize( (base_tone + tone_offsets) * tone_multipliers + context_boosts + intensity_blend )",
+        "range": {
+            "min": 0.0,
+            "max": 1.0
+        },
+        "priority": [
+            "alert",
+            "caution", 
+            "clear"
+        ],
+        "normalize": true
+    }
+}

@@ -419,6 +419,9 @@ final class EnhancedCommunicatorService {
         let url = buildURL(path: path)
         guard let url else { throw CommunicatorError.invalidURL }
 
+        // 🔧 DEBUG: Log full URL before each request to catch path issues
+        print("🔧 CommunicatorService REQUEST \(url.absoluteString)")
+
         var req = URLRequest(url: url, timeoutInterval: 8.0)
         req.httpMethod = method.rawValue
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

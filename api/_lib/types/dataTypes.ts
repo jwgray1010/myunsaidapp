@@ -276,6 +276,7 @@ export interface DataCache {
   sarcasmIndicators?: SarcasmIndicator[];
   weightModifiers?: WeightModifier[];
   attachmentOverrides?: AttachmentOverride[];
+  attachmentToneWeights?: any;
   phraseEdges?: PhraseEdge[];
   toneTriggerWords?: ToneTriggerWord[];
   severityCollaboration?: SeverityCollaboration[];

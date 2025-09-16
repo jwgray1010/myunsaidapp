@@ -183,7 +183,7 @@ class DataLoaderService {
 
       this.cache.semanticThesaurus = this.readJsonSafe<any>(
         'semantic_thesaurus.json',
-        { version: '0' }
+        null // Optional file - if missing, skip semantic backbone features
       );
 
       // Missing files found in tone-analysis-endpoint.js
@@ -239,6 +239,12 @@ class DataLoaderService {
             high: { alert: +0.12, caution: -0.08, clear: -0.04 }
           }
         }
+      );
+
+      // Add attachment tone weights for style-specific tone adjustments
+      this.cache.attachmentToneWeights = this.readJsonSafe<any>(
+        'attachment_tone_weights.json',
+        { version: '0', overrides: {} }
       );
 
       this.initialized = true;
@@ -355,7 +361,7 @@ class DataLoaderService {
 
       this.cache.semanticThesaurus = this.readJsonSafe<any>(
         'semantic_thesaurus.json',
-        { version: '0' }
+        null // Optional file - if missing, skip semantic backbone features
       );
 
       // Missing files found in tone-analysis-endpoint.js
@@ -499,7 +505,7 @@ class DataLoaderService {
   }
 
   public getSemanticThesaurus(): any {
-    return this.cache.semanticThesaurus || { version: '0' };
+    return this.cache.semanticThesaurus; // Return null if not loaded - enables optional feature
   }
 
   public getUserPreferences(): any {
@@ -581,6 +587,10 @@ class DataLoaderService {
   getAllAdviceItems(): AdviceItem[] {
     const db = this.get('therapyAdvice');
     return normalizeAdvice(db);
+  }
+
+  public getAttachmentToneWeights(): any {
+    return this.cache.attachmentToneWeights || { version: '0', overrides: {} };
   }
 }
 

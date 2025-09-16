@@ -14,6 +14,124 @@ import { dataLoader } from './dataLoader';
 import { processWithSpacy, processWithSpacySync } from './spacyBridge';
 
 // -----------------------------
+// Semantic Backbone Configuration
+// -----------------------------
+const ENABLE_SB = process.env.ENABLE_SEMANTIC_BACKBONE === '1';
+
+type ToneLabel = 'clear'|'caution'|'alert';
+
+/**
+ * Apply semantic backbone nudges to tone analysis results
+ * Matches clusters/contexts from semantic_thesaurus.json and applies bounded bias
+ */
+function applySemanticBackboneNudges(
+  text: string,
+  tone: { classification: string; confidence: number },
+  contextLabel: string
+): {
+  tone: { classification: ToneLabel | string; confidence: number };
+  contextLabel: string;
+  debug?: any;
+} {
+  const sb = dataLoader.getSemanticThesaurus();
+  if (!ENABLE_SB || !sb) {
+    return { tone, contextLabel };
+  }
+
+  // --- naive hybrid match (regex + lexical); fast & safe ---
+  const hits: Array<{id: string; score: number; contexts: string[]}> = [];
+  const lower = text.toLowerCase();
+
+  for (const c of (sb.clusters ?? [])) {
+    let s = 0;
+    
+    // Check regex patterns
+    for (const r of (c.match?.regex ?? [])) {
+      try { 
+        if (new RegExp(r, 'i').test(text)) s += 1.0; 
+      } catch (e) {
+        // Skip invalid regex patterns
+      }
+    }
+    
+    // Check lexical matches
+    for (const t of (c.match?.lexical ?? [])) {
+      if (lower.includes(t.toLowerCase())) s += 0.6;
+    }
+    
+    if (s > 0) {
+      hits.push({ 
+        id: c.id, 
+        score: s, 
+        contexts: c.contextLinks ?? [] 
+      });
+    }
+  }
+  
+  hits.sort((a, b) => b.score - a.score);
+
+  // collect context biases
+  let biasAlert = 0, biasCaution = 0, biasClear = 0;
+  const ctxIds = new Set<string>(hits.flatMap(h => h.contexts));
+  
+  for (const ctx of (sb.contexts ?? [])) {
+    if (!ctxIds.has(ctx.id)) continue;
+    const b = ctx.bias || {};
+    biasAlert += b.alert ?? 0;
+    biasCaution += b.caution ?? 0;
+    biasClear += b.clear ?? 0;
+  }
+
+  // reverse register / sarcasm dampeners from settings
+  const rr = sb.settings?.reverseRegisterRule;
+  const irony = sb.settings?.ironySarcasm;
+  let damp = 1.0;
+  
+  if (rr?.enabled) {
+    const banterMarkers = rr.banter_markers ?? [];
+    if (banterMarkers.some((m: string) => lower.includes(m))) {
+      damp *= rr.dampenMultiplier ?? 0.6;
+    }
+  }
+  
+  if (irony?.enabled) {
+    const eye = new Set(irony.signals?.emoji_eye_roll ?? []);
+    if ([...eye].some(e => typeof e === 'string' && text.includes(e))) {
+      biasAlert += (sb.settings?.thresholds?.irony_override ?? 0.65) * 0.05;
+    }
+  }
+
+  // map current classification to deltas
+  const cls = tone.classification as ToneLabel | string;
+  const conf = tone.confidence;
+
+  const delta =
+    (cls === 'alert') ? biasAlert :
+    (cls === 'caution') ? biasCaution :
+    (cls === 'clear') ? biasClear : 0;
+
+  // apply small, bounded nudges (using existing clamp01 function from file)
+  const nudgedConf = Math.max(0, Math.min(1, conf * damp + Math.max(-0.06, Math.min(0.06, delta))));
+
+  // optionally tighten context label from strongest context
+  let outCtx = contextLabel;
+  if (ctxIds.has('CTX_CONFLICT')) outCtx = 'conflict';
+  else if (ctxIds.has('CTX_REPAIR')) outCtx = 'repair';
+  else if (ctxIds.has('CTX_PLANNING')) outCtx = 'planning';
+  else if (ctxIds.has('CTX_BOUNDARY')) outCtx = 'boundary';
+
+  return {
+    tone: { classification: cls, confidence: nudgedConf },
+    contextLabel: outCtx,
+    debug: { 
+      hits: hits.slice(0, 5), 
+      bias: { biasAlert, biasCaution, biasClear }, 
+      damp 
+    }
+  };
+}
+
+// -----------------------------
 // Shared utility for safe array conversion
 // -----------------------------
 function arrify<T = any>(x: unknown): T[] {
@@ -1666,6 +1784,16 @@ export class ToneAnalysisService {
         confidence = Math.max(0.1, confidence * 0.7); // Reduce confidence by 30% for new users
       }
 
+      // Apply semantic backbone nudges (optional feature)
+      const nudgedResult = applySemanticBackboneNudges(
+        text,
+        { classification, confidence },
+        doc.contextLabel || options.context || 'general'
+      );
+      classification = nudgedResult.tone.classification;
+      confidence = nudgedResult.tone.confidence;
+      const adjustedContextLabel = nudgedResult.contextLabel;
+
       // Pack result
       const emotions = {
         joy: scores.positive || 0,
@@ -1701,6 +1829,11 @@ export class ToneAnalysisService {
 
       // ✅ Add context severity for bucket mapping
       (result as any).contextSeverity = (fr as any).contextSeverity;
+
+      // Add semantic backbone debug info if enabled
+      if (ENABLE_SB && nudgedResult.debug) {
+        (result as any).semanticBackbone = nudgedResult.debug;
+      }
 
       if (options.includeAttachmentInsights) {
         result.attachment_insights = {

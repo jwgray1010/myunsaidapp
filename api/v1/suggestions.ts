@@ -1,12 +1,14 @@
 // api/v1/suggestions.ts
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { withCors, withMethods, withValidation, withErrorHandling, withLogging } from '../_lib/wrappers';
+import { withCors, withMethods, withValidation, withErrorHandling, withLogging, withResponseNormalization } from '../_lib/wrappers';
 import { suggestionsRateLimit } from '../_lib/rateLimit';
-import { success } from '../_lib/http';
 import { suggestionRequestSchema } from '../_lib/schemas/suggestionRequest';
+import { normalizeSuggestionResponse } from '../_lib/schemas/normalize';
 import { toneRequestSchema } from '../_lib/schemas/toneRequest';
 import { suggestionsService } from '../_lib/services/suggestions';
+import { dataLoader } from '../_lib/services/dataLoader';
 import { MLAdvancedToneAnalyzer, mapToneToBuckets } from '../_lib/services/toneAnalysis';
+import { adjustToneByAttachment, applyThresholdShift } from '../_lib/services/utils/attachmentToneAdjust';
 import { CommunicatorProfile } from '../_lib/services/communicatorProfile';
 import { logger } from '../_lib/logger';
 import { ensureBoot } from '../_lib/bootstrap';
@@ -145,8 +147,37 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       data.attachmentStyle || attachmentEstimate.primary || 'secure',
       detectedContext || 'general'
     );
-    const uiBuckets = bucketed?.buckets || { clear: 1/3, caution: 1/3, alert: 1/3 };
-    const ui_tone = (Object.entries(uiBuckets).sort((a,b)=> (b[1] as number) - (a[1] as number))[0][0]) as 'clear'|'caution'|'alert';
+    const baseBuckets = bucketed?.buckets || { clear: 1/3, caution: 1/3, alert: 1/3 };
+    
+    // Apply attachment-style tone adjustments
+    const attachmentStyle = data.attachmentStyle || attachmentEstimate.primary || 'secure';
+    const contextKey = (detectedContext === 'conflict' ? 'CTX_CONFLICT'
+                     : detectedContext === 'planning' ? 'CTX_PLANNING'
+                     : detectedContext === 'boundary' ? 'CTX_BOUNDARY'
+                     : detectedContext === 'repair'   ? 'CTX_REPAIR'
+                     : 'CTX_GENERAL');
+    
+    // Get attachment tone weights config and apply adjustments
+    const attachmentToneConfig = dataLoader.getAttachmentToneWeights();
+    const intensityScore = suggestionAnalysis.analysis?.flags?.intensityScore || 0.5;
+    
+    const adjustedBuckets = adjustToneByAttachment(
+      { classification: toneResult?.classification || 'neutral', confidence: toneResult?.confidence || 0.33 },
+      baseBuckets,
+      attachmentStyle as any,
+      contextKey,
+      intensityScore,
+      attachmentToneConfig
+    );
+    
+    // Apply threshold shift for final primary bucket selection
+    const { primary: finalPrimary, distribution: uiBuckets } = applyThresholdShift(
+      adjustedBuckets,
+      attachmentStyle as any,
+      attachmentToneConfig
+    );
+    
+    const ui_tone = finalPrimary;
     
     const processingTime = Date.now() - startTime;
     
@@ -159,10 +190,24 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     });
     
     const response = {
-      ok: true,
-      userId,
+      text: suggestionAnalysis.original_text,
       original_text: suggestionAnalysis.original_text,
       context: suggestionAnalysis.context,
+      ui_tone,
+      ui_distribution: uiBuckets,
+      client_seq: data.client_seq || data.clientSeq,
+      original_analysis: {
+        tone: ui_tone,
+        sentiment: 0, // Default sentiment
+        clarity_score: 0.5, // Default clarity
+        empathy_score: 0.5, // Default empathy
+        attachment_indicators: [],
+        communication_patterns: []
+      },
+      ok: true,
+      success: true,
+      version: 'v1.0.0-advanced',
+      userId,
       attachmentEstimate,
       isNewUser,
       suggestions: suggestionAnalysis.suggestions.map((s: any, index: number) => ({
@@ -177,10 +222,6 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
         attachment_informed: s.attachment_informed
       })),
       analysis_meta: suggestionAnalysis.analysis_meta,
-      // ➕ UI fields to match /tone:
-      ui_tone,
-      ui_distribution: uiBuckets,
-      client_seq: data.client_seq || data.clientSeq,
       metadata: {
         processing_time_ms: processingTime,
         model_version: 'v1.0.0-advanced',
@@ -190,18 +231,25 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       }
     };
     
-    return success(res, response);
+    return response;
   } catch (error) {
     logger.error('Advanced suggestions generation failed:', error);
     throw error;
   }
 };
 
+const responseHandler = async (req: VercelRequest, res: VercelResponse) => {
+  const data = req.body; // Should be already validated by withValidation
+  return handler(req, res, data);
+};
+
 const wrappedHandler = withErrorHandling(
   withLogging(
     withCors(
       withMethods(['POST'], 
-        withValidation(suggestionRequestSchema, handler)
+        withValidation(suggestionRequestSchema, 
+          withResponseNormalization(normalizeSuggestionResponse, responseHandler)
+        )
       )
     )
   )

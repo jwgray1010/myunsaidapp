@@ -179,6 +179,29 @@ final class KeyButtonFactory {
         return b
     }
     
+    /// Compact mode button (123/ABC) with 40% smaller font and size
+    static func makeModeButton(title: String) -> UIButton {
+        let b = ExtendedTouchButton(type: .system)
+        commonKeySetup(b, hPad: 4, vPad: 3) // Reduced padding by ~40%
+        b.setTitle(title, for: .normal)
+        b.accessibilityLabel = title
+
+        // 40% smaller font: 16 * 0.6 = 9.6 ≈ 10
+        b.titleLabel?.font = .systemFont(ofSize: 10, weight: .medium)
+        b.titleLabel?.adjustsFontForContentSizeCategory = false
+        b.titleLabel?.adjustsFontSizeToFitWidth = true
+        b.titleLabel?.minimumScaleFactor = 0.90
+        b.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        applySpecialKeyStyle(to: b, background: .systemGray4, text: .label)
+        
+        // Make the button physically smaller by 40% in width
+        let reducedWidth = max(26, 44 * 0.6) // About 26pt width
+        b.widthAnchor.constraint(equalToConstant: reducedWidth).isActive = true
+        
+        return b
+    }
+
 static func makeGlobeButton() -> UIButton {
     let b = GlobeButton(type: .system)
     commonKeySetup(b, hPad: 2, vPad: 2)

@@ -47,15 +47,23 @@ export const suggestionRequestSchema = z.object({
 
 export type SuggestionRequest = z.infer<typeof suggestionRequestSchema>;
 
-// Enhanced suggestion item schema
+/** SUGGESTION ITEM — accept backend fields too */
 export const suggestionItemSchema = z.object({
-  text: z.string().describe('Suggested therapy advice text'),
-  type: z.enum(['advice', 'emotional_support', 'communication_guidance', 'boundary_setting', 'conflict_resolution']).describe('Type of suggestion'),
-  confidence: z.number().min(0).max(1).describe('Confidence level of the suggestion'),
-  reason: z.string().describe('Explanation for why this suggestion is recommended'),
-  attachmentFriendly: z.boolean().optional().describe('Whether this suggestion is optimized for the user\'s attachment style'),
-  category: z.enum(['communication', 'emotional', 'relationship', 'conflict_resolution']).optional().describe('Category of the suggestion'),
-});
+  // canonical
+  text: z.string(),
+  type: z.enum(['advice','emotional_support','communication_guidance','boundary_setting','conflict_resolution']),
+  confidence: z.number().min(0).max(1),
+  reason: z.string(),
+  attachmentFriendly: z.boolean().optional(),
+  category: z.enum(['communication','emotional','relationship','conflict_resolution']).optional(),
+
+  // backend extras (passthrough, but typed)
+  id: z.union([z.number(), z.string()]).optional(),
+  priority: z.number().optional(),
+  context_specific: z.boolean().optional(),
+  attachment_informed: z.boolean().optional(),
+  categories: z.array(z.string()).optional(),
+}).passthrough();
 
 export type SuggestionItem = z.infer<typeof suggestionItemSchema>;
 
@@ -71,34 +79,50 @@ export const originalAnalysisSchema = z.object({
 
 export type OriginalAnalysis = z.infer<typeof originalAnalysisSchema>;
 
-// Response metadata schema
+/** METADATA — allow backend keys via passthrough */
 export const responseMetadataSchema = z.object({
-  suggestion_count: z.number().describe('Number of suggestions generated'),
-  processing_time_ms: z.number().describe('Processing time in milliseconds'),
-  model_version: z.string().describe('Version of the suggestion model used'),
-  features_used: z.array(z.string()).optional().describe('Features that were actually used in generation'),
-  attachment_style_applied: z.string().optional().describe('Attachment style that was applied'),
-});
+  suggestion_count: z.number(),
+  processing_time_ms: z.number(),
+  model_version: z.string(),
+  features_used: z.array(z.string()).optional(),
+  attachment_style_applied: z.string().optional(),
+
+  // backend present keys (allowed, not required)
+  status: z.string().optional(),
+  attachment_informed: z.boolean().optional(),
+}).passthrough();
 
 export type ResponseMetadata = z.infer<typeof responseMetadataSchema>;
 
-// Complete SuggestionResponse schema
+// Accept both canonical & backend response; keep success/version/ui fields
 export const suggestionResponseSchema = z.object({
-  text: z.string().describe('Original input text'),
-  suggestions: z.array(suggestionItemSchema).describe('Array of generated suggestions'),
-  original_analysis: originalAnalysisSchema.describe('Analysis of the original message'),
-  metadata: responseMetadataSchema.describe('Response metadata'),
-  // ➕ Surface the same UI fields here for consistency with /tone responses
-  ui_tone: z.enum(['clear','caution','alert']).optional().describe('UI bucket for the pill color'),
+  // canonical
+  text: z.string().optional(),               // canonical original text
+  suggestions: z.array(suggestionItemSchema),
+  original_analysis: originalAnalysisSchema.optional(),
+  metadata: responseMetadataSchema,
+  ui_tone: z.enum(['clear','caution','alert']).optional(),
   ui_distribution: z.object({
-    clear: z.number().min(0).max(1),
-    caution: z.number().min(0).max(1),
-    alert: z.number().min(0).max(1),
-  }).partial().optional().describe('Bucket probabilities used to derive ui_tone'),
-  client_seq: z.number().optional().describe('Echoed client sequence for last-writer-wins'),
-  success: z.boolean().default(true).describe('Whether the request was successful'),
-  version: z.string().default('1.0.0').describe('API version used'),
-});
+    clear: z.number().min(0).max(1).optional(),
+    caution: z.number().min(0).max(1).optional(),
+    alert: z.number().min(0).max(1).optional(),
+  }).optional(),
+  client_seq: z.number().optional(),
+  success: z.boolean().default(true),
+  version: z.string().default('1.0.0'),
+
+  // backend fields (presently returned by your endpoint)
+  ok: z.boolean().optional(),
+  userId: z.string().optional(),
+  original_text: z.string().optional(),      // backend name for original input
+  context: z.string().optional(),
+  analysis_meta: z.any().optional(),         // keep loose; already summarized into metadata above
+  isNewUser: z.boolean().optional(),
+  attachmentEstimate: z.any().optional(),
+}).passthrough().refine(
+  (v) => typeof v.text === 'string' || typeof v.original_text === 'string',
+  { message: 'Either "text" or "original_text" must be present on SuggestionResponse.' }
+);
 
 export type SuggestionResponse = z.infer<typeof suggestionResponseSchema>;
 

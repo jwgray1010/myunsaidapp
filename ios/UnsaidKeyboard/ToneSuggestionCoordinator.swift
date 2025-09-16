@@ -1,6 +1,7 @@
 import Foundation
 import os.log
 import Network
+import QuartzCore  // For CACurrentMediaTime
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -51,6 +52,42 @@ enum APIError: LocalizedError {
     }
 }
 
+// MARK: - Async Wrappers
+extension ToneSuggestionCoordinator {
+    /// Async wrapper for fetchSuggestions to avoid closure capture issues
+    func fetchSuggestionsAsync(for text: String) async -> [String] {
+        await withCheckedContinuation { cont in
+            self.fetchSuggestions(for: text) { arr in
+                cont.resume(returning: arr ?? [])
+            }
+        }
+    }
+}
+
+// MARK: - API Response Models
+struct ToneEnvelope: Decodable {
+    let version: String?
+    let timestamp: String?
+    let client_seq: Int?
+    let success: Bool?
+    let data: ToneData
+}
+
+struct ToneData: Decodable {
+    let ui_tone: String?
+    let raw_tone: String?
+    let intense: Bool?
+    let score: Double?
+    let explanations: [String]?
+}
+
+enum UITone: String, CaseIterable {
+    case alert = "alert"
+    case caution = "caution" 
+    case clear = "clear"
+    case neutral = "neutral"
+}
+
 // MARK: - Delegate Protocol
 @MainActor
 protocol ToneSuggestionDelegate: AnyObject {
@@ -72,10 +109,86 @@ private struct SharedConvItem: Codable {
 
 // MARK: - Coordinator
 final class ToneSuggestionCoordinator {
+    // MARK: - Request Token Management (Phase 1: Safe without client_seq)
+    private var latestRequestToken: UUID?
+    private var currentTone: UITone = .neutral
+    private var lastChangeAt: CFTimeInterval = 0
+    
     // MARK: Public
     weak var delegate: ToneSuggestionDelegate?
+    
+    // MARK: - Circuit Breaker per endpoint
+    private struct CircuitKey: Hashable { 
+        let host: String
+        let path: String 
+    }
+    private var circuitBreakers: [CircuitKey: Date] = [:]
+    
+    // Performance Optimization #4: Track circuit breaker state to reduce log chatter
+    private var breakerOpen: Set<CircuitKey> = []
+    
+    private func setBreaker(_ key: CircuitKey, open: Bool) {
+        if open {
+            if breakerOpen.insert(key).inserted { 
+                throttledLog("🚨 CB OPEN \(key.path)", category: "breaker") 
+            }
+        } else {
+            if breakerOpen.remove(key) != nil { 
+                throttledLog("✅ CB CLOSE \(key.path)", category: "breaker") 
+            }
+        }
+    }
 
-    // MARK: - Cached utilities
+    // MARK: - Robust UI Tone Extraction
+    
+    /// Extract UI tone from response envelope with robust fallback
+    private func extractUITone(from env: ToneEnvelope) -> UITone {
+        // Prefer explicit ui_tone from data
+        if let t = env.data.ui_tone, let mapped = UITone(rawValue: t) {
+            throttledLog("🎯 ✅ EXTRACTED ui_tone: '\(t)' -> \(mapped)", category: "tone_debug")
+            return mapped
+        }
+        
+        // Fallback mapping from raw_tone + intensity  
+        let raw = (env.data.raw_tone ?? "").lowercased()
+        let intense = env.data.intense ?? false
+        let result: UITone
+        
+        switch (raw, intense) {
+        case ("anger", _), ("hostile", _), ("contempt", _), ("threat", _):
+            result = .alert
+        case ("frustration", _), ("critique", _), ("defensive", _):
+            result = .caution
+        case ("clear", _):
+            result = .clear
+        case ("", _):
+            result = .neutral
+        default:
+            result = intense ? .alert : .caution
+        }
+        
+        throttledLog("🎯 ⚠️ FALLBACK MAPPING: raw='\(raw)' intense=\(intense) -> \(result)", category: "tone_debug")
+        return result
+    }
+    
+    /// Single source of truth for tone updates (Phase 1: Clean without client_seq)
+    private func setToneIfNeeded(_ new: UITone, animated: Bool = true) {
+        let now = CACurrentMediaTime()
+        
+        // Update conditions: tone changed, periodic refresh, or neutral->non-neutral
+        if new != currentTone || now - lastChangeAt > 0.8 || (currentTone == .neutral && new != .neutral) {
+            throttledLog("🎯 ✅ UPDATING TONE: \(currentTone.rawValue) -> \(new.rawValue)", category: "tone_debug")
+            currentTone = new
+            lastChangeAt = now
+            
+            // Call delegate on main thread
+            DispatchQueue.main.async {
+                self.delegate?.didUpdateToneStatus(new.rawValue)
+            }
+        } else {
+            throttledLog("🎯 ⚠️ SKIP SET_TONE \(currentTone.rawValue) -> \(new.rawValue)", category: "tone_debug")
+        }
+    }
     private static let iso8601: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -223,6 +336,13 @@ final class ToneSuggestionCoordinator {
     private var suggestionSnapshot: String?
     private var enhancedAnalysisResults: [String: Any]?
     
+    // MARK: - Constants
+    
+    /// Single source of truth for allowed suggestion features
+    private let allowedSuggestionFeatures: Set<String> = [
+        "advice", "quick_fixes", "evidence", "emotional_support", "context_analysis"
+    ]
+    
     // MARK: - Snapshot-based UI updates
     private var lastNotifiedSuggestions: [String] = []
     private var lastNotifiedToneStatus: String = "neutral"
@@ -242,7 +362,20 @@ final class ToneSuggestionCoordinator {
     private var inFlightRequests: [String: URLSessionDataTask] = [:] // content hash -> task
     private var inFlightRequestHashes: Set<String> = [] // Track request hashes for deduplication
     private var requestCompletionTimes: [String: Date] = [:] // content hash -> completion time
-    private let requestCacheTTL: TimeInterval = 5.0 // 5 second cache for identical requests
+    
+    // Performance Optimization #7: Single-flight suggestions with tap throttling
+    private var suggestionsInFlight = false
+    private var lastSuggestionsAt: Date = .distantPast
+    private let suggestionTapCooldown: TimeInterval = 0.6
+    // Performance Optimization #3: Per-endpoint cache TTLs
+    private func cacheTTL(for path: String) -> TimeInterval {
+        switch path {
+        case "/api/v1/tone": return 0.8 // Fast turnaround for real-time analysis
+        case "/api/v1/suggestions": return 5.0 // Medium cache for suggestion stability
+        case "/api/v1/communicator/observe": return 10.0 // Longer cache for profile updates
+        default: return 5.0 // Default fallback
+        }
+    }
 
     // MARK: - Shared Defaults
     // private let sharedUserDefaults: UserDefaults = AppGroups.shared
@@ -485,12 +618,12 @@ final class ToneSuggestionCoordinator {
         // debugPrint(" - New User: \(personalityBridge.isNewUser())")
         // debugPrint(" - Learning Days Remaining: \(personalityBridge.learningDaysRemaining())")
         
-        // Health ping to verify API configuration - only if no real text to avoid overwriting tone
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            if self.currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                self.debugPing()
-            }
-        }
+        // Note: Removed debugPing() call to prevent any startup tone changes
+        // DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        //     if self.currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        //         self.debugPing()
+        //     }
+        // }
         #endif
     }
 
@@ -543,17 +676,22 @@ final class ToneSuggestionCoordinator {
         updateCurrentText(text)
         lastKeyStrokeTime = Date()
         
+        throttledLog("🎯 📝 HANDLE_TEXT_CHANGE: '\(String(text.prefix(50)))...', length: \(text.count)", category: "tone_debug")
+        
         // Guard against empty/unchanged text (don't fire network calls)
         guard shouldEnqueueAnalysis() else {
             throttledLog("🚫 Skipping analysis - shouldEnqueueAnalysis returned false for text: '\(text.prefix(50))'", category: "analysis")
             return
         }
         
+        throttledLog("🎯 ✅ PASSED shouldEnqueueAnalysis - proceeding with tone analysis", category: "tone_debug")
+        
         // Cancel in-flight requests for this text field when new keystroke arrives
         cancelInFlightRequestsForCurrentField()
         
         // Wrap network trigger in trailing debounce (200ms) keyed by active text field
         print("📝 Enqueueing tone analysis for: '\(text.prefix(50))...'")
+        throttledLog("🎯 🕐 DEBOUNCING ANALYSIS: \(debounceInterval)s", category: "tone_debug")
         pendingWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in 
             // Switch to pause-based throttling: check if user paused typing for 250ms
@@ -629,6 +767,51 @@ final class ToneSuggestionCoordinator {
         }
         pendingWorkItem = work
         workQueue.async(execute: work)
+    }
+
+    /// Fetch suggestions for specific text with callback (for tone button tap)
+    func fetchSuggestions(for text: String, completion: @escaping ([String]?) -> Void) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            completion(nil)
+            return
+        }
+        
+        // Performance Optimization #7: Single-flight + tap throttling
+        let now = Date()
+        if suggestionsInFlight || now.timeIntervalSince(lastSuggestionsAt) < suggestionTapCooldown {
+            completion(nil)
+            return
+        }
+        suggestionsInFlight = true
+        lastSuggestionsAt = now
+        
+        throttledLog("🎯 Fetching suggestions for tone button tap", category: "suggestions")
+        
+        var textToAnalyze = text
+        if textToAnalyze.count > 1000 { textToAnalyze = String(textToAnalyze.suffix(1000)) }
+
+        var context: [String: Any] = [
+            "text": textToAnalyze,
+            "userId": getUserId(),
+            "userEmail": getUserEmail() ?? NSNull(),
+            "features": ["advice", "evidence"], // Only advice, not rewrite
+            "meta": [
+                "source": "keyboard_tone_button",
+                "request_type": "suggestion",
+                "context": "general",
+                "timestamp": isoTimestamp()
+            ]
+        ]
+        context.merge(personalityPayload()) { _, new in new }
+
+        callSuggestionsAPI(context: context, usingSnapshot: textToAnalyze) { [weak self] suggestion in
+            self?.suggestionsInFlight = false // Reset single-flight flag
+            if let suggestion = suggestion, !suggestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                completion([suggestion])
+            } else {
+                completion(nil)
+            }
+        }
     }
 
     func resetState() {
@@ -825,25 +1008,39 @@ final class ToneSuggestionCoordinator {
         return similarity > 0.92
     }
 
+    func shouldAttemptAnalysis() -> Bool {
+        return shouldEnqueueAnalysis()
+    }
+    
     private func shouldEnqueueAnalysis() -> Bool {
+        // Performance Optimization #6: Don't queue work during global network backoff
+        if Date() < netBackoffUntil { return false }
+        
         let now = Date()
         let trimmed = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
         
         // Guard: empty text doesn't fire network calls
         if trimmed.isEmpty && lastAnalyzedText.isEmpty { return false }
-        
-        if trimmed.count < 2, !trimmed.isEmpty { return false }
         if trimmed.isEmpty, !lastAnalyzedText.isEmpty { return true }
         if now.timeIntervalSince(lastAnalysisTime) < 0.1 { return false }
 
-        // NEW: skip micro deltas within 500ms (user still mid-token)
-        if now.timeIntervalSince(lastAnalysisTime) < 0.5,
-           abs(trimmed.count - lastAnalyzedText.count) <= 1 {
-            return false
-        }
+        // Enhanced logic: neutral doesn't "stick", plus key triggers
+        let prevLen = lastAnalyzedText.count
+        let newLen = trimmed.count
+        let lastChar = trimmed.last
         
-        // Enhanced: Skip semantically similar text to prevent redundant analysis
-        if isSemanticallySimilar(trimmed, lastAnalyzedText) {
+        // Always analyze if current tone is neutral (prevents sticking)
+        if currentTone == .neutral { return true }
+        
+        // Analyze on significant length changes
+        if abs(newLen - prevLen) >= 3 { return true }
+        
+        // Analyze on punctuation or space
+        if let k = lastChar, ".!? ".contains(k) { return true }
+        
+        // Reduced blocking for micro-changes
+        if now.timeIntervalSince(lastAnalysisTime) < 0.2,
+           abs(newLen - prevLen) <= 2 {
             return false
         }
         
@@ -954,7 +1151,6 @@ final class ToneSuggestionCoordinator {
         // Build main payload dictionary
         var payload: [String: Any] = [
             "attachmentStyle": resolved.style ?? "secure",
-            "features": ["rewrite", "advice", "evidence"],
             "meta": metaDict,
             "context": "general",
             "user_profile": profile
@@ -1117,18 +1313,31 @@ final class ToneSuggestionCoordinator {
         payload.merge(personalityPayload()) { _, new in new }
         payload["conversationHistory"] = exportConversationHistoryForAPI(withCurrentText: snapshot)
 
-        callEndpoint(path: "api/v1/suggestions", payload: payload) { [weak self] data in
+        // 🛡️ Sanitize features right before network call (covers all code paths)
+        var safePayload = payload
+        if var feats = safePayload["features"] as? [String] {
+            feats = feats.filter { allowedSuggestionFeatures.contains($0) }
+            // dedupe to be tidy
+            safePayload["features"] = Array(Set(feats))
+        }
+        
+        // Optional: Log the final sanitized features for debugging
+        throttledLog("suggestions features: \((safePayload["features"] as? [String])?.joined(separator: ",") ?? "<none>")", category: "api")
+
+        callEndpoint(path: "api/v1/suggestions", payload: safePayload) { [weak self] data in
             guard let self else { completion(nil); return }
             guard requestID == self.latestRequestID else { completion(nil); return }
 
-            let d = data ?? [:]
-            if !d.isEmpty {
-                self.enhancedAnalysisResults = d
-                self.storeAPIResponseInSharedStorage(endpoint: "suggestions", request: payload, response: d)
+            let root = data ?? [:]
+            let body: [String: Any] = (root["data"] as? [String: Any]) ?? root  // ← prefer top-level, fallback to data{}
+            
+            if !root.isEmpty {
+                self.enhancedAnalysisResults = root
+                self.storeAPIResponseInSharedStorage(endpoint: "suggestions", request: payload, response: root)
             }
 
-            // Update tone with defensive parsing - NOW with UI tone bucketing like tone endpoint
-            let uiTone = self.uiToneString(from: d)
+            // Update tone with defensive parsing - parse from body (top-level or data{})
+            let uiTone = self.uiToneString(from: body)
             
             if uiTone != "neutral" {
                 DispatchQueue.main.async {
@@ -1139,49 +1348,50 @@ final class ToneSuggestionCoordinator {
                         self.delegate?.didUpdateToneStatus(uiTone)  // Only send clamped UI tones
                         
                         // Extract confidence with defensive parsing
-                        let confidence = self.safeDouble(from: d, keys: ["confidence"], fallback: 0.0)
+                        let confidence = self.safeDouble(from: body, keys: ["confidence"], fallback: 0.0)
                         if confidence > 0.0 {
-                            self.storeToneAnalysisResult(data: d, status: uiTone, confidence: confidence)
+                            self.storeToneAnalysisResult(data: body, status: uiTone, confidence: confidence)
                         }
                     }
                 }
             }
 
-            // Extract suggestion with defensive parsing
-            let suggestion = extractSuggestionSafely(from: d)
+            // Extract suggestion with defensive parsing - parse from body (top-level or data{})
+            let suggestion = extractSuggestionSafely(from: body)
             completion(suggestion)
         }
     }
     
     /// Safely extract suggestion from API response with multiple fallbacks
     private func extractSuggestionSafely(from dict: [String: Any]) -> String? {
-        // Try simple string fields first
-        let simpleSuggestion = safeString(from: dict, keys: ["rewrite", "general_suggestion", "suggestion", "data"])
-        if !simpleSuggestion.isEmpty {
-            return simpleSuggestion
+        // 1) Preferred: suggestions[0].text  (your new server)
+        if let arr = dict["suggestions"] as? [[String: Any]],
+           let first = arr.first {
+            let t = safeString(from: first, keys: ["text", "message", "advice"])
+            if !t.isEmpty { return t }
         }
-        
-        // Try nested suggestion arrays
-        let suggestionArrays = safeArrayOfDicts(from: dict, keys: ["suggestions"])
-        if let firstSuggestion = suggestionArrays.first {
-            let text = safeString(from: firstSuggestion, keys: ["text"])
-            if !text.isEmpty { return text }
-        }
-        
-        // Try quickFixes array
-        if let quickFixes = dict["quickFixes"] as? [String], let first = quickFixes.first, !first.isEmpty {
+
+        // 2) quickFixes: [String]
+        if let fixes = dict["quickFixes"] as? [String], let first = fixes.first, !first.isEmpty {
             return first
         }
-        
-        // Try extras nested suggestions
-        if let extras = dict["extras"] as? [String: Any] {
-            let nestedSuggestions = safeArrayOfDicts(from: extras, keys: ["suggestions"])
-            if let firstNested = nestedSuggestions.first {
-                let text = safeString(from: firstNested, keys: ["text"])
-                if !text.isEmpty { return text }
-            }
+
+        // 3) single-field advice string (some backends)
+        let advice = safeString(from: dict, keys: ["advice", "tip", "suggestion", "general_suggestion"])
+        if !advice.isEmpty { return advice }
+
+        // 4) extras.suggestions[0].text (legacy nesting)
+        if let extras = dict["extras"] as? [String: Any],
+           let arr = extras["suggestions"] as? [[String: Any]],
+           let first = arr.first {
+            let t = safeString(from: first, keys: ["text"])
+            if !t.isEmpty { return t }
         }
-        
+
+        // 5) absolute last resort (legacy): data as a plain string
+        if let s = dict["data"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return s
+        }
         return nil
     }
 
@@ -1203,12 +1413,16 @@ final class ToneSuggestionCoordinator {
     // 'angry' and similar raw labels must never directly set the pill.
     /// Convert server response to clamped UI tone string (alert|caution|clear|neutral only)
     private func uiToneString(from response: [String: Any]) -> String {
+        throttledLog("🎯 🔍 PARSING UI TONE - Full response keys: \(Array(response.keys))", category: "tone_debug")
+        
         // FIRST: Check for direct ui_tone field (this is what the API returns!)
         let directUITone = safeString(from: response, keys: ["ui_tone", "uiTone"], fallback: "")
         if !directUITone.isEmpty {
             let normalized = normalizeToneLabel(directUITone)
-            throttledLog("🎯 Found direct ui_tone: '\(directUITone)' -> normalized: '\(normalized)'", category: "tone_debug")
+            throttledLog("🎯 ✅ Found direct ui_tone: '\(directUITone)' -> normalized: '\(normalized)'", category: "tone_debug")
             return normalized
+        } else {
+            throttledLog("🎯 ⚠️ No direct ui_tone found, checking nested analysis...", category: "tone_debug")
         }
         
         // SECOND: Try explicit ui_distribution buckets (including neutral)
@@ -1332,8 +1546,17 @@ final class ToneSuggestionCoordinator {
     }
 
     private func callToneAnalysisAPI(context: [String: Any], completion: @escaping (String?) -> Void) {
+        let textToAnalyze = context["text"] as? String ?? ""
+        
+        // Generate unique token for this request (Phase 1: Safe without client_seq)
+        let token = UUID()
+        latestRequestToken = token
+        
+        throttledLog("🎯 🚀 INITIATING TONE API CALL - Text: '\(String(textToAnalyze.prefix(50)))...' Token: \(token.uuidString.prefix(8))", category: "tone_debug")
+        
         guard isNetworkAvailable, isAPIConfigured, Date() >= netBackoffUntil else { 
-            completion(nil)  // Don't overwrite the UI on failures
+            throttledLog("🎯 ❌ API CALL BLOCKED - Network: \(isNetworkAvailable), Configured: \(isAPIConfigured), Backoff until: \(netBackoffUntil)", category: "tone_debug")
+            completion(nil)
             return 
         }
 
@@ -1344,48 +1567,57 @@ final class ToneSuggestionCoordinator {
         payload["requestId"] = requestID.uuidString
         payload["userId"] = getUserId()
         payload["userEmail"] = getUserEmail()
+        // Note: client_seq will be added in Phase 2
 
         callEndpoint(path: "api/v1/tone", payload: payload) { [weak self] data in
             guard let self else { 
-                completion(nil)  // Don't overwrite UI on coordinator dealloc
+                completion(nil)
                 return 
             }
+            
+            // ✅ Drop stale replies automatically with token check
+            guard token == self.latestRequestToken else {
+                self.throttledLog("🎯 ⚠️ DROPPING STALE TONE REPLY (token mismatch)", category: "tone_debug")
+                completion(nil)
+                return
+            }
+            
             guard requestID == self.latestRequestID else { 
-                completion(nil)  // Don't overwrite UI with stale responses
+                completion(nil)
                 return 
             }
 
             guard let d = data else {
                 self.throttledLog("🎯 Tone API returned nil data - keeping current pill state", category: "tone_debug")
-                completion(nil)  // Don't overwrite UI on API failures
+                completion(nil)
                 return
             }
             
             self.throttledLog("🎯 Tone API response: \(String(describing: d).prefix(200))", category: "tone_debug")
 
-            // Check client sequence for last-writer-wins
-            let responseClientSeq = d["client_seq"] as? Int ?? -1
-            self.throttledLog("🎯 Response client_seq: \(responseClientSeq), current coordinator seq: \(self.clientSequence)", category: "tone_debug")
-
-            // Use new clamped tone string function - only returns alert|caution|clear|neutral
-            let uiTone = self.uiToneString(from: d)
-
-            #if DEBUG
-            // Guardrail: never leak raw labels to UI
-            assert(["alert", "caution", "clear", "neutral"].contains(uiTone))
-            #endif
-
-            // Get raw analysis for debugging
-            var rawTone = "unknown"
-            if let analysis = d["analysis"] as? [String: Any] {
-                rawTone = self.safeString(from: analysis, keys: ["primary_tone", "primaryTone"], fallback: "unknown")
+            // Try to parse as new ToneEnvelope format
+            do {
+                let jsonData = try JSONSerialization.data(withJSONObject: d)
+                let decoder = JSONDecoder()
+                let envelope = try decoder.decode(ToneEnvelope.self, from: jsonData)
+                
+                // Extract UI tone and update
+                let ui = self.extractUITone(from: envelope)
+                self.setToneIfNeeded(ui)
+                completion(envelope.data.ui_tone ?? ui.rawValue)
+                return
+                
+            } catch {
+                self.throttledLog("🎯 ⚠️ Failed to parse as ToneEnvelope, falling back to legacy parsing: \(error)", category: "tone_debug")
             }
-            if rawTone == "unknown" {
-                rawTone = self.safeString(from: d, keys: ["primary_tone", "tone"], fallback: "unknown")
+
+            // Fallback to legacy parsing for backward compatibility
+            let legacyTone = self.uiToneString(from: d)
+            if let uiTone = UITone(rawValue: legacyTone) {
+                self.setToneIfNeeded(uiTone)
             }
-            
-            self.throttledLog("🎯 Extracted UI tone: '\(uiTone)' | raw=\(rawTone) seq=\(responseClientSeq)", category: "tone_debug")
-            completion(uiTone)
+            self.throttledLog("🎯 Legacy extracted UI tone: '\(legacyTone)'", category: "tone_debug")
+            completion(legacyTone)
         }
     }
 
@@ -1410,20 +1642,21 @@ final class ToneSuggestionCoordinator {
             return 
         }
         
-        // 🛡️ Idempotency Guards: Check for duplicate/recent requests
+        // ️ Idempotency Guards: Check for duplicate/recent requests
         let requestHash = contentHash(for: path, payload: payload)
         let now = Date()
+        let ttl = cacheTTL(for: path)
         
         // Clean up old completion times
         onQ {
-            let cutoff = now.addingTimeInterval(-self.requestCacheTTL)
+            let cutoff = now.addingTimeInterval(-ttl)
             self.requestCompletionTimes = self.requestCompletionTimes.filter { $0.value > cutoff }
         }
         
         // Check if identical request completed recently
         if let lastCompletion = requestCompletionTimes[requestHash],
-           now.timeIntervalSince(lastCompletion) < requestCacheTTL {
-            throttledLog("Skipping duplicate request within \(requestCacheTTL)s cache window", category: "api")
+           now.timeIntervalSince(lastCompletion) < ttl {
+            throttledLog("Skipping duplicate request within \(ttl)s cache window", category: "api")
             completion(nil)
             return
         }
@@ -1440,6 +1673,16 @@ final class ToneSuggestionCoordinator {
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             .replacingOccurrences(of: "//", with: "/")
         
+        // 🔧 Circuit Breaker: Check per-endpoint breakers (prevents observe 404s from blocking tone/suggestions)
+        let circuitKey = CircuitKey(host: normalizedBaseURLString(), path: normalized)
+        if let breakerUntil = circuitBreakers[circuitKey], Date() < breakerUntil {
+            // Only log if we haven't already marked this breaker as open (reduces spam)
+            if !breakerOpen.contains(circuitKey) {
+                setBreaker(circuitKey, open: true)
+            }
+            completion(nil)
+            return
+        }
         // Allow tone, suggestions, and communicator/observe endpoints
         let allowed = Set([
             "api/v1/tone",
@@ -1468,6 +1711,9 @@ final class ToneSuggestionCoordinator {
             completion(nil)
             return
         }
+        
+        // 🔧 DEBUG: Log full URL before each request to catch path issues
+        throttledLog("🔧 REQUEST \(url.absoluteString)", category: "api")
         
         // Additional validation: ensure URL is well-formed
         guard url.scheme == "http" || url.scheme == "https" else {
@@ -1516,11 +1762,8 @@ final class ToneSuggestionCoordinator {
                 let task = self.session.dataTask(with: req) { data, response, error in
                     let latencyMs = Date().timeIntervalSince(startTime) * 1000
                     
-                    // 🛡️ Idempotency: Clean up tracking on completion
-                    self.onQ {
-                        self.inFlightRequests.removeValue(forKey: requestHash)
-                        self.requestCompletionTimes[requestHash] = Date()
-                    }
+                    // 🛡️ Always remove the in-flight marker
+                    self.onQ { self.inFlightRequests.removeValue(forKey: requestHash) }
                     
                     if let error = error as NSError? {
                         if error.code == NSURLErrorCancelled { 
@@ -1574,6 +1817,19 @@ final class ToneSuggestionCoordinator {
                             }
                             completion(nil)
                             return
+                        case 404:
+                            // Special handling for /communicator/observe 404s - don't freeze other endpoints
+                            if normalized == "api/v1/communicator/observe" {
+                                let jitterMultiplier = Double.random(in: 0.8...1.2)
+                                let circuitDelay = 10.0 * jitterMultiplier // 8-12 seconds with jitter
+                                self.circuitBreakers[circuitKey] = Date().addingTimeInterval(circuitDelay)
+                                // Performance Optimization #4: Use quiet state tracking for breaker logging
+                                self.setBreaker(circuitKey, open: true)
+                                completion(nil)
+                                return
+                            }
+                            // For other endpoints, fall through to normal error handling
+                            break
                         default:
                             break
                         }
@@ -1609,6 +1865,12 @@ final class ToneSuggestionCoordinator {
                         self.logMetrics(clientSeq: currentClientSeq, inputLength: inputLength, latencyMs: latencyMs, error: "http_\(http.statusCode)")
                         completion(nil)
                         return
+                    }
+
+                    // Performance Optimization #5: Auto-close circuit breaker on successful response
+                    if self.circuitBreakers[circuitKey] != nil {
+                        self.circuitBreakers.removeValue(forKey: circuitKey)
+                        self.setBreaker(circuitKey, open: false)
                     }
 
                     // Robust decoding: Check Content-Type and gracefully handle plaintext or unexpected bodies
@@ -1657,6 +1919,9 @@ final class ToneSuggestionCoordinator {
                             
                             // Update pendingClientSeq atomically on workQueue
                             self.pendingClientSeq = responseClientSeq
+                            
+                            // 🛡️ Only cache successful requests (prevents retries from being suppressed)
+                            self.requestCompletionTimes[requestHash] = Date()
                             
                             DispatchQueue.main.async {
                                 completion(responseDict)
