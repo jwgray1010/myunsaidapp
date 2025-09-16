@@ -318,7 +318,7 @@ final class EnhancedCommunicatorService {
         )
 
         let res: EnhancedAnalysisResponse = try await request(
-            path: "/communicator/analysis/detailed",
+            path: "/api/v1/communicator",
             method: HTTPMethod.POST,
             body: req
         )
@@ -341,7 +341,7 @@ final class EnhancedCommunicatorService {
             personalityProfile: personalityProfile
         )
         return try await request(
-            path: "/communicator/observe",
+            path: "/api/v1/communicator",
             method: HTTPMethod.POST,
             body: req
         )
@@ -349,7 +349,7 @@ final class EnhancedCommunicatorService {
 
     func getProfile() async throws -> ProfileResponse {
         let emptyBody: [String: String]? = nil
-        return try await request(path: "/communicator/profile", method: HTTPMethod.GET, body: emptyBody)
+        return try await request(path: "/api/v1/communicator", method: HTTPMethod.GET, body: emptyBody)
     }
 
     func checkEnhancedCapabilities() async throws -> Bool {

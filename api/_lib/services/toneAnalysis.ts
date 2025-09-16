@@ -96,7 +96,7 @@ function applySemanticBackboneNudges(
   
   if (irony?.enabled) {
     const eye = new Set(irony.signals?.emoji_eye_roll ?? []);
-    if ([...eye].some(e => typeof e === 'string' && text.includes(e))) {
+    if (Array.from(eye).some(e => typeof e === 'string' && text.includes(e))) {
       biasAlert += (sb.settings?.thresholds?.irony_override ?? 0.65) * 0.05;
     }
   }
@@ -338,7 +338,7 @@ class AhoCorasickAutomaton {
     const queue: AhoCorasickNode[] = [];
     
     // Initialize first level
-    for (const child of this.root.children.values()) {
+    for (const child of Array.from(this.root.children.values())) {
       child.failure = this.root;
       queue.push(child);
     }
@@ -347,7 +347,7 @@ class AhoCorasickAutomaton {
     while (queue.length > 0) {
       const currentNode = queue.shift()!;
       
-      for (const [char, childNode] of currentNode.children) {
+      for (const [char, childNode] of Array.from(currentNode.children)) {
         queue.push(childNode);
         
         let failureNode = currentNode.failure;
@@ -904,12 +904,12 @@ class ToneDetectors {
     }> = [];
 
     // Reset message state for all detectors
-    for (const detector of this.contextDetectors.values()) {
+    for (const detector of Array.from(this.contextDetectors.values())) {
       detector.resetMessageState();
     }
 
     // Detect all contexts
-    for (const [contextId, detector] of this.contextDetectors) {
+    for (const [contextId, detector] of Array.from(this.contextDetectors)) {
       const config = detector.getConfig();
       
       // Check attachment gates

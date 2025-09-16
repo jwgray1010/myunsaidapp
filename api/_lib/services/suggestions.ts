@@ -713,7 +713,10 @@ class AdviceEngine {
     
     // Normalize after overrides and semantic bias
     let sum = Object.values(dist).reduce((a:number,b:any)=>a+(Number(b)||0),0) || 1;
-    dist = { clear:(Number(dist.clear)||0)/sum, caution:(Number(dist.caution)||0)/sum, alert:(Number(dist.alert)||0)/sum };
+    const clearVal = Number(dist.clear) || 0;
+    const cautionVal = Number(dist.caution) || 0;
+    const alertVal = Number(dist.alert) || 0;
+    dist = { clear: clearVal/sum, caution: cautionVal/sum, alert: alertVal/sum };
 
     // Apply intensity shifts
     const thr = map.intensityShifts?.thresholds || { low: 0.15, med: 0.35, high: 0.60 };
@@ -728,9 +731,12 @@ class AdviceEngine {
 
     // Final normalization
     sum = (Number(dist.clear) ?? 0) + (Number(dist.caution) ?? 0) + (Number(dist.alert) ?? 0) || 1;
-    dist.clear   = (Number(dist.clear)   ?? 0) / sum;
-    dist.caution = (Number(dist.caution) ?? 0) / sum;
-    dist.alert   = (Number(dist.alert)   ?? 0) / sum;
+    const clearNum = Number(dist.clear) ?? 0;
+    const cautionNum = Number(dist.caution) ?? 0;
+    const alertNum = Number(dist.alert) ?? 0;
+    dist.clear = clearNum / sum;
+    dist.caution = cautionNum / sum;
+    dist.alert = alertNum / sum;
 
     const primary = (Object.entries(dist).sort((a, b) => (b[1] as number) - (a[1] as number))[0][0]) as string;
     return { primary, dist: dist as ToneBucketDistribution };
@@ -860,7 +866,7 @@ class AdviceEngine {
       }
       
       // Apply multipliers for each matching category
-      for (const category of categories) {
+      for (const category of Array.from(categories)) {
         const categoryKey = String(category).toLowerCase();
         if (categoryMultipliers[categoryKey] != null) {
           categoryBoost *= Number(categoryMultipliers[categoryKey]) || 1.0;

@@ -31,7 +31,7 @@ export class BM25 {
       for (const t of terms) local.set(t, (local.get(t) || 0) + 1);
       this.tf.set(d.id, local);
 
-      for (const t of local.keys()) this.df.set(t, (this.df.get(t) || 0) + 1);
+      for (const t of Array.from(local.keys())) this.df.set(t, (this.df.get(t) || 0) + 1);
     }
     this.avgdl = totalLen / this.N || 1;
   }
@@ -61,7 +61,7 @@ export class BM25 {
       if (s) scores.set(d.id, s);
     }
 
-    return [...scores.entries()]
+    return Array.from(scores.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, limit)
       .map(([id, score]) => ({ id, score }));

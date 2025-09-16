@@ -90,7 +90,7 @@ export function matchSemanticBackbone(
       matches.push({
         cluster: clusterName,
         strength,
-        matchedTerms: [...new Set(matchedTerms)] // Remove duplicates
+        matchedTerms: Array.from(new Set(matchedTerms)) // Remove duplicates
       });
     }
   });

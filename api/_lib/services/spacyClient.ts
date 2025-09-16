@@ -323,7 +323,7 @@ export class SpacyService {
     if (/[a-z]+(ing|ed)$/.test(lw)) return 'VERB';
     if (/[a-z]+ly$/.test(lw)) return 'ADV';
     if (/^[A-Z][a-z]+$/.test(w) && !/^[A-Z]+$/.test(w)) return 'PROPN'; // avoid mid-sentence ALLCAPS
-    if (/^[\p{P}\p{S}]$/u.test(w)) return 'PUNCT';
+    if (/^[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]+$/u.test(w)) return 'PUNCT';
     return /[a-z]/i.test(w) ? 'NOUN' : 'X';
   }
 

@@ -201,7 +201,7 @@ final class ToneSuggestionCoordinator {
     private func cacheTTL(for path: String) -> TimeInterval {
         switch path {
         case "/api/v1/suggestions": return 5.0
-        case "/api/v1/communicator/observe": return 10.0
+        case "/api/v1/communicator": return 10.0
         default: return 5.0
         }
     }
@@ -563,7 +563,7 @@ final class ToneSuggestionCoordinator {
             if !breakerOpen.contains(circuitKey) { setBreaker(circuitKey, open: true) }
             completion(nil); return
         }
-        let allowed = Set(["api/v1/suggestions", "api/v1/communicator/observe"])
+        let allowed = Set(["api/v1/suggestions", "api/v1/communicator"])
         guard allowed.contains(normalized) else {
             throttledLog("invalid endpoint \(normalized); expected one of \(allowed)", category: "api")
             completion(nil); return
@@ -632,7 +632,7 @@ final class ToneSuggestionCoordinator {
                             Task { @MainActor in self.delegate?.didReceiveAPIError(.paymentRequired) }
                             completion(nil); return
                         case 404:
-                            if normalized == "api/v1/communicator/observe" {
+                            if normalized == "api/v1/communicator" {
                                 let circuitDelay = 10.0 * Double.random(in: 0.8...1.2)
                                 self.circuitBreakers[circuitKey] = Date().addingTimeInterval(circuitDelay)
                                 self.setBreaker(circuitKey, open: true)
@@ -756,7 +756,7 @@ final class ToneSuggestionCoordinator {
         ]
         if let email = getUserEmail() { payload["userEmail"] = email }
         
-        callEndpoint(path: "api/v1/communicator/observe", payload: payload) { [weak self] _ in
+        callEndpoint(path: "api/v1/communicator", payload: payload) { [weak self] _ in
             self?.throttledLog("communicator profile updated", category: "learning")
         }
     }
@@ -779,7 +779,7 @@ final class ToneSuggestionCoordinator {
         ]
         if let email = getUserEmail() { payload["userEmail"] = email }
         
-        callEndpoint(path: "api/v1/communicator/observe", payload: payload) { [weak self] _ in
+        callEndpoint(path: "api/v1/communicator", payload: payload) { [weak self] _ in
             self?.throttledLog("communicator learned from accepted suggestion", category: "learning")
         }
     }
