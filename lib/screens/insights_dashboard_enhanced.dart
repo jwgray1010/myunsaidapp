@@ -647,7 +647,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
               floating: false, // Don't float back in when scrolling up
               snap: false,
               expandedHeight:
-                  140, // Increased height for better visibility at top
+                  120, // Reduced height for more compact header
               forceElevated: innerBoxIsScrolled,
               backgroundColor: Colors.transparent,
               elevation: 0,

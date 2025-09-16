@@ -670,7 +670,7 @@ class _SettingsScreenProfessionalState
                     floating: true, // Reappear when scrolling up
                     snap: false,
                     expandedHeight:
-                        120, // Increased height for better visibility at top
+                        100, // Reduced height for more compact header
                     actions: [
                       IconButton(
                         tooltip: 'Search settings',
