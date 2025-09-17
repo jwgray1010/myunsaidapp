@@ -877,6 +877,86 @@ final class ToneSuggestionCoordinator {
         updateCurrentText(testText)
         Task { @MainActor in self.onTextChanged(fullText: testText, lastInserted: " ", isDeletion: false) }
     }
+    
+    // MARK: - Debug Methods
+    
+    func debugCoordinatorState() {
+        logger.info("🔍 ToneSuggestionCoordinator Debug State:")
+        logger.info("🔍 API Base URL: '\(apiBaseURL)'")
+        logger.info("🔍 API Key configured: \(!apiKey.isEmpty)")
+        logger.info("🔍 Is API configured: \(isAPIConfigured)")
+        logger.info("🔍 Current text: '\(currentText)'")
+        logger.info("🔍 Last UI tone: \(lastUiTone.rawValue)")
+        logger.info("🔍 Smoothed buckets: clear=\(String(format: "%.2f", smoothedBuckets.clear)), caution=\(String(format: "%.2f", smoothedBuckets.caution)), alert=\(String(format: "%.2f", smoothedBuckets.alert))")
+        logger.info("🔍 Suggestions count: \(suggestions.count)")
+        logger.info("🔍 Network available: \(isNetworkAvailable)")
+        logger.info("🔍 Auth backoff until: \(authBackoffUntil)")
+        logger.info("🔍 Net backoff until: \(netBackoffUntil)")
+        
+        if let delegate = delegate {
+            logger.info("🔍 Delegate is set: \(type(of: delegate))")
+        } else {
+            logger.error("🔍 Delegate is nil!")
+        }
+    }
+    
+    func debugTestToneAPI(with text: String = "You never listen to me and it's really frustrating") {
+        logger.info("🧪 Testing tone API with text: '\(text)'")
+        
+        guard isAPIConfigured else {
+            logger.error("🧪 API not configured - cannot test")
+            return
+        }
+        
+        Task {
+            do {
+                let toneOut = try await postTone(base: apiBaseURL, text: text, token: apiKey.nilIfEmpty)
+                await MainActor.run {
+                    self.logger.info("🧪 API Response received:")
+                    self.logger.info("🧪 Buckets: \(toneOut.buckets)")
+                    if let metadata = toneOut.metadata {
+                        self.logger.info("🧪 Metadata available: \(metadata.feature_noticings?.count ?? 0) feature noticings")
+                        if let noticings = metadata.feature_noticings {
+                            for (i, noticing) in noticings.enumerated() {
+                                self.logger.info("🧪 Feature noticing \(i+1): \(noticing.pattern) - \(noticing.message)")
+                            }
+                        }
+                    } else {
+                        self.logger.info("🧪 No metadata in response")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.logger.error("🧪 API test failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    func debugDelegateCallbacks() {
+        logger.info("📡 Testing delegate callbacks...")
+        
+        guard let delegate = delegate else {
+            logger.error("📡 No delegate set - cannot test callbacks")
+            return
+        }
+        
+        // Test tone status update
+        delegate.didUpdateToneStatus("alert")
+        logger.info("📡 Called didUpdateToneStatus with 'alert'")
+        
+        // Test suggestions update
+        delegate.didUpdateSuggestions(["Test suggestion 1", "Test suggestion 2"])
+        logger.info("📡 Called didUpdateSuggestions with 2 test suggestions")
+        
+        // Test feature noticings
+        delegate.didReceiveFeatureNoticings(["Debug feature noticing: Consider softening your tone"])
+        logger.info("📡 Called didReceiveFeatureNoticings with debug message")
+        
+        // Test error
+        delegate.didReceiveAPIError(.networkError)
+        logger.info("📡 Called didReceiveAPIError with network error")
+    }
     #endif
 }
 

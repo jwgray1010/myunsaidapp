@@ -426,8 +426,28 @@ final class KeyboardController: UIInputView,
         setupKeyboardLayout()   // then layout that pins to it
         dbg("✅ Keyboard layout setup complete")
         
+        #if DEBUG
+        setupDebugGestures()
+        #endif
+        
         dbg("✅ KeyboardController.commonInit() completed successfully")
     }
+    
+    #if DEBUG
+    private func setupDebugGestures() {
+        // Add a four-finger tap gesture to trigger debug tests
+        let debugGesture = UITapGestureRecognizer(target: self, action: #selector(handleDebugGesture))
+        debugGesture.numberOfTouchesRequired = 4
+        debugGesture.numberOfTapsRequired = 2
+        addGestureRecognizer(debugGesture)
+        dbg("🔧 Debug gesture added: Four-finger double-tap to run debug tests")
+    }
+    
+    @objc private func handleDebugGesture() {
+        logger.info("🔍 DEBUG GESTURE TRIGGERED - Running full system debug...")
+        debugFullSystem()
+    }
+    #endif
     
     private func setupDelegates() {
         // Setup all manager delegates
@@ -1805,6 +1825,175 @@ final class KeyboardController: UIInputView,
             }
         }
     }
+    
+    // MARK: - Debug Methods
+    
+    #if DEBUG
+    /// Debug method to test spell checker functionality
+    func debugSpellChecker() {
+        logger.info("🔤 Testing spell checker functionality...")
+        
+        let spellChecker = LightweightSpellChecker.shared
+        logger.info("🔤 Spell checker instance obtained: \(type(of: spellChecker))")
+        
+        // Test common typos
+        let testWords = ["hte", "teh", "yuor", "recieve", "definately", "seperate"]
+        
+        for word in testWords {
+            logger.info("🔤 Testing word: '\(word)'")
+            
+            // Check if word is considered correct
+            do {
+                let suggestions = spellChecker.quickSuggestions(for: word, maxCount: 3)
+                logger.info("🔤 Suggestions for '\(word)': \(suggestions)")
+            } catch {
+                logger.error("🔤 Error getting suggestions for '\(word)': \(error)")
+            }
+        }
+        
+        // Test app groups
+        let testKey = "debug_spell_test"
+        AppGroups.shared.set("test_value", forKey: testKey)
+        let retrieved = AppGroups.shared.string(forKey: testKey)
+        logger.info("🔤 App Groups test - stored/retrieved: \(retrieved == "test_value")")
+        AppGroups.shared.removeObject(forKey: testKey)
+        
+        // Test spell checker integration in keyboard
+        if let spellIntegration = spellCheckerIntegration as? SpellCheckerIntegration {
+            logger.info("🔤 Spell checker integration: \(type(of: spellIntegration))")
+            
+            // Test spell checking a sentence
+            let testSentence = "Ths is a test sentance with som typos"
+            logger.info("🔤 Testing sentence: '\(testSentence)'")
+            
+            // Note: We can't easily test the actual integration without mocking UITextDocumentProxy
+            logger.info("🔤 Spell checker integration test requires active text input")
+        }
+    }
+    
+    /// Debug method to test tone color functionality  
+    func debugToneColors() {
+        logger.info("🎨 Testing tone color functionality...")
+        
+        // Test each tone status
+        let tones: [ToneStatus] = [.clear, .caution, .alert, .neutral]
+        
+        for tone in tones {
+            logger.info("🎨 Testing tone: \(tone.rawValue)")
+            
+            // Manually trigger tone update
+            setToneStatus(tone, animated: false)
+            
+            // Check button colors
+            if let button = toneButton {
+                logger.info("🎨 Tone button background color: \(button.backgroundColor?.debugDescription ?? "nil")")
+                logger.info("🎨 Tone button tint color: \(button.tintColor?.debugDescription ?? "nil")")
+                logger.info("🎨 Tone button alpha: \(button.alpha)")
+                logger.info("🎨 Tone button is hidden: \(button.isHidden)")
+            } else {
+                logger.error("🎨 Tone button is nil!")
+            }
+            
+            // Check gradient layer
+            if let gradient = toneGradient {
+                logger.info("🎨 Gradient layer colors count: \(gradient.colors?.count ?? 0)")
+                logger.info("🎨 Gradient layer opacity: \(gradient.opacity)")
+            } else {
+                logger.info("🎨 No gradient layer found")
+            }
+        }
+        
+        // Test coordinator state
+        if let coord = coordinator {
+            logger.info("🎨 Coordinator last tone: \(lastToneStatusString)")
+            logger.info("🎨 Current UI tone: \(currentUITone.rawValue)")
+        } else {
+            logger.error("🎨 Coordinator is nil!")
+        }
+    }
+    
+    /// Debug method to test the full tone analysis pipeline
+    func debugToneAnalysis(text: String = "You always do this wrong and it makes me angry") {
+        logger.info("🎯 Testing tone analysis pipeline with text: '\(text)'")
+        
+        guard let coord = coordinator else {
+            logger.error("🎯 Coordinator is nil - cannot test tone analysis")
+            return
+        }
+        
+        // Trigger analysis manually
+        coord.onTextChanged(fullText: text, lastInserted: nil, isDeletion: false)
+        
+        // Check if delegate methods are being called
+        logger.info("🎯 Waiting for tone analysis results...")
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            self.logger.info("🎯 After 2 seconds - last tone: \(self.lastToneStatusString)")
+            self.logger.info("🎯 Current UI tone: \(self.currentUITone.rawValue)")
+        }
+    }
+    
+    /// Debug method to test suggestion chip display
+    func debugSuggestionChip() {
+        logger.info("💬 Testing suggestion chip functionality...")
+        
+        // Test different tone suggestions
+        let testSuggestions = [
+            ("Try saying: 'I feel frustrated when...'", ToneStatus.alert),
+            ("Consider: 'Help me understand your perspective'", ToneStatus.caution),
+            ("Great communication! Keep it up.", ToneStatus.clear),
+            ("This is a neutral suggestion", ToneStatus.neutral)
+        ]
+        
+        for (i, (text, tone)) in testSuggestions.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 2.0) {
+                self.logger.info("💬 Showing suggestion \(i+1): '\(text)' with tone: \(tone.rawValue)")
+                self.suggestionChipManager.showSuggestion(text: text, tone: tone)
+            }
+        }
+    }
+    
+    /// Comprehensive debug method to test the entire keyboard system
+    func debugFullSystem() {
+        logger.info("🔍 FULL SYSTEM DEBUG - Starting comprehensive tests...")
+        
+        // Test 1: Coordinator state
+        logger.info("🔍 TEST 1: Coordinator State")
+        coordinator?.debugCoordinatorState()
+        
+        // Test 2: Spell checker (delay to see output)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.logger.info("🔍 TEST 2: Spell Checker")
+            self.debugSpellChecker()
+        }
+        
+        // Test 3: Tone colors (delay to see output)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            self.logger.info("🔍 TEST 3: Tone Colors")
+            self.debugToneColors()
+        }
+        
+        // Test 4: API connectivity (delay to see output)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            self.logger.info("🔍 TEST 4: API Connectivity")
+            self.coordinator?.debugTestToneAPI()
+        }
+        
+        // Test 5: Delegate callbacks (delay to see output)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            self.logger.info("🔍 TEST 5: Delegate Callbacks")
+            self.coordinator?.debugDelegateCallbacks()
+        }
+        
+        // Test 6: Suggestion chips (delay to see output)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+            self.logger.info("🔍 TEST 6: Suggestion Chips")
+            self.debugSuggestionChip()
+        }
+        
+        logger.info("🔍 FULL SYSTEM DEBUG - All tests scheduled. Check logs for results.")
+    }
+    #endif
     
     @objc private func undoButtonPressed(_ sender: UIButton) {
         undoButtonTapped()
