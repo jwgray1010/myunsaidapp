@@ -4,7 +4,6 @@ import { withCors, withMethods, withValidation, withErrorHandling, withLogging, 
 import { suggestionsRateLimit } from '../_lib/rateLimit';
 import { suggestionRequestSchema } from '../_lib/schemas/suggestionRequest';
 import { normalizeSuggestionResponse } from '../_lib/schemas/normalize';
-import { toneRequestSchema } from '../_lib/schemas/toneRequest';
 import { suggestionsService } from '../_lib/services/suggestions';
 import { dataLoader } from '../_lib/services/dataLoader';
 import { MLAdvancedToneAnalyzer, mapToneToBuckets } from '../_lib/services/toneAnalysis';
@@ -89,6 +88,11 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
         toneResult = { classification: 'neutral', confidence: 0.5 };
       }
     }
+
+    // Normalize tone to clear/caution/alert (not raw emotion)
+    const toneKeyNorm: 'clear' | 'caution' | 'alert' = 
+      (toneResult?.classification === 'alert' || toneResult?.classification === 'angry' || toneResult?.classification === 'hostile') ? 'alert' :
+      (toneResult?.classification === 'caution' || toneResult?.classification === 'frustrated' || toneResult?.classification === 'sad') ? 'caution' : 'clear';
     
     // Generate suggestions using the dedicated service with tone analysis
     // Pass context hint (if provided) but let the system auto-detect from text
@@ -161,10 +165,15 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
 
     // 3) Use detected context for history
     const detectedContext = suggestionAnalysis.analysis?.context?.label || data.context || 'general';
-    profile.addCommunication(data.text, detectedContext, toneResult?.classification || 'neutral');
+    profile.addCommunication(data.text, detectedContext, toneKeyNorm);
 
-    // 4) Buckets for UI: start from suggestionAnalysis (already normalized)
-    const baseBuckets = suggestionAnalysis.analysis.toneBuckets?.dist ?? { clear: 1/3, caution: 1/3, alert: 1/3 };
+    // 4) Buckets for UI: start from suggestionAnalysis (already normalized) but use normalized tone  
+    const baseBuckets = suggestionAnalysis.analysis.toneBuckets?.dist ?? 
+      mapToneToBuckets(
+        { classification: toneKeyNorm, confidence: toneResult?.confidence || 0.5 },
+        'secure',
+        detectedContext
+      )?.buckets ?? { clear: 1/3, caution: 1/3, alert: 1/3 };
 
     // 5) Apply attachment adjustments and threshold shifts
     const attachmentStyle = data.attachmentStyle || attachmentEstimate.primary || 'secure';
@@ -294,3 +303,6 @@ export default (req: VercelRequest, res: VercelResponse) => {
     return wrappedHandler(req, res);
   });
 };
+
+// Pin to iad1 region for reduced latency
+export const config = { regions: ['iad1'] };

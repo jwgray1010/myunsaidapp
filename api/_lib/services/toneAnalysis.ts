@@ -591,7 +591,10 @@ class ContextDetector {
 class ToneDetectors {
   private trigByLen = new Map<number, {term: string, bucket: Bucket, w: number}[]>();
   private ahoCorasick = new AhoCorasickAutomaton(); // ✅ New Aho-Corasick automaton
-  private useAhoCorasick = true; // ✅ Feature flag for gradual rollout
+  private ahoMode: 'aho' | 'fallback' | 'hybrid' =
+    (process.env.AHO_MODE as any) || 'hybrid';
+  private oneGram: Array<{ term: string; bucket: Bucket; w: number }> = [];
+  private oneGramMap = new Map<string, Array<{ bucket: Bucket; w: number }>>();
   private negRegexes: RegExp[] = [];
   private sarcRegexes: RegExp[] = [];
   private edgeRegexes: { re: RegExp, cat: string, weight?: number }[] = [];
@@ -632,6 +635,11 @@ class ToneDetectors {
       const arr = this.trigByLen.get(L) || [];
       arr.push({ term: normalizedTerm, bucket, w });
       this.trigByLen.set(L, arr);
+      
+      // NEW: track 1-grams for O(1) lookup in hybrid mode
+      if (L === 1) {
+        this.oneGram.push({ term: normalizedTerm, bucket, w });
+      }
       
       // ✅ Also add to Aho-Corasick automaton for O(n) performance
       this.ahoCorasick.addPattern(normalizedTerm, bucket, w);
@@ -687,6 +695,13 @@ class ToneDetectors {
       }
     }
     logger.info(`Total trigger words loaded: ${totalWords}`);
+
+    // Build oneGramMap for fast unigram lookups
+    for (const { term, bucket, w } of this.oneGram) {
+      const arr = this.oneGramMap.get(term) || [];
+      arr.push({ bucket, w });
+      this.oneGramMap.set(term, arr);
+    }
 
     // Load engine configuration for negation and context handling
     const engineConfig = trig?.engine || {};
@@ -830,50 +845,114 @@ class ToneDetectors {
     return this.scan(normalizedLemmas); 
   }
 
-  private scan(terms: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number }[] {
-    this.initSyncIfNeeded();   // ✅ No async in hot path
+  private regexToneHits(terms: string[]) {
+    const hits: { bucket: Bucket; weight: number; term: string; start: number; end: number }[] = [];
+    if (this.tonePatternRegexes.length === 0) return hits;
 
-    let hits: { bucket: Bucket; weight: number; term: string; start: number; end: number }[] = [];
+    const fullText = terms.join(' ');
+    for (const { re, bucket, weight } of this.tonePatternRegexes) {
+      const match = re.exec(fullText);
+      if (match) {
+        const startChar = match.index || 0;
+        const endChar = startChar + match[0].length;
+        const startTerm = fullText.substring(0, startChar).split(' ').length - 1;
+        const endTerm = Math.min(terms.length - 1, startTerm + match[0].split(' ').length - 1);
+        hits.push({ bucket, weight, term: match[0], start: Math.max(0, startTerm), end: Math.max(0, endTerm) });
+      }
+    }
+    return hits;
+  }
 
-    // ✅ Use Aho-Corasick for O(n) performance when enabled
-    if (this.useAhoCorasick) {
-      hits = this.ahoCorasick.search(terms);
-    } else {
-      // ✅ Fallback to original O(n*m) implementation
-      const MAX_N = Math.max(1, ...Array.from(this.trigByLen.keys(), n => n || 1));
-      for (let i=0;i<terms.length;i++) {
-        for (let n=Math.min(MAX_N, terms.length - i); n>=1; n--) {
-          const arr = this.trigByLen.get(n); if (!arr || !arr.length) continue;
-          const span = terms.slice(i, i+n).join(' ');
-          for (const cand of arr) if (span === cand.term) hits.push({ bucket:cand.bucket, weight:cand.w, term:cand.term, start:i, end:i+n-1 });
+  private fallbackScan(terms: string[]) {
+    // Your existing O(n*m) span scan using this.trigByLen
+    const hits: { bucket: Bucket; weight: number; term: string; start: number; end: number }[] = [];
+    const MAX_N = Math.max(1, ...Array.from(this.trigByLen.keys(), n => n || 1));
+    for (let i = 0; i < terms.length; i++) {
+      for (let n = Math.min(MAX_N, terms.length - i); n >= 1; n--) {
+        const arr = this.trigByLen.get(n);
+        if (!arr || !arr.length) continue;
+        const span = terms.slice(i, i + n).join(' ');
+        for (const cand of arr) {
+          if (span === cand.term) hits.push({ bucket: cand.bucket, weight: cand.w, term: cand.term, start: i, end: i + n - 1 });
         }
       }
     }
+    return hits;
+  }
 
-    // ✅ Add regex pattern matching from tone_patterns.json
-    if (this.tonePatternRegexes.length > 0) {
-      const fullText = terms.join(' ');
-      this.tonePatternRegexes.forEach(({ re, bucket, weight }) => {
-        const match = re.exec(fullText);
-        if (match) {
-          // Estimate position in terms array (rough approximation)
-          const startChar = match.index || 0;
-          const endChar = startChar + match[0].length;
-          const startTerm = fullText.substring(0, startChar).split(' ').length - 1;
-          const endTerm = Math.min(terms.length - 1, startTerm + match[0].split(' ').length - 1);
-          
-          hits.push({
-            bucket,
-            weight,
-            term: match[0],
-            start: Math.max(0, startTerm),
-            end: Math.max(0, endTerm)
-          });
-        }
-      });
+  private scanHybrid(terms: string[]) {
+    this.initSyncIfNeeded();
+
+    const t0 = Date.now();
+    const hits: { bucket: Bucket; weight: number; term: string; start: number; end: number }[] = [];
+
+    // Aho pass (all phrases / ≥2-gram patterns fed during init)
+    const ahoHits = this.ahoCorasick.search(terms);
+    for (const h of ahoHits) {
+      hits.push({ bucket: h.bucket, weight: h.weight, term: h.term, start: h.start, end: h.end });
     }
 
-    return hits;
+    // Unigram pass (O(1) per token)
+    let uniCount = 0;
+    for (let i = 0; i < terms.length; i++) {
+      const t = terms[i];
+      const arr = this.oneGramMap.get(t);
+      if (!arr) continue;
+      uniCount += arr.length;
+      for (const m of arr) {
+        hits.push({ bucket: m.bucket, weight: m.w, term: t, start: i, end: i });
+      }
+    }
+
+    // Regex patterns (existing)
+    const regexHits = this.regexToneHits(terms);
+    for (const h of regexHits) hits.push(h);
+
+    // De-dupe identical spans
+    const key = (h: any) => `${h.bucket}:${h.term}:${h.start}:${h.end}`;
+    const seen = new Set<string>();
+    const out: typeof hits = [];
+    for (const h of hits) {
+      const k = key(h);
+      if (!seen.has(k)) { seen.add(k); out.push(h); }
+    }
+
+    if ((process.env.DEBUG_TONE ?? '') === '1') {
+      logger.info('scanHybrid metrics', {
+        tokens: terms.length,
+        ahoHits: ahoHits.length,
+        unigramMatches: uniCount,
+        regexMatches: regexHits.length,
+        outCount: out.length,
+        ms: Date.now() - t0,
+      });
+    }
+    return out;
+  }
+
+  private scan(terms: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number }[] {
+    this.initSyncIfNeeded();
+
+    if ((process.env.DEBUG_TONE ?? '') === '1') {
+      logger.info('ToneDetectors.scan', { mode: this.ahoMode, nTerms: terms.length });
+    }
+
+    if (this.ahoMode === 'aho') {
+      // Aho only + regex
+      const ahoHits = this.ahoCorasick.search(terms);
+      const regexHits = this.regexToneHits(terms);
+      return [...ahoHits, ...regexHits];
+    }
+
+    if (this.ahoMode === 'fallback') {
+      // Legacy O(n*m) + regex
+      const fb = this.fallbackScan(terms);
+      const regexHits = this.regexToneHits(terms);
+      return [...fb, ...regexHits];
+    }
+
+    // default: hybrid
+    return this.scanHybrid(terms);
   }
 
   hasNegation(text: string) { return this.negRegexes.some(r => r.test(text)); }
@@ -1209,6 +1288,12 @@ export class ToneStream {
       log.clear -= 0.1; 
     }
 
+    // Optional clamp to avoid runaway
+    const cap = 6.0;
+    log.clear = Math.min(log.clear, cap);
+    log.caution = Math.min(log.caution, cap);
+    log.alert = Math.min(log.alert, cap);
+
     const dist = softmax3(log);
     this.lastDist = normalize3({
       clear: this.alpha*dist.clear + (1-this.alpha)*this.lastDist.clear,
@@ -1240,6 +1325,12 @@ export class ToneStream {
       log.alert += alertBoost; 
       log.clear -= 0.1; 
     }
+
+    // Optional clamp to avoid runaway
+    const cap = 6.0;
+    log.clear = Math.min(log.clear, cap);
+    log.caution = Math.min(log.caution, cap);
+    log.alert = Math.min(log.alert, cap);
 
     const dist = softmax3(log);
     this.lastDist = normalize3({
