@@ -21,6 +21,7 @@ import { dataLoader } from '../_lib/services/dataLoader';
 import { toneAnalysisService } from '../_lib/services/toneAnalysis';
 import { suggestionsService } from '../_lib/services/suggestions';
 import { spacyClient } from '../_lib/services/spacyClient';
+import { FeatureSpotterStore } from '../_lib/services/featureSpotter.store';
 import { logger } from '../_lib/logger';
 import { metrics } from '../_lib/metrics';
 import { z } from 'zod';
@@ -81,12 +82,6 @@ async function getProfile(req: VercelRequest, res: VercelResponse) {
     const daysObserved = Number(rawSignals.daysObserved || 0);
     const attachmentLearning = (await dataLoader.getAttachmentLearning?.()) || dataLoader.getAttachmentLearning();
     const learningDays = attachmentLearning?.learningDays || 7;
-    const serverNorm = normalizeScores({
-      anxious: Number(rawSignals.anxious)||0,
-      avoidant: Number(rawSignals.avoidant)||0,
-      disorganized: Number(rawSignals.disorganized)||0,
-      secure: Number(rawSignals.secure)||0,
-    });
     const priorWeightEffective = localPrior ? defaultPriorWeight(daysObserved, learningDays) : 0;
 
     logger.info('Profile retrieved', {
@@ -95,9 +90,18 @@ async function getProfile(req: VercelRequest, res: VercelResponse) {
       isNewUser
     });
 
+    // Build detailed breakdown with server totals
+    const serverSignals = (profile as any).data?.learningSignals || {};
+    const serverNorm = normalizeScores({
+      anxious: Number(serverSignals.anxious)||0,
+      avoidant: Number(serverSignals.avoidant)||0,
+      disorganized: Number(serverSignals.disorganized)||0,
+      secure: Number(serverSignals.secure)||0,
+    });
+
     return success(res, {
       userId,
-      attachmentEstimate,
+      attachmentEstimate, // Now includes scores, daysObserved, totalSignals
       isNewUser,
       metadata: {
         version: '2.0.0-enhanced',
@@ -108,6 +112,10 @@ async function getProfile(req: VercelRequest, res: VercelResponse) {
         prior: localPrior?.scores || null,
         priorWeightEffective,
         serverSignals: serverNorm,
+        serverTotals: {
+          daysObserved: Number(serverSignals.daysObserved || 0),
+          totalSignals: (Number(serverSignals.anxious)||0)+(Number(serverSignals.avoidant)||0)+(Number(serverSignals.disorganized)||0)+(Number(serverSignals.secure)||0),
+        }
       }
     });
   } catch (error) {
@@ -162,6 +170,14 @@ async function observe(req: VercelRequest, res: VercelResponse) {
       context: meta?.context || 'general',
       isNewUser: false // For observations, analyze fully to build profile
     });
+
+    // FeatureSpotter integration - analyze patterns and aggregate to profile
+    const fs = new FeatureSpotterStore(userId);
+    const fsRun = fs.run(text, { 
+      hasNegation: (toneResult as any)?.negation, 
+      hasSarcasm: false 
+    });
+    fs.aggregateToProfile(fsRun, profile);
 
     // Record the observation
     profile.addCommunication(text, meta?.context || 'general', toneResult.primary_tone);

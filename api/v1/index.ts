@@ -25,11 +25,12 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
     },
     supported_contexts: [
       'general',
-      'romantic', 
+      'conflict',
+      'repair',
+      'boundary',
+      'planning',
       'professional',
-      'family',
-      'friendship',
-      'conflict_resolution'
+      'romantic'
     ],
     supported_languages: ['en'],
   };

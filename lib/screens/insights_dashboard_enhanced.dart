@@ -650,21 +650,18 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
           controller: _scrollController,
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             SliverAppBar(
-              pinned: false, // Allow header to disappear when scrolling down
-              floating: true, // Reappear when scrolling up
+              pinned: true, // Keep header static to avoid pixel errors
+              floating: false, // Don't float
               snap: false,
-              expandedHeight:
-                  140, // Increased height for better visibility at top
+              expandedHeight: 140,
               forceElevated: innerBoxIsScrolled,
               backgroundColor: Colors.transparent,
               elevation: 0,
               flexibleSpace: FlexibleSpaceBar(
                 titlePadding: EdgeInsetsDirectional.only(
                   start: 16,
-                  bottom: 20, // Increased bottom padding for larger header
-                  top:
-                      MediaQuery.of(context).padding.top +
-                      10, // Add more top padding for larger header
+                  bottom: 20,
+                  top: MediaQuery.of(context).padding.top + 10,
                 ),
                 title: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -692,13 +689,12 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
                             color: UnsaidPalette.textPrimaryDark,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -0.2,
-                            fontSize:
-                                22, // Increased font size for larger header
+                            fontSize: 22,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8), // Reduced spacing
+                    const SizedBox(height: 8),
                     _StreakChip(streakDays: _computeStreakDays()),
                   ],
                 ),
@@ -730,30 +726,23 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
           ],
           body: Column(
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                height: _showTabs ? kTextTabBarHeight : 0,
-                clipBehavior:
-                    Clip.hardEdge, // Prevent overflow during animation
-                decoration: const BoxDecoration(),
-                child: _showTabs
-                    ? Container(
-                        color: colorScheme.surface,
-                        child: TabBar(
-                          controller: _tabs,
-                          labelColor: Colors.black,
-                          unselectedLabelColor: Colors.black.withOpacity(0.7),
-                          indicatorColor: UnsaidPalette.blush,
-                          onTap: (_) => HapticFeedback.lightImpact(),
-                          tabs: const [
-                            Tab(text: 'Secure'),
-                            Tab(text: 'Analytics'),
-                            Tab(text: 'Therapy'),
-                            Tab(text: 'Settings'),
-                          ],
-                        ),
-                      )
-                    : const SizedBox.shrink(),
+              // Static tab bar instead of animated one
+              Container(
+                height: kTextTabBarHeight,
+                color: colorScheme.surface,
+                child: TabBar(
+                  controller: _tabs,
+                  labelColor: Colors.black,
+                  unselectedLabelColor: Colors.black.withOpacity(0.7),
+                  indicatorColor: UnsaidPalette.blush,
+                  onTap: (_) => HapticFeedback.lightImpact(),
+                  tabs: const [
+                    Tab(text: 'Secure'),
+                    Tab(text: 'Analytics'),
+                    Tab(text: 'Therapy'),
+                    Tab(text: 'Settings'),
+                  ],
+                ),
               ),
               Expanded(
                 child: TabBarView(

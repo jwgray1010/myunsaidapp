@@ -6,6 +6,8 @@ import { success } from '../_lib/http';
 import { toneRequestSchema } from '../_lib/schemas/toneRequest';
 import { toneAnalysisService, mapToneToBuckets } from '../_lib/services/toneAnalysis';
 import { CommunicatorProfile } from '../_lib/services/communicatorProfile';
+import { FeatureSpotterStore } from '../_lib/services/featureSpotter.store';
+import { DialogueStateStore } from '../_lib/services/dialogueState';
 import { logger } from '../_lib/logger';
 import { ensureBoot } from '../_lib/bootstrap';
 import { spacyClient } from '../_lib/services/spacyClient';
@@ -55,9 +57,9 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
                    : undefined;
   
   logger.info('Processing advanced tone analysis request', { 
+    userId,
     textLength: data.text.length,
-    context: data.context,
-    userId
+    context: data.context
   });
   
   try {
@@ -112,6 +114,32 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       caution: Math.max(0, (uiBuckets.caution ?? 0) + (sev.caution || 0)),
       alert: Math.max(0, (uiBuckets.alert ?? 0) + (sev.alert || 0)),
     };
+    
+    // FeatureSpotter integration - pattern detection and tone nudging
+    const fs = new FeatureSpotterStore(userId);
+    const fsRun = fs.run(data.text, {
+      hasNegation: (result as any)?.flags?.hasNegation,
+      hasSarcasm: (result as any)?.flags?.hasSarcasm
+    });
+
+    // Nudge intensity + tone a touch (safe, bounded)
+    const toneOffsets = fsRun.toneHints; // e.g., {clear:+0.02, caution:+0.03, alert:+0.05}
+    const bumped = { ...uiBuckets };
+    (['clear','caution','alert'] as const).forEach(k => { 
+      bumped[k] = Math.max(0, bumped[k] + (toneOffsets[k] || 0)); 
+    });
+    const sum = Math.max(1e-9, bumped.clear + bumped.caution + bumped.alert);
+    const bucketsAfterFS = { clear: bumped.clear/sum, caution: bumped.caution/sum, alert: bumped.alert/sum };
+    
+    // Update dialogue state
+    new DialogueStateStore(userId).update({
+      lastContext: (data.context || 'general') as any,
+      lastTone: undefined // Will be set after ui_tone calculation
+    }, data.text);
+    
+    // Use the feature-spotted buckets for final calculation
+    uiBuckets = bucketsAfterFS;
+    
     // Normalize
     {
       const s = uiBuckets.clear + uiBuckets.caution + uiBuckets.alert || 1;
@@ -120,15 +148,23 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
 
     // Final pill color via 3-way tie rule (neutral only when all three within .05)
     const ui_tone = pickUiTone(uiBuckets);
+    
+    // Update dialogue state with final tone
+    new DialogueStateStore(userId).update({
+      lastContext: (data.context || 'general') as any,
+      lastTone: ui_tone as any
+    });
 
-    const processingTime = Date.now() - startTime;    logger.info('Advanced tone analysis completed', { 
-      processingTime,
+    const processingTime = Date.now() - startTime;
+    
+    logger.info('Advanced tone analysis completed', { 
+      userId,
+      processingTimeMs: processingTime,
       tone: result.primary_tone,
       confidence: result.confidence,
-      userId,
       ui_tone,
-      // attachment: attachmentEstimate.primary,
-      // isNewUser
+      featureSpotterMatches: fsRun.matches.length,
+      featureSpotterNoticings: fsRun.noticings.length
     });
     
     const response = {
@@ -160,10 +196,9 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
         attachment_insights: result.attachment_insights,
       },
       metadata: {
-        processing_time_ms: processingTime,
+        processingTimeMs: processingTime,
         model_version: 'v1.0.0-advanced',
-        // attachment_informed: true,
-        // status: isNewUser ? 'learning' : 'active'
+        feature_noticings: fsRun.noticings
       }
     };
     

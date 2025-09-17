@@ -10,6 +10,8 @@ import { dataLoader } from '../_lib/services/dataLoader';
 import { MLAdvancedToneAnalyzer, mapToneToBuckets } from '../_lib/services/toneAnalysis';
 import { adjustToneByAttachment, applyThresholdShift } from '../_lib/services/utils/attachmentToneAdjust';
 import { CommunicatorProfile } from '../_lib/services/communicatorProfile';
+import { FeatureSpotterStore } from '../_lib/services/featureSpotter.store';
+import { DialogueStateStore } from '../_lib/services/dialogueState';
 import { logger } from '../_lib/logger';
 import { ensureBoot } from '../_lib/bootstrap';
 import * as path from 'path';
@@ -26,11 +28,11 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
   const userId = getUserId(req);
   
   logger.info('Processing advanced suggestions request', { 
-    textLength: data.text.length,
-    context: data.context, // Context now comes from top-level field
-    toneOverride: data.toneOverride,
-    features: data.features,
     userId,
+    textLength: data.text.length,
+    context: data.context,
+    toneOverride: data.toneOverride,
+    attachment: data.attachmentStyle,
     clientSeq: data.client_seq || data.clientSeq
   });
   
@@ -90,40 +92,37 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     
     // Generate suggestions using the dedicated service with tone analysis
     // Pass context hint (if provided) but let the system auto-detect from text
-    logger.info('About to call suggestionsService.generateAdvancedSuggestions with:', {
+    logger.info('About to call suggestionsService.generateAdvancedSuggestions', {
       textLength: data.text.length,
-      context: data.context || 'general', // Context from top-level field
+      context: data.context || 'general',
       userId,
-      attachmentEstimate,
-      toneResult,
-      options: {
-        maxSuggestions: 3, // Default count since not in schema
-        attachmentStyle: data.attachmentStyle || attachmentEstimate.primary || undefined, // Use schema field
-        relationshipStage: data.meta?.relationshipStage,
-        conflictLevel: data.meta?.conflictLevel || 'low',
-        isNewUser,
-        toneAnalysisResult: toneResult
-      }
+      attachmentStyle: data.attachmentStyle || attachmentEstimate.primary || 'secure',
+      toneOverride: data.toneOverride,
+      isNewUser
     });
 
     let suggestionAnalysis;
     try {
+      // 1) Analyze tone (override or ML)
+      const detectedToneResult = toneResult;
+
+      // 2) Generate suggestions -> returns analysis with flags + context
       suggestionAnalysis = await suggestionsService.generateAdvancedSuggestions(
         data.text,
-        data.context || 'general', // Context from top-level field
+        data.context || 'general',
         {
           id: userId,
-          attachment: data.attachmentStyle || attachmentEstimate.primary || 'secure', // Default to secure during learning
+          attachment: data.attachmentStyle || attachmentEstimate.primary || 'secure',
           secondary: attachmentEstimate.secondary,
           windowComplete: attachmentEstimate.windowComplete
         },
         {
-          maxSuggestions: 3, // Default count since not in schema
-          attachmentStyle: data.attachmentStyle || attachmentEstimate.primary || 'secure', // Default to secure during learning
+          maxSuggestions: 3,
+          attachmentStyle: data.attachmentStyle || attachmentEstimate.primary || 'secure',
           relationshipStage: data.meta?.relationshipStage,
           conflictLevel: data.meta?.conflictLevel || 'low',
           isNewUser,
-          toneAnalysisResult: toneResult
+          toneAnalysisResult: detectedToneResult
         }
       );
       logger.info('suggestionsService.generateAdvancedSuggestions completed successfully');
@@ -137,54 +136,88 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       throw suggestionError;
     }
 
-    // Use the auto-detected context for profile history (more accurate than hint)
+    // FeatureSpotter integration - run pattern detection
+    const fs = new FeatureSpotterStore(userId);
+    const fsRun = fs.run(data.text, {
+      hasNegation: suggestionAnalysis.analysis.flags.hasNegation,
+      hasSarcasm: suggestionAnalysis.analysis.flags.hasSarcasm
+    });
+
+    // Make the noticings & matches visible for UX / analytics
+    suggestionAnalysis.analysis.flags.phraseEdgeHits = [
+      ...(suggestionAnalysis.analysis.flags.phraseEdgeHits || []),
+      ...fsRun.matches.map(m => m.featureId)
+    ];
+    (suggestionAnalysis as any).analysis.flags.featureNoticings = fsRun.noticings;
+
+    // Update dialogue state
+    new DialogueStateStore(userId).update({
+      lastContext: (suggestionAnalysis.context || 'general') as any,
+      lastTone: undefined // Will be set after ui_tone calculation
+    }, data.text);
+
+    // Aggregate into profile learning
+    fs.aggregateToProfile(fsRun, profile);
+
+    // 3) Use detected context for history
     const detectedContext = suggestionAnalysis.analysis?.context?.label || data.context || 'general';
     profile.addCommunication(data.text, detectedContext, toneResult?.classification || 'neutral');
-    
-    // Map tone → UI buckets so iOS pill can colorize immediately
-    const bucketed = mapToneToBuckets(
-      { classification: toneResult?.classification || 'neutral', confidence: toneResult?.confidence || 0.33 },
-      data.attachmentStyle || attachmentEstimate.primary || 'secure',
-      detectedContext || 'general'
-    );
-    const baseBuckets = bucketed?.buckets || { clear: 1/3, caution: 1/3, alert: 1/3 };
-    
-    // Apply attachment-style tone adjustments
+
+    // 4) Buckets for UI: start from suggestionAnalysis (already normalized)
+    const baseBuckets = suggestionAnalysis.analysis.toneBuckets?.dist ?? { clear: 1/3, caution: 1/3, alert: 1/3 };
+
+    // 5) Apply attachment adjustments and threshold shifts
     const attachmentStyle = data.attachmentStyle || attachmentEstimate.primary || 'secure';
-    const contextKey = (detectedContext === 'conflict' ? 'CTX_CONFLICT'
-                     : detectedContext === 'planning' ? 'CTX_PLANNING'
-                     : detectedContext === 'boundary' ? 'CTX_BOUNDARY'
-                     : detectedContext === 'repair'   ? 'CTX_REPAIR'
-                     : 'CTX_GENERAL');
-    
-    // Get attachment tone weights config and apply adjustments
-    const attachmentToneConfig = dataLoader.getAttachmentToneWeights();
-    const intensityScore = suggestionAnalysis.analysis?.flags?.intensityScore || 0.5;
-    
+    const contextKey =
+      detectedContext === 'conflict'   ? 'CTX_CONFLICT'  :
+      detectedContext === 'planning'   ? 'CTX_PLANNING'  :
+      detectedContext === 'boundary'   ? 'CTX_BOUNDARY'  :
+      detectedContext === 'repair'     ? 'CTX_REPAIR'    : 'CTX_GENERAL';
+
+    const intensityScore = suggestionAnalysis.analysis?.flags?.intensityScore ?? 0.5;
+
+    // Apply feature spotter attachment hints to base buckets
+    const attachmentHintDelta = fsRun.attachmentHints[attachmentStyle] || 0;
+    const baseBucketsWithFS = {
+      clear: Math.max(0, baseBuckets.clear + (fsRun.toneHints.clear || 0)),
+      caution: Math.max(0, baseBuckets.caution + (fsRun.toneHints.caution || 0)),
+      alert: Math.max(0, baseBuckets.alert + (fsRun.toneHints.alert || 0))
+    };
+    // Normalize after FS hints
+    const fsSum = baseBucketsWithFS.clear + baseBucketsWithFS.caution + baseBucketsWithFS.alert || 1;
+    baseBucketsWithFS.clear /= fsSum;
+    baseBucketsWithFS.caution /= fsSum;
+    baseBucketsWithFS.alert /= fsSum;
+
     const adjustedBuckets = adjustToneByAttachment(
       { classification: toneResult?.classification || 'neutral', confidence: toneResult?.confidence || 0.33 },
-      baseBuckets,
+      baseBucketsWithFS, // Use FS-adjusted buckets instead of original baseBuckets
       attachmentStyle as any,
       contextKey,
       intensityScore,
-      attachmentToneConfig
+      dataLoader.getAttachmentToneWeights()
     );
-    
-    // Apply threshold shift for final primary bucket selection
+
     const { primary: finalPrimary, distribution: uiBuckets } = applyThresholdShift(
       adjustedBuckets,
       attachmentStyle as any,
-      attachmentToneConfig
+      dataLoader.getAttachmentToneWeights()
     );
+
+    const ui_tone = finalPrimary; // 'clear' | 'caution' | 'alert'
     
-    const ui_tone = finalPrimary;
+    // Update dialogue state with final tone
+    new DialogueStateStore(userId).update({
+      lastContext: (suggestionAnalysis.context || 'general') as any,
+      lastTone: ui_tone as any
+    });
     
     const processingTime = Date.now() - startTime;
     
     logger.info('Advanced suggestions generated', { 
-      processingTime,
-      count: suggestionAnalysis.suggestions.length,
       userId,
+      processingTimeMs: processingTime,
+      pickedSize: suggestionAnalysis.suggestions.length,
       attachment: attachmentEstimate.primary,
       isNewUser
     });
@@ -223,11 +256,12 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       })),
       analysis_meta: suggestionAnalysis.analysis_meta,
       metadata: {
-        processing_time_ms: processingTime,
+        processingTimeMs: processingTime,
         model_version: 'v1.0.0-advanced',
         attachment_informed: true,
         suggestion_count: suggestionAnalysis.suggestions.length,
-        status: 'active' // Always active - learning happens in background
+        status: 'active', // Always active - learning happens in background
+        feature_noticings: fsRun.noticings
       }
     };
     

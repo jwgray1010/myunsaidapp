@@ -665,12 +665,10 @@ class _SettingsScreenProfessionalState
             : CustomScrollView(
                 slivers: [
                   SliverAppBar(
-                    pinned:
-                        false, // Allow header to disappear when scrolling down
-                    floating: true, // Reappear when scrolling up
+                    pinned: true, // Keep header static to avoid pixel errors
+                    floating: false, // Don't float
                     snap: false,
-                    expandedHeight:
-                        120, // Increased height for better visibility at top
+                    expandedHeight: 120,
                     actions: [
                       IconButton(
                         tooltip: 'Search settings',
@@ -697,9 +695,7 @@ class _SettingsScreenProfessionalState
                           padding: const EdgeInsets.only(
                             left: AppTheme.spaceLG,
                             right: AppTheme.spaceLG,
-                            bottom:
-                                AppTheme.spaceLG +
-                                10, // Extra bottom padding for larger header
+                            bottom: AppTheme.spaceLG + 10,
                             top: AppTheme.spaceLG,
                           ),
                           child: Row(
@@ -711,8 +707,7 @@ class _SettingsScreenProfessionalState
                                 style: theme.textTheme.headlineMedium?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize:
-                                      28, // Increased font size for larger header
+                                  fontSize: 28,
                                 ),
                               ),
                             ],

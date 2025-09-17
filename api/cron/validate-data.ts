@@ -121,7 +121,7 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
     const processingTime = Date.now() - startTime;
     
     logger.info('Data validation completed', {
-      processingTime,
+      processingTimeMs: processingTime,
       totalFiles,
       validFiles,
       invalidFiles,

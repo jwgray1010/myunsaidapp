@@ -419,6 +419,19 @@ class DataLoaderService {
         }
       );
 
+      // Feature Spotter configuration (new)
+      this.cache.featureSpotter = this.readJsonSafe<any>(
+        'feature_spotter.json',
+        {
+          version: '1.0.0',
+          globals: { flags: 'i', maxInputChars: 2000, timeoutMs: 500, dedupeWindowMs: 5000, matchLimitPerFeature: 3 },
+          features: [],
+          noticingsMap: {},
+          aggregation: { decayDays: 7, capPerDay: 5.0, noiseFloor: 0.001, cooldownMsPerBucket: {} },
+          runtime: { safeOrder: [], conflictResolution: { mergeSameBucket: true, preferPositiveWhenTied: true, maxNoticingsPerMessage: 2 } }
+        }
+      );
+
       this.initialized = true;
       logger.info('Data cache initialized successfully');
     } catch (error) {
@@ -522,6 +535,17 @@ class DataLoaderService {
       default: {
         neutral: { clear: 0.70, caution: 0.25, alert: 0.05 }
       }
+    };
+  }
+
+  public getFeatureSpotter(): any {
+    return this.cache.featureSpotter || {
+      version: '1.0.0',
+      globals: { flags: 'i', maxInputChars: 2000, timeoutMs: 500, dedupeWindowMs: 5000, matchLimitPerFeature: 3 },
+      features: [],
+      noticingsMap: {},
+      aggregation: { decayDays: 7, capPerDay: 5.0, noiseFloor: 0.001, cooldownMsPerBucket: {} },
+      runtime: { safeOrder: [], conflictResolution: { mergeSameBucket: true, preferPositiveWhenTied: true, maxNoticingsPerMessage: 2 } }
     };
   }
 

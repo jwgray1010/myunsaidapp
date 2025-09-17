@@ -282,4 +282,5 @@ export interface DataCache {
   severityCollaboration?: SeverityCollaboration[];
   severityCollab?: any; // From tone-analysis-endpoint.js
   weightProfiles?: any; // From tone-analysis-endpoint.js
+  featureSpotter?: any; // Feature spotter configuration
 }

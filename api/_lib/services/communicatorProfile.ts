@@ -8,6 +8,14 @@ export interface AttachmentEstimate {
   secondary: string | null;
   windowComplete: boolean;
   confidence: number;
+  scores: {
+    anxious: number;
+    avoidant: number;
+    disorganized: number;
+    secure: number;
+  };
+  daysObserved: number;
+  totalSignals: number;
 }
 
 export interface ProfileData {
@@ -107,7 +115,15 @@ export class CommunicatorProfile {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const localPrior: any = (this as any).data.localPrior; // tolerate absence
     if (totalSignals < 1e-9 && !localPrior) {
-      return { primary: null, secondary: null, windowComplete: false, confidence: 0 };
+      return { 
+        primary: null, 
+        secondary: null, 
+        windowComplete: false, 
+        confidence: 0,
+        scores: { anxious: 0, avoidant: 0, disorganized: 0, secure: 0 },
+        daysObserved,
+        totalSignals
+      };
     }
 
     const serverNorm = normalizeScores({
@@ -144,6 +160,9 @@ export class CommunicatorProfile {
       secondary,
       windowComplete: daysObserved >= learningDays,
       confidence,
+      scores: combined,           // Schema-compliant field
+      daysObserved,               // Schema-compliant field
+      totalSignals                // Schema-compliant field
     };
   }
 

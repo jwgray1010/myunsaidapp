@@ -101,10 +101,12 @@ export const toneResponseSchema = z.object({
   attachmentInsights: z.array(z.string()).optional().describe('Attachment-specific insights'),
   communicationPatterns: z.array(z.string()).optional().describe('Detected communication patterns'),
   metadata: z.object({
-    processing_time_ms: z.number(),
+    processingTimeMs: z.number(),
     model_version: z.string(),
     analysis_depth: z.enum(['basic', 'standard', 'deep']).optional().default('standard'),
     features_used: z.array(z.string()).optional(),
+    // Legacy field for backward compatibility
+    processing_time_ms: z.number().optional(),
   }).describe('Analysis metadata'),
   version: z.string().default('1.0.0').describe('API version'),
   timestamp: z.string().datetime().optional().describe('Response timestamp'),

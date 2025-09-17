@@ -197,7 +197,7 @@ final class KeyboardController: UIInputView,
             await MainActor.run {
                 let fullText = self.snapshotFullText()
                 self.logger.info("🔄 Router analysis: '\(String(fullText.prefix(60)))…' inserted='\(lastInserted ?? "none")' deletion=\(isDeletion)")
-                coordinator.onTextChanged(fullText: fullText, lastInserted: lastInserted, isDeletion: isDeletion)
+                coordinator.onTextChanged(fullText: fullText, lastInserted: lastInserted?.first, isDeletion: isDeletion)
             }
         }
     }
@@ -1660,7 +1660,7 @@ final class KeyboardController: UIInputView,
     /// Manually trigger tone analysis for debugging
     func debugTriggerToneAnalysis() {
         logger.info("🔍 Debug: Manually triggering tone analysis")
-        coordinator?.debugTriggerToneAnalysis()
+        coordinator?.analyzeFinalSentence("Debug tone analysis trigger")
     }
     
     /// Force a specific tone for testing
@@ -1772,7 +1772,11 @@ final class KeyboardController: UIInputView,
             
             lastSuggestionFetchTime = now
             activeSuggestionTask = Task { // @MainActor context here
-                let suggestions = await coordinator?.fetchSuggestionsAsync(for: textBefore) ?? []
+                let suggestions: [String] = await withUnsafeContinuation { continuation in
+                    coordinator?.fetchSuggestions(for: textBefore) { suggestions in
+                        continuation.resume(returning: suggestions ?? [])
+                    }
+                }
                 guard !Task.isCancelled else { return }
                 
                 guard let first = suggestions.first else {

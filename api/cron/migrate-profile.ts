@@ -114,7 +114,7 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
     const processingTime = Date.now() - startTime;
     
     logger.info('Profile migration completed', {
-      processingTime,
+      processingTimeMs: processingTime,
       totalProfiles,
       migratedProfiles,
       failedProfiles,

@@ -1058,7 +1058,10 @@ class SuggestionsService {
       return true;
     });
 
-    logger.info(`Guardrails applied: ${suggestions.length} → ${filteredSuggestions.length} suggestions`);
+    logger.info(`Guardrails applied`, { 
+      poolSize: suggestions.length, 
+      rankedSize: filteredSuggestions.length 
+    });
     return filteredSuggestions;
   }
 
@@ -1066,9 +1069,10 @@ class SuggestionsService {
     const softenerReqs = guardrailConfig?.softenerRequirements;
     if (!softenerReqs) return true;
 
-    const intensityScore = analysis?.intensity?.score || 0;
+    // Fixed field names to match analysis structure
+    const intensityScore = analysis?.flags?.intensityScore ?? 0;
     const isAlertContext = analysis?.toneBuckets?.primary === 'alert';
-    const hasNegation = analysis?.negation?.detected || false;
+    const hasNegation = analysis?.flags?.hasNegation ?? false;
 
     // Check if softeners are required based on context
     const requiresSoftener = 
@@ -1097,7 +1101,8 @@ class SuggestionsService {
     const intensityGuards = guardrailConfig?.intensityGuardrails;
     if (!intensityGuards) return true;
 
-    const intensityScore = analysis?.intensity?.score || 0;
+    // Fixed field name to match analysis structure
+    const intensityScore = analysis?.flags?.intensityScore ?? 0;
     const advice = suggestion.advice?.toLowerCase() || '';
 
     // Block high-intensity suggestions if they contain confrontational language
@@ -1173,27 +1178,10 @@ class SuggestionsService {
   }
 
   private isContextAppropriate(suggestion: any, analysis: any): boolean {
-    const analysisContext = analysis.context?.label || 'general';
+    const analysisContext = analysis?.context?.label || 'general';
     if (!suggestion.contexts || suggestion.contexts.length === 0) return true;
     if (suggestion.contexts.includes('general') || suggestion.contexts.includes(analysisContext)) return true;
-    return false; // re-enable filtering
-
-    // Keep tone appropriateness check
-    if (suggestion.triggerTone) {
-      const analysisTone = analysis.toneBuckets?.primary;
-      if (analysisTone && suggestion.triggerTone !== analysisTone) {
-        // Allow suggestions for less severe tones (alert can use caution/clear)
-        const toneHierarchy = { alert: 3, caution: 2, clear: 1 };
-        const suggestionLevel = toneHierarchy[suggestion.triggerTone as keyof typeof toneHierarchy] || 1;
-        const analysisLevel = toneHierarchy[analysisTone as keyof typeof toneHierarchy] || 1;
-        
-        if (suggestionLevel > analysisLevel) {
-          return false;
-        }
-      }
-    }
-
-    return true;
+    return false;
   }
 
   private isSafeForAlertContext(suggestion: any): boolean {
@@ -1260,6 +1248,9 @@ class SuggestionsService {
 
     await this.ensureDataLoaded();
 
+    // TODO: If we want "degraded mode", change ensureDataLoaded to warn but not throw,
+    // and gate the features that require the missing JSONs.
+    
     // Strict JSON dependency validation - enforce all critical data is loaded
     this.validateCriticalDependencies();
 
@@ -1281,12 +1272,44 @@ class SuggestionsService {
       
       // Cache the analysis result
       performanceCache.setCachedAnalysis(text, analysis, context, attachmentStyle);
-      logger.info('Analysis cached', { textLength: text.length, context, attachmentStyle });
+      logger.info('Analysis cached', { 
+        userId: options.userId || 'anonymous',
+        textLength: text.length, 
+        context: context, 
+        attachment: attachmentStyle 
+      });
     } else {
-      logger.info('Analysis cache hit', { textLength: text.length, context, attachmentStyle });
+      logger.info('Analysis cache hit', { 
+        userId: options.userId || 'anonymous',
+        textLength: text.length, 
+        context: context, 
+        attachment: attachmentStyle 
+      });
     }
 
+    // Pipeline Step 1: Normalize tone to bucket immediately after analysis
+    const contextLabel = context || analysis.context?.label || 'general';
+
+    // Normalize tone → Bucket (toneKeyNorm)
+    const toneKeyNorm: 'clear' | 'caution' | 'alert' = (() => {
+      const t = (analysis.tone.classification || '').toLowerCase();
+      if (t==='clear'||t==='caution'||t==='alert') return t as 'clear' | 'caution' | 'alert';
+      if (['positive','supportive','neutral'].includes(t)) return 'clear';
+      if (['negative','angry','frustrated','safety_concern'].includes(t)) return 'alert';
+      return 'caution';
+    })();
+
+    // Pipeline Step 2: Seed toneBuckets early so guardrails can read it
+    const { primary: bucketPrimary, dist: bucketDist } = this.adviceEngine.resolveToneBucket(
+      toneKeyNorm, 
+      contextLabel, 
+      analysis.flags.intensityScore,
+      (analysis as any).semanticBackbone
+    );
+    (analysis as any).toneBuckets = { primary: bucketPrimary, dist: bucketDist };
+
     // Generate cache key for suggestions
+    // TODO: include data schema version in the cache key if JSONs change frequently.
     const analysisKey = `${JSON.stringify(analysis.tone)}:${analysis.context.label}:${JSON.stringify(analysis.flags)}`;
     
     // Check cache for suggestions
@@ -1295,7 +1318,7 @@ class SuggestionsService {
     if (suggestions) {
       logger.info('Suggestions cache hit', { count: suggestions.length, tier, maxSuggestions });
       
-      // Return cached suggestions with proper format
+      // Return cached suggestions with proper format including toneBuckets
       return {
         success: true,
         tier,
@@ -1307,7 +1330,7 @@ class SuggestionsService {
           mlGenerated: analysis.mlGenerated,
           context: analysis.context,
           flags: analysis.flags,
-          toneBuckets: { primary: 'clear', dist: { clear: 0.8, caution: 0.15, alert: 0.05 } }
+          toneBuckets: (analysis as any).toneBuckets // Use the computed toneBuckets
         },
         analysis_meta: {
           complexity_score: this.calculateComplexity(text),
@@ -1329,21 +1352,16 @@ class SuggestionsService {
     // Cache miss - continue with full processing
     logger.info('Suggestions cache miss - performing full processing');
 
-    // Normalize tone to 3-bucket family if needed
-    const toneKeyNorm = (() => {
-      const t = (analysis.tone.classification || '').toLowerCase();
-      if (['clear','caution','alert'].includes(t)) return t;
-      if (t === 'positive' || t === 'supportive' || t === 'neutral') return 'clear';
-      if (t === 'negative' || t === 'angry' || t === 'frustrated' || t === 'safety_concern') return 'alert';
-      return 'caution';
-    })() as Bucket;
-
     const intensityScore = analysis.flags.intensityScore;
-    const contextLabel = context || analysis.context?.label || 'general'; // Prioritize user-provided context
 
     // 2) Retrieve (hybrid)
     const pool = await hybridRetrieve(text, contextLabel, toneKeyNorm, 200);
-    logger.info('Hybrid retrieval completed', { poolSize: pool.length, contextLabel, toneKeyNorm });
+    logger.info('Hybrid retrieval completed', { 
+      userId: options.userId || 'anonymous',
+      poolSize: pool.length, 
+      context: contextLabel, 
+      tone: toneKeyNorm 
+    });
 
     // TEMPORARY: Add direct fallback when hybrid search fails
     if (pool.length === 0) {

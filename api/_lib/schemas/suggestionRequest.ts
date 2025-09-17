@@ -13,6 +13,9 @@ export const toneOverrideSchema = z.enum(['alert', 'caution', 'clear']).describe
 // Attachment style enum (matching JSON schema)
 export const attachmentStyleSchema = z.enum(['anxious', 'avoidant', 'disorganized', 'secure']).describe('User attachment style');
 
+// Context enum for better type safety across the stack
+export const contextSchema = z.enum(['general', 'conflict', 'repair', 'boundary', 'planning', 'professional', 'romantic']).optional().describe('Communication context classification');
+
 // Features array for response customization
 export const featuresSchema = z.array(z.enum(['advice', 'quick_fixes', 'evidence', 'emotional_support', 'context_analysis'])).max(8).optional().describe('Feature flags to include in the response');
 
@@ -82,7 +85,7 @@ export type OriginalAnalysis = z.infer<typeof originalAnalysisSchema>;
 /** METADATA — allow backend keys via passthrough */
 export const responseMetadataSchema = z.object({
   suggestion_count: z.number(),
-  processing_time_ms: z.number(),
+  processingTimeMs: z.number(),
   model_version: z.string(),
   features_used: z.array(z.string()).optional(),
   attachment_style_applied: z.string().optional(),
@@ -90,6 +93,9 @@ export const responseMetadataSchema = z.object({
   // backend present keys (allowed, not required)
   status: z.string().optional(),
   attachment_informed: z.boolean().optional(),
+  
+  // Legacy field for backward compatibility
+  processing_time_ms: z.number().optional(),
 }).passthrough();
 
 export type ResponseMetadata = z.infer<typeof responseMetadataSchema>;

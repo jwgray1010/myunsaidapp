@@ -234,13 +234,33 @@ final class ToneSuggestionCoordinator {
     }
     
     func debugPing() {
+        logger.info("🔥 Debug ping triggered")
+        debugPingAll()
+    }
+    
+    func debugPingAll() {
+        print("🔧 normalized base:", normalizedBaseURLString())
+        print("🔧 suggestions:", normalizedBaseURLString() + "/api/v1/suggestions")
+        print("🔧 communicator:", normalizedBaseURLString() + "/api/v1/communicator")
+        print("🔧 tone:", normalizedBaseURLString() + "/api/v1/tone")
         dumpAPIConfig()
-        let rawBase = (Bundle.main.object(forInfoDictionaryKey: "UNSAID_API_BASE_URL") as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanedBase: String = rawBase.hasSuffix("/api/v1") ? String(rawBase.dropLast(7)) : rawBase
-        os_log("🔧 API Base URL configured: %{public}@", log: self.netLog, type: .info, cleanedBase)
-        os_log("🔧 Network available: %{public}@", log: self.netLog, type: .info, String(self.isNetworkAvailable))
-        os_log("🔧 Current text length: %d", log: self.netLog, type: .info, self.currentText.count)
         
+        // Test a sample suggestion request to verify endpoints work
+        let testPayload: [String: Any] = [
+            "text": "Hello test",
+            "context": "general"
+        ]
+        print("🔧 Testing suggestions endpoint...")
+        callEndpoint(path: "api/v1/suggestions", payload: testPayload) { result in
+            if result != nil {
+                print("✅ Suggestions endpoint responded")
+            } else {
+                print("❌ Suggestions endpoint failed")
+            }
+        }
+    }
+    
+    private func checkBackoffStatus() {
         let currentTextTrimmed = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !currentTextTrimmed.isEmpty {
             Task { @MainActor in
@@ -405,7 +425,6 @@ final class ToneSuggestionCoordinator {
             "text": textToAnalyze,
             "userId": getUserId(),
             "userEmail": getUserEmail() ?? NSNull(),
-            "context": "general",  // Top-level context for server compatibility
             "features": ["advice", "evidence"],
             "meta": [
                 "source": "keyboard_manual",
@@ -424,10 +443,6 @@ final class ToneSuggestionCoordinator {
                     self.delegate?.didUpdateSuggestions(self.suggestions)
                     self.delegate?.didUpdateSecureFixButtonState()
                     self.storeSuggestionGenerated(suggestion: s)
-                } else if let fallback = self.fallbackSuggestion(for: textToAnalyze), !fallback.isEmpty {
-                    self.suggestions = [fallback]
-                    self.delegate?.didUpdateSuggestions(self.suggestions)
-                    self.delegate?.didUpdateSecureFixButtonState()
                 } else {
                     self.suggestions = []
                     self.delegate?.didUpdateSuggestions([])
@@ -445,7 +460,6 @@ final class ToneSuggestionCoordinator {
             "text": textToAnalyze,
             "userId": getUserId(),
             "userEmail": getUserEmail() ?? NSNull(),
-            "context": "general",  // Top-level context for server compatibility
             "toneOverride": tone,
             "features": ["advice"],
             "meta": [
@@ -467,10 +481,6 @@ final class ToneSuggestionCoordinator {
                     self.delegate?.didUpdateSuggestions([s])
                     self.delegate?.didUpdateSecureFixButtonState()
                     self.storeSuggestionGenerated(suggestion: s)
-                } else if let fallback = self.fallbackSuggestionForTone(tone, text: textToAnalyze) {
-                    self.suggestions = [fallback]
-                    self.delegate?.didUpdateSuggestions([fallback])
-                    self.delegate?.didUpdateSecureFixButtonState()
                 } else {
                     self.suggestions = []
                     self.delegate?.didUpdateSuggestions([])
@@ -606,7 +616,7 @@ final class ToneSuggestionCoordinator {
             DispatchQueue.main.async {
                 self.cancelInFlightRequestsForCurrentField()
                 let task = self.session.dataTask(with: req) { data, response, error in
-                    let latencyMs = Date().timeIntervalSince(startTime) * 1000
+                    let _ = Date().timeIntervalSince(startTime) * 1000  // latency measurement
                     self.onQ { self.inFlightRequests.removeValue(forKey: requestHash) }
                     
                     if let error = error as NSError? {
@@ -632,12 +642,7 @@ final class ToneSuggestionCoordinator {
                             Task { @MainActor in self.delegate?.didReceiveAPIError(.paymentRequired) }
                             completion(nil); return
                         case 404:
-                            if normalized == "api/v1/communicator" {
-                                let circuitDelay = 10.0 * Double.random(in: 0.8...1.2)
-                                self.circuitBreakers[circuitKey] = Date().addingTimeInterval(circuitDelay)
-                                self.setBreaker(circuitKey, open: true)
-                                completion(nil); return
-                            }
+                            break
                         default: break
                         }
                         self.throttledLog("HTTP \(http.statusCode) \(normalized)", category: "api")
@@ -687,6 +692,14 @@ final class ToneSuggestionCoordinator {
                 }
                 self.pendingRequests["default"] = task
                 self.onQ { self.inFlightRequests[requestHash] = task }
+                
+                // Debug logging before starting the request
+                print("🌐 \(req.httpMethod ?? "POST") \(req.url!.absoluteString)")
+                print("🌐 Headers:", req.allHTTPHeaderFields ?? [:])
+                if let body = req.httpBody { 
+                    print("🌐 Body:", String(data: body, encoding: .utf8) ?? "<non-utf8>") 
+                }
+                
                 task.resume()
             }
         }
@@ -809,7 +822,6 @@ final class ToneSuggestionCoordinator {
         for key in keys { if let v = dict[key] as? String, !v.isEmpty { return v } }
         return fallback
     }
-    private func fallbackSuggestion(for text: String) -> String? { nil }
     private func getEmotionalIndicatorsForTone(_ tone: String) -> [String] {
         switch tone {
         case "alert": return ["anger", "frustration", "urgency"]
@@ -1023,13 +1035,22 @@ extension ToneSuggestionCoordinator {
     private struct ToneOut: Decodable { let buckets: [String: Double] }
     
     private func postTone(base: String, text: String, token: String?) async throws -> ToneOut {
-        let url = URL(string: "\(base)/api/v1/tone")!
+        let origin = normalizedBaseURLString()  // Use the normalizer to prevent doubled paths
+        let url = URL(string: "\(origin)/api/v1/tone")!
+        print("🎯 TONE URL: \(url.absoluteString)")
+        
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(getUserId(), forHTTPHeaderField: "x-user-id")
         if let token = token?.nilIfEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let body = ["text": text]
+        request.setValue(getUserId(), forHTTPHeaderField: "x-user-id")
+        
+        // Include context and client_seq to match schema/handler expectations
+        let body: [String: Any] = [
+            "text": text,
+            "context": "general",
+            "client_seq": clientSequence
+        ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
         let (data, response) = try await URLSession.shared.data(for: request)
