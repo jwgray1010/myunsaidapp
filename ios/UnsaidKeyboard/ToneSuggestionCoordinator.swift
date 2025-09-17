@@ -42,6 +42,7 @@ protocol ToneSuggestionDelegate: AnyObject {
     func didUpdateToneStatus(_ tone: String)  // "clear" | "caution" | "alert" | "neutral"
     func didUpdateSecureFixButtonState()
     func didReceiveAPIError(_ error: APIError)
+    func didReceiveFeatureNoticings(_ noticings: [String]) // New: Feature noticings from FeatureSpotter
     #if canImport(UIKit)
     func getTextDocumentProxy() -> UITextDocumentProxy?
     #endif
@@ -978,6 +979,15 @@ extension ToneSuggestionCoordinator {
             let alpha = isSeverityDrop ? 0.50 : 0.30
             smoothedBuckets = smoothBuckets(prev: smoothedBuckets, curr: newBuckets, alpha: alpha)
             let finalTone = pickUiTone(smoothedBuckets, current: lastUiTone)
+            
+            // Extract and forward feature noticings to the delegate
+            if let noticings = toneOut.metadata?.feature_noticings {
+                let noticeMessages = noticings.map { $0.message }
+                await MainActor.run { 
+                    delegate?.didReceiveFeatureNoticings(noticeMessages)
+                }
+            }
+            
             await MainActor.run { maybeUpdateIndicator(to: finalTone) }
         } catch {
             logger.info("🎯 Analysis failed, retaining current tone: \(error.localizedDescription)")
@@ -1032,7 +1042,19 @@ extension ToneSuggestionCoordinator {
     }
     
     // MARK: - API Helper for Tone
-    private struct ToneOut: Decodable { let buckets: [String: Double] }
+    private struct ToneOut: Decodable { 
+        let buckets: [String: Double]
+        let metadata: ToneMetadata?
+    }
+    
+    private struct ToneMetadata: Decodable {
+        let feature_noticings: [FeatureNoticing]?
+    }
+    
+    private struct FeatureNoticing: Decodable {
+        let pattern: String
+        let message: String
+    }
     
     private func postTone(base: String, text: String, token: String?) async throws -> ToneOut {
         let origin = normalizedBaseURLString()  // Use the normalizer to prevent doubled paths
@@ -1060,9 +1082,13 @@ extension ToneSuggestionCoordinator {
         if let direct = try? JSONDecoder().decode(ToneOut.self, from: data) { return direct }
         struct Wrapped: Decodable { let data: ToneOut }
         if let wrapped = try? JSONDecoder().decode(Wrapped.self, from: data) { return wrapped.data }
-        struct UI: Decodable { let ui_distribution: [String: Double]?; let buckets: [String: Double]? }
+        struct UI: Decodable { 
+            let ui_distribution: [String: Double]?
+            let buckets: [String: Double]? 
+            let metadata: ToneMetadata?
+        }
         let ui = try JSONDecoder().decode(UI.self, from: data)
-        return ToneOut(buckets: ui.ui_distribution ?? ui.buckets ?? [:])
+        return ToneOut(buckets: ui.ui_distribution ?? ui.buckets ?? [:], metadata: ui.metadata)
     }
 }
 
