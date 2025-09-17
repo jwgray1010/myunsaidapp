@@ -434,16 +434,29 @@ final class KeyboardController: UIInputView,
     }
     
     #if DEBUG
+    private var lastDebugTime: Date = Date.distantPast
+    private let debugCooldownInterval: TimeInterval = 10.0  // 10 seconds cooldown
+    
     private func setupDebugGestures() {
         // Add a four-finger tap gesture to trigger debug tests
         let debugGesture = UITapGestureRecognizer(target: self, action: #selector(handleDebugGesture))
         debugGesture.numberOfTouchesRequired = 4
         debugGesture.numberOfTapsRequired = 2
         addGestureRecognizer(debugGesture)
-        dbg("🔧 Debug gesture added: Four-finger double-tap to run debug tests")
+        dbg("🔧 Debug gesture added: Four-finger double-tap to run debug tests (10s cooldown)")
     }
     
     @objc private func handleDebugGesture() {
+        let now = Date()
+        let timeSinceLastDebug = now.timeIntervalSince(lastDebugTime)
+        
+        if timeSinceLastDebug < debugCooldownInterval {
+            let remaining = debugCooldownInterval - timeSinceLastDebug
+            logger.info("🔍 DEBUG COOLDOWN: \(String(format: "%.1f", remaining))s remaining")
+            return
+        }
+        
+        lastDebugTime = now
         logger.info("🔍 DEBUG GESTURE TRIGGERED - Running full system debug...")
         debugFullSystem()
     }
@@ -1842,12 +1855,11 @@ final class KeyboardController: UIInputView,
         for word in testWords {
             logger.info("🔤 Testing word: '\(word)'")
             
-            // Check if word is considered correct
-            do {
-                let suggestions = spellChecker.quickSuggestions(for: word, maxCount: 3)
-                logger.info("🔤 Suggestions for '\(word)': \(suggestions)")
-            } catch {
-                logger.error("🔤 Error getting suggestions for '\(word)': \(error)")
+            // Get suggestions using the async API
+            spellChecker.requestSuggestions(for: word, range: NSRange(location: 0, length: word.count)) { [weak self] suggestions in
+                DispatchQueue.main.async {
+                    self?.logger.info("🔤 Suggestions for '\(word)': \(suggestions ?? [])")
+                }
             }
         }
         
@@ -1905,8 +1917,8 @@ final class KeyboardController: UIInputView,
         
         // Test coordinator state
         if let coord = coordinator {
-            logger.info("🎨 Coordinator last tone: \(lastToneStatusString)")
-            logger.info("🎨 Current UI tone: \(currentUITone.rawValue)")
+            logger.info("🎨 Coordinator last tone: \(self.lastToneStatusString)")
+            logger.info("🎨 Current UI tone: \(self.currentUITone.rawValue)")
         } else {
             logger.error("🎨 Coordinator is nil!")
         }
@@ -2022,7 +2034,7 @@ final class KeyboardController: UIInputView,
         
         // Test 1: Check if spell checker integration exists and is configured
         logger.info("🔤 Test 1: Spell Checker Integration State")
-        logger.info("🔤 Spell integration object: \(type(of: spellCheckerIntegration))")
+        logger.info("🔤 Spell integration object: \(type(of: self.spellCheckerIntegration))")
         
         // Test 2: Check if UITextChecker is available
         #if canImport(UIKit)
@@ -2034,9 +2046,9 @@ final class KeyboardController: UIInputView,
         
         // Test 3: Check spell strip functionality
         logger.info("🔤 Test 3: Spell Strip State")
-        logger.info("🔤 Spell strip superview: \(spellStrip.superview != nil)")
-        logger.info("🔤 Spell strip frame: \(spellStrip.frame)")
-        logger.info("🔤 Spell strip hidden: \(spellStrip.isHidden)")
+        logger.info("🔤 Spell strip superview: \(self.spellStrip.superview != nil)")
+        logger.info("🔤 Spell strip frame: \(String(describing: self.spellStrip.frame))")
+        logger.info("🔤 Spell strip hidden: \(self.spellStrip.isHidden)")
         
         // Test 4: Simulate text input for spell checking
         logger.info("🔤 Test 4: Simulating Text Input")
@@ -2058,9 +2070,9 @@ final class KeyboardController: UIInputView,
         if let button = toneButton {
             logger.info("🎨 Tone button exists: \(type(of: button))")
             logger.info("🎨 Button superview: \(button.superview != nil)")
-            logger.info("🎨 Button frame: \(button.frame)")
-            logger.info("🎨 Button bounds: \(button.bounds)")
-            logger.info("🎨 Button center: \(button.center)")
+            logger.info("🎨 Button frame: \(String(describing: button.frame))")
+            logger.info("🎨 Button bounds: \(String(describing: button.bounds))")
+            logger.info("🎨 Button center: \(String(describing: button.center))")
             logger.info("🎨 Button alpha: \(button.alpha)")
             logger.info("🎨 Button hidden: \(button.isHidden)")
             logger.info("🎨 Button background color: \(button.backgroundColor?.debugDescription ?? "nil")")
@@ -2081,7 +2093,7 @@ final class KeyboardController: UIInputView,
         logger.info("🎨 Test 2: Tone Button Background")
         if let background = toneButtonBackground {
             logger.info("🎨 Background exists: \(type(of: background))")
-            logger.info("🎨 Background frame: \(background.frame)")
+            logger.info("🎨 Background frame: \(String(describing: background.frame))")
             logger.info("🎨 Background alpha: \(background.alpha)")
             logger.info("🎨 Background hidden: \(background.isHidden)")
             logger.info("🎨 Background color: \(background.backgroundColor?.debugDescription ?? "nil")")
@@ -2093,14 +2105,16 @@ final class KeyboardController: UIInputView,
         logger.info("🎨 Test 3: Gradient Layer")
         if let gradient = toneGradient {
             logger.info("🎨 Gradient exists: \(type(of: gradient))")
-            logger.info("🎨 Gradient frame: \(gradient.frame)")
+            logger.info("🎨 Gradient frame: \(String(describing: gradient.frame))")
             logger.info("🎨 Gradient colors count: \(gradient.colors?.count ?? 0)")
             logger.info("🎨 Gradient opacity: \(gradient.opacity)")
             logger.info("🎨 Gradient hidden: \(gradient.isHidden)")
             
             if let colors = gradient.colors {
-                for (i, color) in colors.enumerated() {
-                    let uiColor = UIColor(cgColor: color)
+                for (i, colorRef) in colors.enumerated() {
+                    // colorRef is already CGColor, no need for conditional cast
+                    let cgColor = colorRef as! CGColor
+                    let uiColor = UIColor(cgColor: cgColor)
                     logger.info("🎨 Gradient color \(i): \(uiColor.debugDescription)")
                 }
             }
@@ -2183,32 +2197,22 @@ final class KeyboardController: UIInputView,
         
         let testSentence = "hte quick brown fox jumps over teh lazy dog"
         
-        logger.info("⚙️ Test 1: Text Input Simulation")
+        logger.info("⚙️ Test 1: Simple Text Analysis (without character simulation)")
         logger.info("⚙️ Input text: '\(testSentence)'")
         
-        // Simulate character-by-character input
-        var partialText = ""
-        for (i, char) in testSentence.enumerated() {
-            partialText.append(char)
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) {
-                self.logger.info("⚙️ Partial text: '\(partialText)'")
-                self.scheduleAnalysisRouter(lastInserted: String(char), isDeletion: false, urgent: false)
-                
-                // Update current text
-                self.currentText = partialText
-                self.textDidChange()
-            }
-        }
+        // DISABLED: Character-by-character simulation to prevent API flooding
+        // Instead, just test final sentence analysis
+        logger.info("⚙️ Simulating final text entry...")
+        currentText = testSentence
         
-        // Test spell checking after input is complete
-        DispatchQueue.main.asyncAfter(deadline: .now() + Double(testSentence.count) * 0.1 + 1.0) {
+        // Test spell checking after setup
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             self.logger.info("⚙️ Test 2: Final Spell Check")
             self.debugSpellCheckerIntegration()
         }
         
-        // Test tone analysis after input is complete
-        DispatchQueue.main.asyncAfter(deadline: .now() + Double(testSentence.count) * 0.1 + 2.0) {
+        // Test tone analysis with final sentence only
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             self.logger.info("⚙️ Test 3: Final Tone Analysis")
             self.coordinator?.debugTestToneAPI(with: testSentence)
         }
