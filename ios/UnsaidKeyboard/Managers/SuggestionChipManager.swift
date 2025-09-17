@@ -174,6 +174,36 @@ final class SuggestionChipManager {
         self.suggestionBar = suggestionBar
     }
     
+    // MARK: - Debug Methods
+    
+    #if DEBUG
+    func debugSuggestionChipState() {
+        print("💬 SUGGESTION CHIP MANAGER DEBUG")
+        print("================================")
+        
+        print("💬 Container view: \(containerView != nil ? "exists" : "nil")")
+        print("💬 Suggestion bar: \(suggestionBar != nil ? "exists" : "nil")")
+        print("💬 Active chip: \(activeChip != nil ? "exists" : "nil")")
+        
+        if let chip = activeChip {
+            print("💬 Active chip superview: \(chip.superview != nil)")
+            print("💬 Active chip frame: \(chip.frame)")
+            print("💬 Active chip alpha: \(chip.alpha)")
+            print("💬 Active chip hidden: \(chip.isHidden)")
+            print("💬 Active chip text: '\(chip.getCurrentSuggestion() ?? "nil")'")
+        }
+        
+        if let container = containerView {
+            print("💬 Container subviews count: \(container.subviews.count)")
+            let chipViews = container.subviews.filter { $0 is SuggestionChipView }
+            print("💬 SuggestionChipView instances in container: \(chipViews.count)")
+        }
+        
+        print("💬 Tutorial shown: \(shouldShowTutorial() ? "no" : "yes")")
+        print("💬 SUGGESTION CHIP MANAGER DEBUG COMPLETE")
+    }
+    #endif
+    
     // MARK: - First-time User Management
     
     private func markTutorialAsShown() {

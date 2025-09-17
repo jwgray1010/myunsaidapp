@@ -1989,9 +1989,229 @@ final class KeyboardController: UIInputView,
         DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
             self.logger.info("🔍 TEST 6: Suggestion Chips")
             self.debugSuggestionChip()
+            self.suggestionChipManager.debugSuggestionChipState()
         }
         
-        logger.info("🔍 FULL SYSTEM DEBUG - All tests scheduled. Check logs for results.")
+        // Test 7: Advanced spell checker integration (delay to see output)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) {
+            self.logger.info("🔍 TEST 7: Advanced Spell Checker Integration")
+            self.debugSpellCheckerIntegration()
+        }
+        
+        // Test 8: Advanced tone color system (delay to see output)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 7.0) {
+            self.logger.info("🔍 TEST 8: Advanced Tone Color System")
+            self.debugToneColorSystem()
+        }
+        
+        // Test 9: Text processing pipeline (delay to see output)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) {
+            self.logger.info("🔍 TEST 9: Text Processing Pipeline")
+            self.debugTextProcessingPipeline()
+        }
+        
+        logger.info("🔍 FULL SYSTEM DEBUG - All 9 tests scheduled. Check logs for results.")
+    }
+    
+    // MARK: - Advanced Debug Methods
+    
+    /// Debug method specifically for spell checker integration issues
+    func debugSpellCheckerIntegration() {
+        logger.info("🔍 SPELL CHECKER INTEGRATION DEBUG")
+        logger.info("=====================================")
+        
+        // Test 1: Check if spell checker integration exists and is configured
+        logger.info("🔤 Test 1: Spell Checker Integration State")
+        logger.info("🔤 Spell integration object: \(type(of: spellCheckerIntegration))")
+        
+        // Test 2: Check if UITextChecker is available
+        #if canImport(UIKit)
+        let textChecker = UITextChecker()
+        let availableLanguages = UITextChecker.availableLanguages
+        logger.info("🔤 UITextChecker available languages: \(availableLanguages.count)")
+        logger.info("🔤 First few languages: \(Array(availableLanguages.prefix(5)))")
+        #endif
+        
+        // Test 3: Check spell strip functionality
+        logger.info("🔤 Test 3: Spell Strip State")
+        logger.info("🔤 Spell strip superview: \(spellStrip.superview != nil)")
+        logger.info("🔤 Spell strip frame: \(spellStrip.frame)")
+        logger.info("🔤 Spell strip hidden: \(spellStrip.isHidden)")
+        
+        // Test 4: Simulate text input for spell checking
+        logger.info("🔤 Test 4: Simulating Text Input")
+        simulateTextForSpellCheck()
+        
+        // Test 5: Check delegate connections
+        logger.info("🔤 Test 5: Delegate Connections")
+        
+        logger.info("🔤 SPELL CHECKER INTEGRATION DEBUG COMPLETE")
+    }
+    
+    /// Debug method specifically for tone color display issues
+    func debugToneColorSystem() {
+        logger.info("🎨 TONE COLOR SYSTEM DEBUG")
+        logger.info("===============================")
+        
+        // Test 1: Check tone button hierarchy
+        logger.info("🎨 Test 1: Tone Button Hierarchy")
+        if let button = toneButton {
+            logger.info("🎨 Tone button exists: \(type(of: button))")
+            logger.info("🎨 Button superview: \(button.superview != nil)")
+            logger.info("🎨 Button frame: \(button.frame)")
+            logger.info("🎨 Button bounds: \(button.bounds)")
+            logger.info("🎨 Button center: \(button.center)")
+            logger.info("🎨 Button alpha: \(button.alpha)")
+            logger.info("🎨 Button hidden: \(button.isHidden)")
+            logger.info("🎨 Button background color: \(button.backgroundColor?.debugDescription ?? "nil")")
+            logger.info("🎨 Button tint color: \(button.tintColor?.debugDescription ?? "nil")")
+            
+            // Check button layers
+            logger.info("🎨 Button layer count: \(button.layer.sublayers?.count ?? 0)")
+            if let sublayers = button.layer.sublayers {
+                for (i, layer) in sublayers.enumerated() {
+                    logger.info("🎨 Sublayer \(i): \(type(of: layer)) - hidden: \(layer.isHidden)")
+                }
+            }
+        } else {
+            logger.error("🎨 ❌ CRITICAL: Tone button is nil!")
+        }
+        
+        // Test 2: Check tone button background
+        logger.info("🎨 Test 2: Tone Button Background")
+        if let background = toneButtonBackground {
+            logger.info("🎨 Background exists: \(type(of: background))")
+            logger.info("🎨 Background frame: \(background.frame)")
+            logger.info("🎨 Background alpha: \(background.alpha)")
+            logger.info("🎨 Background hidden: \(background.isHidden)")
+            logger.info("🎨 Background color: \(background.backgroundColor?.debugDescription ?? "nil")")
+        } else {
+            logger.error("🎨 ❌ CRITICAL: Tone button background is nil!")
+        }
+        
+        // Test 3: Check gradient layer
+        logger.info("🎨 Test 3: Gradient Layer")
+        if let gradient = toneGradient {
+            logger.info("🎨 Gradient exists: \(type(of: gradient))")
+            logger.info("🎨 Gradient frame: \(gradient.frame)")
+            logger.info("🎨 Gradient colors count: \(gradient.colors?.count ?? 0)")
+            logger.info("🎨 Gradient opacity: \(gradient.opacity)")
+            logger.info("🎨 Gradient hidden: \(gradient.isHidden)")
+            
+            if let colors = gradient.colors {
+                for (i, color) in colors.enumerated() {
+                    let uiColor = UIColor(cgColor: color)
+                    logger.info("🎨 Gradient color \(i): \(uiColor.debugDescription)")
+                }
+            }
+        } else {
+            logger.info("🎨 No gradient layer found")
+        }
+        
+        // Test 4: Test each tone status manually
+        logger.info("🎨 Test 4: Manual Tone Status Testing")
+        testAllToneStates()
+        
+        logger.info("🎨 TONE COLOR SYSTEM DEBUG COMPLETE")
+    }
+    
+    /// Helper method to simulate text input for spell checking
+    private func simulateTextForSpellCheck() {
+        let testTexts = [
+            "hte quick brown fox",
+            "recieve the message",
+            "definately correct",
+            "seperate the items"
+        ]
+        
+        for (i, text) in testTexts.enumerated() {
+            logger.info("🔤 Simulating text \(i+1): '\(text)'")
+            
+            // Simulate text change
+            currentText = text
+            textDidChange()
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.logger.info("🔤 After text change - current text: '\(self.currentText)'")
+            }
+        }
+    }
+    
+    /// Helper method to test all tone states
+    private func testAllToneStates() {
+        let tones: [ToneStatus] = [.clear, .caution, .alert, .neutral]
+        
+        for (i, tone) in tones.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 1.0) {
+                self.logger.info("🎨 Setting tone to: \(tone.rawValue)")
+                self.setToneStatus(tone, animated: true)
+                
+                // Check colors after setting
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    self.logToneButtonState(for: tone)
+                }
+            }
+        }
+    }
+    
+    /// Helper method to log tone button state
+    private func logToneButtonState(for tone: ToneStatus) {
+        logger.info("🎨 State after setting \(tone.rawValue):")
+        
+        if let button = toneButton {
+            logger.info("🎨   Button alpha: \(button.alpha)")
+            logger.info("🎨   Button hidden: \(button.isHidden)")
+            logger.info("🎨   Button bg color: \(button.backgroundColor?.debugDescription ?? "nil")")
+        }
+        
+        if let background = toneButtonBackground {
+            logger.info("🎨   Background alpha: \(background.alpha)")
+            logger.info("🎨   Background hidden: \(background.isHidden)")
+            logger.info("🎨   Background color: \(background.backgroundColor?.debugDescription ?? "nil")")
+        }
+        
+        if let gradient = toneGradient {
+            logger.info("🎨   Gradient opacity: \(gradient.opacity)")
+            logger.info("🎨   Gradient colors: \(gradient.colors?.count ?? 0)")
+        }
+    }
+    
+    /// Debug method to test the complete text processing pipeline
+    func debugTextProcessingPipeline() {
+        logger.info("⚙️ TEXT PROCESSING PIPELINE DEBUG")
+        logger.info("====================================")
+        
+        let testSentence = "hte quick brown fox jumps over teh lazy dog"
+        
+        logger.info("⚙️ Test 1: Text Input Simulation")
+        logger.info("⚙️ Input text: '\(testSentence)'")
+        
+        // Simulate character-by-character input
+        var partialText = ""
+        for (i, char) in testSentence.enumerated() {
+            partialText.append(char)
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) {
+                self.logger.info("⚙️ Partial text: '\(partialText)'")
+                self.scheduleAnalysisRouter(lastInserted: String(char), isDeletion: false, urgent: false)
+                
+                // Update current text
+                self.currentText = partialText
+                self.textDidChange()
+            }
+        }
+        
+        // Test spell checking after input is complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double(testSentence.count) * 0.1 + 1.0) {
+            self.logger.info("⚙️ Test 2: Final Spell Check")
+            self.debugSpellCheckerIntegration()
+        }
+        
+        // Test tone analysis after input is complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double(testSentence.count) * 0.1 + 2.0) {
+            self.logger.info("⚙️ Test 3: Final Tone Analysis")
+            self.coordinator?.debugTestToneAPI(with: testSentence)
+        }
     }
     #endif
     

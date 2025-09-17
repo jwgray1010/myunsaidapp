@@ -882,16 +882,16 @@ final class ToneSuggestionCoordinator {
     
     func debugCoordinatorState() {
         logger.info("🔍 ToneSuggestionCoordinator Debug State:")
-        logger.info("🔍 API Base URL: '\(apiBaseURL)'")
-        logger.info("🔍 API Key configured: \(!apiKey.isEmpty)")
-        logger.info("🔍 Is API configured: \(isAPIConfigured)")
-        logger.info("🔍 Current text: '\(currentText)'")
-        logger.info("🔍 Last UI tone: \(lastUiTone.rawValue)")
-        logger.info("🔍 Smoothed buckets: clear=\(String(format: "%.2f", smoothedBuckets.clear)), caution=\(String(format: "%.2f", smoothedBuckets.caution)), alert=\(String(format: "%.2f", smoothedBuckets.alert))")
-        logger.info("🔍 Suggestions count: \(suggestions.count)")
-        logger.info("🔍 Network available: \(isNetworkAvailable)")
-        logger.info("🔍 Auth backoff until: \(authBackoffUntil)")
-        logger.info("🔍 Net backoff until: \(netBackoffUntil)")
+        logger.info("🔍 API Base URL: '\(self.apiBaseURL)'")
+        logger.info("🔍 API Key configured: \(!self.apiKey.isEmpty)")
+        logger.info("🔍 Is API configured: \(self.isAPIConfigured)")
+        logger.info("🔍 Current text: '\(self.currentText)'")
+        logger.info("🔍 Last UI tone: \(self.lastUiTone.rawValue)")
+        logger.info("🔍 Smoothed buckets: clear=\(String(format: "%.2f", self.smoothedBuckets.clear)), caution=\(String(format: "%.2f", self.smoothedBuckets.caution)), alert=\(String(format: "%.2f", self.smoothedBuckets.alert))")
+        logger.info("🔍 Suggestions count: \(self.suggestions.count)")
+        logger.info("🔍 Network available: \(self.isNetworkAvailable)")
+        logger.info("🔍 Auth backoff until: \(self.authBackoffUntil)")
+        logger.info("🔍 Net backoff until: \(self.netBackoffUntil)")
         
         if let delegate = delegate {
             logger.info("🔍 Delegate is set: \(type(of: delegate))")
@@ -903,14 +903,14 @@ final class ToneSuggestionCoordinator {
     func debugTestToneAPI(with text: String = "You never listen to me and it's really frustrating") {
         logger.info("🧪 Testing tone API with text: '\(text)'")
         
-        guard isAPIConfigured else {
+        guard self.isAPIConfigured else {
             logger.error("🧪 API not configured - cannot test")
             return
         }
         
         Task {
             do {
-                let toneOut = try await postTone(base: apiBaseURL, text: text, token: apiKey.nilIfEmpty)
+                let toneOut = try await self.postTone(base: self.apiBaseURL, text: text, token: self.apiKey.nilIfEmpty)
                 await MainActor.run {
                     self.logger.info("🧪 API Response received:")
                     self.logger.info("🧪 Buckets: \(toneOut.buckets)")
@@ -942,20 +942,22 @@ final class ToneSuggestionCoordinator {
         }
         
         // Test tone status update
-        delegate.didUpdateToneStatus("alert")
-        logger.info("📡 Called didUpdateToneStatus with 'alert'")
-        
-        // Test suggestions update
-        delegate.didUpdateSuggestions(["Test suggestion 1", "Test suggestion 2"])
-        logger.info("📡 Called didUpdateSuggestions with 2 test suggestions")
-        
-        // Test feature noticings
-        delegate.didReceiveFeatureNoticings(["Debug feature noticing: Consider softening your tone"])
-        logger.info("📡 Called didReceiveFeatureNoticings with debug message")
-        
-        // Test error
-        delegate.didReceiveAPIError(.networkError)
-        logger.info("📡 Called didReceiveAPIError with network error")
+        Task { @MainActor in
+            delegate.didUpdateToneStatus("alert")
+            self.logger.info("📡 Called didUpdateToneStatus with 'alert'")
+            
+            // Test suggestions update
+            delegate.didUpdateSuggestions(["Test suggestion 1", "Test suggestion 2"])
+            self.logger.info("📡 Called didUpdateSuggestions with 2 test suggestions")
+            
+            // Test feature noticings
+            delegate.didReceiveFeatureNoticings(["Debug feature noticing: Consider softening your tone"])
+            self.logger.info("📡 Called didReceiveFeatureNoticings with debug message")
+            
+            // Test error
+            delegate.didReceiveAPIError(.networkError)
+            self.logger.info("📡 Called didReceiveAPIError with network error")
+        }
     }
     #endif
 }
