@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		02A4807D7767461AB72E0C48 /* PersonalityKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16CA44672FBE427384B2020B /* PersonalityKeys.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		179422438779BB9281C52962 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DBBD51BB0CCFD0647B7647B5 /* Pods_RunnerTests.framework */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
+		4FEAAD4224D44D13BA34AB95 /* PersonalityKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16CA44672FBE427384B2020B /* PersonalityKeys.swift */; };
 		576C785C1C6A8C94C2145ED3 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B214A6858BAB21475015F446 /* Pods_Runner.framework */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
@@ -23,10 +25,6 @@
 		D0ED47002E5910DC0094BD53 /* UnsaidKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D0ED46F92E5910DC0094BD53 /* UnsaidKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D0ED470D2E5911530094BD53 /* LightweightSpellChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47062E5911520094BD53 /* LightweightSpellChecker.swift */; };
 		D0ED470E2E5911530094BD53 /* ToneSuggestionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47072E5911520094BD53 /* ToneSuggestionCoordinator.swift */; };
-
-		HD1234567890ABCDEF123456 /* HapticsDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = HD1234567890ABCDEF123457 /* HapticsDriver.swift */; };
-		NG1234567890ABCDEF123455 /* NetGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = NG1234567890ABCDEF123456 /* NetGate.swift */; };
-		TH1234567890ABCDEF123456 /* TimerHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = TH1234567890ABCDEF123457 /* TimerHub.swift */; };
 		D0ED470F2E5911530094BD53 /* SafeKeyboardDataStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47092E5911530094BD53 /* SafeKeyboardDataStorage.swift */; };
 		D0ED47102E5911530094BD53 /* KeyboardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED470A2E5911530094BD53 /* KeyboardController.swift */; };
 		D0ED47112E5911530094BD53 /* PersonalityDataBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED470B2E5911530094BD53 /* PersonalityDataBridge.swift */; };
@@ -45,16 +43,17 @@
 		E0A12362 /* KeyboardDataSyncBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12361 /* KeyboardDataSyncBridge.swift */; };
 		E0A12371 /* BackgroundTaskManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12371A /* BackgroundTaskManager.swift */; };
 		E0A12372 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12372A /* NotificationManager.swift */; };
-		F39A47031E1F170200E8B355 /* PersonalityDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39A47041E1F170200E8B355 /* PersonalityDataManager.swift */; };
 		E1448293C5E640DE84B5AF44 /* GradientView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FFA836915704AD38679F914 /* GradientView.swift */; };
-		02A4807D7767461AB72E0C48 /* PersonalityKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16CA44672FBE427384B2020B /* PersonalityKeys.swift */; };
-		4FEAAD4224D44D13BA34AB95 /* PersonalityKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16CA44672FBE427384B2020B /* PersonalityKeys.swift */; };
+		F39A47031E1F170200E8B355 /* PersonalityDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39A47041E1F170200E8B355 /* PersonalityDataManager.swift */; };
 		F39A47051E1F170300E8B355 /* UnsaidKeyboardHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39A46FF1E1F170000E8B355 /* UnsaidKeyboardHelper.swift */; };
 		F39A47141E1F170400E8B355 /* 000_UnsaidSharedTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47122E5911540094BD53 /* 000_UnsaidSharedTypes.swift */; };
 		F3A001101E1F170500E8B355 /* UnsaidKeyboardBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A001001E1F170500E8B355 /* UnsaidKeyboardBridge.swift */; };
 		F3A001111E1F170500E8B355 /* KeyboardAnalyticsBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A001011E1F170500E8B355 /* KeyboardAnalyticsBridge.swift */; };
 		F3A001121E1F170500E8B355 /* PersonalityDataPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A001021E1F170500E8B355 /* PersonalityDataPlugin.swift */; };
 		FA247EB4F594405FA72FB2A9 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = FA247EB4F594405FA72FB2A8 /* GoogleService-Info.plist */; };
+		HD1234567890ABCDEF123456 /* HapticsDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = HD1234567890ABCDEF123457 /* HapticsDriver.swift */; };
+		NG1234567890ABCDEF123455 /* NetGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = NG1234567890ABCDEF123456 /* NetGate.swift */; };
+		TH1234567890ABCDEF123456 /* TimerHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = TH1234567890ABCDEF123457 /* TimerHub.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -99,7 +98,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0FFA836915704AD38679F914 /* GradientView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradientView.swift; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
+		16CA44672FBE427384B2020B /* PersonalityKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalityKeys.swift; sourceTree = "<group>"; };
 		1BA92D402F4A38FD3B8475A8 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -125,10 +126,6 @@
 		D0ED46FD2E5910DC0094BD53 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		D0ED47062E5911520094BD53 /* LightweightSpellChecker.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LightweightSpellChecker.swift; sourceTree = "<group>"; };
 		D0ED47072E5911520094BD53 /* ToneSuggestionCoordinator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ToneSuggestionCoordinator.swift; sourceTree = "<group>"; };
-
-		HD1234567890ABCDEF123457 /* HapticsDriver.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HapticsDriver.swift; sourceTree = "<group>"; };
-		NG1234567890ABCDEF123456 /* NetGate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NetGate.swift; sourceTree = "<group>"; };
-		TH1234567890ABCDEF123457 /* TimerHub.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TimerHub.swift; sourceTree = "<group>"; };
 		D0ED47082E5911530094BD53 /* UnsaidKeyboard-Bridging-Header.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = "UnsaidKeyboard-Bridging-Header.mm"; sourceTree = "<group>"; };
 		D0ED47092E5911530094BD53 /* SafeKeyboardDataStorage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SafeKeyboardDataStorage.swift; sourceTree = "<group>"; };
 		D0ED470A2E5911530094BD53 /* KeyboardController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeyboardController.swift; sourceTree = "<group>"; };
@@ -151,14 +148,15 @@
 		E0A12371A /* BackgroundTaskManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = BackgroundTaskManager.swift; path = ../Runner/BackgroundTaskManager.swift; sourceTree = "<group>"; };
 		E0A12372A /* NotificationManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = NotificationManager.swift; path = ../Runner/NotificationManager.swift; sourceTree = "<group>"; };
 		F39A46FF1E1F170000E8B355 /* UnsaidKeyboardHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsaidKeyboardHelper.swift; sourceTree = "<group>"; };
-		0FFA836915704AD38679F914 /* GradientView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradientView.swift; sourceTree = "<group>"; };
-		16CA44672FBE427384B2020B /* PersonalityKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalityKeys.swift; sourceTree = "<group>"; };
 		F39A47041E1F170200E8B355 /* PersonalityDataManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalityDataManager.swift; sourceTree = "<group>"; };
 		F39A47061E1F170300E8B355 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		F3A001001E1F170500E8B355 /* UnsaidKeyboardBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsaidKeyboardBridge.swift; sourceTree = "<group>"; };
 		F3A001011E1F170500E8B355 /* KeyboardAnalyticsBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardAnalyticsBridge.swift; sourceTree = "<group>"; };
 		F3A001021E1F170500E8B355 /* PersonalityDataPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalityDataPlugin.swift; sourceTree = "<group>"; };
 		FA247EB4F594405FA72FB2A8 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		HD1234567890ABCDEF123457 /* HapticsDriver.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HapticsDriver.swift; sourceTree = "<group>"; };
+		NG1234567890ABCDEF123456 /* NetGate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NetGate.swift; sourceTree = "<group>"; };
+		TH1234567890ABCDEF123457 /* TimerHub.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TimerHub.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -375,7 +373,7 @@
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				D0ED47012E5910DC0094BD53 /* Embed Foundation Extensions */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
-				297D2021801617129E38C074 /* [CP] Embed Pods Frameworks */,
+				06BC07D8A620FBAEBEC5B134 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -478,6 +476,23 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		06BC07D8A620FBAEBEC5B134 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 		2248C71C3716B25DE66E052B /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -498,23 +513,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		297D2021801617129E38C074 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		3B06AD1E1E4923F5004D2608 /* Thin Binary */ = {
@@ -615,7 +613,6 @@
 				D0ED47112E5911530094BD53 /* PersonalityDataBridge.swift in Sources */,
 				4FEAAD4224D44D13BA34AB95 /* PersonalityKeys.swift in Sources */,
 				D0ED470E2E5911530094BD53 /* ToneSuggestionCoordinator.swift in Sources */,
-
 				HD1234567890ABCDEF123456 /* HapticsDriver.swift in Sources */,
 				NG1234567890ABCDEF123455 /* NetGate.swift in Sources */,
 				TH1234567890ABCDEF123456 /* TimerHub.swift in Sources */,
