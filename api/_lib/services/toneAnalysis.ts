@@ -256,6 +256,10 @@ export interface AdvancedToneResult {
     triggered_patterns: string[];
     healing_suggestions: string[];
   };
+  metaClassifier?: {
+    pAlert: number;
+    pCaution: number;
+  };
 }
 
 export interface ToneAnalysisOptions {
@@ -1542,7 +1546,8 @@ function mapBucketsFromJson(
   toneLabel: string,
   contextKey: string,
   intensity: number,
-  contextSeverity?: Record<Bucket, number>
+  contextSeverity?: Record<Bucket, number>,
+  metaClassifier?: { pAlert: number, pCaution: number }
 ): { primary: Bucket, dist: Record<Bucket, number>, meta: any } {
   const map = dataLoader.get('toneBucketMapping') || dataLoader.get('toneBucketMap') || {};
   const TB = map.toneBuckets || {};
@@ -1552,11 +1557,65 @@ function mapBucketsFromJson(
   const mathDomain = engine?.combination?.mathDomain || 'prob'; // 'prob' | 'logit'
 
   // Base (supports your defaultBucket)
+  const toneConfig = TB[toneLabel] || {};
   const base =
-    TB[toneLabel]?.base ||
+    toneConfig?.base ||
     TB[map.defaultBucket || 'neutral']?.base ||
     TB['neutral']?.base ||
     { clear:0.5, caution:0.3, alert:0.2 };
+
+  // Check if this tone should use meta-classifier results
+  if (toneConfig?.meta_classifier && metaClassifier) {
+    const { pAlert, pCaution } = metaClassifier;
+    
+    // Use meta-classifier probabilities to determine distribution
+    // Higher pCaution than pAlert should favor caution bucket
+    // High pAlert (>0.7) should favor alert bucket
+    // Otherwise use balanced approach
+    
+    const pClear = Math.max(0, 1 - pAlert - pCaution); // Remaining probability for clear
+    
+    let metaBuckets: Record<Bucket, number>;
+    
+    if (pAlert > 0.7) {
+      // High alert confidence - use alert-dominant distribution
+      metaBuckets = {
+        clear: Math.max(0.05, pClear * 0.3),
+        caution: Math.max(0.15, pCaution * 0.6),
+        alert: Math.max(0.4, pAlert * 0.8)
+      };
+    } else if (pCaution > pAlert && pCaution > 0.6) {
+      // Higher caution confidence - use caution-dominant distribution  
+      metaBuckets = {
+        clear: Math.max(0.1, pClear * 0.5),
+        caution: Math.max(0.4, pCaution * 0.7),
+        alert: Math.max(0.1, pAlert * 0.5)
+      };
+    } else {
+      // Balanced or unclear - use base distribution with meta-classifier influence
+      const influence = Math.max(pAlert, pCaution);
+      const metaWeight = Math.min(0.7, influence); // Don't let meta-classifier completely override
+      
+      metaBuckets = {
+        clear: base.clear * (1 - metaWeight) + (pClear * 0.4) * metaWeight,
+        caution: base.caution * (1 - metaWeight) + (pCaution * 0.6) * metaWeight,
+        alert: base.alert * (1 - metaWeight) + (pAlert * 0.6) * metaWeight
+      };
+    }
+    
+    // Normalize to ensure sum = 1
+    const sum = metaBuckets.clear + metaBuckets.caution + metaBuckets.alert;
+    if (sum > 0) {
+      metaBuckets.clear /= sum;
+      metaBuckets.caution /= sum; 
+      metaBuckets.alert /= sum;
+    }
+    
+    logger.info(`🧠 Meta-classifier override: pAlert=${pAlert.toFixed(3)}, pCaution=${pCaution.toFixed(3)} → buckets=${JSON.stringify(metaBuckets)}`);
+    
+    // Use meta-classifier determined buckets as the starting point
+    Object.assign(base, metaBuckets);
+  }
 
   let dist: Record<Bucket, number> = { ...base };
 
@@ -3005,7 +3064,13 @@ export async function getGeneralToneAnalysis(text: string, attachmentStyle: stri
       includeAttachmentInsights: false
     });
     
-    const bucketResult = mapBucketsFromJson(result.primary_tone, context, result.intensity, (result as any).contextSeverity);
+    const bucketResult = mapBucketsFromJson(
+      result.primary_tone, 
+      context, 
+      result.intensity, 
+      (result as any).contextSeverity,
+      result.metaClassifier
+    );
     
     // ✅ Apply clear-eligibility guards now that we have the raw user text:
     const guardedDist = enforceBucketGuardsV2(bucketResult.dist, text, attachmentStyle);

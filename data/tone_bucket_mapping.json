@@ -71,17 +71,34 @@
 
   "toneBuckets": {
     "general_support": { "base": { "clear": 0.70, "caution": 0.25, "alert": 0.05 } },
-    "angry":           { "base": { "clear": 0.10, "caution": 0.30, "alert": 0.60 } },
-    "frustrated":      { "base": { "clear": 0.15, "caution": 0.45, "alert": 0.40 } },
+    "angry":           { 
+      "base": { "clear": 0.15, "caution": 0.50, "alert": 0.35 },
+      "meta_classifier": true,
+      "fallback": { "clear": 0.10, "caution": 0.30, "alert": 0.60 },
+      "description": "Uses meta-classifier pAlert/pCaution to determine final distribution"
+    },
+    "frustrated":      { 
+      "base": { "clear": 0.25, "caution": 0.55, "alert": 0.20 },
+      "meta_classifier": true,
+      "fallback": { "clear": 0.15, "caution": 0.45, "alert": 0.40 }
+    },
     "anxious":         { "base": { "clear": 0.20, "caution": 0.60, "alert": 0.20 } },
     "sad":             { "base": { "clear": 0.25, "caution": 0.60, "alert": 0.15 } },
-    "assertive":       { "base": { "clear": 0.40, "caution": 0.40, "alert": 0.20 } },
+    "assertive":       { 
+      "base": { "clear": 0.50, "caution": 0.35, "alert": 0.15 },
+      "meta_classifier": true,
+      "fallback": { "clear": 0.40, "caution": 0.40, "alert": 0.20 }
+    },
     "positive":        { "base": { "clear": 0.80, "caution": 0.15, "alert": 0.05 } },
     "supportive":      { "base": { "clear": 0.85, "caution": 0.12, "alert": 0.03 } },
     "neutral":         { "base": { "clear": 0.50, "caution": 0.30, "alert": 0.20 } },
     "tentative":       { "base": { "clear": 0.30, "caution": 0.60, "alert": 0.10 } },
     "confident":       { "base": { "clear": 0.60, "caution": 0.25, "alert": 0.15 } },
-    "negative":        { "base": { "clear": 0.20, "caution": 0.50, "alert": 0.30 } },
+    "negative":        { 
+      "base": { "clear": 0.30, "caution": 0.50, "alert": 0.20 },
+      "meta_classifier": true,
+      "fallback": { "clear": 0.20, "caution": 0.50, "alert": 0.30 }
+    },
     "safety_concern":  { "base": { "clear": 0.05, "caution": 0.25, "alert": 0.70 } }
   },
 
