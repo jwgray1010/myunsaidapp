@@ -176,14 +176,22 @@ class _ToneIndicatorTutorialScreenState
         curve: Curves.easeInOut,
       );
     } else {
-      // Navigate to keyboard setup after tone tutorial
-      Navigator.pushReplacementNamed(context, '/keyboard_intro');
+      // Use onComplete callback if provided, otherwise fallback to keyboard intro
+      if (widget.onComplete != null) {
+        widget.onComplete!();
+      } else {
+        Navigator.pushReplacementNamed(context, '/keyboard_intro');
+      }
     }
   }
 
   void _skipTutorial() {
-    // Navigate to keyboard setup when skipping
-    Navigator.pushReplacementNamed(context, '/keyboard_intro');
+    // Use onComplete callback if provided, otherwise fallback to keyboard intro
+    if (widget.onComplete != null) {
+      widget.onComplete!();
+    } else {
+      Navigator.pushReplacementNamed(context, '/keyboard_intro');
+    }
   }
 
   @override

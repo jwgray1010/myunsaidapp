@@ -244,6 +244,8 @@ class _KeyboardIntroScreenProfessionalState
   }
 
   void _openKeyboardSettings(BuildContext context) async {
+    if (kDebugMode) print('KeyboardIntro: _openKeyboardSettings() called');
+
     // Gentle haptic feedback
     try {
       HapticFeedback.lightImpact();
@@ -253,7 +255,15 @@ class _KeyboardIntroScreenProfessionalState
 
     // Try to use the keyboard manager first (for platform-specific deep linking)
     try {
+      if (kDebugMode)
+        print(
+          'KeyboardIntro: Calling UnsaidKeyboardExtension.openKeyboardSettings()',
+        );
       await UnsaidKeyboardExtension.openKeyboardSettings();
+      if (kDebugMode)
+        print(
+          'KeyboardIntro: UnsaidKeyboardExtension.openKeyboardSettings() completed',
+        );
 
       // Auto-detect enablement after returning from Settings
       _awaitReturnCheck();
@@ -271,10 +281,13 @@ class _KeyboardIntroScreenProfessionalState
         );
       }
     } catch (e) {
+      if (kDebugMode)
+        print('KeyboardIntro: UnsaidKeyboardExtension failed: $e');
       // Fallback to general settings
       const url = 'app-settings:';
       final uri = Uri.parse(url);
       if (await canLaunchUrl(uri)) {
+        if (kDebugMode) print('KeyboardIntro: Falling back to app-settings:');
         await launchUrl(uri);
         _awaitReturnCheck();
 

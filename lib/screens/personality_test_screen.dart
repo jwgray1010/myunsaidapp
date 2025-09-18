@@ -79,12 +79,22 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
   }
 
   void _selectAnswer(int value, int index) {
+    print('DEBUG: _selectAnswer called with value: $value, index: $index');
+    print(
+      'DEBUG: Current _selectedValue before: $_selectedValue, _selectedIndex: $_selectedIndex',
+    );
     HapticFeedback.selectionClick();
     setState(() {
       _selectedValue = value;
       _selectedIndex = index;
       widget.responses[currentQuestion.id] = value;
     });
+    print(
+      'DEBUG: _selectedValue after setState: $_selectedValue, _selectedIndex: $_selectedIndex',
+    );
+    print(
+      'DEBUG: widget.responses[${currentQuestion.id}] = ${widget.responses[currentQuestion.id]}',
+    );
   }
 
   Future<void> _goNext() async {
@@ -392,6 +402,11 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
                         final idx = entry.key;
                         final isSelected = _selectedIndex == idx;
 
+                        // Debug logging for selection state
+                        print(
+                          'DEBUG: Option $idx (value: ${option.value}) - isSelected: $isSelected, _selectedIndex: $_selectedIndex',
+                        );
+
                         return Container(
                           margin: const EdgeInsets.only(
                             bottom: AppTheme.spaceMD,
@@ -574,9 +589,9 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
                                             _allQuestions.length - 1
                                         ? 'Next'
                                         : 'Complete Assessment',
-                                    style: theme.textTheme.titleLarge?.copyWith(
+                                    style: theme.textTheme.bodyLarge?.copyWith(
                                       color: theme.colorScheme.primary,
-                                      fontWeight: FontWeight.bold,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                   const SizedBox(width: AppTheme.spaceSM),

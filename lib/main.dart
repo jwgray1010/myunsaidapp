@@ -37,6 +37,9 @@ import 'screens/insights_dashboard_enhanced.dart';
 // Global navigator key for post-frame service initialization
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+// Global flag to prevent duplicate Firebase initialization
+bool _firebaseInitialized = false;
+
 void main() async {
   print("🎯 [FLUTTER DEBUG] main() - START");
 
@@ -59,15 +62,27 @@ void main() async {
   // Initialize Firebase with user-initiated QoS (higher priority than background)
   // ignore: unawaited_futures
   Future(() async {
+    // Prevent duplicate initialization attempts
+    if (_firebaseInitialized) {
+      print("🚀 [FLUTTER DEBUG] Firebase initialization already in progress, skipping");
+      return;
+    }
+    _firebaseInitialized = true;
+    
     Timeline.startSync('firebase_init');
     try {
       print("🚀 [FLUTTER DEBUG] Initializing Firebase (background)...");
+      print("🚀 [FLUTTER DEBUG] Current Firebase apps count: ${Firebase.apps.length}");
+      
       if (Firebase.apps.isEmpty) {
+        print("🚀 [FLUTTER DEBUG] No Firebase apps found, initializing...");
         await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform,
         );
+        print("🚀 [FLUTTER DEBUG] Firebase initialization completed");
       } else {
         print("ℹ️ Firebase already initialized – skipping duplicate init");
+        print("ℹ️ Existing apps: ${Firebase.apps.map((app) => app.name).toList()}");
       }
       print(
         "🚀 [FLUTTER DEBUG] Firebase initialized successfully (background)",

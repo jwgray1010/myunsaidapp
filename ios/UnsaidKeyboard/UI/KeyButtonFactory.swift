@@ -13,45 +13,6 @@
 
 import UIKit
 
-// MARK: - KeyButton
-/// UIButton subclass that enforces a minimum 44×44pt touch target and provides
-/// fast, interruptible press feedback without layout thrash.
-final class KeyButton: UIButton {
-
-    // Ensure minimum HIG target while letting Auto Layout compress if needed
-    override var intrinsicContentSize: CGSize {
-        let s = super.intrinsicContentSize
-        return CGSize(width: max(44, s.width), height: max(44, s.height))
-    }
-
-    // Expanded hit area for comfort
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        bounds.insetBy(dx: -8, dy: -4).contains(point)
-    }
-
-    // Cheap shadows: keep a path so CoreAnimation doesn’t re-raster on each frame
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        if layer.shadowOpacity > 0 {
-            layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
-        }
-    }
-
-    // Snappy, interruptible press cue
-    override var isHighlighted: Bool {
-        didSet {
-            let t = isHighlighted ? CGAffineTransform(scaleX: 0.96, y: 0.96) : .identity
-            let a: CGFloat = isHighlighted ? 0.92 : 1.0
-            UIView.animate(withDuration: 0.08,
-                           delay: 0,
-                           options: [.curveEaseInOut, .allowUserInteraction, .beginFromCurrentState]) {
-                self.transform = t
-                self.alpha = a
-            }
-        }
-    }
-}
-
 // MARK: - Factory
 final class KeyButtonFactory {
 
@@ -75,13 +36,17 @@ final class KeyButtonFactory {
         b.setTitle(title, for: .normal)
 
         // Dynamic Type + graceful downscaling for tight layouts
-        let base = UIFont.systemFont(ofSize: 20, weight: .semibold)
+        let base = UIFont.systemFont(ofSize: 20, weight: .medium)
         b.titleLabel?.font = UIFontMetrics(forTextStyle: .title3).scaledFont(for: base)
         b.titleLabel?.adjustsFontForContentSizeCategory = true
         b.titleLabel?.adjustsFontSizeToFitWidth = true
         b.titleLabel?.minimumScaleFactor = 0.80
         b.titleLabel?.numberOfLines = 1
         b.titleLabel?.textAlignment = .center
+
+        // Let letter keys compress horizontally to fit screen width
+        b.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        b.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         applyLetterKeyStyle(to: b)
         return b
@@ -91,7 +56,7 @@ final class KeyButtonFactory {
                                   background: UIColor = .systemGray4,
                                   text: UIColor = .label) -> UIButton {
         let b = ExtendedTouchButton(type: .system)
-        commonKeySetup(b, hPad: 6, vPad: 4)
+        commonKeySetup(b, hPad: 4, vPad: 4)
         b.setTitle(title, for: .normal)
         b.accessibilityLabel = title
 
@@ -107,7 +72,7 @@ final class KeyButtonFactory {
 
     static func makeSpaceButton() -> UIButton {
         let b = ExtendedSpaceButton(type: .system)
-        commonKeySetup(b, hPad: 6, vPad: 4)
+        commonKeySetup(b, hPad: 4, vPad: 4)
         b.setTitle("space", for: .normal)
         b.accessibilityLabel = "Space"
         b.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
@@ -118,7 +83,7 @@ final class KeyButtonFactory {
 
     static func makeDeleteButton() -> KeyButton {
         let b = KeyButton(type: .system)
-        commonKeySetup(b, hPad: 8, vPad: 10)
+        commonKeySetup(b, hPad: 4, vPad: 10)
         b.setImage(UIImage(systemName: "delete.left"), for: .normal)
         b.tintColor = .label
         let cfg = UIImage.SymbolConfiguration(textStyle: .title2, scale: .medium)
@@ -129,7 +94,7 @@ final class KeyButtonFactory {
 
     static func makeShiftButton(useSymbol: Bool = false) -> UIButton {
         let b = ExtendedTouchButton(type: .system)
-        commonKeySetup(b, hPad: 6, vPad: 4)
+        commonKeySetup(b, hPad: 4, vPad: 4)
         if useSymbol, let img = UIImage(systemName: "shift") {
             b.setImage(img, for: .normal)
             b.tintColor = .label
@@ -145,7 +110,7 @@ final class KeyButtonFactory {
 
     static func makeReturnButton() -> KeyButton {
         let b = KeyButton(type: .system)
-        commonKeySetup(b, hPad: 8, vPad: 10)
+        commonKeySetup(b, hPad: 4, vPad: 10)
         b.setTitle("Return", for: .normal)
         b.accessibilityLabel = "Return"
 
@@ -162,7 +127,7 @@ final class KeyButtonFactory {
     /// Branded “Secure” action key (compact width to avoid crowding near Return).
     static func makeSecureButton() -> KeyButton {
         let b = KeyButton(type: .system)
-        commonKeySetup(b, hPad: 6, vPad: 10)
+        commonKeySetup(b, hPad: 4, vPad: 10)
         b.setTitle("Secure", for: .normal)
         b.accessibilityLabel = "Secure"
 
@@ -195,9 +160,11 @@ final class KeyButtonFactory {
 
         applySpecialKeyStyle(to: b, background: .systemGray4, text: .label)
         
-        // Make the button physically smaller by 40% in width
-        let reducedWidth = max(26, 44 * 0.6) // About 26pt width
-        b.widthAnchor.constraint(equalToConstant: reducedWidth).isActive = true
+        // Set minimum tap target width instead of fixed width to avoid conflicts
+        let minW = b.widthAnchor.constraint(greaterThanOrEqualToConstant: 44)
+        minW.priority = .defaultLow  // Lower priority so external layout constraints can win
+        minW.identifier = "ModeButton.internalMinWidth"
+        minW.isActive = true
         
         return b
     }
@@ -214,8 +181,11 @@ static func makeGlobeButton() -> UIButton {
 
     applySpecialKeyStyle(to: b, background: .systemGray5, text: .label)
 
-    // Intentionally small (below 44pt per your request)
-    b.widthAnchor.constraint(equalToConstant: 34).isActive = true
+    // Set minimum tap target width instead of fixed width to avoid conflicts
+    let minW = b.widthAnchor.constraint(greaterThanOrEqualToConstant: 44)
+    minW.priority = .defaultLow  // Lower priority so external layout constraints can win
+    minW.identifier = "GlobeButton.internalMinWidth"
+    minW.isActive = true
     return b
 }
     // MARK: Styling
@@ -381,16 +351,14 @@ static func makeGlobeButton() -> UIButton {
 
 // MARK: - Extended Buttons
 
-/// Space bar: even larger hit area + cheap shadow path
+/// Space bar: conservative hit area to prevent overlap with adjacent keys
 final class ExtendedSpaceButton: UIButton {
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        // Expand ONLY to the left; keep right tight to avoid overlapping Secure/Return
-        let expandLeft: CGFloat  = 28   // generous toward globe
-        let expandRight: CGFloat = 0    // do NOT expand toward Secure/Return
-        let expandVert: CGFloat  = 10
-
-        let expanded = bounds.insetBy(dx: -expandRight, dy: -expandVert)
-                            .offsetBy(dx: -expandLeft + expandRight, dy: 0)
+        // Conservative expansion to avoid overlap with Secure/Return buttons
+        let expandHorizontal: CGFloat = 6  // Reduced from 28pt to prevent overlap
+        let expandVertical: CGFloat = 6    // Reduced for consistency
+        
+        let expanded = bounds.insetBy(dx: -expandHorizontal, dy: -expandVertical)
         return expanded.contains(point)
     }
     override func layoutSubviews() {
@@ -411,10 +379,11 @@ final class ExtendedSpaceButton: UIButton {
     }
 }
 
-/// Control keys: larger hit area + cheap shadow path
+/// Control keys: conservative hit area consistent with KeyButton policy
 final class ExtendedTouchButton: UIButton {
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        bounds.insetBy(dx: -8, dy: -4).contains(point)
+        // Conservative expansion matching KeyButton's 2pt policy to prevent overlaps
+        bounds.insetBy(dx: -2, dy: -1).contains(point)  // Reduced from -8,-4 to match KeyButton
     }
     override func layoutSubviews() {
         super.layoutSubviews()

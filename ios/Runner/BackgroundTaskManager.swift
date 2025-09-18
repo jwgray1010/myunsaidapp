@@ -182,7 +182,7 @@ class KeyboardSyncOperation: Operation, @unchecked Sendable {
         logger.info("⌨️ Syncing keyboard data...")
         
         // Quick sync of keyboard data to main app storage
-        let defaults = UserDefaults(suiteName: "group.com.example.unsaid")
+        let defaults = UserDefaults(suiteName: AppGroups.id)
         let metadata = defaults?.dictionary(forKey: "keyboard_storage_metadata")
         let totalItems: Int = metadata?["total_items"] as? Int ?? 0
         

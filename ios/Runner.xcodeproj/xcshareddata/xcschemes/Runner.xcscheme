@@ -28,7 +28,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "D0ED46F82E5910DC0094BD53"
+               BlueprintIdentifier = "D0AAA7C42E7AF9A300990696"
                BuildableName = "UnsaidKeyboard.appex"
                BlueprintName = "UnsaidKeyboard"
                ReferencedContainer = "container:Runner.xcodeproj">

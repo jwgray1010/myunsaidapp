@@ -668,7 +668,7 @@ class _SettingsScreenProfessionalState
                     pinned: true, // Keep header static to avoid pixel errors
                     floating: false, // Don't float
                     snap: false,
-                    expandedHeight: 120,
+                    expandedHeight: 80,
                     actions: [
                       IconButton(
                         tooltip: 'Search settings',
@@ -707,7 +707,7 @@ class _SettingsScreenProfessionalState
                                 style: theme.textTheme.headlineMedium?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 28,
+                                  fontSize: 20,
                                 ),
                               ),
                             ],
@@ -750,12 +750,17 @@ class _SettingsScreenProfessionalState
     final slivers = <Widget>[];
 
     for (final section in sections) {
-      // Sticky header
+      // Section header (scrollable, not sticky)
       slivers.add(
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _StickyHeader(
-            Row(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppTheme.spaceLG,
+              24,
+              AppTheme.spaceLG,
+              8,
+            ),
+            child: Row(
               children: [
                 Icon(
                   section.icon,
@@ -1152,52 +1157,4 @@ class _SettingsSearchDelegate extends SearchDelegate<void> {
       },
     );
   }
-}
-
-/// Sticky header delegate for section headers
-class _StickyHeader extends SliverPersistentHeaderDelegate {
-  _StickyHeader(this.child);
-  final Widget child;
-
-  @override
-  double get minExtent => 44; // Reduced from 48
-
-  @override
-  double get maxExtent => 52; // Reduced from 56
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    final shrink = shrinkOffset / maxExtent;
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      elevation: shrink > 0.1 ? 1 : 0,
-      child: Container(
-        height: maxExtent,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 6,
-        ), // Reduced from 8
-        alignment: Alignment.centerLeft,
-        decoration: BoxDecoration(
-          border: shrink > 0.1
-              ? Border(
-                  bottom: BorderSide(
-                    color: Theme.of(context).dividerColor,
-                    width: 0.5,
-                  ),
-                )
-              : null,
-        ),
-        child: child,
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) =>
-      true;
 }

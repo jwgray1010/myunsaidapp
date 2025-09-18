@@ -11,7 +11,7 @@ final class SafeKeyboardDataStorage {
     private init() {}
 
     // MARK: - Properties
-    private let logger = Logger(subsystem: "com.example.unsaid.unsaid.UnsaidKeyboard", category: "SafeDataStorage")
+    private let logger = Logger(subsystem: "com.example.unsaid.UnsaidKeyboard", category: "SafeDataStorage")
     private let sharedDefaults = AppGroups.shared  // Non-optional shared UserDefaults
     private let maxQueueSize = 100          // in-memory bound
     private let maxPersistedSize = 200      // on-disk bound (per bucket)

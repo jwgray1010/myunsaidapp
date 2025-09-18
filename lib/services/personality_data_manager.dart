@@ -256,7 +256,17 @@ class PersonalityDataManager {
       factors++;
     }
 
-    final metadata = rawData['metadata'] as Map<String, dynamic>? ?? {};
+    // Safely convert metadata
+    final metadataRaw = rawData['metadata'];
+    final metadata = <String, dynamic>{};
+    if (metadataRaw is Map) {
+      metadataRaw.forEach((key, value) {
+        if (key != null) {
+          metadata[key.toString()] = value;
+        }
+      });
+    }
+
     if ((metadata['total_items'] as num? ?? 0) > 0) {
       score = (score + 0.1).clamp(0.0, 1.0);
     }
@@ -280,9 +290,17 @@ class PersonalityDataManager {
       final events = rawData[category] as List<dynamic>? ?? [];
 
       for (final event in events) {
-        if (event is! Map<String, dynamic>) continue;
+        if (event is! Map) continue;
 
-        final raw = event['timestamp'];
+        // Safely convert the event map
+        final eventMap = <String, dynamic>{};
+        event.forEach((key, value) {
+          if (key != null) {
+            eventMap[key.toString()] = value;
+          }
+        });
+
+        final raw = eventMap['timestamp'];
         final ms = _toMillis(raw);
         if (ms > 0) {
           final dt = DateTime.fromMillisecondsSinceEpoch(ms);

@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import os.log
 
 @MainActor
 protocol SuggestionChipPresenting: AnyObject {
@@ -38,8 +39,8 @@ final class SuggestionChipView: UIControl {
     private var isExpanded = false
     private var autoHideTimer: Timer?
     private var textHash: String = ""
-    private let haptic = UIImpactFeedbackGenerator(style: .light)
     private var didNotifyDismiss = false
+    private var hasDismissed = false
 
     // Layout
     private let collapsedHeight: CGFloat = 44
@@ -95,8 +96,8 @@ final class SuggestionChipView: UIControl {
         accessibilityValue = text
         accessibilityHint = "Tap to expand"
 
-        // Prepare haptics for near-term interaction
-        haptic.prepare()
+        // Prepare unified haptics for near-term interaction
+        UnifiedHapticsController.shared.start()
     }
 
     /// Sets the fully expanded content layout.
@@ -128,6 +129,9 @@ final class SuggestionChipView: UIControl {
 
     /// Dismiss the chip. If `animated` is false, removal is immediate.
     func dismiss(animated: Bool) {
+        guard !hasDismissed else { return }
+        hasDismissed = true
+        
         autoHideTimer?.invalidate()
         autoHideTimer = nil
 
@@ -135,29 +139,29 @@ final class SuggestionChipView: UIControl {
         if !didNotifyDismiss {
             didNotifyDismiss = true
             #if DEBUG
-            print("🗑️ ChipView: Dismissing chip, notifying manager")
+            KBDLog("🗑️ ChipView: Dismissing chip, notifying manager", .debug, "Chips")
             #endif
             onDismiss?()
         } else {
             #if DEBUG
-            print("⚠️ ChipView: Dismiss already notified, skipping")
+            KBDLog("⚠️ ChipView: Dismiss already notified, skipping", .debug, "Chips")
             #endif
         }
 
         let work = {
             self.alpha = 0
-            self.transform = CGAffineTransform(translationX: 0, y: -6)
+            self.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
         }
         let done: (Bool) -> Void = { _ in
             #if DEBUG
-            print("🏁 ChipView: Animation complete, calling onDismissed")
+            KBDLog("🏁 ChipView: Animation complete, calling onDismissed", .debug, "Chips")
             #endif
-            self.removeFromSuperview()
             self.onDismissed?()
+            self.removeFromSuperview()
         }
 
         if animated && shouldAnimate {
-            UIView.animate(withDuration: 0.15, animations: work, completion: done)
+            UIView.animate(withDuration: 0.20, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut], animations: work, completion: done)
         } else {
             work()
             done(true)
@@ -290,7 +294,7 @@ final class SuggestionChipView: UIControl {
     private func expandIfNeeded() {
         guard !isExpanded else { return }
         isExpanded = true
-        haptic.impactOccurred()
+        UnifiedHapticsController.shared.selection()
         onExpanded?()
 
         // stop auto-hide while expanded
@@ -320,7 +324,7 @@ final class SuggestionChipView: UIControl {
     }
 
     @objc private func handleSwipeUp() {
-        haptic.impactOccurred()
+        UnifiedHapticsController.shared.lightTap()
         onDismiss?()
         dismiss(animated: true)
     }
@@ -393,4 +397,9 @@ extension SuggestionChipView: SuggestionChipPresenting {
     func dismissSuggestion() {
         dismiss(animated: true)
     }
+}
+
+// MARK: - Logging
+extension OSLog {
+    static let chips = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "com.example.unsaid.UnsaidKeyboard", category: "chips")
 }

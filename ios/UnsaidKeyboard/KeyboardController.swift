@@ -12,17 +12,6 @@ import os.log
 import AudioToolbox
 import UIKit
 
-// MARK: - Conditional Debug Logging
-#if DEBUG
-private func dbg(_ msg: @autoclosure () -> String) {
-    let logger = Logger(subsystem: "com.example.unsaid.unsaid.UnsaidKeyboard", category: "KeyboardController")
-    let message = msg() // Evaluate the autoclosure immediately
-    logger.info("\(message)")
-}
-#else
-private func dbg(_ msg: @autoclosure () -> String) {}
-#endif
-
 // MARK: - Analysis Result for switch-in analysis
 struct AnalysisResult {
     let topSuggestion: String?
@@ -131,8 +120,17 @@ final class KeyboardController: UIInputView,
                                 SecureFixManagerDelegate {
 
     // MARK: - Services and Managers
-    private let logger = Logger(subsystem: "com.example.unsaid.unsaid.UnsaidKeyboard", category: "KeyboardController")
     private var coordinator: ToneSuggestionCoordinator?
+    
+    // MARK: - Configuration and Logging
+    private var didConfigure = false
+    private let logger = Logger(subsystem: "com.example.unsaid.UnsaidKeyboard", category: "KeyboardController")
+    #if DEBUG
+    private let logGate = LogGate(0.40) // 400ms collapse window
+    #endif
+    
+    // MARK: - In-flight tracking
+    private var toneRequestInFlight = false
     
     // Managers (UIKit-heavy, per-feature)
     private let deleteManager = DeleteManager()
@@ -165,10 +163,20 @@ final class KeyboardController: UIInputView,
     
     // Haptic debouncing to prevent double-buzz
     private var lastHapticAt: CFTimeInterval = 0
+    private var lastHapticPrepareAt: CFTimeInterval = 0
     private let hapticMinGap: CFTimeInterval = 0.06 // 60ms
-    
-    // Instant feedback generator for crisp tap response
-    private let instantFeedback = UIImpactFeedbackGenerator(style: .light)
+    private let hapticPrepareMinGap: CFTimeInterval = 0.2 // 200ms
+
+    // Unified haptic feedback (replaced individual UIImpactFeedbackGenerator)    // MARK: - Error Message Debouncing
+    private var lastErrorShownAt = Date.distantPast
+    private let errorCooldown: TimeInterval = 5
+
+    // MARK: - Debug State
+    private class DebugState {
+        static let shared = DebugState()
+        var isOn = false
+        private init() {}
+    }
     
     // MARK: - Debounce & Coalesce
     private var analyzeTask: Task<Void, Never>?
@@ -196,8 +204,23 @@ final class KeyboardController: UIInputView,
             
             await MainActor.run {
                 let fullText = self.snapshotFullText()
-                self.logger.info("🔄 Router analysis: '\(String(fullText.prefix(60)))…' inserted='\(lastInserted ?? "none")' deletion=\(isDeletion)")
-                coordinator.onTextChanged(fullText: fullText, lastInserted: lastInserted?.first, isDeletion: isDeletion)
+                #if DEBUG
+                let preview = String(fullText.prefix(60))
+                if self.logGate.allow("router", preview) {
+                    KBDLog("🔄 Router analysis: '\(preview)…' inserted='\(lastInserted ?? "none")' deletion=\(isDeletion)", .debug, "KeyboardController")
+                }
+                #endif
+                
+                // Prevent overlapping tone requests
+                if !self.toneRequestInFlight {
+                    self.toneRequestInFlight = true
+                    coordinator.onTextChanged(fullText: fullText, lastInserted: lastInserted?.first, isDeletion: isDeletion)
+                    
+                    // Reset flag after a reasonable timeout (coordinator should reset it sooner)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+                        self?.toneRequestInFlight = false
+                    }
+                }
             }
         }
     }
@@ -208,9 +231,12 @@ final class KeyboardController: UIInputView,
         if now - lastHapticAt < hapticMinGap { return }   // debounce
         lastHapticAt = now
 
-        // Prepare right before play (improves latency/jitter)
-        instantFeedback.prepare()
-        instantFeedback.impactOccurred(intensity: 0.8)
+        // Use unified haptic controller instead of individual generator
+        if now - lastHapticPrepareAt >= hapticPrepareMinGap {
+            UnifiedHapticsController.shared.start()
+            lastHapticPrepareAt = now
+        }
+        UnifiedHapticsController.shared.mediumTap()
         
         // Keep session timer behavior as-is (optional)
         if !isHapticSessionStarted {
@@ -300,8 +326,8 @@ final class KeyboardController: UIInputView,
 
     // Layout constants
     private let verticalSpacing: CGFloat = 8
-    private let horizontalSpacing: CGFloat = 6
-    private let sideMargins: CGFloat = 8
+    private let horizontalSpacing: CGFloat = 4  // Reduced from 6 to 4 for tighter spacing
+    private let sideMargins: CGFloat = 3  // Reduced from 8 to 3 for fuller screen width
     
     // First-time user tutorial management
     private static let keyboardUsedKey = "UnsaidKeyboardHasBeenUsed"
@@ -331,10 +357,9 @@ final class KeyboardController: UIInputView,
 
     // MARK: - Lifecycle
     override var intrinsicContentSize: CGSize {
-        if let superView = superview, superView.bounds.height > 0 {
-            return CGSize(width: UIView.noIntrinsicMetric, height: superView.bounds.height)
-        }
-        return CGSize(width: UIView.noIntrinsicMetric, height: 422) // Increased from 396 to account for taller prediction bar
+        // Width: let the system take full screen width
+        // Height: let constraints/safe area drive height (suggestion bar + keyboard + margins)
+        return CGSize(width: UIView.noIntrinsicMetric, height: UIView.noIntrinsicMetric)
     }
 
     override init(frame: CGRect, inputViewStyle: UIInputView.Style) {
@@ -348,8 +373,21 @@ final class KeyboardController: UIInputView,
     }
 
     func configure(with inputVC: UIInputViewController) {
+        guard !didConfigure else {
+            KBDLog("⚠️ configure(with:) called again; ignoring duplicate", .warn, "KeyboardController")
+            return
+        }
+        didConfigure = true
+        
+        KBDLog("✅ KeyboardController.configure() OK", .info, "KeyboardController")
+        
         parentInputVC = inputVC
         coordinator = ToneSuggestionCoordinator()
+        let coordId = UUID().uuidString.prefix(8) // Short ID for readability
+        #if DEBUG
+        coordinator?.debugInstanceId = String(coordId)
+        #endif
+        KBDLog("🔧 Coordinator initialized id=\(coordId)", .info, "KeyboardController")
         coordinator?.delegate = self
         refreshContext()
         syncHostTraits()
@@ -366,7 +404,7 @@ final class KeyboardController: UIInputView,
                 button.isHidden = false
                 button.alpha = 1.0
                 #if DEBUG
-                self?.logger.info("ToneButton: post-config state -> visible, alpha=\(button.alpha), hidden=\(button.isHidden)")
+                    KBDLog("ToneButton: post-config state -> visible, alpha=\(button.alpha), hidden=\(button.isHidden)", .debug, "KeyboardController")
                 #endif
             }
         }
@@ -375,15 +413,15 @@ final class KeyboardController: UIInputView,
     let test = AppGroups.shared
     test.set(true, forKey: "groupRoundtrip")
     let ok = test.bool(forKey: "groupRoundtrip")
-        logger.info("App Group roundtrip ok: \(ok)")
+        KBDLog("App Group roundtrip ok: \(ok)", .info, "KeyboardController")
         
         // Debug API configuration
         let extBundle = Bundle(for: KeyboardController.self)
         let baseURL = extBundle.object(forInfoDictionaryKey: "UNSAID_API_BASE_URL") as? String ?? "NOT FOUND"
         let apiKey = extBundle.object(forInfoDictionaryKey: "UNSAID_API_KEY") as? String ?? "NOT FOUND"
-        dbg("🔧 API Config - Base URL: \(baseURL)")
-        dbg("🔧 API Config - API Key: \(apiKey.prefix(10))...")
-        dbg("🔧 Coordinator initialized: \(self.coordinator != nil)")
+        KBDLog("🔧 API Config - Base URL: \(baseURL)", .debug, "KeyboardController")
+        KBDLog("🔧 API Config - API Key: \(apiKey.prefix(10))...", .debug, "KeyboardController")
+        KBDLog("🔧 Coordinator initialized: \(self.coordinator != nil)", .debug, "KeyboardController")
         
         // Note: Removed immediate analysis ping to prevent any startup tone changes
         // coordinator?.forceImmediateAnalysis("ping")
@@ -409,28 +447,28 @@ final class KeyboardController: UIInputView,
     }
 
     private func commonInit() {
-        dbg("🔧 KeyboardController.commonInit() starting...")
+        KBDLog("🔧 KeyboardController.commonInit() starting...", .debug, "KeyboardController")
         
-        // Prepare instant haptic feedback for crisp response
-        instantFeedback.prepare()
+        // Start unified haptic system for responsive feedback
+        UnifiedHapticsController.shared.start()
         
-        dbg("🔧 Setting up delegates...")
+        KBDLog("🔧 Setting up delegates...", .debug, "KeyboardController")
         setupDelegates()
-        dbg("✅ Delegates setup complete")
+        KBDLog("✅ Delegates setup complete", .debug, "KeyboardController")
         
-        dbg("🔧 Setting up suggestion bar...")
+        KBDLog("🔧 Setting up suggestion bar...", .debug, "KeyboardController")
         setupSuggestionBar()    // create it first
-        dbg("✅ Suggestion bar setup complete")
+        KBDLog("✅ Suggestion bar setup complete", .debug, "KeyboardController")
         
-        dbg("🔧 Setting up keyboard layout...")
+        KBDLog("🔧 Setting up keyboard layout...", .debug, "KeyboardController")
         setupKeyboardLayout()   // then layout that pins to it
-        dbg("✅ Keyboard layout setup complete")
+        KBDLog("✅ Keyboard layout setup complete", .debug, "KeyboardController")
         
         #if DEBUG
         setupDebugGestures()
         #endif
         
-        dbg("✅ KeyboardController.commonInit() completed successfully")
+        KBDLog("✅ KeyboardController.commonInit() OK", .info, "KeyboardController")
     }
     
     #if DEBUG
@@ -443,7 +481,7 @@ final class KeyboardController: UIInputView,
         debugGesture.numberOfTouchesRequired = 4
         debugGesture.numberOfTapsRequired = 2
         addGestureRecognizer(debugGesture)
-        dbg("🔧 Debug gesture added: Four-finger double-tap to run debug tests (10s cooldown)")
+        KBDLog("🔧 Debug gesture added: Four-finger double-tap to run debug tests (10s cooldown)", .debug, "KeyboardController")
     }
     
     @objc private func handleDebugGesture() {
@@ -452,13 +490,27 @@ final class KeyboardController: UIInputView,
         
         if timeSinceLastDebug < debugCooldownInterval {
             let remaining = debugCooldownInterval - timeSinceLastDebug
-            logger.info("🔍 DEBUG COOLDOWN: \(String(format: "%.1f", remaining))s remaining")
+            KBDLog("🔍 DEBUG COOLDOWN: \(String(format: "%.1f", remaining))s remaining", .warn, "KeyboardController")
             return
         }
         
         lastDebugTime = now
-        logger.info("🔍 DEBUG GESTURE TRIGGERED - Running full system debug...")
-        debugFullSystem()
+        toggleDebugHUD()
+    }
+    
+    @MainActor
+    private func toggleDebugHUD() {
+        DebugState.shared.isOn.toggle()
+        
+        if DebugState.shared.isOn {
+            KBDLog("🔍 DEBUG MODE ON - Running system diagnostics...", .info, "KeyboardController")
+            coordinator?.dumpAPIConfig()
+            coordinator?.debugCoordinatorState()
+            coordinator?.debugPing()
+            // Optional: coordinator?.debugTestToneAPI()
+        } else {
+            KBDLog("🔍 DEBUG MODE OFF", .info, "KeyboardController")
+        }
     }
     #endif
     
@@ -495,10 +547,22 @@ final class KeyboardController: UIInputView,
         guard g.frame != newBounds else { return } // ✨ skip redundant work
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        g.frame = newBounds
-        g.cornerRadius = newBounds.height / 2
+        g.frame = nonZeroRect(newBounds)
+        g.cornerRadius = nonZero(newBounds.height) / 2
         bg.layer.shadowPath = UIBezierPath(roundedRect: newBounds, cornerRadius: g.cornerRadius).cgPath
         CATransaction.commit()
+    }
+    
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self,
+                  let bg = self.toneButtonBackground,
+                  let g = self.toneGradient else { return }
+            g.frame = nonZeroRect(bg.bounds.integral)
+            g.cornerRadius = nonZero(bg.bounds.height) / 2
+            bg.layer.shadowPath = UIBezierPath(roundedRect: bg.bounds, cornerRadius: g.cornerRadius).cgPath
+        }
     }
 
     // MARK: - DeleteManagerDelegate
@@ -512,6 +576,8 @@ final class KeyboardController: UIInputView,
         
         proxy.deleteBackward()
         performHapticFeedback()
+        // 👉 refresh candidates on delete
+        spellCheckerIntegration.refreshSpellCandidates(for: snapshotFullText())
         // Use router pattern for sentence-aware analysis after deletion
         scheduleAnalysisRouter(lastInserted: nil, isDeletion: true, urgent: false)
     }
@@ -519,6 +585,8 @@ final class KeyboardController: UIInputView,
     func performDeleteTick() {
         guard let proxy = textDocumentProxy else { return }
         proxy.deleteBackward()
+        // 👉 refresh candidates on repeat delete
+        spellCheckerIntegration.refreshSpellCandidates(for: snapshotFullText())
         // Use router pattern for sentence-aware analysis after deletion
         scheduleAnalysisRouter(lastInserted: nil, isDeletion: true, urgent: false)
     }
@@ -874,7 +942,7 @@ final class KeyboardController: UIInputView,
             // Use original rendering mode (not template) so logo keeps its design
             button.setImage(logoImage.withRenderingMode(.alwaysOriginal), for: .normal)
             button.adjustsImageWhenHighlighted = false
-            dbg("✅ KeyboardController: Loaded from keyboard Asset Catalog with correct scale")
+            KBDLog("✅ KeyboardController: Loaded from keyboard Asset Catalog with correct scale", .debug, "KeyboardController")
             return
         }
 
@@ -884,7 +952,7 @@ final class KeyboardController: UIInputView,
             // Use original rendering mode (not template) so logo keeps its design
             button.setImage(logoImage.withRenderingMode(.alwaysOriginal), for: .normal)
             button.adjustsImageWhenHighlighted = false
-            dbg("✅ KeyboardController: Loaded unsaid_logo.png directly from keyboard bundle")
+            KBDLog("✅ KeyboardController: Loaded unsaid_logo.png directly from keyboard bundle", .debug, "KeyboardController")
             return
         }
 
@@ -893,12 +961,12 @@ final class KeyboardController: UIInputView,
             // Use original rendering mode (not template) so logo keeps its design
             button.setImage(logoImage.withRenderingMode(.alwaysOriginal), for: .normal)
             button.adjustsImageWhenHighlighted = false
-            dbg("✅ KeyboardController: Loaded from main app bundle")
+            KBDLog("✅ KeyboardController: Loaded from main app bundle", .debug, "KeyboardController")
             return
         }
 
         // Method 4: Create a simple programmatic logo as backup
-        dbg("❌ KeyboardController: All methods failed, creating programmatic logo")
+        KBDLog("❌ KeyboardController: All methods failed, creating programmatic logo", .warn, "KeyboardController")
         let image = createSimpleLogoImage()
         button.setImage(image.withRenderingMode(.alwaysOriginal), for: .normal)
         button.adjustsImageWhenHighlighted = false
@@ -914,12 +982,12 @@ final class KeyboardController: UIInputView,
             
             // Create a white circle background for better contrast
             ctx.setFillColor(UIColor.white.cgColor)
-            ctx.fillEllipse(in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
+            ctx.fillEllipse(in: CGRect(x: 0, y: 0, width: nonZero(size.width), height: nonZero(size.height)))
             
             // Add a subtle border
             ctx.setStrokeColor(UIColor.systemGray3.cgColor)
             ctx.setLineWidth(1.0)
-            ctx.strokeEllipse(in: CGRect(x: 0.5, y: 0.5, width: size.width - 1, height: size.height - 1))
+            ctx.strokeEllipse(in: CGRect(x: 0.5, y: 0.5, width: nonZero(size.width) - 1, height: nonZero(size.height) - 1))
             
             // Draw "U" in the center
             ctx.setFillColor(UIColor.systemBlue.cgColor)
@@ -930,11 +998,13 @@ final class KeyboardController: UIInputView,
                 .foregroundColor: UIColor.systemBlue
             ]
             let textSize = text.size(withAttributes: attributes)
+            let safeWidth = nonZero(size.width)
+            let safeHeight = nonZero(size.height)
             let textRect = CGRect(
-                x: (size.width - textSize.width) / 2.0,
-                y: (size.height - textSize.height) / 2.0,
-                width: textSize.width,
-                height: textSize.height
+                x: (safeWidth - nonZero(textSize.width)) / 2.0,
+                y: (safeHeight - nonZero(textSize.height)) / 2.0,
+                width: nonZero(textSize.width),
+                height: nonZero(textSize.height)
             )
             text.draw(in: textRect, withAttributes: attributes)
         }
@@ -945,14 +1015,14 @@ final class KeyboardController: UIInputView,
     // MARK: - Tone Status Management
 
     private func setToneStatus(_ tone: ToneStatus, animated: Bool = true) {
-        print("🎯 🎨 SET_TONE_STATUS CALLED: \(String(describing: tone)), animated: \(animated)")
-        logger.info("🎯 setToneStatus called with: \(String(describing: tone)), animated: \(animated)")
-        logger.info("🎯 Current tone button: exists=\(self.toneButton != nil), visible=\(self.toneButton?.isHidden == false)")
-        logger.info("🎯 Current tone background: exists=\(self.toneButtonBackground != nil), visible=\(self.toneButtonBackground?.isHidden == false)")
+        #if DEBUG
+        if logGate.allow("tone_set", tone.rawValue) {
+            KBDLog("🎯 setToneStatus(\(tone.rawValue)) animated=\(animated) bg=\(self.toneButtonBackground != nil) btn=\(self.toneButton != nil)", .info, "KeyboardController")
+        }
+        #endif
         
         guard let bg = toneButtonBackground else {
-            print("🎯 ❌ CRITICAL ERROR: No tone button background found!")
-            logger.warning("🎯 No tone button background found!")
+            KBDLog("🎯 ❌ CRITICAL ERROR: No tone button background found!", .error, "KeyboardController")
             return
         }
         
@@ -963,13 +1033,8 @@ final class KeyboardController: UIInputView,
             (bg.layer.animation(forKey: "alertPulse") == nil && tone == .alert)
         
         guard tone != currentTone || bg.alpha < 0.99 || visualOutOfSync else {
-            print("🎯 ⚠️ SKIPPING REDUNDANT: current=\(String(describing: currentTone)), new=\(String(describing: tone))")
-            logger.info("🎯 Skipping tone update; visually up-to-date")
-            return
-        } // skip redundant work, but allow refresh when visual state is stale
-        
-        print("🎯 🔄 PROCEEDING WITH TONE UPDATE: \(String(describing: currentTone)) -> \(String(describing: tone))")
-        logger.info("🎯 Updating tone button to: \(String(describing: tone))")
+            return // skip redundant work, but allow refresh when visual state is stale
+        }
 
         // Ensure background is definitely visible
         bg.isHidden = false
@@ -1003,8 +1068,8 @@ final class KeyboardController: UIInputView,
             let g = CAGradientLayer()
             g.startPoint = CGPoint(x: 0, y: 0)
             g.endPoint = CGPoint(x: 1, y: 1)
-            g.cornerRadius = bg.bounds.height / 2.0
-            g.frame = bg.bounds
+            g.cornerRadius = nonZero(bg.bounds.height) / 2.0
+            g.frame = nonZeroRect(bg.bounds)
             g.colors = [UIColor.white.cgColor, UIColor.white.cgColor]  // Start with white visible
             g.masksToBounds = true  // Keep gradient within circle bounds
             bg.layer.insertSublayer(g, at: 0)
@@ -1039,7 +1104,11 @@ final class KeyboardController: UIInputView,
             g.colors = colors // final state
             
             // Instrument gradient updates to prove they're happening
-            dbg("🎨 tone=\(tone) colors=\(String(describing: g.colors)) frame=\(g.frame)")
+            #if DEBUG
+            if let g = toneGradient, logGate.allow("grad", tone.rawValue) {
+                KBDLog("🎨 tone=\(tone.rawValue) gradientColors=\(g.colors?.count ?? 0) frame=\(g.frame.debugDescription)", .debug, "KeyboardController")
+            }
+            #endif
         } else if let baseColor = baseColor {
             // fallback background if gradient missing
             bg.backgroundColor = baseColor
@@ -1104,7 +1173,7 @@ final class KeyboardController: UIInputView,
             result = ([c.cgColor, c.cgColor], UIColor.white)
         }
         
-        print("🎯 🎨 GRADIENT COLORS FOR \(String(describing: tone)): \(result.0.count) colors")
+        KBDLog("🎯 🎨 GRADIENT COLORS FOR \(String(describing: tone)): \(result.0.count) colors", .debug, "KeyboardController")
         return result
     }
 
@@ -1291,22 +1360,34 @@ final class KeyboardController: UIInputView,
         let returnButtonWidth: CGFloat = 51  // Back to original size  
         let secureButtonWidth: CGFloat = 61  // Back to original size
         
-        // Space is the only flexible one - increased minimum width to fill space from smaller mode button
-        space.widthAnchor.constraint(greaterThanOrEqualToConstant: 140).isActive = true  // Increased from 120
+        // Space is the only flexible one - use priority-based layout to prevent over-constraining
+        let spaceMin = space.widthAnchor.constraint(greaterThanOrEqualToConstant: 80)  // Reduced from 140
+        spaceMin.priority = .defaultLow  // 250, so it won't fight required constraints
+        spaceMin.identifier = "space.minWidth"
+        spaceMin.isActive = true
+        
         space.setContentHuggingPriority(.defaultLow, for: .horizontal)
         space.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        // Fixed widths for non-space controls
-        mode.widthAnchor.constraint(equalToConstant: standardWidth).isActive = true
-        secureFix.widthAnchor.constraint(equalToConstant: secureButtonWidth).isActive = true
-        returnBtn.widthAnchor.constraint(equalToConstant: returnButtonWidth).isActive = true
-        // Globe is intentionally small
-        globe.widthAnchor.constraint(equalToConstant: 34).isActive = true  // Back to original size
+        // Minimum widths for non-space controls - all set to lower priority to prevent conflicts
+        [mode, secureFix, returnBtn, globe].forEach { button in
+            let min: CGFloat = (button === globe) ? 34 : 56  // Smaller mins to prevent conflicts
+            let constraint = button.widthAnchor.constraint(greaterThanOrEqualToConstant: min)
+            constraint.priority = .defaultLow  // 250, prevent blocking layout
+            constraint.identifier = "control.minWidth"
+            constraint.isActive = true
 
-        [secureFix, mode, globe, returnBtn].forEach {
-            $0.setContentHuggingPriority(.required, for: .horizontal)
-            $0.setContentCompressionResistancePriority(.required, for: .horizontal)
+            button.setContentHuggingPriority(.required, for: .horizontal)
+            button.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
+
+        #if DEBUG
+        func assertNoDuplicateFixedWidth(_ v: UIView) {
+            let w = v.constraints.filter { $0.firstAttribute == .width && $0.relation == .equal && $0.isActive }
+            assert(w.count <= 1, "Duplicate equal width constraints on \(v): \(w)")
+        }
+        [mode, secureFix, returnBtn, globe].forEach(assertNoDuplicateFixedWidth)
+        #endif
 
         return stack
     }
@@ -1323,6 +1404,9 @@ final class KeyboardController: UIInputView,
         }
         
         proxy.insertText(textToInsert)
+        
+        // 👉 feed the spell bar after each keypress
+        spellCheckerIntegration.refreshSpellCandidates(for: snapshotFullText())
         
         // Auto-switch to letters mode after punctuation
         if [".", "!", "?", ",", ";", ":"].contains(title) && currentMode != .letters {
@@ -1348,6 +1432,8 @@ final class KeyboardController: UIInputView,
         spaceHandler.handleSpaceKey()
         // Use router pattern for sentence-aware analysis after space insertion
         scheduleAnalysisRouter(lastInserted: " ", isDeletion: false, urgent: false)
+        // 👉 refresh (shows/hides strip appropriately after commit)
+        spellCheckerIntegration.refreshSpellCandidates(for: snapshotFullText())
     }
     
     @objc private func handleReturnKey() {
@@ -1355,6 +1441,8 @@ final class KeyboardController: UIInputView,
         proxy.insertText("\n")
         // Use router pattern for sentence-aware analysis after return insertion
         scheduleAnalysisRouter(lastInserted: "\n", isDeletion: false, urgent: true) // Urgent for new line
+        // 👉 refresh after newline
+        spellCheckerIntegration.refreshSpellCandidates(for: snapshotFullText())
     }
     
     @objc private func handleGlobeKey() {
@@ -1519,6 +1607,9 @@ final class KeyboardController: UIInputView,
         // Use router pattern for sentence-aware analysis
         scheduleAnalysisRouter(lastInserted: nil, isDeletion: false, urgent: false)
         updateShiftForContext()
+        
+        // 👉 feed the spell bar
+        spellCheckerIntegration.refreshSpellCandidates(for: snapshotFullText())
     }
     
 
@@ -1600,7 +1691,7 @@ final class KeyboardController: UIInputView,
         case "clear":   setToneStatus(.clear)
         default:        
             // Don't force neutral on unknown status - retain last tone
-            dbg("[tone_debug] Unknown status '\(status)' - retaining current tone")
+            KBDLog("[tone_debug] Unknown status '\(status)' - retaining current tone", .warn, "KeyboardController")
         }
 
         // Avoid optional-chain interpolation ambiguity; assign plainly
@@ -1639,13 +1730,16 @@ final class KeyboardController: UIInputView,
     }
 
     func didUpdateToneStatus(_ tone: String) {
+        // Reset in-flight flag since we got a response
+        toneRequestInFlight = false
+        
         // Performance Optimization #1: Fast guard for redundant tone updates
         let normalizedTone = tone.lowercased()
         if lastToneStatusString == normalizedTone {
             return // Skip redundant update - tone hasn't actually changed
         }
         
-        logger.info("🎯 🔥 KEYBOARD RECEIVED TONE: '\(tone)'")
+        KBDLog("🎯 🔥 KEYBOARD RECEIVED TONE: '\(tone)'", .info, "KeyboardController")
         let toneStatus = ToneStatus(from: tone)
         
         // Gate neutral to avoid flicker + spam
@@ -1763,6 +1857,10 @@ final class KeyboardController: UIInputView,
     
     /// Shows an error message to the user via a temporary overlay or alert
     private func showErrorMessage(_ message: String) {
+        // Debounce error messages to avoid spamming
+        guard Date().timeIntervalSince(lastErrorShownAt) > errorCooldown else { return }
+        lastErrorShownAt = Date()
+        
         logger.info("📢 Showing error message: \(message)")
         
         // For now, we'll use the suggestion chip to show the error message
@@ -1775,7 +1873,7 @@ final class KeyboardController: UIInputView,
             
             // Also log to console for debugging
             #if DEBUG
-            print("🚨 Keyboard API Error: \(message)")
+            KBDLog("🚨 Keyboard API Error: \(message)", .error, "KeyboardController")
             #endif
         }
     }
@@ -2216,10 +2314,49 @@ final class KeyboardController: UIInputView,
             self.logger.info("⚙️ Test 3: Final Tone Analysis")
             self.coordinator?.debugTestToneAPI(with: testSentence)
         }
+        
+        // Test suggestion chip integration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            self.logger.info("⚙️ Test 4: Suggestion Chip Integration")
+            self.debugTestSuggestionChips()
+        }
+    }
+    #endif
+    
+    #if DEBUG
+    /// Test the entire suggestion chip integration flow
+    private func debugTestSuggestionChips() {
+        logger.info("🧪 TESTING SUGGESTION CHIP INTEGRATION")
+        logger.info("=====================================")
+        
+        // Test 1: Direct chip manager test
+        logger.info("🧪 Test 1: Direct chip manager integration test")
+        suggestionChipManager.testIntegration()
+        
+        // Test 2: Simulate coordinator suggestion update
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) {
+            self.logger.info("🧪 Test 2: Simulating coordinator suggestion")
+            self.didUpdateSuggestions(["This is a test suggestion from the coordinator simulation"])
+        }
+        
+        // Test 3: Test delegate callbacks
+        DispatchQueue.main.asyncAfter(deadline: .now() + 12.0) {
+            self.logger.info("🧪 Test 3: Current delegate setup:")
+            self.logger.info("🧪   - Chip manager delegate set: \(self.suggestionChipManager.delegate != nil)")
+            self.logger.info("🧪   - Coordinator delegate set: \(self.coordinator?.delegate != nil)")
+            self.logger.info("🧪   - Suggestion bar configured: \(self.suggestionBar != nil)")
+        }
     }
     #endif
     
     @objc private func undoButtonPressed(_ sender: UIButton) {
         undoButtonTapped()
     }
+}
+
+// MARK: - Logging
+extension OSLog {
+    static let api = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "com.example.unsaid.UnsaidKeyboard", category: "api")
+    static let tone = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "com.example.unsaid.UnsaidKeyboard", category: "tone")
+    static let layout = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "com.example.unsaid.UnsaidKeyboard", category: "layout")
 }

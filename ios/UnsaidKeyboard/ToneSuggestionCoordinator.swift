@@ -60,6 +60,14 @@ final class ToneSuggestionCoordinator {
     // MARK: Public
     weak var delegate: ToneSuggestionDelegate?
     
+    #if DEBUG
+    var debugInstanceId: String = ""
+    private let coordLog = Logger(subsystem: "com.example.unsaid.UnsaidKeyboard", category: "Coordinator")
+    private let netLog = Logger(subsystem: "com.example.unsaid.UnsaidKeyboard", category: "Network")
+    private let logGate = LogGate(0.40)
+    #endif
+    private let instanceId = UUID().uuidString
+    
     // MARK: - Circuit Breaker (used for suggestions/observe)
     private struct CircuitKey: Hashable { let host: String; let path: String }
     private var circuitBreakers: [CircuitKey: Date] = [:]
@@ -124,11 +132,11 @@ final class ToneSuggestionCoordinator {
     private var apiKey: String { cachedAPIKey }
     private var isAPIConfigured: Bool {
         if Date() < authBackoffUntil {
-            print("🔴 API blocked due to auth backoff until \(authBackoffUntil)")
+            KBDLog("🔴 API blocked due to auth backoff until \(authBackoffUntil)", .warn, "ToneCoordinator")
             return false
         }
         let configured = !apiBaseURL.isEmpty && !apiKey.isEmpty
-        print("🔧 API configured: \(configured) - URL: '\(apiBaseURL)', Key: '\(apiKey.prefix(10))...'")
+        KBDLog("🔧 API configured: \(configured) - URL: '\(apiBaseURL)', Key: '\(apiKey.prefix(10))...'", .debug, "ToneCoordinator")
         return configured
     }
     
@@ -214,8 +222,6 @@ final class ToneSuggestionCoordinator {
     private let personaTTL: TimeInterval = 10 * 60
     
     // Logging & Haptics
-    private let logger = Logger(subsystem: "com.example.unsaid.unsaid.UnsaidKeyboard", category: "ToneSuggestionCoordinator")
-    private let netLog = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "UnsaidKeyboard", category: "Network")
     private let hapticController: Any? = nil
     private var isHapticSessionActive = false
     
@@ -231,19 +237,21 @@ final class ToneSuggestionCoordinator {
     func dumpAPIConfig() {
         let base = Bundle.main.object(forInfoDictionaryKey: "UNSAID_API_BASE_URL") as? String ?? "<missing>"
         let key  = Bundle.main.object(forInfoDictionaryKey: "UNSAID_API_KEY") as? String ?? "<missing>"
-        os_log("🔧 API Config - Base URL: %{public}@, Key prefix: %{public}@", log: netLog, type: .info, base, String(key.prefix(8)))
+        #if DEBUG
+        netLog.info("🔧 API Config - Base URL: \(base), Key prefix: \(String(key.prefix(8)))")
+        #endif
     }
     
     func debugPing() {
-        logger.info("🔥 Debug ping triggered")
+        KBDLog("🔥 Debug ping triggered", .info, "Coordinator")
         debugPingAll()
     }
     
     func debugPingAll() {
-        print("🔧 normalized base:", normalizedBaseURLString())
-        print("🔧 suggestions:", normalizedBaseURLString() + "/api/v1/suggestions")
-        print("🔧 communicator:", normalizedBaseURLString() + "/api/v1/communicator")
-        print("🔧 tone:", normalizedBaseURLString() + "/api/v1/tone")
+        KBDLog("🔧 normalized base: \(normalizedBaseURLString())", .debug, "ToneCoordinator")
+        KBDLog("🔧 suggestions: \(normalizedBaseURLString() + "/api/v1/suggestions")", .debug, "ToneCoordinator")
+        KBDLog("🔧 communicator: \(normalizedBaseURLString() + "/api/v1/communicator")", .debug, "ToneCoordinator")
+        KBDLog("🔧 tone: \(normalizedBaseURLString() + "/api/v1/tone")", .debug, "ToneCoordinator")
         dumpAPIConfig()
         
         // Test a sample suggestion request to verify endpoints work
@@ -251,12 +259,12 @@ final class ToneSuggestionCoordinator {
             "text": "Hello test",
             "context": "general"
         ]
-        print("🔧 Testing suggestions endpoint...")
+        KBDLog("🔧 Testing suggestions endpoint...", .debug, "ToneCoordinator")
         callEndpoint(path: "api/v1/suggestions", payload: testPayload) { result in
             if result != nil {
-                print("✅ Suggestions endpoint responded")
+                KBDLog("✅ Suggestions endpoint responded", .info, "ToneCoordinator")
             } else {
-                print("❌ Suggestions endpoint failed")
+                KBDLog("❌ Suggestions endpoint failed", .error, "ToneCoordinator")
             }
         }
     }
@@ -272,21 +280,26 @@ final class ToneSuggestionCoordinator {
     
     // MARK: - Init/Deinit
     init() {
+        #if DEBUG
+        debugInstanceId = String(instanceId.prefix(8))
+        coordLog.info("🔧 Coordinator init id=\(self.instanceId)")
+        #endif
+        
         setupWorkQueueIdentification()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.startNetworkMonitoringSafely() }
         #if DEBUG
-        debugPrint("🧠 Personality Data Bridge Status:")
-        debugPrint(" - Attachment Style: '\(getAttachmentStyle())'")
-        debugPrint(" - Emotional State: '\(getEmotionalState())'")
+        KBDLog("🧠 Personality Data Bridge Status:", .debug, "ToneCoordinator")
+        KBDLog(" - Attachment Style: '\(getAttachmentStyle())'", .debug, "ToneCoordinator")
+        KBDLog(" - Emotional State: '\(getEmotionalState())'", .debug, "ToneCoordinator")
         #endif
     }
     
     deinit {
-        print("🗑️ ToneSuggestionCoordinator deinit - cleaning up resources")
+        KBDLog("🗑️ ToneSuggestionCoordinator deinit - cleaning up resources", .info, "ToneCoordinator")
         pendingWorkItem?.cancel()
         inFlightTask?.cancel()
         stopNetworkMonitoring()
-        print("✅ ToneSuggestionCoordinator cleanup complete")
+        KBDLog("✅ ToneSuggestionCoordinator cleanup complete", .info, "ToneCoordinator")
     }
     
     // MARK: - Public API
@@ -635,18 +648,18 @@ final class ToneSuggestionCoordinator {
                     }
                     
                     guard (200..<300).contains(http.statusCode), let data = data else {
-                        switch http.statusCode {
-                        case 401:
-                            Task { @MainActor in self.delegate?.didReceiveAPIError(.authRequired) }
-                            completion(nil); return
-                        case 402:
-                            Task { @MainActor in self.delegate?.didReceiveAPIError(.paymentRequired) }
-                            completion(nil); return
-                        case 404:
-                            break
-                        default: break
+                        let code = http.statusCode
+                        Task { @MainActor in
+                            switch code {
+                            case 401:
+                                self.delegate?.didReceiveAPIError(.authRequired)
+                            case 402:
+                                self.delegate?.didReceiveAPIError(.paymentRequired)
+                            default:
+                                self.delegate?.didReceiveAPIError(.serverError(code))
+                            }
                         }
-                        self.throttledLog("HTTP \(http.statusCode) \(normalized)", category: "api")
+                        self.throttledLog("HTTP \(code) \(normalized)", category: "api")
                         completion(nil); return
                     }
                     
@@ -695,10 +708,10 @@ final class ToneSuggestionCoordinator {
                 self.onQ { self.inFlightRequests[requestHash] = task }
                 
                 // Debug logging before starting the request
-                print("🌐 \(req.httpMethod ?? "POST") \(req.url!.absoluteString)")
-                print("🌐 Headers:", req.allHTTPHeaderFields ?? [:])
+                KBDLog("🌐 \(req.httpMethod ?? "POST") \(req.url!.absoluteString)", .debug, "Network")
+                KBDLog("🌐 Headers: \(req.allHTTPHeaderFields ?? [:])", .debug, "Network")
                 if let body = req.httpBody { 
-                    print("🌐 Body:", String(data: body, encoding: .utf8) ?? "<non-utf8>") 
+                    KBDLog("🌐 Body: \(String(data: body, encoding: .utf8) ?? "<non-utf8>")", .debug, "Network")
                 }
                 
                 task.resume()
@@ -708,15 +721,21 @@ final class ToneSuggestionCoordinator {
     
     private func handleNetworkError(_ error: Error, url: URL) {
         let ns = error as NSError
+        
         #if DEBUG
+        netLog.error("🌐 \(url.absoluteString, privacy: .public) → code=\(ns.code) domain=\(ns.domain, privacy: .public)")
         switch ns.code {
-        case NSURLErrorNotConnectedToInternet: print("🔌 offline: \(url)")
-        case NSURLErrorTimedOut:               print("⏱️ timeout: \(url)")
-        case NSURLErrorCannotFindHost:         print("🌐 cannot find host: \(url)")
-        case NSURLErrorCannotConnectToHost:    print("🔌 cannot connect: \(url)")
-        default:                               print("❌ network error \(ns.code): \(error.localizedDescription)")
+        case NSURLErrorNotConnectedToInternet: netLog.warning("🔌 offline: \(url, privacy: .public)")
+        case NSURLErrorTimedOut:               netLog.warning("⏱️ timeout: \(url, privacy: .public)")
+        case NSURLErrorCannotFindHost:         netLog.error("🌐 cannot find host: \(url, privacy: .public)")
+        case NSURLErrorCannotConnectToHost:    netLog.error("🔌 cannot connect: \(url, privacy: .public)")
+        default:                               netLog.error("❌ network error \(ns.code): \(error.localizedDescription)")
         }
         #endif
+        
+        Task { @MainActor in
+            self.delegate?.didReceiveAPIError(.networkError)
+        }
         throttledLog("network error \(ns.code)", category: "api")
     }
     
@@ -805,7 +824,7 @@ final class ToneSuggestionCoordinator {
     private func getEmotionalState() -> String { "neutral" }
     private func getUserId() -> String {
         let userIdKey = "unsaid_user_id"
-        let appGroupId = "group.com.example.unsaid"
+        let appGroupId = AppGroups.id
         if let sharedDefaults = UserDefaults(suiteName: appGroupId),
            let userId = sharedDefaults.string(forKey: userIdKey) { return userId }
         let fallbackId = UUID().uuidString
@@ -813,7 +832,13 @@ final class ToneSuggestionCoordinator {
         return fallbackId
     }
     private func getUserEmail() -> String? { nil }
-    private func throttledLog(_ message: String, category: String) { print("[\(category)] \(message)") }
+    private func throttledLog(_ message: String, category: String) {
+        #if DEBUG
+        if logGate.allow(category, message) {
+            coordLog.debug("[\(category)] \(message)")
+        }
+        #endif
+    }
     private func startNetworkMonitoringSafely() { /* stub */ }
     private func stopNetworkMonitoring() { /* stub */ }
     private func storeSuggestionAccepted(suggestion: String) { /* stub */ }
@@ -868,7 +893,7 @@ final class ToneSuggestionCoordinator {
             let toneString = bucket.rawValue
             Task { @MainActor in self?.delegate?.didUpdateToneStatus(toneString) }
         }
-        logger.info("🎯 Sentence-aware tone system initialized")
+        KBDLog("🎯 Sentence-aware tone system initialized")
     }
     
     func testToneAPIWithDebugText() {
@@ -881,30 +906,30 @@ final class ToneSuggestionCoordinator {
     // MARK: - Debug Methods
     
     func debugCoordinatorState() {
-        logger.info("🔍 ToneSuggestionCoordinator Debug State:")
-        logger.info("🔍 API Base URL: '\(self.apiBaseURL)'")
-        logger.info("🔍 API Key configured: \(!self.apiKey.isEmpty)")
-        logger.info("🔍 Is API configured: \(self.isAPIConfigured)")
-        logger.info("🔍 Current text: '\(self.currentText)'")
-        logger.info("🔍 Last UI tone: \(self.lastUiTone.rawValue)")
-        logger.info("🔍 Smoothed buckets: clear=\(String(format: "%.2f", self.smoothedBuckets.clear)), caution=\(String(format: "%.2f", self.smoothedBuckets.caution)), alert=\(String(format: "%.2f", self.smoothedBuckets.alert))")
-        logger.info("🔍 Suggestions count: \(self.suggestions.count)")
-        logger.info("🔍 Network available: \(self.isNetworkAvailable)")
-        logger.info("🔍 Auth backoff until: \(self.authBackoffUntil)")
-        logger.info("🔍 Net backoff until: \(self.netBackoffUntil)")
+        KBDLog("🔍 ToneSuggestionCoordinator Debug State:", .info)
+        KBDLog("🔍 API Base URL: '\(self.apiBaseURL)'", .info)
+        KBDLog("🔍 API Key configured: \(!self.apiKey.isEmpty)", .info)
+        KBDLog("🔍 Is API configured: \(self.isAPIConfigured)", .info)
+        KBDLog("🔍 Current text: '\(self.currentText)'", .info)
+        KBDLog("🔍 Last UI tone: \(self.lastUiTone.rawValue)", .info)
+        KBDLog("🔍 Smoothed buckets: clear=\(String(format: "%.2f", self.smoothedBuckets.clear)), caution=\(String(format: "%.2f", self.smoothedBuckets.caution)), alert=\(String(format: "%.2f", self.smoothedBuckets.alert))", .info)
+        KBDLog("🔍 Suggestions count: \(self.suggestions.count)", .info)
+        KBDLog("🔍 Network available: \(self.isNetworkAvailable)", .info)
+        KBDLog("🔍 Auth backoff until: \(self.authBackoffUntil)", .info)
+        KBDLog("🔍 Net backoff until: \(self.netBackoffUntil)", .info)
         
         if let delegate = delegate {
-            logger.info("🔍 Delegate is set: \(type(of: delegate))")
+            KBDLog("🔍 Delegate is set: \(type(of: delegate))", .info)
         } else {
-            logger.error("🔍 Delegate is nil!")
+            KBDLog("🔍 Delegate is nil!", .error)
         }
     }
     
     func debugTestToneAPI(with text: String = "You never listen to me and it's really frustrating") {
-        logger.info("🧪 Testing tone API with text: '\(text)'")
+        KBDLog("🧪 Testing tone API with text: '\(text)'", .info)
         
         guard self.isAPIConfigured else {
-            logger.error("🧪 API not configured - cannot test")
+            KBDLog("🧪 API not configured - cannot test", .error)
             return
         }
         
@@ -912,51 +937,51 @@ final class ToneSuggestionCoordinator {
             do {
                 let toneOut = try await self.postTone(base: self.apiBaseURL, text: text, token: self.apiKey.nilIfEmpty)
                 await MainActor.run {
-                    self.logger.info("🧪 API Response received:")
-                    self.logger.info("🧪 Buckets: \(toneOut.buckets)")
+                    KBDLog("🧪 API Response received:", .info)
+                    KBDLog("🧪 Buckets: \(toneOut.buckets)", .info)
                     if let metadata = toneOut.metadata {
-                        self.logger.info("🧪 Metadata available: \(metadata.feature_noticings?.count ?? 0) feature noticings")
+                        KBDLog("🧪 Metadata available: \(metadata.feature_noticings?.count ?? 0) feature noticings", .info)
                         if let noticings = metadata.feature_noticings {
                             for (i, noticing) in noticings.enumerated() {
-                                self.logger.info("🧪 Feature noticing \(i+1): \(noticing.pattern) - \(noticing.message)")
+                                KBDLog("🧪 Feature noticing \(i+1): \(noticing.pattern) - \(noticing.message)", .info)
                             }
                         }
                     } else {
-                        self.logger.info("🧪 No metadata in response")
+                        KBDLog("🧪 No metadata in response", .info)
                     }
                 }
             } catch {
                 await MainActor.run {
-                    self.logger.error("🧪 API test failed: \(error.localizedDescription)")
+                    KBDLog("🧪 API test failed: \(error.localizedDescription)", .error)
                 }
             }
         }
     }
     
     func debugDelegateCallbacks() {
-        logger.info("📡 Testing delegate callbacks...")
+        KBDLog("📡 Testing delegate callbacks...", .info)
         
         guard let delegate = delegate else {
-            logger.error("📡 No delegate set - cannot test callbacks")
+            KBDLog("📡 No delegate set - cannot test callbacks", .error)
             return
         }
         
         // Test tone status update
         Task { @MainActor in
             delegate.didUpdateToneStatus("alert")
-            self.logger.info("📡 Called didUpdateToneStatus with 'alert'")
+            KBDLog("📡 Called didUpdateToneStatus with 'alert'", .info)
             
             // Test suggestions update
             delegate.didUpdateSuggestions(["Test suggestion 1", "Test suggestion 2"])
-            self.logger.info("📡 Called didUpdateSuggestions with 2 test suggestions")
+            KBDLog("📡 Called didUpdateSuggestions with 2 test suggestions", .info)
             
             // Test feature noticings
             delegate.didReceiveFeatureNoticings(["Debug feature noticing: Consider softening your tone"])
-            self.logger.info("📡 Called didReceiveFeatureNoticings with debug message")
+            KBDLog("📡 Called didReceiveFeatureNoticings with debug message", .info)
             
             // Test error
             delegate.didReceiveAPIError(.networkError)
-            self.logger.info("📡 Called didReceiveAPIError with network error")
+            KBDLog("📡 Called didReceiveAPIError with network error", .info)
         }
     }
     #endif
@@ -1072,7 +1097,9 @@ extension ToneSuggestionCoordinator {
             
             await MainActor.run { maybeUpdateIndicator(to: finalTone) }
         } catch {
-            logger.info("🎯 Analysis failed, retaining current tone: \(error.localizedDescription)")
+            #if DEBUG
+            coordLog.info("🎯 Analysis failed, retaining current tone: \(error.localizedDescription)")
+            #endif
         }
     }
     
@@ -1120,7 +1147,9 @@ extension ToneSuggestionCoordinator {
         guard newTone != lastUiTone else { return }
         lastUiTone = newTone
         onToneUpdate?(newTone, true)
-        logger.info("🎯 Sentence-aware tone update: \(newTone.rawValue)")
+        #if DEBUG
+        coordLog.info("🎯 [\(self.instanceId)] UI tone=\(newTone.rawValue) buckets clear=\(String(format: "%.2f", self.smoothedBuckets.clear)) caution=\(String(format: "%.2f", self.smoothedBuckets.caution)) alert=\(String(format: "%.2f", self.smoothedBuckets.alert))")
+        #endif
     }
     
     // MARK: - API Helper for Tone
@@ -1139,36 +1168,35 @@ extension ToneSuggestionCoordinator {
     }
     
     private func postTone(base: String, text: String, token: String?) async throws -> ToneOut {
-        let origin = normalizedBaseURLString()  // Use the normalizer to prevent doubled paths
-        let url = URL(string: "\(origin)/api/v1/tone")!
-        print("🎯 TONE URL: \(url.absoluteString)")
-        
+        let origin = normalizedBaseURLString()
+        guard let url = URL(string: "\(origin)/api/v1/tone") else { throw URLError(.badURL) }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = token?.nilIfEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         request.setValue(getUserId(), forHTTPHeaderField: "x-user-id")
-        
-        // Include context and client_seq to match schema/handler expectations
-        let body: [String: Any] = [
-            "text": text,
-            "context": "general",
-            "client_seq": clientSequence
-        ]
+
+        let body: [String: Any] = ["text": text, "context": "general", "client_seq": clientSequence]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+
+        #if DEBUG
+        if logGate.allow("tone_req", "\(text.count)") {
+            netLog.info("🎯 [\(self.instanceId)] POST /api/v1/tone len=\(text.count)")
+        }
+        #endif
+
+        // Use the same configured session
+        let (data, response) = try await session.data(for: request)
+
+        guard let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode else {
             throw URLError(.badServerResponse)
         }
+
         if let direct = try? JSONDecoder().decode(ToneOut.self, from: data) { return direct }
         struct Wrapped: Decodable { let data: ToneOut }
         if let wrapped = try? JSONDecoder().decode(Wrapped.self, from: data) { return wrapped.data }
-        struct UI: Decodable { 
-            let ui_distribution: [String: Double]?
-            let buckets: [String: Double]? 
-            let metadata: ToneMetadata?
-        }
+        struct UI: Decodable { let ui_distribution: [String: Double]?, buckets: [String: Double]?, metadata: ToneMetadata? }
         let ui = try JSONDecoder().decode(UI.self, from: data)
         return ToneOut(buckets: ui.ui_distribution ?? ui.buckets ?? [:], metadata: ui.metadata)
     }

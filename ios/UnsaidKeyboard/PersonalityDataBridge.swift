@@ -116,7 +116,7 @@ actor PersonalityDataBridge {
     private let ud: UserDefaults
 
     // Logging (throttled)
-    private let logger = Logger(subsystem: "com.example.unsaid.unsaid.UnsaidKeyboard", category: "PersonalityDataBridge")
+    private let logger = Logger(subsystem: "com.example.unsaid.UnsaidKeyboard", category: "PersonalityDataBridge")
     private var lastLog: [String: Date] = [:]
     private let logWindow: TimeInterval = 1.0
 
@@ -140,7 +140,7 @@ actor PersonalityDataBridge {
 
     // MARK: - Init (single, non-duplicated)
     #if DEBUG
-    init(suiteName: String = "group.com.example.unsaid") {
+    init(suiteName: String = AppGroups.id) {
         self.ud = UserDefaults(suiteName: suiteName) ?? .standard
         Task { @MainActor in
             await self.migrateIfNeeded()
@@ -149,7 +149,7 @@ actor PersonalityDataBridge {
     }
     #else
     private init() {
-        self.ud = UserDefaults(suiteName: "group.com.example.unsaid") ?? .standard
+        self.ud = UserDefaults(suiteName: AppGroups.id) ?? .standard
         Task { @MainActor in
             await self.migrateIfNeeded()
             await self.log("Bridge ready (app group defaults active)", level: .info)

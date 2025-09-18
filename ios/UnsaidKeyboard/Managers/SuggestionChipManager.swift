@@ -7,6 +7,7 @@
 
 import UIKit
 import Foundation
+import os.log
 
 @MainActor
 protocol SuggestionChipManagerDelegate: AnyObject {
@@ -30,7 +31,7 @@ final class SuggestionChipManager {
 
     func showSuggestion(text: String, tone: ToneStatus) {
         #if DEBUG
-        print("📨 ChipManager: showSuggestion called with text: '\(text)', tone: \(tone)")
+        KBDLog("📨 ChipManager: showSuggestion called with text: '\(text)', tone: \(tone)", .debug, "ChipManager")
         #endif
         
         guard let containerView = containerView else { return }
@@ -41,28 +42,25 @@ final class SuggestionChipManager {
             let isSameText = active.getCurrentSuggestion() == text
             
             #if DEBUG
-            print("🔍 ChipManager: Active chip found - onscreen: \(isOnscreen), sameText: \(isSameText), text: '\(text)'")
+            KBDLog("🔍 ChipManager: Active chip found - onscreen: \(isOnscreen), sameText: \(isSameText), text: '\(text)'", .debug, "ChipManager")
             #endif
             
             if isSameText && isOnscreen {
                 // Chip is visible and has same text - just refresh styling
                 #if DEBUG
-                print("🔄 ChipManager: Refreshing existing chip")
+                KBDLog("🔄 ChipManager: Refreshing existing chip", .debug, "ChipManager")
+                KBDLog("💬 Chip coalesce: onscreen=\(isOnscreen) sameText=\(isSameText)", .debug, "ChipManager")
                 #endif
                 active.presentSuggestion(text, tone: tone)
                 return
             } else if isSameText && !isOnscreen {
                 // Chip has same text but is off-screen - clean up and create new one
-                #if DEBUG
-                print("🧹 ChipManager: Cleaning up off-screen chip")
-                #endif
+                KBDLog("🧹 ChipManager: Cleaning up off-screen chip", .debug, "ChipManager")
                 activeChip = nil
                 // Fall through to create new chip
             } else if !isSameText {
                 // Different text - dismiss old chip and create new one
-                #if DEBUG
-                print("🔄 ChipManager: Dismissing old chip for new text")
-                #endif
+                KBDLog("🔄 ChipManager: Dismissing old chip for new text", .debug, "ChipManager")
                 active.onDismissed = { [weak self] in
                     self?.presentNewChip(text: text, tone: tone, in: containerView)
                 }
@@ -73,16 +71,12 @@ final class SuggestionChipManager {
         }
 
         // Create new chip
-        #if DEBUG
-        print("🆕 ChipManager: Creating new chip for text: '\(text)'")
-        #endif
+        KBDLog("🆕 ChipManager: Creating new chip for text: '\(text)'", .debug, "ChipManager")
         presentNewChip(text: text, tone: tone, in: containerView)
     }
 
     private func presentNewChip(text: String, tone: ToneStatus, in containerView: UIView) {
-        #if DEBUG
-        print("🎯 ChipManager: Presenting new chip, clearing any existing active chip")
-        #endif
+        KBDLog("🎯 ChipManager: Presenting new chip, clearing any existing active chip", .debug, "ChipManager")
         
         let chip = SuggestionChipView()
         chip.setPreview(text: text, tone: tone, textHash: String(text.hashValue))
@@ -97,7 +91,7 @@ final class SuggestionChipManager {
             self.delegate?.suggestionChipDidDismiss(chip)
             if self.activeChip === chip { 
                 #if DEBUG
-                print("🗑️ ChipManager: Clearing active chip reference (user dismissed)")
+                KBDLog("🗑️ ChipManager: Clearing active chip reference (user dismissed)", .debug, "ChipManager")
                 #endif
                 self.activeChip = nil 
             }
@@ -105,15 +99,13 @@ final class SuggestionChipManager {
         chip.onTimeout = { [weak self, weak chip] in
             guard let self, let chip else { return }
             #if DEBUG
-            print("⏰ ChipManager: Clearing active chip reference (timeout)")
+            KBDLog("⏰ ChipManager: Clearing active chip reference (timeout)", .debug, "ChipManager")
             #endif
             if self.activeChip === chip { self.activeChip = nil }
         }
         chip.onDismissed = { [weak self, weak chip] in
             guard let self, let chip else { return }
-            #if DEBUG
-            print("🏁 ChipManager: Chip fully dismissed, clearing reference")
-            #endif
+            KBDLog("🏁 ChipManager: Chip fully dismissed, clearing reference", .debug, "ChipManager")
             if self.activeChip === chip { self.activeChip = nil }
         }
 
@@ -135,9 +127,8 @@ final class SuggestionChipManager {
         }
         
         activeChip = chip
-        #if DEBUG
-        print("✅ ChipManager: Set new active chip")
-        #endif
+        KBDLog("✅ ChipManager: Set new active chip", .debug, "ChipManager")
+        KBDLog("💬 Chip present under bar? \(self.suggestionBar != nil)", .debug, "ChipManager")
         chip.present(in: containerView)
     }
 
@@ -178,40 +169,94 @@ final class SuggestionChipManager {
     
     #if DEBUG
     func debugSuggestionChipState() {
-        print("💬 SUGGESTION CHIP MANAGER DEBUG")
-        print("================================")
+        KBDLog("💬 SUGGESTION CHIP MANAGER DEBUG", .debug, "ChipManager")
+        KBDLog("================================", .debug, "ChipManager")
         
-        print("💬 Container view: \(containerView != nil ? "exists" : "nil")")
-        print("💬 Suggestion bar: \(suggestionBar != nil ? "exists" : "nil")")
-        print("💬 Active chip: \(activeChip != nil ? "exists" : "nil")")
+        KBDLog("💬 Container view: \(containerView != nil ? "exists" : "nil")", .debug, "ChipManager")
+        KBDLog("💬 Suggestion bar: \(suggestionBar != nil ? "exists" : "nil")", .debug, "ChipManager")
+        KBDLog("💬 Active chip: \(activeChip != nil ? "exists" : "nil")", .debug, "ChipManager")
         
         if let chip = activeChip {
-            print("💬 Active chip superview: \(chip.superview != nil)")
-            print("💬 Active chip frame: \(chip.frame)")
-            print("💬 Active chip alpha: \(chip.alpha)")
-            print("💬 Active chip hidden: \(chip.isHidden)")
-            print("💬 Active chip text: '\(chip.getCurrentSuggestion() ?? "nil")'")
+            KBDLog("💬 Active chip superview: \(chip.superview != nil)", .debug, "ChipManager")
+            KBDLog("💬 Active chip frame: \(chip.frame)", .debug, "ChipManager")
+            KBDLog("💬 Active chip alpha: \(chip.alpha)", .debug, "ChipManager")
+            KBDLog("💬 Active chip hidden: \(chip.isHidden)", .debug, "ChipManager")
+            KBDLog("💬 Active chip text: '\(chip.getCurrentSuggestion() ?? "nil")'", .debug, "ChipManager")
         }
         
         if let container = containerView {
-            print("💬 Container subviews count: \(container.subviews.count)")
+            KBDLog("💬 Container subviews count: \(container.subviews.count)", .debug, "ChipManager")
             let chipViews = container.subviews.filter { $0 is SuggestionChipView }
-            print("💬 SuggestionChipView instances in container: \(chipViews.count)")
+            KBDLog("💬 SuggestionChipView instances in container: \(chipViews.count)", .debug, "ChipManager")
         }
         
-        print("💬 Tutorial shown: \(shouldShowTutorial() ? "no" : "yes")")
-        print("💬 SUGGESTION CHIP MANAGER DEBUG COMPLETE")
+        KBDLog("💬 Tutorial shown: \(shouldShowTutorial() ? "no" : "yes")", .debug, "ChipManager")
+        KBDLog("💬 SUGGESTION CHIP MANAGER DEBUG COMPLETE", .debug, "ChipManager")
     }
     #endif
     
     // MARK: - First-time User Management
     
     private func markTutorialAsShown() {
-    // AppGroups.shared already returns a valid UserDefaults (falls back to .standard internally)
-    AppGroups.shared.set(true, forKey: Self.tutorialShownKey)
+        // AppGroups.shared already returns a valid UserDefaults (falls back to .standard internally)
+        AppGroups.shared.set(true, forKey: Self.tutorialShownKey)
     }
     
     private func shouldShowTutorial() -> Bool {
-    return !AppGroups.shared.bool(forKey: Self.tutorialShownKey)
+        return !AppGroups.shared.bool(forKey: Self.tutorialShownKey)
+    }
+    
+    // MARK: - Integration Helper Methods
+    
+    /// Recover if the suggestion bar is attached later (e.g., after layout)
+    func attachSuggestionBarIfNeeded(_ bar: UIView?) {
+        if let bar { 
+            configure(suggestionBar: bar) 
+        }
+        // If a chip is active and had been anchored to bottom, you could re-layout here if desired
+    }
+    
+    /// Public refresh of tone only (if you get tone updates without new text)
+    func updateTone(_ tone: ToneStatus) {
+        guard let active = activeChip, let text = active.getCurrentSuggestion() else { return }
+        active.presentSuggestion(text, tone: tone)
+    }
+    
+    /// Integration proof method - drop this into any suggestion result handler
+    /// to verify end-to-end functionality
+    func handleSuggestionResult(text: String, uiToneString: String) {
+        showSuggestionChip(text: text, toneString: uiToneString)
+        #if DEBUG
+        debugSuggestionChipState()
+        #endif
+    }
+    
+    /// Test method to verify the entire integration chain
+    /// Call this from anywhere to test if chips are working
+    func testIntegration() {
+        #if DEBUG
+        KBDLog("🧪 CHIP INTEGRATION TEST START", .debug, "ChipManager")
+        KBDLog("==============================", .debug, "ChipManager")
+        
+        // Test all tone states
+        let testCases = [
+            ("Alert tone test suggestion", "alert"),
+            ("Caution tone test suggestion", "caution"),
+            ("Clear tone test suggestion", "clear"),
+            ("Neutral tone test suggestion", "neutral")
+        ]
+        
+        for (index, testCase) in testCases.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 2.0) { [weak self] in
+                guard let self = self else { return }
+                KBDLog("🧪 Testing: \(testCase.0) with tone: \(testCase.1)", .debug, "ChipManager")
+                self.showSuggestionChip(text: testCase.0, toneString: testCase.1)
+                self.debugSuggestionChipState()
+            }
+        }
+        
+        KBDLog("🧪 CHIP INTEGRATION TEST SCHEDULED", .debug, "ChipManager")
+        KBDLog("   Watch for chips appearing every 2 seconds...", .debug, "ChipManager")
+        #endif
     }
 }

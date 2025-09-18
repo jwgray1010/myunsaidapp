@@ -34,19 +34,33 @@ class UnsaidKeyboardExtension {
 
   /// Opens the device's keyboard settings.
   static Future<void> openKeyboardSettings() async {
+    print('UnsaidKeyboardExtension: openKeyboardSettings() called');
     try {
       if (Platform.isIOS) {
+        print('UnsaidKeyboardExtension: iOS detected, trying app-settings:');
         // Try to open directly to keyboard settings on iOS
         const settingsUrl = 'app-settings:';
         if (await canLaunchUrl(Uri.parse(settingsUrl))) {
+          print('UnsaidKeyboardExtension: app-settings: URL can be launched');
           await launchUrl(Uri.parse(settingsUrl));
+          print(
+            'UnsaidKeyboardExtension: app-settings: URL launched successfully',
+          );
         } else {
+          print(
+            'UnsaidKeyboardExtension: app-settings: URL cannot be launched, using platform channel',
+          );
           // Fallback: use platform channel
           await _channel.invokeMethod('openKeyboardSettings');
+          print('UnsaidKeyboardExtension: platform channel method completed');
         }
       } else {
+        print(
+          'UnsaidKeyboardExtension: Android detected, using platform channel',
+        );
         // For Android, use platform channel
         await _channel.invokeMethod('openKeyboardSettings');
+        print('UnsaidKeyboardExtension: Android platform channel completed');
       }
     } on PlatformException catch (e) {
       print('Error opening keyboard settings: ${e.message}');

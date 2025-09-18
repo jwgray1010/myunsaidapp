@@ -6,6 +6,35 @@
 import Foundation
 import UIKit
 
+// MARK: - Debug Extensions for Constraint Debugging
+
+extension UIView {
+    func debugConstraints() {
+        #if DEBUG
+        print("=== Debug Constraints for \(type(of: self)) ===")
+        print("Frame: \(frame)")
+        print("Bounds: \(bounds)")
+        print("Constraints: \(constraints.count)")
+        for constraint in constraints {
+            print("  \(constraint)")
+        }
+        print("=== End Debug Constraints ===")
+        #endif
+    }
+    
+    // Helper to debug autolayout trace when constraint conflicts occur
+    func debugAutolayoutTrace() {
+        #if DEBUG
+        print("🔍 Autolayout trace for \(type(of: self)):")
+        print(self.value(forKey: "_autolayoutTrace") ?? "No trace available")
+        #endif
+    }
+}
+
+// MARK: - Constraint Conflict Debugging
+// To use: In Xcode, add symbolic breakpoint for: UIViewAlertForUnsatisfiableConstraints
+// Then in debugger console, run: po keyPreview.debugAutolayoutTrace()
+
 @MainActor
 final class KeyPreviewManager {
 
@@ -37,22 +66,31 @@ final class KeyPreviewManager {
         let preview = KeyPreview(text: title)
         keyPreviewTable.setObject(preview, forKey: button)
 
-        // Position preview above button
-        guard let superview = button.superview else { return }
-        superview.addSubview(preview)
-        superview.bringSubviewToFront(preview)
+        // Find the keyboard's main container view (not a stack view)
+        guard let containerView = findKeyboardContainerView(for: button) else { return }
+        containerView.addSubview(preview)
+        containerView.bringSubviewToFront(preview)
 
         // Keep above everything
         preview.layer.zPosition = 999
 
         // Constraints: centerX to key; bottom to key top (-8); keep on-screen
-        NSLayoutConstraint.activate([
+        let constraints = [
             preview.centerXAnchor.constraint(equalTo: button.centerXAnchor),
             preview.bottomAnchor.constraint(equalTo: button.topAnchor, constant: -8),
-            preview.topAnchor.constraint(greaterThanOrEqualTo: superview.topAnchor, constant: 2),
-            preview.leadingAnchor.constraint(greaterThanOrEqualTo: superview.leadingAnchor, constant: 4),
-            preview.trailingAnchor.constraint(lessThanOrEqualTo: superview.trailingAnchor, constant: -4)
-        ])
+            preview.topAnchor.constraint(greaterThanOrEqualTo: containerView.topAnchor, constant: 2),
+            preview.leadingAnchor.constraint(greaterThanOrEqualTo: containerView.leadingAnchor, constant: 4),
+            preview.trailingAnchor.constraint(lessThanOrEqualTo: containerView.trailingAnchor, constant: -4),
+            // Add width cap to prevent long labels from forcing off-screen friction
+            preview.widthAnchor.constraint(lessThanOrEqualTo: containerView.widthAnchor, multiplier: 0.5)
+        ]
+        
+        #if DEBUG
+        print("📍 KeyPreview: Adding preview to \(type(of: containerView)) with frame: \(containerView.frame)")
+        print("📍 KeyPreview: Button frame: \(button.frame)")
+        #endif
+        
+        NSLayoutConstraint.activate(constraints)
 
         // Animate in with subtle pop effect
         preview.alpha = 0
@@ -107,6 +145,33 @@ final class KeyPreviewManager {
         }
         keyPreviewTable.removeAllObjects()
     }
+    
+    // MARK: - Private Helpers
+    
+    private func findKeyboardContainerView(for button: UIButton) -> UIView? {
+        // Walk up the view hierarchy to find the KeyboardController root view
+        var currentView: UIView? = button
+        
+        while let view = currentView {
+            // Look specifically for KeyboardController view, not just any non-stack view
+            if String(describing: type(of: view)).contains("KeyboardController") {
+                return view
+            }
+            currentView = view.superview
+        }
+        
+        // Fallback: find any view that's not a stack view and has reasonable bounds
+        currentView = button.superview
+        while let view = currentView {
+            if !(view is UIStackView), view.bounds.width > 200 {
+                return view
+            }
+            currentView = view.superview
+        }
+        
+        // Last resort: use button's window or superview
+        return button.window ?? button.superview
+    }
 }
 
 // MARK: - Key Preview Balloon (adaptive size)
@@ -149,13 +214,16 @@ final class KeyPreview: UIView {
         addSubview(label)
 
         // Larger sizing with more padding for better visibility
+        let minHeightConstraint = heightAnchor.constraint(greaterThanOrEqualToConstant: 52)
+        minHeightConstraint.priority = .defaultHigh  // 750, so it won't fight required constraints
+        
         NSLayoutConstraint.activate([
             label.topAnchor.constraint(equalTo: topAnchor, constant: 10),
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
             label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
 
-            heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
+            minHeightConstraint,
             widthAnchor.constraint(greaterThanOrEqualToConstant: 52)
         ])
     }

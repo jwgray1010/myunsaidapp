@@ -14,7 +14,7 @@ final class PersonalityDataManager {
     private let appGroupIdentifier = AppGroups.id
     private let sharedUD: UserDefaults
     private var ud: UserDefaults { sharedUD }
-    private let log = Logger(subsystem: "com.example.unsaid.unsaid", category: "PersonalityDataManager")
+    private let log = Logger(subsystem: "com.example.unsaid", category: "PersonalityDataManager")
 
     private init() {
         guard let u = UserDefaults(suiteName: appGroupIdentifier) else {

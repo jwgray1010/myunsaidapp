@@ -73,11 +73,17 @@ class _PersonalityTestScreenProfessionalState
       q is Map ? (q['subtitle']) : (q.subtitle);
 
   void _selectAnswer(String type) {
+    print('DEBUG: _selectAnswer called with type: $type');
+    print('DEBUG: Current _selectedAnswer before: $_selectedAnswer');
     HapticFeedback.selectionClick();
     setState(() {
       _selectedAnswer = type;
       widget.answers[widget.currentIndex] = type;
     });
+    print('DEBUG: _selectedAnswer after setState: $_selectedAnswer');
+    print(
+      'DEBUG: widget.answers[${widget.currentIndex}] = ${widget.answers[widget.currentIndex]}',
+    );
   }
 
   Future<void> _goNext() async {
@@ -377,6 +383,14 @@ class _PersonalityTestScreenProfessionalState
                         final optionText = getOptionText(option);
                         final isSelected = _selectedAnswer == optionType;
                         final colorDot = typeColors[optionType] ?? Colors.grey;
+
+                        // Debug logging for selection state
+                        if (widget.currentIndex == 0) {
+                          // Only log for first question to avoid spam
+                          print(
+                            'DEBUG: Option $optionType - isSelected: $isSelected, _selectedAnswer: $_selectedAnswer',
+                          );
+                        }
 
                         return Container(
                           margin: const EdgeInsets.only(

@@ -22,8 +22,12 @@ import Flutter
       result(UnsaidKeyboardHelper.getKeyboardStatus())
 
     case "openKeyboardSettings":
+      print("UnsaidKeyboardBridge: openKeyboardSettings method called")
       Task { @MainActor in
-        UnsaidKeyboardHelper.openKeyboardSettings { ok in result(ok) }
+        UnsaidKeyboardHelper.openKeyboardSettings { ok in 
+          print("UnsaidKeyboardBridge: openKeyboardSettings completed with result: \(ok)")
+          result(ok) 
+        }
       }
 
     case "requestKeyboardPermissions":
@@ -42,7 +46,7 @@ import Flutter
       // Store tone analysis data in shared UserDefaults for keyboard extension
       if let args = call.arguments as? [String: Any],
          let text = args["text"] as? String {
-        let sharedDefaults = UserDefaults(suiteName: "group.com.example.unsaid")
+        let sharedDefaults = UserDefaults(suiteName: AppGroups.id)
         sharedDefaults?.set(args, forKey: "latest_tone_analysis")
         sharedDefaults?.set(Date().timeIntervalSince1970, forKey: "tone_analysis_timestamp")
         result(true)
@@ -54,7 +58,7 @@ import Flutter
       // Store text processing request for keyboard extension
       if let args = call.arguments as? [String: Any],
          let text = args["text"] as? String {
-        let sharedDefaults = UserDefaults(suiteName: "group.com.example.unsaid")
+        let sharedDefaults = UserDefaults(suiteName: AppGroups.id)
         sharedDefaults?.set(args, forKey: "latest_text_processing")
         sharedDefaults?.set(Date().timeIntervalSince1970, forKey: "text_processing_timestamp")
         result(text) // Return the processed text
@@ -65,7 +69,7 @@ import Flutter
     case "sendCoParentingAnalysis", "sendEQCoaching", "sendChildDevelopmentAnalysis":
       // Store analysis data in shared UserDefaults for keyboard extension
       if let args = call.arguments as? [String: Any] {
-        let sharedDefaults = UserDefaults(suiteName: "group.com.example.unsaid")
+        let sharedDefaults = UserDefaults(suiteName: AppGroups.id)
         let key = "latest_\(call.method)"
         sharedDefaults?.set(args, forKey: key)
         sharedDefaults?.set(Date().timeIntervalSince1970, forKey: "\(call.method)_timestamp")
@@ -76,7 +80,7 @@ import Flutter
 
     case "startKeyboardMonitoring", "stopKeyboardMonitoring":
       // Store monitoring commands for keyboard extension
-      let sharedDefaults = UserDefaults(suiteName: "group.com.example.unsaid")
+      let sharedDefaults = UserDefaults(suiteName: AppGroups.id)
       sharedDefaults?.set(call.method, forKey: "keyboard_monitoring_command")
       sharedDefaults?.set(Date().timeIntervalSince1970, forKey: "monitoring_command_timestamp")
       result(true)

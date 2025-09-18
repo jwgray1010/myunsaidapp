@@ -123,7 +123,7 @@ class NotificationManager {
     // MARK: - Smart Logic
     
     private func shouldSendInsightsNotification() -> Bool {
-        let defaults = UserDefaults(suiteName: "group.com.example.unsaid")
+        let defaults = UserDefaults(suiteName: AppGroups.id)
         
         // Check if user has significant data
         let metadata = defaults?.dictionary(forKey: "keyboard_storage_metadata")
@@ -152,7 +152,7 @@ class NotificationManager {
     }
     
     private func shouldSendReminderNotification() -> Bool {
-        let defaults = UserDefaults(suiteName: "group.com.example.unsaid")
+        let defaults = UserDefaults(suiteName: AppGroups.id)
         
         // Check last app open time
         let lastAppOpen = defaults?.double(forKey: "last_app_open_time") ?? 0
@@ -184,7 +184,7 @@ class NotificationManager {
     }
     
     func updateLastAppOpenTime() {
-        let defaults = UserDefaults(suiteName: "group.com.example.unsaid")
+        let defaults = UserDefaults(suiteName: AppGroups.id)
         defaults?.set(Date().timeIntervalSince1970, forKey: "last_app_open_time")
         logger.debug("📱 Updated last app open time")
     }

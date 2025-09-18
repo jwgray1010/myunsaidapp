@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -12,34 +12,15 @@
 		179422438779BB9281C52962 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DBBD51BB0CCFD0647B7647B5 /* Pods_RunnerTests.framework */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
-		4FEAAD4224D44D13BA34AB95 /* PersonalityKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16CA44672FBE427384B2020B /* PersonalityKeys.swift */; };
 		576C785C1C6A8C94C2145ED3 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B214A6858BAB21475015F446 /* Pods_Runner.framework */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		D05BB7C52E59565800E5C7B2 /* PersonalityDataBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED470B2E5911530094BD53 /* PersonalityDataBridge.swift */; };
 		D05BB7C62E59565C00E5C7B2 /* SafeKeyboardDataStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47092E5911530094BD53 /* SafeKeyboardDataStorage.swift */; };
+		D0AAA7CC2E7AF9A300990696 /* UnsaidKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D0AAA7C52E7AF9A300990696 /* UnsaidKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D0B001232E6DE1B400C8FB5C /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0B001222E6DE1B400C8FB5C /* SceneDelegate.swift */; };
-		D0B001252E6E95A500C8FB5C /* unsaid_logo.png in Resources */ = {isa = PBXBuildFile; fileRef = D0B001242E6E95A500C8FB5C /* unsaid_logo.png */; };
-		D0ED46FC2E5910DC0094BD53 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED46FB2E5910DC0094BD53 /* KeyboardViewController.swift */; };
-		D0ED47002E5910DC0094BD53 /* UnsaidKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D0ED46F92E5910DC0094BD53 /* UnsaidKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		D0ED470D2E5911530094BD53 /* LightweightSpellChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47062E5911520094BD53 /* LightweightSpellChecker.swift */; };
-		D0ED470E2E5911530094BD53 /* ToneSuggestionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47072E5911520094BD53 /* ToneSuggestionCoordinator.swift */; };
-		D0ED470F2E5911530094BD53 /* SafeKeyboardDataStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47092E5911530094BD53 /* SafeKeyboardDataStorage.swift */; };
-		D0ED47102E5911530094BD53 /* KeyboardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED470A2E5911530094BD53 /* KeyboardController.swift */; };
-		D0ED47112E5911530094BD53 /* PersonalityDataBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED470B2E5911530094BD53 /* PersonalityDataBridge.swift */; };
-		D0ED47132E5911540094BD53 /* 000_UnsaidSharedTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47122E5911540094BD53 /* 000_UnsaidSharedTypes.swift */; };
-		D0F701DC2E6AB78A00C3BE7D /* AppGroups.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0F701DB2E6AB78A00C3BE7D /* AppGroups.swift */; };
-		D0F701DD2E6AB78A00C3BE7D /* AppGroups.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0F701DB2E6AB78A00C3BE7D /* AppGroups.swift */; };
-		E0A123452E5912000094BD53 /* EnhancedCommunicatorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A123442E5912000094BD53 /* EnhancedCommunicatorService.swift */; };
-		E0A123472E5912010094BD53 /* KeyButtonFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A123462E5912010094BD53 /* KeyButtonFactory.swift */; };
-		E0A123492E5912020094BD53 /* SuggestionChipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A123482E5912020094BD53 /* SuggestionChipView.swift */; };
-		E0A12350 /* DeleteManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12349 /* DeleteManager.swift */; };
-		E0A12352 /* KeyPreviewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12351 /* KeyPreviewManager.swift */; };
-		E0A12354 /* SecureFixManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12353 /* SecureFixManager.swift */; };
-		E0A12356 /* SpaceHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12355 /* SpaceHandler.swift */; };
-		E0A12358 /* SuggestionChipManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12357 /* SuggestionChipManager.swift */; };
-		E0A12360 /* SpellCheckerIntegration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12359 /* SpellCheckerIntegration.swift */; };
+		D0F701E02E6AB78A00C3BE80 /* AppGroups.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0F701DE2E6AB78A00C3BE7E /* AppGroups.swift */; };
 		E0A12362 /* KeyboardDataSyncBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12361 /* KeyboardDataSyncBridge.swift */; };
 		E0A12371 /* BackgroundTaskManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12371A /* BackgroundTaskManager.swift */; };
 		E0A12372 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12372A /* NotificationManager.swift */; };
@@ -51,9 +32,6 @@
 		F3A001111E1F170500E8B355 /* KeyboardAnalyticsBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A001011E1F170500E8B355 /* KeyboardAnalyticsBridge.swift */; };
 		F3A001121E1F170500E8B355 /* PersonalityDataPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A001021E1F170500E8B355 /* PersonalityDataPlugin.swift */; };
 		FA247EB4F594405FA72FB2A9 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = FA247EB4F594405FA72FB2A8 /* GoogleService-Info.plist */; };
-		HD1234567890ABCDEF123456 /* HapticsDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = HD1234567890ABCDEF123457 /* HapticsDriver.swift */; };
-		NG1234567890ABCDEF123455 /* NetGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = NG1234567890ABCDEF123456 /* NetGate.swift */; };
-		TH1234567890ABCDEF123456 /* TimerHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = TH1234567890ABCDEF123457 /* TimerHub.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,11 +42,11 @@
 			remoteGlobalIDString = 97C146ED1CF9000F007C117D;
 			remoteInfo = Runner;
 		};
-		D0ED46FE2E5910DC0094BD53 /* PBXContainerItemProxy */ = {
+		D0AAA7CA2E7AF9A300990696 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = D0ED46F82E5910DC0094BD53;
+			remoteGlobalIDString = D0AAA7C42E7AF9A300990696;
 			remoteInfo = UnsaidKeyboard;
 		};
 /* End PBXContainerItemProxy section */
@@ -90,7 +68,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				D0ED47002E5910DC0094BD53 /* UnsaidKeyboard.appex in Embed Foundation Extensions */,
+				D0AAA7CC2E7AF9A300990696 /* UnsaidKeyboard.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -118,10 +96,13 @@
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		9F1867C0296BED52B9AB16EC /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		B214A6858BAB21475015F446 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		D06776992E7AD52800033899 /* LayoutUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutUtilities.swift; sourceTree = "<group>"; };
 		D0990F8A1822F327B3322151 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
+		D0AAA7BD2E7AF71200990696 /* KeyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyButton.swift; sourceTree = "<group>"; };
+		D0AAA7BF2E7AF74C00990696 /* KBDLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBDLogging.swift; sourceTree = "<group>"; };
+		D0AAA7C52E7AF9A300990696 /* UnsaidKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UnsaidKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0B001222E6DE1B400C8FB5C /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		D0B001242E6E95A500C8FB5C /* unsaid_logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = unsaid_logo.png; sourceTree = "<group>"; };
-		D0ED46F92E5910DC0094BD53 /* UnsaidKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UnsaidKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0ED46FB2E5910DC0094BD53 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
 		D0ED46FD2E5910DC0094BD53 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		D0ED47062E5911520094BD53 /* LightweightSpellChecker.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LightweightSpellChecker.swift; sourceTree = "<group>"; };
@@ -132,7 +113,7 @@
 		D0ED470B2E5911530094BD53 /* PersonalityDataBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PersonalityDataBridge.swift; sourceTree = "<group>"; };
 		D0ED470C2E5911530094BD53 /* UnsaidKeyboard.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = UnsaidKeyboard.entitlements; sourceTree = "<group>"; };
 		D0ED47122E5911540094BD53 /* 000_UnsaidSharedTypes.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = 000_UnsaidSharedTypes.swift; sourceTree = "<group>"; };
-		D0F701DB2E6AB78A00C3BE7D /* AppGroups.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroups.swift; sourceTree = "<group>"; };
+		D0F701DE2E6AB78A00C3BE7E /* AppGroups.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = AppGroups.swift; path = ../Runner/AppGroups.swift; sourceTree = "<group>"; };
 		D8F124A3A0498C53B70A3114 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		DBBD51BB0CCFD0647B7647B5 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0A123442E5912000094BD53 /* EnhancedCommunicatorService.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EnhancedCommunicatorService.swift; sourceTree = "<group>"; };
@@ -159,6 +140,20 @@
 		TH1234567890ABCDEF123457 /* TimerHub.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TimerHub.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D0AAA7CD2E7AF9A400990696 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D0AAA7C42E7AF9A300990696 /* UnsaidKeyboard */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		D0AAA7C62E7AF9A300990696 /* UnsaidKeyboard */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (D0AAA7CD2E7AF9A400990696 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = UnsaidKeyboard; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		97C146EB1CF9000F007C117D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -168,7 +163,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D0ED46F62E5910DC0094BD53 /* Frameworks */ = {
+		D0AAA7C22E7AF9A300990696 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -220,6 +215,7 @@
 				9740EEB11CF90186004384FC /* Flutter */,
 				97C146F01CF9000F007C117D /* Runner */,
 				D0ED46FA2E5910DC0094BD53 /* UnsaidKeyboard */,
+				D0AAA7C62E7AF9A300990696 /* UnsaidKeyboard */,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
 				A1930E9D68C4608D50A68408 /* Pods */,
@@ -232,7 +228,7 @@
 			children = (
 				97C146EE1CF9000F007C117D /* Runner.app */,
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
-				D0ED46F92E5910DC0094BD53 /* UnsaidKeyboard.appex */,
+				D0AAA7C52E7AF9A300990696 /* UnsaidKeyboard.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -280,13 +276,15 @@
 			isa = PBXGroup;
 			children = (
 				D0ED470A2E5911530094BD53 /* KeyboardController.swift */,
+				D06776992E7AD52800033899 /* LayoutUtilities.swift */,
 				D0ED46FB2E5910DC0094BD53 /* KeyboardViewController.swift */,
+				D0AAA7BF2E7AF74C00990696 /* KBDLogging.swift */,
 				D0ED47122E5911540094BD53 /* 000_UnsaidSharedTypes.swift */,
+				D0F701DE2E6AB78A00C3BE7E /* AppGroups.swift */,
 				E0A123442E5912000094BD53 /* EnhancedCommunicatorService.swift */,
 				D0ED47062E5911520094BD53 /* LightweightSpellChecker.swift */,
 				D0ED470B2E5911530094BD53 /* PersonalityDataBridge.swift */,
 				D0ED47092E5911530094BD53 /* SafeKeyboardDataStorage.swift */,
-				D0F701DB2E6AB78A00C3BE7D /* AppGroups.swift */,
 				D0B001242E6E95A500C8FB5C /* unsaid_logo.png */,
 				D0ED47072E5911520094BD53 /* ToneSuggestionCoordinator.swift */,
 				HD1234567890ABCDEF123457 /* HapticsDriver.swift */,
@@ -333,6 +331,7 @@
 		E0A12366 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				D0AAA7BD2E7AF71200990696 /* KeyButton.swift */,
 				NG1234567890ABCDEF123456 /* NetGate.swift */,
 				TH1234567890ABCDEF123457 /* TimerHub.swift */,
 			);
@@ -378,28 +377,31 @@
 			buildRules = (
 			);
 			dependencies = (
-				D0ED46FF2E5910DC0094BD53 /* PBXTargetDependency */,
+				D0AAA7CB2E7AF9A300990696 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			productName = Runner;
 			productReference = 97C146EE1CF9000F007C117D /* Runner.app */;
 			productType = "com.apple.product-type.application";
 		};
-		D0ED46F82E5910DC0094BD53 /* UnsaidKeyboard */ = {
+		D0AAA7C42E7AF9A300990696 /* UnsaidKeyboard */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D0ED47052E5910DC0094BD53 /* Build configuration list for PBXNativeTarget "UnsaidKeyboard" */;
+			buildConfigurationList = D0AAA7CE2E7AF9A400990696 /* Build configuration list for PBXNativeTarget "UnsaidKeyboard" */;
 			buildPhases = (
-				D0ED46F52E5910DC0094BD53 /* Sources */,
-				D0ED46F62E5910DC0094BD53 /* Frameworks */,
-				D0ED46F72E5910DC0094BD53 /* Resources */,
+				D0AAA7C12E7AF9A300990696 /* Sources */,
+				D0AAA7C22E7AF9A300990696 /* Frameworks */,
+				D0AAA7C32E7AF9A300990696 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
+			fileSystemSynchronizedGroups = (
+				D0AAA7C62E7AF9A300990696 /* UnsaidKeyboard */,
+			);
 			name = UnsaidKeyboard;
 			productName = UnsaidKeyboard;
-			productReference = D0ED46F92E5910DC0094BD53 /* UnsaidKeyboard.appex */;
+			productReference = D0AAA7C52E7AF9A300990696 /* UnsaidKeyboard.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -409,7 +411,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastSwiftUpdateCheck = 1520;
+				LastSwiftUpdateCheck = 1640;
 				LastUpgradeCheck = 1510;
 				ORGANIZATIONNAME = "";
 				TargetAttributes = {
@@ -421,8 +423,8 @@
 						CreatedOnToolsVersion = 7.3.1;
 						LastSwiftMigration = 1100;
 					};
-					D0ED46F82E5910DC0094BD53 = {
-						CreatedOnToolsVersion = 15.2;
+					D0AAA7C42E7AF9A300990696 = {
+						CreatedOnToolsVersion = 16.4;
 					};
 				};
 			};
@@ -441,7 +443,7 @@
 			targets = (
 				97C146ED1CF9000F007C117D /* Runner */,
 				331C8080294A63A400263BE5 /* RunnerTests */,
-				D0ED46F82E5910DC0094BD53 /* UnsaidKeyboard */,
+				D0AAA7C42E7AF9A300990696 /* UnsaidKeyboard */,
 			);
 		};
 /* End PBXProject section */
@@ -465,11 +467,10 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D0ED46F72E5910DC0094BD53 /* Resources */ = {
+		D0AAA7C32E7AF9A300990696 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D0B001252E6E95A500C8FB5C /* unsaid_logo.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -484,9 +485,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -590,7 +595,7 @@
 				E1448293C5E640DE84B5AF44 /* GradientView.swift in Sources */,
 				02A4807D7767461AB72E0C48 /* PersonalityKeys.swift in Sources */,
 				D05BB7C52E59565800E5C7B2 /* PersonalityDataBridge.swift in Sources */,
-				D0F701DC2E6AB78A00C3BE7D /* AppGroups.swift in Sources */,
+				D0F701E02E6AB78A00C3BE80 /* AppGroups.swift in Sources */,
 				F39A47051E1F170300E8B355 /* UnsaidKeyboardHelper.swift in Sources */,
 				F39A47141E1F170400E8B355 /* 000_UnsaidSharedTypes.swift in Sources */,
 				D0B001232E6DE1B400C8FB5C /* SceneDelegate.swift in Sources */,
@@ -603,31 +608,10 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D0ED46F52E5910DC0094BD53 /* Sources */ = {
+		D0AAA7C12E7AF9A300990696 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D0ED47132E5911540094BD53 /* 000_UnsaidSharedTypes.swift in Sources */,
-				E0A123452E5912000094BD53 /* EnhancedCommunicatorService.swift in Sources */,
-				D0ED46FC2E5910DC0094BD53 /* KeyboardViewController.swift in Sources */,
-				D0ED47112E5911530094BD53 /* PersonalityDataBridge.swift in Sources */,
-				4FEAAD4224D44D13BA34AB95 /* PersonalityKeys.swift in Sources */,
-				D0ED470E2E5911530094BD53 /* ToneSuggestionCoordinator.swift in Sources */,
-				HD1234567890ABCDEF123456 /* HapticsDriver.swift in Sources */,
-				NG1234567890ABCDEF123455 /* NetGate.swift in Sources */,
-				TH1234567890ABCDEF123456 /* TimerHub.swift in Sources */,
-				D0ED47102E5911530094BD53 /* KeyboardController.swift in Sources */,
-				D0ED470D2E5911530094BD53 /* LightweightSpellChecker.swift in Sources */,
-				D0ED470F2E5911530094BD53 /* SafeKeyboardDataStorage.swift in Sources */,
-				E0A123472E5912010094BD53 /* KeyButtonFactory.swift in Sources */,
-				E0A123492E5912020094BD53 /* SuggestionChipView.swift in Sources */,
-				E0A12350 /* DeleteManager.swift in Sources */,
-				D0F701DD2E6AB78A00C3BE7D /* AppGroups.swift in Sources */,
-				E0A12352 /* KeyPreviewManager.swift in Sources */,
-				E0A12354 /* SecureFixManager.swift in Sources */,
-				E0A12356 /* SpaceHandler.swift in Sources */,
-				E0A12358 /* SuggestionChipManager.swift in Sources */,
-				E0A12360 /* SpellCheckerIntegration.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -639,10 +623,10 @@
 			target = 97C146ED1CF9000F007C117D /* Runner */;
 			targetProxy = 331C8085294A63A400263BE5 /* PBXContainerItemProxy */;
 		};
-		D0ED46FF2E5910DC0094BD53 /* PBXTargetDependency */ = {
+		D0AAA7CB2E7AF9A300990696 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = D0ED46F82E5910DC0094BD53 /* UnsaidKeyboard */;
-			targetProxy = D0ED46FE2E5910DC0094BD53 /* PBXContainerItemProxy */;
+			target = D0AAA7C42E7AF9A300990696 /* UnsaidKeyboard */;
+			targetProxy = D0AAA7CA2E7AF9A300990696 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -944,14 +928,13 @@
 			};
 			name = Release;
 		};
-		D0ED47022E5910DC0094BD53 /* Debug */ = {
+		D0AAA7CF2E7AF9A400990696 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CODE_SIGN_ENTITLEMENTS = UnsaidKeyboard/UnsaidKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -961,9 +944,9 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UnsaidKeyboard/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = UnsaidKeyboard;
+				INFOPLIST_KEY_CFBundleDisplayName = "Unsaid Keyboard";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -973,7 +956,7 @@
 				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.unsaid.Keyboard;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.unsaid.UnsaidKeyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -984,14 +967,13 @@
 			};
 			name = Debug;
 		};
-		D0ED47032E5910DC0094BD53 /* Release */ = {
+		D0AAA7D02E7AF9A400990696 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CODE_SIGN_ENTITLEMENTS = UnsaidKeyboard/UnsaidKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -1001,9 +983,9 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UnsaidKeyboard/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = UnsaidKeyboard;
+				INFOPLIST_KEY_CFBundleDisplayName = "Unsaid Keyboard";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1012,7 +994,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MARKETING_VERSION = 1.0;
 				MTL_FAST_MATH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.unsaid.Keyboard;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.unsaid.UnsaidKeyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -1021,14 +1003,13 @@
 			};
 			name = Release;
 		};
-		D0ED47042E5910DC0094BD53 /* Profile */ = {
+		D0AAA7D12E7AF9A400990696 /* Profile */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CODE_SIGN_ENTITLEMENTS = UnsaidKeyboard/UnsaidKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -1038,9 +1019,9 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UnsaidKeyboard/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = UnsaidKeyboard;
+				INFOPLIST_KEY_CFBundleDisplayName = "Unsaid Keyboard";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1049,7 +1030,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MARKETING_VERSION = 1.0;
 				MTL_FAST_MATH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.unsaid.Keyboard;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.unsaid.UnsaidKeyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -1091,12 +1072,12 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D0ED47052E5910DC0094BD53 /* Build configuration list for PBXNativeTarget "UnsaidKeyboard" */ = {
+		D0AAA7CE2E7AF9A400990696 /* Build configuration list for PBXNativeTarget "UnsaidKeyboard" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				D0ED47022E5910DC0094BD53 /* Debug */,
-				D0ED47032E5910DC0094BD53 /* Release */,
-				D0ED47042E5910DC0094BD53 /* Profile */,
+				D0AAA7CF2E7AF9A400990696 /* Debug */,
+				D0AAA7D02E7AF9A400990696 /* Release */,
+				D0AAA7D12E7AF9A400990696 /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

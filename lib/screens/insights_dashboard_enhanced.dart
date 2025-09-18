@@ -45,9 +45,6 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
   final _storage = SecureStorageService();
   final _keyboard = KeyboardManager();
   final _personality = PersonalityDataManager.shared;
-  final _scrollController = ScrollController();
-  bool _showTabs = true;
-  double _lastScrollPosition = 0.0;
 
   String _userName = 'Friend';
   double _sensitivity = 0.5;
@@ -71,7 +68,10 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
     super.initState();
     _tabs = TabController(length: 4, vsync: this);
     WidgetsBinding.instance.addObserver(this);
-    _scrollController.addListener(_onScroll);
+
+    // Listen to auth state changes to update user name automatically
+    AuthService.instance.addListener(_onAuthStateChanged);
+
     _bootstrap();
   }
 
@@ -81,6 +81,8 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
       // Refresh lightweight analytics on app focus
       _computeBehaviorScores();
       _loadKeyboardSummary();
+      // Also refresh user name in case user signed in
+      _refreshUserName();
     }
     super.didChangeAppLifecycleState(state);
   }
@@ -107,6 +109,7 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
       if (!mounted) return;
       setState(() {
         if (name != null && name.isNotEmpty) {
+          debugPrint('📦 Loaded user name from storage: $name');
           _userName = name;
         } else {
           // Try Firebase Auth as fallback
@@ -115,10 +118,15 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
             if (currentUser?.displayName != null &&
                 currentUser!.displayName!.isNotEmpty) {
               _userName = currentUser.displayName!;
+              debugPrint('🔥 Loaded user name from Firebase: $_userName');
+              // Save Firebase name to secure storage for future use
+              _storage.storeSecureData('display_name', _userName);
             } else {
+              debugPrint('👤 No user name available, using default: Friend');
               _userName = 'Friend';
             }
-          } catch (_) {
+          } catch (e) {
+            debugPrint('❌ Error loading user from Firebase: $e');
             _userName = 'Friend';
           }
         }
@@ -136,6 +144,27 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
           _userName = 'Friend';
         });
       }
+    }
+  }
+
+  Future<void> _refreshUserName() async {
+    try {
+      final currentUser = AuthService.instance.user;
+      if (currentUser?.displayName != null &&
+          currentUser!.displayName!.isNotEmpty) {
+        final newName = currentUser.displayName!;
+        if (newName != _userName) {
+          debugPrint('🔄 Updating user name from "$_userName" to "$newName"');
+          setState(() {
+            _userName = newName;
+          });
+          // Save to secure storage for persistence
+          await _storage.storeSecureData('display_name', newName);
+          debugPrint('✅ User name updated and saved to storage');
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error refreshing user name: $e');
     }
   }
 
@@ -619,23 +648,14 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    AuthService.instance.removeListener(_onAuthStateChanged);
     _tabs.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    final currentPosition = _scrollController.position.pixels;
-    final delta = currentPosition - _lastScrollPosition;
-
-    // Show tabs when scrolling up, hide when scrolling down
-    if (delta > 10 && _showTabs) {
-      setState(() => _showTabs = false);
-    } else if (delta < -10 && !_showTabs) {
-      setState(() => _showTabs = true);
-    }
-
-    _lastScrollPosition = currentPosition;
+  void _onAuthStateChanged() {
+    // Update user name when auth state changes (e.g., user signs in)
+    _refreshUserName();
   }
 
   @override
@@ -645,132 +665,126 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
 
     return UnsaidGradientScaffold(
       body: SafeArea(
-        top: false, // Let SliverAppBar handle top spacing
-        child: NestedScrollView(
-          controller: _scrollController,
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
-            SliverAppBar(
-              pinned: true, // Keep header static to avoid pixel errors
-              floating: false, // Don't float
-              snap: false,
-              expandedHeight: 140,
-              forceElevated: innerBoxIsScrolled,
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              flexibleSpace: FlexibleSpaceBar(
-                titlePadding: EdgeInsetsDirectional.only(
-                  start: 16,
-                  bottom: 20,
-                  top: MediaQuery.of(context).padding.top + 10,
+        child: Column(
+          children: [
+            // Static header that never moves or changes opacity
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [colorScheme.primary, colorScheme.tertiary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                title: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: MediaQuery.of(context).padding.top + 16,
+                  bottom: 28,
+                ),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: UnsaidPalette.textPrimaryDark
-                              .withOpacity(0.2),
-                          child: Text(
-                            _userName.isNotEmpty
-                                ? _userName[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              color: UnsaidPalette.textPrimaryDark,
-                              fontWeight: FontWeight.bold,
-                            ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 22, // Larger avatar
+                                backgroundColor: UnsaidPalette.textPrimaryDark
+                                    .withOpacity(0.2),
+                                child: Text(
+                                  _userName.isNotEmpty
+                                      ? _userName[0].toUpperCase()
+                                      : '?',
+                                  style: TextStyle(
+                                    color: UnsaidPalette.textPrimaryDark,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18, // Larger avatar text
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16), // More spacing
+                              Expanded(
+                                child: Text(
+                                  'Welcome, $_userName',
+                                  style: TextStyle(
+                                    color: UnsaidPalette.textPrimaryDark,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.3,
+                                    fontSize: 32, // Much bigger font
+                                    height: 1.1, // Tighter line height
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Welcome, $_userName',
-                          style: TextStyle(
-                            color: UnsaidPalette.textPrimaryDark,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.2,
-                            fontSize: 22,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    _StreakChip(streakDays: _computeStreakDays()),
-                  ],
-                ),
-                background: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [colorScheme.primary, colorScheme.tertiary],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Align(
-                    alignment: Alignment.bottomRight,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: IconButton(
-                        icon: Icon(
-                          Icons.refresh,
-                          color: UnsaidPalette.textPrimaryDark,
-                        ),
-                        onPressed: _onRefreshAll,
-                        tooltip: 'Refresh all data',
+                          const SizedBox(height: 12), // More spacing
+                          _StreakChip(streakDays: _computeStreakDays()),
+                        ],
                       ),
                     ),
-                  ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.refresh,
+                        color: UnsaidPalette.textPrimaryDark,
+                        size: 24, // Standard icon size
+                      ),
+                      onPressed: _onRefreshAll,
+                      tooltip: 'Refresh all data',
+                    ),
+                  ],
                 ),
               ),
             ),
+            // Static tab bar
+            Container(
+              height: kTextTabBarHeight,
+              color: colorScheme.surface,
+              child: TabBar(
+                controller: _tabs,
+                labelColor: Colors.black,
+                unselectedLabelColor: Colors.black.withOpacity(0.7),
+                indicatorColor: UnsaidPalette.blush,
+                onTap: (_) => HapticFeedback.lightImpact(),
+                tabs: const [
+                  Tab(text: 'Secure'),
+                  Tab(text: 'Analytics'),
+                  Tab(text: 'Therapy'),
+                  Tab(text: 'Settings'),
+                ],
+              ),
+            ),
+            // Scrollable content area
+            Expanded(
+              child: TabBarView(
+                controller: _tabs,
+                children: [
+                  _secureTab(),
+                  _analyticsTab(),
+                  _therapyTab(),
+                  SettingsScreenProfessional(
+                    sensitivity: _sensitivity,
+                    onSensitivityChanged: (v) {
+                      setState(() => _sensitivity = v);
+                      _storage.storeSecureData(
+                        'analysis_sensitivity',
+                        v.toString(),
+                      );
+                    },
+                    tone: _tonePref,
+                    onToneChanged: (t) {
+                      setState(() => _tonePref = t);
+                      _storage.storeSecureData('tone_preference', t);
+                    },
+                  ),
+                ],
+              ),
+            ),
           ],
-          body: Column(
-            children: [
-              // Static tab bar instead of animated one
-              Container(
-                height: kTextTabBarHeight,
-                color: colorScheme.surface,
-                child: TabBar(
-                  controller: _tabs,
-                  labelColor: Colors.black,
-                  unselectedLabelColor: Colors.black.withOpacity(0.7),
-                  indicatorColor: UnsaidPalette.blush,
-                  onTap: (_) => HapticFeedback.lightImpact(),
-                  tabs: const [
-                    Tab(text: 'Secure'),
-                    Tab(text: 'Analytics'),
-                    Tab(text: 'Therapy'),
-                    Tab(text: 'Settings'),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabs,
-                  children: [
-                    _secureTab(),
-                    _analyticsTab(),
-                    _therapyTab(),
-                    SettingsScreenProfessional(
-                      sensitivity: _sensitivity,
-                      onSensitivityChanged: (v) {
-                        setState(() => _sensitivity = v);
-                        _storage.storeSecureData(
-                          'analysis_sensitivity',
-                          v.toString(),
-                        );
-                      },
-                      tone: _tonePref,
-                      onToneChanged: (t) {
-                        setState(() => _tonePref = t);
-                        _storage.storeSecureData('tone_preference', t);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

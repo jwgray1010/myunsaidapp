@@ -72,19 +72,52 @@ final class UnsaidKeyboardHelper {
     
     // MARK: - Settings Navigation
     
-    /// Opens app Settings. Apple does not provide a public deep-link directly to the Keyboard pane.
+    /// Opens keyboard settings. Tries specific URLs first, then falls back to app settings.
     @MainActor
     static func openAppSettings(completion: ((Bool) -> Void)? = nil) {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else {
-            completion?(false); return
+        // Try multiple URL schemes to get as close as possible to keyboard settings
+        let keyboardUrls = [
+            "App-prefs:General&path=Keyboard", // iOS 10+
+            "prefs:General&path=Keyboard",     // iOS 9-10
+            "App-prefs:General",               // General settings
+            UIApplication.openSettingsURLString // App-specific settings fallback
+        ]
+        
+        func tryNextUrl(index: Int) {
+            guard index < keyboardUrls.count else {
+                completion?(false)
+                return
+            }
+            
+            guard let url = URL(string: keyboardUrls[index]) else {
+                tryNextUrl(index: index + 1)
+                return
+            }
+            
+            if UIApplication.shared.canOpenURL(url) {
+                UIApplication.shared.open(url, options: [:]) { success in
+                    if success {
+                        completion?(true)
+                    } else {
+                        tryNextUrl(index: index + 1)
+                    }
+                }
+            } else {
+                tryNextUrl(index: index + 1)
+            }
         }
-        UIApplication.shared.open(url, options: [:], completionHandler: completion)
+        
+        tryNextUrl(index: 0)
     }
     
     /// For consistency; currently just calls `openAppSettings()`.
     @MainActor
     static func openKeyboardSettings(completion: ((Bool) -> Void)? = nil) {
-        openAppSettings(completion: completion)
+        print("UnsaidKeyboardHelper: openKeyboardSettings() called")
+        openAppSettings { success in
+            print("UnsaidKeyboardHelper: openAppSettings completed with success: \(success)")
+            completion?(success)
+        }
     }
     
     // MARK: - UX Helpers

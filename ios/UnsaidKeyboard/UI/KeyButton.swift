@@ -14,24 +14,24 @@ final class KeyButton: UIButton {
     
     override var intrinsicContentSize: CGSize {
         let original = super.intrinsicContentSize
-        // Ensure minimum 44×44pt for iOS accessibility compliance
+        // Allow narrow visual keys; keep a small floor to avoid zero-width
+        // Guarantee 44pt tap target through hit-testing instead of visual width
         return CGSize(
-            width: max(44, original.width),
-            height: max(44, original.height)
+            width: max(KeyButtonFactory.minKeyWidth, original.width),  // 26pt, not 44
+            height: max(KeyButtonFactory.touchTargetHeight, original.height) // 44–46
         )
     }
     
-    // MARK: - Precision Hit Testing (Performance Optimized)
+    // MARK: - Precision Hit Testing (44×44 Tap Target Guarantee)
     
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        // First check: Is this within our actual bounds?
-        guard bounds.contains(point) else { 
-            // Second check: Allow minimal edge extension for thumb-friendly taps
-            let edgeExtension: CGFloat = 2.0  // Reduced from 8pt to prevent overlaps
-            let expandedBounds = bounds.insetBy(dx: -edgeExtension, dy: -1)
-            return expandedBounds.contains(point)
-        }
-        return true  // Inside our real bounds = always accept
+        // Guarantee 44×44 tap target by expanding touch area instead of visual width
+        let minW: CGFloat = 44
+        let minH: CGFloat = KeyButtonFactory.touchTargetHeight
+        let dx = max(0, (minW - bounds.width) / 2)
+        let dy = max(0, (minH - bounds.height) / 2)
+        let expanded = bounds.insetBy(dx: -dx, dy: -dy)
+        return expanded.contains(point)
     }
     
     // MARK: - Performance Optimization
