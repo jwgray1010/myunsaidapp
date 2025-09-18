@@ -6,7 +6,7 @@ import { suggestionRequestSchema } from '../_lib/schemas/suggestionRequest';
 import { normalizeSuggestionResponse } from '../_lib/schemas/normalize';
 import { suggestionsService } from '../_lib/services/suggestions';
 import { dataLoader } from '../_lib/services/dataLoader';
-import { MLAdvancedToneAnalyzer, mapToneToBuckets } from '../_lib/services/toneAnalysis';
+import { mapToneToBuckets, toneAnalysisService } from '../_lib/services/toneAnalysis';
 import { adjustToneByAttachment, applyThresholdShift } from '../_lib/services/utils/attachmentToneAdjust';
 import { CommunicatorProfile } from '../_lib/services/communicatorProfile';
 import { FeatureSpotterStore } from '../_lib/services/featureSpotter.store';
@@ -57,15 +57,53 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     
     // Priority 1: Full tone analysis provided (best option - no duplicate computation)
     if (data.toneAnalysis) {
-      fullToneAnalysis = data.toneAnalysis;
-      toneResult = {
-        classification: data.toneAnalysis.tone,
-        confidence: data.toneAnalysis.confidence
+      fullToneAnalysis = {
+        // Core tone fields that suggestions service expects
+        tone: data.toneAnalysis.tone || data.toneAnalysis.classification || 'neutral',
+        confidence: data.toneAnalysis.confidence || 0.5,
+        
+        // UI consistency fields
+        ui_tone: data.toneAnalysis.ui_tone || 'clear',
+        ui_distribution: data.toneAnalysis.ui_distribution || {},
+        
+        // Rich emotional and linguistic data for optimal therapy advice
+        emotions: data.toneAnalysis.emotions || {},
+        sentiment_score: data.toneAnalysis.sentiment_score,
+        linguistic_features: data.toneAnalysis.linguistic_features || {},
+        context_analysis: data.toneAnalysis.context_analysis || {},
+        attachmentInsights: data.toneAnalysis.attachment_insights || [],
+        
+        // Metadata for comprehensive analysis
+        metadata: data.toneAnalysis.metadata || { analysis_depth: data.toneAnalysis.intensity || 0.5 },
+        
+        // Additional fields for completeness
+        intensity: data.toneAnalysis.intensity,
+        evidence: data.toneAnalysis.evidence,
+        suggestions: data.toneAnalysis.suggestions
       };
-      logger.info('Using provided full tone analysis', { 
+      
+      toneResult = {
+        classification: data.toneAnalysis.classification || data.toneAnalysis.tone || 'neutral',
+        confidence: data.toneAnalysis.confidence || 0.5
+      };
+      
+      logger.info('Using provided COMPLETE tone analysis from coordinator', { 
         tone: toneResult.classification, 
-        ui_tone: data.toneAnalysis.ui_tone,
-        confidence: toneResult.confidence 
+        ui_tone: fullToneAnalysis.ui_tone,
+        confidence: toneResult.confidence,
+        emotions: Object.keys(fullToneAnalysis.emotions || {}).length,
+        hasLinguisticFeatures: !!fullToneAnalysis.linguistic_features,
+        hasContextAnalysis: !!fullToneAnalysis.context_analysis,
+        hasAttachmentInsights: Array.isArray(fullToneAnalysis.attachmentInsights) && fullToneAnalysis.attachmentInsights.length > 0,
+        source: 'coordinator_cache',
+        // 🎯 ENHANCED: Log what complete data we received for therapy advice
+        dataCompleteness: {
+          emotions: Object.keys(fullToneAnalysis.emotions || {}).join(','),
+          sentimentScore: fullToneAnalysis.sentiment_score,
+          linguisticFeatures: fullToneAnalysis.linguistic_features ? 'present' : 'missing',
+          contextAnalysis: fullToneAnalysis.context_analysis ? 'present' : 'missing',
+          attachmentInsights: fullToneAnalysis.attachmentInsights?.length || 0
+        }
       });
     }
     // Priority 2: Simple tone override (for testing/manual control)
@@ -78,30 +116,37 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     } 
     // Priority 3: Run tone analysis (fallback when no tone data provided)
     else {
-      // Run tone analysis if no override provided
+      // Run advanced tone analysis directly using the service for full meta-classifier benefits
       try {
-        const toneAnalyzer = new MLAdvancedToneAnalyzer({ 
-          enableSmoothing: true, 
-          enableSafetyChecks: true 
+        const result = await toneAnalysisService.analyzeAdvancedTone(data.text, {
+          context: data.context || 'general',
+          attachmentStyle: attachmentEstimate.primary || 'secure',
+          includeAttachmentInsights: true,
+          deepAnalysis: true,
+          isNewUser
         });
         
-        const result = await toneAnalyzer.analyzeTone(
-          data.text,
-          attachmentEstimate.primary || 'secure',
-          data.context || 'general', // Context from top-level field
-          'general'
-        );
+        // Map advanced result to simple format for backward compatibility
+        toneResult = {
+          classification: result.primary_tone,
+          confidence: result.confidence
+        };
         
-        if (result?.success) {
-          toneResult = {
-            classification: result.tone.classification,
-            confidence: result.tone.confidence
-          };
-          logger.info('Tone analysis completed', toneResult);
-        } else {
-          logger.warn('Tone analysis failed, using fallback');
-          toneResult = { classification: 'neutral', confidence: 0.5 };
-        }
+        // Store full analysis for suggestions service
+        fullToneAnalysis = {
+          tone: result.primary_tone,
+          confidence: result.confidence,
+          ui_tone: 'clear', // Will be set below based on buckets
+          emotions: result.emotions,
+          analysis: result,
+          metaClassifier: result.metaClassifier
+        };
+        
+        logger.info('Advanced tone analysis completed', { 
+          primaryTone: result.primary_tone,
+          confidence: result.confidence,
+          metaClassifier: result.metaClassifier 
+        });
       } catch (toneError) {
         logger.error('Tone analysis error:', toneError);
         toneResult = { classification: 'neutral', confidence: 0.5 };

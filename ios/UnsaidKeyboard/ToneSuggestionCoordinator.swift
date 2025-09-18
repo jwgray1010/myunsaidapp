@@ -266,6 +266,10 @@ final class ToneSuggestionCoordinator {
     private let newSystemDebounceInterval: TimeInterval = 0.2
     var onToneUpdate: ((Bucket, Bool) -> Void)?
     
+    // Store full tone analysis for reuse in suggestions
+    private var lastToneAnalysis: [String: Any]?
+    private var lastAnalyzedText: String = ""
+    
     // Suggestions helpers
     private var suggestionSnapshot: String?
     private let allowedSuggestionFeatures: Set<String> = ["advice", "quick_fixes", "evidence", "emotional_support", "context_analysis"]
@@ -434,21 +438,6 @@ final class ToneSuggestionCoordinator {
         workQueue.async(execute: work)
     }
     
-    func requestBestSuggestion(forTone tone: String) {
-        pendingWorkItem?.cancel()
-        let snapshot = currentText
-        let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            guard !snapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                DispatchQueue.main.async { self.delegate?.didUpdateSuggestions([]) }
-                return
-            }
-            self.generateBestSuggestionForTone(tone, from: snapshot)
-        }
-        pendingWorkItem = work
-        workQueue.async(execute: work)
-    }
-    
     func fetchSuggestions(for text: String, completion: @escaping ([String]?) -> Void) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             completion(nil); return
@@ -477,6 +466,22 @@ final class ToneSuggestionCoordinator {
                 "timestamp": isoTimestamp()
             ]
         ]
+        
+        // 🎯 REUSE STORED ANALYSIS - If we have recent analysis for similar text, use it!
+        if let storedAnalysis = lastToneAnalysis,
+           let storedText = storedAnalysis["text"] as? String,
+           let toneData = storedAnalysis["toneAnalysis"] as? [String: Any],
+           textToAnalyze.hasSuffix(storedText) || storedText.hasSuffix(textToAnalyze) || 
+           abs(textToAnalyze.count - storedText.count) < 50 {
+            
+            // Use stored analysis instead of letting API re-analyze
+            context["toneAnalysis"] = toneData
+            
+            #if DEBUG
+            throttledLog("🎯 REUSING stored tone analysis - avoiding redundant API call", category: "suggestions")
+            #endif
+        }
+        
         context.merge(personalityPayload()) { _, new in new }
         
         callSuggestionsAPI(context: context, usingSnapshot: textToAnalyze) { [weak self] suggestion in
@@ -537,44 +542,6 @@ final class ToneSuggestionCoordinator {
                 if let s = suggestion, !s.isEmpty {
                     self.suggestions = [s]
                     self.delegate?.didUpdateSuggestions(self.suggestions)
-                    self.delegate?.didUpdateSecureFixButtonState()
-                    self.storeSuggestionGenerated(suggestion: s)
-                } else {
-                    self.suggestions = []
-                    self.delegate?.didUpdateSuggestions([])
-                    self.delegate?.didUpdateSecureFixButtonState()
-                }
-            }
-        }
-    }
-    
-    private func generateBestSuggestionForTone(_ tone: String, from snapshot: String = "") {
-        var textToAnalyze = snapshot.isEmpty ? currentText : snapshot
-        if textToAnalyze.count > 1000 { textToAnalyze = String(textToAnalyze.suffix(1000)) }
-        
-        var context: [String: Any] = [
-            "text": textToAnalyze,
-            "userId": getUserId(),
-            "userEmail": getUserEmail() ?? NSNull(),
-            "toneOverride": tone,
-            "features": ["advice"],
-            "meta": [
-                "source": "keyboard_tone_specific",
-                "requested_tone": tone,
-                "context": "general",
-                "timestamp": isoTimestamp(),
-                "emotionalIndicators": getEmotionalIndicatorsForTone(tone),
-                "communicationStyle": getCommunicationStyleForTone(tone)
-            ]
-        ]
-        context.merge(personalityPayload()) { _, new in new }
-        
-        callSuggestionsAPI(context: context, usingSnapshot: textToAnalyze) { [weak self] suggestion in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                if let s = suggestion, !s.isEmpty {
-                    self.suggestions = [s]
-                    self.delegate?.didUpdateSuggestions([s])
                     self.delegate?.didUpdateSecureFixButtonState()
                     self.storeSuggestionGenerated(suggestion: s)
                 } else {
@@ -1019,22 +986,6 @@ final class ToneSuggestionCoordinator {
         for key in keys { if let v = dict[key] as? String, !v.isEmpty { return v } }
         return fallback
     }
-    private func getEmotionalIndicatorsForTone(_ tone: String) -> [String] {
-        switch tone {
-        case "alert": return ["anger", "frustration", "urgency"]
-        case "caution": return ["concern", "worry", "uncertainty"]
-        case "clear": return ["confidence", "clarity", "positivity"]
-        default: return []
-        }
-    }
-    private func getCommunicationStyleForTone(_ tone: String) -> String {
-        switch tone {
-        case "alert": return "direct"
-        case "caution": return "tentative"
-        case "clear": return "confident"
-        default: return "neutral"
-        }
-    }
     
     // MARK: - Text & History
     private func updateCurrentText(_ text: String) {
@@ -1312,6 +1263,44 @@ extension ToneSuggestionCoordinator {
             }
             
             await MainActor.run { maybeUpdateIndicator(to: finalTone) }
+            
+            // 🎯 STORE COMPLETE ANALYSIS - Store the full analysis for optimal therapy advice
+            lastAnalyzedText = trimmed
+            // Store complete analysis payload that suggestions API needs for best therapy advice
+            lastToneAnalysis = [
+                "text": trimmed,
+                "toneAnalysis": [
+                    // Core tone data
+                    "tone": toneOut.primary_tone ?? "neutral",
+                    "classification": toneOut.primary_tone ?? "neutral",
+                    "confidence": toneOut.confidence ?? 0.5,
+                    
+                    // UI data for consistency
+                    "ui_tone": toneOut.ui_tone ?? "clear",
+                    "ui_distribution": toneOut.buckets,
+                    
+                    // Rich emotional and linguistic data for therapy advice
+                    "emotions": toneOut.emotions ?? [:],
+                    "intensity": toneOut.intensity ?? 0.5,
+                    
+                    // Advanced analysis data from ToneAnalysis struct
+                    "sentiment_score": toneOut.analysis?.sentiment_score ?? 0.5,
+                    "linguistic_features": (toneOut.analysis?.linguistic_features as? AnyCodable)?.value ?? [:],
+                    "context_analysis": (toneOut.analysis?.context_analysis as? AnyCodable)?.value ?? [:],
+                    "attachment_insights": (toneOut.analysis?.attachment_insights as? AnyCodable)?.value ?? [],
+                    
+                    // Metadata for comprehensive analysis
+                    "metadata": [
+                        "analysis_depth": toneOut.intensity ?? 0.5,
+                        "model_version": "v1.0.0-advanced",
+                        "feature_noticings": toneOut.metadata?.feature_noticings?.map { ["pattern": $0.pattern, "message": $0.message] } ?? []
+                    ]
+                ]
+            ]
+            
+            #if DEBUG
+            coordLog.info("🎯 Stored COMPLETE tone analysis for optimal therapy advice - text='\(trimmed.prefix(30))' primaryTone=\(toneOut.primary_tone ?? "unknown") emotions=\(toneOut.emotions?.keys.joined(separator: ",") ?? "none")")
+            #endif
         } catch {
             #if DEBUG
             coordLog.info("🎯 Analysis failed, retaining current tone: \(error.localizedDescription)")
@@ -1408,6 +1397,13 @@ extension ToneSuggestionCoordinator {
         let ui_tone: String?  // Trust the API's tone decision
         let metadata: ToneMetadata?
         
+        // Store full analysis for suggestions reuse
+        let analysis: ToneAnalysis?
+        let primary_tone: String?
+        let emotions: [String: Double]?
+        let intensity: Double?
+        let confidence: Double?
+        
         // Computed property to convert API ui_tone to our Bucket enum
         var apiTone: Bucket? {
             guard let ui_tone = ui_tone else { return nil }
@@ -1419,6 +1415,42 @@ extension ToneSuggestionCoordinator {
             default: return nil
             }
         }
+    }
+    
+    private struct ToneAnalysis: Decodable {
+        let primary_tone: String
+        let emotions: [String: Double]?
+        let intensity: Double?
+        let sentiment_score: Double?
+        // Using AnyCodable for complex nested objects that we don't need to parse
+        let linguistic_features: AnyCodable?
+        let context_analysis: AnyCodable?
+        let attachment_insights: AnyCodable?
+    }
+    
+    // Helper for decoding arbitrary JSON values
+    private struct AnyCodable: Decodable {
+        let value: Any
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let intVal = try? container.decode(Int.self) {
+                value = intVal
+            } else if let doubleVal = try? container.decode(Double.self) {
+                value = doubleVal
+            } else if let stringVal = try? container.decode(String.self) {
+                value = stringVal
+            } else if let boolVal = try? container.decode(Bool.self) {
+                value = boolVal
+            } else if let arrayVal = try? container.decode([AnyCodable].self) {
+                value = arrayVal.map { $0.value }
+            } else if let dictVal = try? container.decode([String: AnyCodable].self) {
+                value = dictVal.mapValues { $0.value }
+            } else {
+                value = NSNull()
+            }
+        }
+    }
     }
     
     private struct ToneMetadata: Decodable {
@@ -1463,16 +1495,25 @@ extension ToneSuggestionCoordinator {
             let ui_distribution: [String: Double]?
             let buckets: [String: Double]?
             let ui_tone: String?
-            let metadata: ToneMetadata? 
+            let metadata: ToneMetadata?
+            // Include the essential tone analysis fields for fallback
+            let primary_tone: String?
+            let confidence: Double?
+            let emotions: [String: Double]?
+            let intensity: Double?
         }
         let ui = try JSONDecoder().decode(UI.self, from: data)
         return ToneOut(
             buckets: ui.ui_distribution ?? ui.buckets ?? [:], 
             ui_tone: ui.ui_tone,
-            metadata: ui.metadata
+            metadata: ui.metadata,
+            analysis: nil, // Can't reconstruct the full analysis object
+            primary_tone: ui.primary_tone,
+            emotions: ui.emotions,
+            intensity: ui.intensity,
+            confidence: ui.confidence
         )
     }
-}
 
 // MARK: - Helpers
 private extension String { var nilIfEmpty: String? { isEmpty ? nil : self } }
