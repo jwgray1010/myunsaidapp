@@ -1,10 +1,11 @@
 // api/_lib/schemas/suggestionRequest.ts
 import { z } from 'zod';
+import { toneResponseSchema } from './toneRequest';
 
 /**
  * Enhanced SuggestionRequest schema matching the JSON schema structure
  * Schema for generating therapy advice and communication guidance
- * Version: 1.0.0 - Last Updated: 2025-08-28
+ * Version: 1.0.0 - Last Updated: 2025-09-17
  */
 
 // Tone override enum (matching JSON schema)
@@ -39,6 +40,7 @@ export const suggestionRequestSchema = z.object({
     .describe('The message to analyze and provide therapy advice for'),
   context: z.string().optional().describe('Optional hint about conversation context - system auto-detects from text if not provided'),
   toneOverride: toneOverrideSchema.optional().describe('Optional override for detected tone. Useful for testing or manual control'),
+  toneAnalysis: toneResponseSchema.optional().describe('Optional pre-computed tone analysis result - when provided, eliminates duplicate tone analysis computation'),
   attachmentStyle: attachmentStyleSchema.optional().describe('Optional user attachment-style override, if already known'),
   features: featuresSchema.optional().describe('Feature flags to include in the response. Common values: advice, quick_fixes, evidence, emotional_support'),
   meta: metaSchema.optional().describe('Optional metadata for tracing and UX decisions'),

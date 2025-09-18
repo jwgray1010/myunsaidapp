@@ -33,6 +33,7 @@ import type {
   EvaluationTone,
   UserPreference
 } from '../types/dataTypes';
+import type { ToneResponse } from '../schemas/toneRequest';
 import { adjustToneByAttachment } from './utils/attachmentToneAdjust';
 import { matchSemanticBackbone, applySemanticBias, type SemanticBackboneResult } from './utils/semanticBackbone';
 
@@ -633,7 +634,8 @@ class AnalysisOrchestrator {
     text: string,
     providedTone?: { classification: string; confidence: number } | null,
     attachmentStyle?: string,
-    contextHint?: string
+    contextHint?: string,
+    fullToneAnalysis?: ToneResponse | null
   ) {
     // Use spaCy bridge for processing
     const spacyResult = await processWithSpacy(text);
@@ -651,8 +653,38 @@ class AnalysisOrchestrator {
 
     let toneResult = providedTone || null;
     let mlGenerated = false;
+    let richToneData: any = null;
 
-    if (!toneResult) {
+    // Priority: fullToneAnalysis > providedTone > run analysis
+    if (fullToneAnalysis) {
+      // Extract tone result from full analysis
+      toneResult = {
+        classification: fullToneAnalysis.tone,
+        confidence: fullToneAnalysis.confidence
+      };
+      richToneData = {
+        emotions: fullToneAnalysis.emotions,
+        intensity: fullToneAnalysis.metadata?.analysis_depth ? fullToneAnalysis.metadata.analysis_depth : intensityScore,
+        sentiment_score: fullToneAnalysis.confidence, // Approximate mapping
+        linguistic_features: {
+          formality_level: 0.5, // Default values - could be extracted if available
+          emotional_complexity: Object.keys(fullToneAnalysis.emotions?.emotions || {}).length > 0 ? 0.7 : 0.3,
+          assertiveness: (fullToneAnalysis.emotions?.emotions?.anger || fullToneAnalysis.emotions?.emotions?.confident || 0) * 0.8,
+          empathy_indicators: fullToneAnalysis.attachmentInsights || [],
+          potential_misunderstandings: []
+        },
+        context_analysis: {
+          appropriateness_score: fullToneAnalysis.confidence,
+          relationship_impact: fullToneAnalysis.ui_tone === 'alert' ? 'negative' : 
+                              fullToneAnalysis.ui_tone === 'caution' ? 'neutral' : 'positive',
+          suggested_adjustments: fullToneAnalysis.suggestions?.map(s => s.text) || []
+        },
+        ui_tone: fullToneAnalysis.ui_tone,
+        ui_distribution: fullToneAnalysis.ui_distribution,
+        evidence: fullToneAnalysis.evidence
+      };
+      logger.info('Using full tone analysis', { tone: toneResult.classification, ui_tone: fullToneAnalysis.ui_tone });
+    } else if (!toneResult) {
       const ml = await this.mlAnalyzer.analyzeTone(
         text,
         attachmentStyle || 'secure',
@@ -689,7 +721,8 @@ class AnalysisOrchestrator {
       },
       features: fullAnalysis.features || {},
       mlGenerated,
-      semanticBackbone: semanticResult
+      semanticBackbone: semanticResult,
+      richToneData // ← Add the rich tone analysis data
     };
   }
 }
@@ -1291,6 +1324,7 @@ class SuggestionsService {
       userId?: string;
       userEmail?: string;
       toneAnalysisResult?: { classification: string; confidence: number } | null;
+      fullToneAnalysis?: ToneResponse | null;
       isNewUser?: boolean;
     } = {}
   ): Promise<SuggestionAnalysis> {
@@ -1300,7 +1334,8 @@ class SuggestionsService {
       attachmentStyle = 'secure',
       userId = 'anonymous',
       userEmail,
-      toneAnalysisResult
+      toneAnalysisResult,
+      fullToneAnalysis
     } = options;
 
     await this.ensureDataLoaded();
@@ -1324,7 +1359,8 @@ class SuggestionsService {
         text,
         toneAnalysisResult ?? null,
         attachmentStyle,
-        context
+        context,
+        fullToneAnalysis ?? null
       );
       
       // Cache the analysis result

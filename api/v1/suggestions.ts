@@ -46,19 +46,38 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     const attachmentEstimate = profile.getAttachmentEstimate();
     const isNewUser = !attachmentEstimate.primary || attachmentEstimate.confidence < 0.3;
     
-    // FIRST: Get tone analysis - either from override or by running analysis
-    logger.info('Determining tone for suggestions...');
+    // FIRST: Get tone analysis - priority: toneAnalysis > toneOverride > run analysis
+    logger.info('Determining tone for suggestions...', { 
+      hasToneAnalysis: !!data.toneAnalysis, 
+      hasToneOverride: !!data.toneOverride 
+    });
     
     let toneResult: { classification: string; confidence: number } | null = null;
+    let fullToneAnalysis: any = null;
     
-    // Check if tone is overridden in the request (matching suggestionRequestSchema)
-    if (data.toneOverride) {
+    // Priority 1: Full tone analysis provided (best option - no duplicate computation)
+    if (data.toneAnalysis) {
+      fullToneAnalysis = data.toneAnalysis;
+      toneResult = {
+        classification: data.toneAnalysis.tone,
+        confidence: data.toneAnalysis.confidence
+      };
+      logger.info('Using provided full tone analysis', { 
+        tone: toneResult.classification, 
+        ui_tone: data.toneAnalysis.ui_tone,
+        confidence: toneResult.confidence 
+      });
+    }
+    // Priority 2: Simple tone override (for testing/manual control)
+    else if (data.toneOverride) {
       toneResult = {
         classification: data.toneOverride, // This will be 'alert', 'caution', or 'clear'
         confidence: 0.9 // High confidence for manual override
       };
       logger.info('Using tone override from request', toneResult);
-    } else {
+    } 
+    // Priority 3: Run tone analysis (fallback when no tone data provided)
+    else {
       // Run tone analysis if no override provided
       try {
         const toneAnalyzer = new MLAdvancedToneAnalyzer({ 
@@ -126,7 +145,8 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
           relationshipStage: data.meta?.relationshipStage,
           conflictLevel: data.meta?.conflictLevel || 'low',
           isNewUser,
-          toneAnalysisResult: detectedToneResult
+          toneAnalysisResult: detectedToneResult,
+          fullToneAnalysis: fullToneAnalysis
         }
       );
       logger.info('suggestionsService.generateAdvancedSuggestions completed successfully');
