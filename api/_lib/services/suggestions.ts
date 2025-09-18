@@ -36,6 +36,38 @@ import type {
 import { adjustToneByAttachment } from './utils/attachmentToneAdjust';
 import { matchSemanticBackbone, applySemanticBias, type SemanticBackboneResult } from './utils/semanticBackbone';
 
+// ---- weight-mod fallback resolver (exact → alias → family → general → code_default)
+const DISABLE_WEIGHT_FALLBACKS = process.env.DISABLE_WEIGHT_FALLBACKS === '1';
+const WEIGHTS_FALLBACK_EVENT_SUG = 'weights.fallback.suggestions';
+
+function getWeightMods() { return dataLoader.get('weightModifiers'); }
+
+type ResolvedCtx = { key: string; reason: string };
+function resolveWeightContextKey(rawCtx: string): ResolvedCtx {
+  const wm = getWeightMods();
+  const ctx = (rawCtx || 'general').toLowerCase().trim();
+
+  if (!wm || DISABLE_WEIGHT_FALLBACKS) {
+    return { key: ctx, reason: wm ? 'nofallbacks_env' : 'nofallbacks_missing_config' };
+  }
+
+  const byContext = wm.adviceRankOverrides?.byContext || wm.suggestionsByContext || wm.byContext || {};
+  const aliasMap  = wm.aliasMap  || {};
+  const familyMap = wm.familyMap || {};
+
+  if (byContext[ctx]) return { key: ctx, reason: 'exact' };
+
+  const aliased = aliasMap[ctx];
+  if (aliased && byContext[aliased]) return { key: aliased, reason: `alias:${ctx}` };
+
+  const fam = familyMap[ctx];
+  if (fam && byContext[fam]) return { key: fam, reason: `family:${ctx}` };
+
+  if (byContext.general) return { key: 'general', reason: `fallback:general(${ctx})` };
+
+  return { key: '__code_default__', reason: `fallback:code_default(${ctx})` };
+}
+
 // ============================
 // Interfaces (keep identical to your original)
 // ============================
@@ -666,26 +698,51 @@ class AnalysisOrchestrator {
 // Advice Engine (JSON-weighted; no fallbacks)
 // ============================
 class AdviceEngine {
-  private baseWeights = {
-    baseConfidence: 1.0,
-    toneMatch: 2.0,
-    contextMatch: 1.5,
-    attachmentMatch: 1.2,
-    intensityBoost: 0.6,
-    negationPenalty: -0.8,
-    sarcasmPenalty: -1.0,
-    userPrefBoost: 0.5,
-    severityFit: 1.2,
-    phraseEdgeBoost: 0.4,
-    premiumBoost: 0.2,
-    secondPersonBoost: 0.8
-  };
-
   constructor(private loader: any) {}
 
   private currentWeights(contextLabel: string) {
-    const mods = this.loader.get('weightModifiers');
-    return { ...this.baseWeights, ...(mods?.byContext?.[contextLabel] ?? {}) };
+    // base scoring weights for ranking suggestions (unchanged defaults)
+    const base = {
+      baseConfidence: 1.0,
+      toneMatch: 2.0,
+      contextMatch: 1.5,
+      attachmentMatch: 1.2,
+      intensityBoost: 0.6,
+      negationPenalty: -0.8,
+      sarcasmPenalty: -1.0,
+      userPrefBoost: 0.5,
+      severityFit: 1.2,
+      phraseEdgeBoost: 0.4,
+      premiumBoost: 0.2,
+      secondPersonBoost: 0.8
+    };
+
+    const wm = getWeightMods();
+    if (!wm) return base;
+
+    // prefer a dedicated section if present; otherwise fall back to legacy byContext
+    const bag = wm.adviceRankOverrides?.byContext || wm.suggestionsByContext || wm.byContext;
+    if (!bag) return base;
+
+    const { key, reason } = resolveWeightContextKey(contextLabel);
+    const deltas = key !== '__code_default__' ? bag[key] : null;
+
+    if (deltas && typeof deltas === 'object') {
+      // additive deltas with gentle bounds to prevent runaway values
+      const min = (wm.bounds?.minSuggestionWeight ?? -2.0);
+      const max = (wm.bounds?.maxSuggestionWeight ?? 3.0);
+      for (const k of Object.keys(base)) {
+        const v = (deltas as any)[k];
+        if (typeof v === 'number') {
+          (base as any)[k] = Math.max(min, Math.min(max, (base as any)[k] + v));
+        }
+      }
+    }
+
+    // optional telemetry for observability
+    try { logger.info(WEIGHTS_FALLBACK_EVENT_SUG, { ctx_in: contextLabel, ctx_used: key, reason }); } catch {}
+
+    return base;
   }
 
   // Probabilistic bucket mapping from JSON with semantic backbone integration

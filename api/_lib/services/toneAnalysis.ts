@@ -29,6 +29,15 @@ const CLEAR_OVERSHADOW = ENGINE?.bucketGuards?.clear?.overshadowedBy || { bucket
 const CLEAR_DAMPEN_ESCALATORY = ENGINE?.bucketGuards?.clear?.dampenIfEscalatoryContextsActive ?? 0.35;
 const PREFER_CAUTION_IF_BOTH = ENGINE?.bucketGuards?.caution?.preferIfClearAndAlertBoth ?? 0.18;
 
+// Fallback control (env kill switch)
+const DISABLE_WEIGHT_FALLBACKS = process.env.DISABLE_WEIGHT_FALLBACKS === '1';
+
+// Optional: log each fallback hit
+const WEIGHTS_FALLBACK_EVENT = 'weights.fallback';
+
+// Pull maps from JSON at runtime
+function getWeightMods() { return dataLoader.get('weightModifiers'); }
+
 // -----------------------------
 // Semantic Backbone Configuration
 // -----------------------------
@@ -209,6 +218,120 @@ export interface ToneAnalysisOptions {
 // Utils
 // -----------------------------
 const clamp01 = (x:number)=>Math.max(0,Math.min(1,x));
+
+type ResolvedContext = { key: string; reason: string };
+
+function resolveContextKey(rawCtx: string): ResolvedContext {
+  const wm = getWeightMods();
+  const ctx = (rawCtx || 'general').toLowerCase().trim();
+
+  // Guard: no config or kill switch
+  if (!wm || DISABLE_WEIGHT_FALLBACKS) {
+    return { key: ctx, reason: wm ? 'nofallbacks_env' : 'nofallbacks_missing_config' };
+  }
+
+  const byContext = wm.byContext || {};
+  const aliasMap = wm.aliasMap || {};
+  const familyMap = wm.familyMap || {};
+  const fallbacks = wm.fallbacks || { order: ['exact','general','code_default'], enabled: true };
+
+  // 1) exact
+  if (byContext[ctx]) return { key: ctx, reason: 'exact' };
+
+  // 2) alias
+  const aliased = aliasMap[ctx];
+  if (aliased && byContext[aliased]) return { key: aliased, reason: `alias:${ctx}` };
+
+  // 3) family (e.g., CTX_CONFLICT → conflict)
+  const fam = familyMap[ctx];
+  if (fam && byContext[fam]) return { key: fam, reason: `family:${ctx}` };
+
+  // 4) general
+  if (byContext.general) return { key: 'general', reason: `fallback:general(${ctx})` };
+
+  // 5) code_default (no JSON deltas)
+  return { key: '__code_default__', reason: `fallback:code_default(${ctx})` };
+}
+
+// ===== Tone Bucket Mapping helpers (v2.1.1) =====
+function normBuckets(d: Record<Bucket, number>): Record<Bucket, number> {
+  const s = Math.max(1e-9, (d.clear||0)+(d.caution||0)+(d.alert||0));
+  return { clear: (d.clear||0)/s, caution: (d.caution||0)/s, alert: (d.alert||0)/s };
+}
+function logit(p:number){ const e=1e-6; const q=Math.min(1-e,Math.max(e,p)); return Math.log(q/(1-q)); }
+function ilogit(z:number){ return 1/(1+Math.exp(-z)); }
+
+function tokenizePlainV2(text: string): string[] {
+  return text.normalize('NFKC').toLowerCase().replace(/[^\w\s]/g,' ')
+    .trim().split(/\s+/).filter(Boolean);
+}
+
+/** Collect raw phrase evidence per bucket from the whole text using existing detectors */
+function collectBucketEvidenceV2(text: string) {
+  const tokens = tokenizePlainV2(text);
+  const hits = detectors.scanSurface(tokens); // { bucket, weight, term, start, end }[]
+  const byBucket: Record<Bucket, number> = { clear:0, caution:0, alert:0 };
+  const termsByBucket: Record<Bucket, Set<string>> = { clear:new Set(), caution:new Set(), alert:new Set() };
+  for (const h of hits) {
+    byBucket[h.bucket] += Math.max(0, h.weight || 0);
+    const len = String(h.term || '').trim().split(/\s+/).filter(Boolean).length;
+    termsByBucket[h.bucket].add(`${(h.term||'').toLowerCase().trim()}__LEN${len}`);
+  }
+  return { byBucket, termsByBucket, tokens };
+}
+
+/** Enforce JSON "eligibility.clear" gates (phrase-level, excludeTokens, overshadow, prefer-caution) */
+function enforceBucketGuardsV2(
+  dist: Record<Bucket, number>,
+  text: string,
+  attachmentStyle: string = 'secure'
+): Record<Bucket, number> {
+  const map = dataLoader.get('toneBucketMapping') || dataLoader.get('toneBucketMap') || {};
+  const EL = map?.eligibility?.clear;
+  if (!EL) return dist;
+
+  let out = { ...dist };
+  const evidence = collectBucketEvidenceV2(text);
+
+  // 1) require phrase-level & exclude generic tokens from contributing to clear
+  if (EL.requirePhraseLevel || EL.minNgram || EL.excludeTokens) {
+    const entries = Array.from(evidence.termsByBucket.clear || []);
+    const onlyGeneric = (() => {
+      if (!entries.length) return true;
+      const minN = EL.minNgram ?? 2;
+      const exclude = new Set((EL.excludeTokens||[]).map((t:string)=>t.toLowerCase()));
+      for (const tagged of entries) {
+        const [term, lenTag] = tagged.split('__LEN');
+        const n = parseInt(lenTag||'1',10)||1;
+        if (n >= minN && !exclude.has(term.trim())) return false;
+      }
+      return true;
+    })();
+    if (onlyGeneric) {
+      out.clear = Math.min(out.clear, 0.01);
+      out = normBuckets(out);
+    }
+  }
+
+  // 2) overshadow: if alert strong and clear not sufficiently larger, dampen clear
+  if (EL.overshadow?.by === 'alert') {
+    const min = EL.overshadow.min ?? 0.22;
+    const ratio = EL.overshadow.ratio ?? 1.75;
+    if (out.alert >= min && out.clear < out.alert * ratio) {
+      out.clear = Math.min(out.clear, out.alert * 0.25);
+      out = normBuckets(out);
+    }
+  }
+
+  // 3) prefer caution if both clear & alert present
+  const prefer = EL.preferCautionIfBoth ?? 0.18;
+  if (out.clear >= prefer && out.alert >= prefer) {
+    const bleed = Math.min(0.15, out.clear * 0.25);
+    out = normBuckets({ clear: out.clear - bleed, caution: out.caution + bleed, alert: out.alert });
+  }
+
+  return out;
+}
 
 function softmax3(log: Record<Bucket, number>): Record<Bucket, number> {
   const m = Math.max(log.clear, log.caution, log.alert, 0);
@@ -1210,44 +1333,72 @@ const detectors = new ToneDetectors();
 // -----------------------------
 // Bucket mapping from JSON
 // -----------------------------
+// Maps tone -> {clear,caution,alert} using toneBucketMapping v2.1.1 (no eligibility here)
+// Eligibility is applied later with enforceBucketGuardsV2(), where we have access to the raw text.
 function mapBucketsFromJson(
   toneLabel: string,
   contextKey: string,
   intensity: number,
   contextSeverity?: Record<Bucket, number>
 ): { primary: Bucket, dist: Record<Bucket, number>, meta: any } {
-  const map = dataLoader.get('toneBucketMapping') || dataLoader.get('toneBucketMap');
-  const base = map?.default?.[toneLabel] ?? map?.default?.neutral ?? { clear:0.33,caution:0.34,alert:0.33 };
-  let dist = { ...base };
+  const map = dataLoader.get('toneBucketMapping') || dataLoader.get('toneBucketMap') || {};
+  const TB = map.toneBuckets || {};
+  const CO = map.contextOverrides || {};
+  const IS = map.intensityShifts || {};
+  const engine = map.engine || {};
+  const mathDomain = engine?.combination?.mathDomain || 'prob'; // 'prob' | 'logit'
 
-  const ctx = map?.contextOverrides?.[contextKey]?.[toneLabel];
-  if (ctx) dist = { ...dist, ...ctx };
+  // Base (supports your defaultBucket)
+  const base =
+    TB[toneLabel]?.base ||
+    TB[map.defaultBucket || 'neutral']?.base ||
+    TB['neutral']?.base ||
+    { clear:0.5, caution:0.3, alert:0.2 };
 
-  const thr = map?.intensityShifts?.thresholds ?? { low:0.15, med:0.35, high:0.60 };
-  const key = intensity >= thr.high ? 'high' : intensity >= thr.med ? 'med' : 'low';
-  const shift = map?.intensityShifts?.[key] ?? {};
-  
-  // Apply intensity shifts to the distribution
-  dist = {
-    clear: Math.max(0,(dist.clear ?? 0)+(shift.clear ?? 0)),
-    caution: Math.max(0,(dist.caution ?? 0)+(shift.caution ?? 0)),
-    alert: Math.max(0,(dist.alert ?? 0)+(shift.alert ?? 0)),
-  };
+  let dist: Record<Bucket, number> = { ...base };
 
-  // ✅ Apply context severity adjustments (new mechanism)
-  if (contextSeverity) {
-    logger.info('Applying context severity adjustments', contextSeverity);
-    dist = {
-      clear: Math.max(0, dist.clear + (contextSeverity.clear || 0)),
-      caution: Math.max(0, dist.caution + (contextSeverity.caution || 0)),
-      alert: Math.max(0, dist.alert + (contextSeverity.alert || 0)),
-    };
+  // Context overrides (small nudges; logit domain blends nicer)
+  if (CO[contextKey]?.[toneLabel]) {
+    const o = CO[contextKey][toneLabel];
+    if (mathDomain === 'logit') {
+      const z = { clear: logit(dist.clear), caution: logit(dist.caution), alert: logit(dist.alert) };
+      dist = normBuckets({
+        clear: ilogit(z.clear + (o.clear||0)),
+        caution: ilogit(z.caution + (o.caution||0)),
+        alert: ilogit(z.alert + (o.alert||0)),
+      });
+    } else {
+      dist = normBuckets({
+        clear: Math.max(0, dist.clear + (o.clear||0)),
+        caution: Math.max(0, dist.caution + (o.caution||0)),
+        alert: Math.max(0, dist.alert + (o.alert||0)),
+      });
+    }
   }
 
-  const s = dist.clear + dist.caution + dist.alert || 1;
-  const normalizedDist = { clear: dist.clear/s, caution: dist.caution/s, alert: dist.alert/s };
-  const primary = (Object.entries(normalizedDist).sort((a,b)=>b[1]-a[1])[0][0]) as Bucket;
-  return { primary, dist: normalizedDist, meta: { intensity, key, contextSeverity } };
+  // Intensity shifts (prob domain ok; magnitudes are small)
+  const thr = IS?.thresholds || { low:0.15, med:0.35, high:0.60 };
+  const key = intensity >= thr.high ? 'high' : intensity >= thr.med ? 'med' : 'low';
+  if (IS?.[key]) {
+    const s = IS[key];
+    dist = normBuckets({
+      clear: Math.max(0, dist.clear + (s.clear||0)),
+      caution: Math.max(0, dist.caution + (s.caution||0)),
+      alert: Math.max(0, dist.alert + (s.alert||0)),
+    });
+  }
+
+  // Direct bucket nudges from upstream context detection (optional)
+  if (contextSeverity) {
+    dist = normBuckets({
+      clear: Math.max(0, dist.clear + (contextSeverity.clear||0)),
+      caution: Math.max(0, dist.caution + (contextSeverity.caution||0)),
+      alert: Math.max(0, dist.alert + (contextSeverity.alert||0)),
+    });
+  }
+
+  const primary = (Object.entries(dist).sort((a,b)=>b[1]-a[1])[0][0]) as Bucket;
+  return { primary, dist, meta: { intensity, key, mathDomain } };
 }
 
 // -----------------------------
@@ -1505,117 +1656,6 @@ class AdvancedFeatureExtractor {
   }
 }
 
-// Reuse the detectors we already have:
-function tokenizePlain(text: string): string[] {
-  return text
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(/[^\w\s]/g,' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
-/** Collect raw phrase evidence per bucket from the whole text */
-function collectBucketEvidence(text: string) {
-  const tokens = tokenizePlain(text);
-  const hits = detectors.scanSurface(tokens); // { bucket, weight, term, start, end }[]
-  const byBucket = { clear: 0, caution: 0, alert: 0 } as Record<Bucket, number>;
-  const termsByBucket: Record<Bucket, Set<string>> = { clear:new Set(), caution:new Set(), alert:new Set() };
-
-  for (const h of hits) {
-    byBucket[h.bucket] += Math.max(0, h.weight || 0);
-    // term length in tokens (phrase-level check)
-    const len = String(h.term || '').trim().split(/\s+/).filter(Boolean).length;
-    if (len > 0) termsByBucket[h.bucket].add(`${h.term}__LEN${len}`);
-  }
-  return { byBucket, termsByBucket, tokens };
-}
-
-/** Whether clear evidence is only generic ("I/me/we/ok") or single-token fluff */
-function clearIsOnlyGeneric(termsByBucket: Record<Bucket, Set<string>>): boolean {
-  const entries = Array.from(termsByBucket.clear);
-  if (entries.length === 0) return true;
-
-  let hasSpecific = false;
-  for (const tagged of entries) {
-    const [term, lenTag] = tagged.split('__LEN');
-    const len = parseInt(lenTag || '1', 10) || 1;
-    const t = term.toLowerCase().trim();
-    const isGeneric = GENERIC_CLEAR_STOPS.has(t);
-    // require phrase-level (>= CLEAR_MIN_TOKENS) and not on the generic stop list
-    if (len >= CLEAR_MIN_TOKENS && !isGeneric) {
-      hasSpecific = true;
-      break;
-    }
-  }
-  return !hasSpecific;
-}
-
-/** Any escalatory contexts active? (by polarity) */
-function hasEscalatoryContexts(activeContextIds: string[]): boolean {
-  for (const id of activeContextIds) {
-    const cfg = CTX_INDEX[id];
-    if (cfg?.polarity === 'escalatory') return true;
-  }
-  return false;
-}
-
-/** Apply JSON bucket guards to a {clear,caution,alert} dist, using evidence + contexts. */
-function enforceBucketGuards(
-  dist: Record<Bucket, number>,
-  evidence: ReturnType<typeof collectBucketEvidence>,
-  activeContextIds: string[]
-): Record<Bucket, number> {
-  let { clear, caution, alert } = dist;
-
-  // 1) Ignore generic/unigram "clear" evidence
-  if (ENGINE?.genericTokens?.policy?.ignoreForBuckets?.clear) {
-    if (clearIsOnlyGeneric(evidence.termsByBucket)) {
-      clear = Math.min(clear, 0.01); // essentially zero without hard zeroing
-    }
-  }
-
-  // 2) Escalatory presence dampens clear
-  if (hasEscalatoryContexts(activeContextIds) && CLEAR_DAMPEN_ESCALATORY > 0 && clear > 0) {
-    clear = clear * (1 - CLEAR_DAMPEN_ESCALATORY);
-  }
-
-  // 3) Overshadow rule: alert strong ⇒ clear must exceed ratio or be suppressed
-  if ((CLEAR_OVERSHADOW?.bucket === 'alert') && alert >= (CLEAR_OVERSHADOW?.atOrAbove ?? 0.22)) {
-    const need = alert * (CLEAR_OVERSHADOW?.ratioRequiredForClear ?? 1.75);
-    if (clear < need) {
-      // suppress clear rather than zeroing it completely
-      clear = Math.min(clear, alert * 0.25);
-    }
-  }
-
-  // 4) Prefer caution if both clear & alert noticeably present
-  if (clear >= PREFER_CAUTION_IF_BOTH && alert >= PREFER_CAUTION_IF_BOTH) {
-    const bleed = Math.min(0.15, clear * 0.25);
-    clear -= bleed;
-    caution += bleed; // move some to caution
-  }
-
-  // 5) Per-context clearGate (promote/dampen)
-  if (Array.isArray(activeContextIds) && activeContextIds.length) {
-    for (const id of activeContextIds) {
-      const cfg = CTX_INDEX[id];
-      const gate = cfg?.clearGate;
-      if (!gate) continue;
-      if (gate.mode === 'promote') {
-        clear = clear + (clear * (gate.strength ?? 0.5));
-      } else if (gate.mode === 'dampen') {
-        clear = clear * (1 - (gate.strength ?? 0.5));
-      }
-    }
-  }
-
-  // Normalize
-  const sum = Math.max(1e-9, clear + caution + alert);
-  return { clear: clear/sum, caution: caution/sum, alert: alert/sum };
-}
-
 // -----------------------------
 // Tone Analysis Service (JSON-weighted)
 // -----------------------------
@@ -1639,19 +1679,33 @@ export class ToneAnalysisService {
   }
 
   private _weights(context: string) {
+    // Base (code) weights — safe if JSON missing
     const W = {
-      emo: 0.40, ctx: 0.20, attach: 0.15, ling: 0.15, intensity: 0.10,
-      negPenalty: 0.15, sarcPenalty: 0.18, absolutesBoost: 0.06
+      emo: 0.40, ctx: 0.20, attach: 0.15, ling: 0.15,
+      intensity: 0.10, negPenalty: 0.15, sarcPenalty: 0.18, absolutesBoost: 0.06
     };
-    const mods = dataLoader.get('weightModifiers')?.byContext?.[context];
-    if (mods) {
-      // Allow additive overrides for transparency/simplicity
-      for (const [k,v] of Object.entries(mods)) {
-        if ((W as any)[k] !== undefined && typeof v === 'number') {
-          (W as any)[k] = (W as any)[k] + v;
-        }
+
+    const wm = getWeightMods();
+    if (!wm) return W;
+
+    const { key, reason } = resolveContextKey(context);
+
+    if (key !== '__code_default__') {
+      const deltas = wm.byContext?.[key];
+      if (deltas) {
+        // additive deltas with bounds
+        (Object.keys(W) as Array<keyof typeof W>).forEach(k => {
+          const delta = typeof deltas[k] === 'number' ? (deltas as any)[k] : 0;
+          (W as any)[k] = Math.max(wm.bounds?.min ?? 0, Math.min(wm.bounds?.max ?? 1, (W as any)[k] + delta));
+        });
       }
     }
+
+    // Telemetry (optional)
+    if (wm.fallbacks?.enabled && WEIGHTS_FALLBACK_EVENT) {
+      try { logger.info(WEIGHTS_FALLBACK_EVENT, { ctx_in: context, ctx_used: key, reason }); } catch {}
+    }
+
     return W;
   }
 
@@ -1921,7 +1975,13 @@ export class ToneAnalysisService {
 
       // Score
       logger.info('Scoring tones');
-      const { scores, intensity: baseIntensity } = this._scoreTones(fr, text, style, doc.contextLabel || options.context || 'general');
+      const contextForWeights = doc.contextLabel || options.context || 'general';
+      
+      // Debug: verify what context key was used during scoring
+      const resolved = resolveContextKey(contextForWeights);
+      logger.info('weights.context_resolved', resolved);
+      
+      const { scores, intensity: baseIntensity } = this._scoreTones(fr, text, style, contextForWeights);
       const intensity = clamp01(baseIntensity + advBump + excl + q + caps);
       
       // 🔒 Hard-floor: profanity + 2nd-person targeting => angry
@@ -2179,14 +2239,12 @@ export function mapToneToBuckets(
     (['clear','caution','alert'] as Bucket[]).forEach(b => (buckets as any)[b] = (buckets as any)[b] / total);
   }
 
-  // ✅ NEW: optional guard application if caller passed { text }
-  if (config?.text && ENGINE) {
-    const evidence = collectBucketEvidence(String(config.text || ''));
-    // derive contexts from text so we can apply clearGate/overshadow
-    const ctxDetected = detectors.detectContexts(tokenizePlain(String(config.text || '')), attachmentStyle);
-    const activeIds = (ctxDetected.allContexts || []).map((c:any) => c.id);
-    buckets = enforceBucketGuards(buckets, evidence, activeIds);
-  }
+  // Optional guard application if caller provides raw text
+  try {
+    if (config?.text) {
+      buckets = enforceBucketGuardsV2(buckets, String(config.text || ''), attachmentStyle);
+    }
+  } catch {}
   
   return {
     buckets,
@@ -2244,20 +2302,15 @@ export async function getGeneralToneAnalysis(text: string, attachmentStyle: stri
     
     const bucketResult = mapBucketsFromJson(result.primary_tone, context, result.intensity, (result as any).contextSeverity);
     
-    // NEW: enforce engine guards using real evidence + actual active contexts
-    const evidence = collectBucketEvidence(text);
-    const ctxTokens = tokenizePlain(text);
-    const ctxDetected = detectors.detectContexts(ctxTokens, attachmentStyle);
-    const activeIds = (ctxDetected.allContexts || []).map(c => c.id);
-
-    const guardedDist = enforceBucketGuards(bucketResult.dist, evidence, activeIds);
+    // ✅ Apply clear-eligibility guards now that we have the raw user text:
+    const guardedDist = enforceBucketGuardsV2(bucketResult.dist, text, attachmentStyle);
     const primaryBucket = (Object.entries(guardedDist).sort((a,b)=>b[1]-a[1])[0][0]) as Bucket;
     
     return {
       tone: result.primary_tone,
       confidence: result.confidence,
-      buckets: guardedDist,               // <-- use guarded
-      primary_bucket: primaryBucket,      // <-- use guarded
+      buckets: guardedDist,
+      primary_bucket: primaryBucket,
       intensity: result.intensity,
       emotions: result.emotions,
       linguistic_features: result.linguistic_features,
