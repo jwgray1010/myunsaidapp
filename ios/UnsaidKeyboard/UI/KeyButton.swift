@@ -14,10 +14,10 @@ final class KeyButton: UIButton {
     
     override var intrinsicContentSize: CGSize {
         let original = super.intrinsicContentSize
-        // Allow narrow visual keys; keep a small floor to avoid zero-width
-        // Guarantee 44pt tap target through hit-testing instead of visual width
+        // For letter keys: Let UIStackView .fillEqually distribution control width
+        // Only enforce minimum height for touch targets
         return CGSize(
-            width: max(KeyButtonFactory.minKeyWidth, original.width),  // 26pt, not 44
+            width: original.width,  // Use natural width, let stack distribution control final width
             height: max(KeyButtonFactory.touchTargetHeight, original.height) // 44–46
         )
     }

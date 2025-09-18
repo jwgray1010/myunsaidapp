@@ -174,7 +174,7 @@
       "repeatDecay": 0.8,
       "cooldown_ms": 200,
       "maxBoostsPerMessage": 4,
-      "requiresAny": ["I", "me", "my"],
+      "requiresAny": ["sorry", "apologize", "my fault", "my bad", "forgive", "make up", "make amends", "I was wrong", "I apologize", "owning it"],
       "confidenceBoosts": {
         "clear": 0.25,
         "caution": 0.05

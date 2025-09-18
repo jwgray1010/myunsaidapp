@@ -51,13 +51,14 @@ final class SpellCandidatesStrip: UIView {
         layer.cornerRadius = 8
         stack.axis = .horizontal
         stack.distribution = .fillEqually
+        stack.alignment = .center  // ⬅️ Fix: center buttons vertically to avoid constraint conflicts
         stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 0), // Full width - no margins
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: 0), // Full width - no margins
             stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4)
         ])
     }
@@ -88,8 +89,8 @@ final class SpellCandidatesStrip: UIView {
     }
 
     private func pill(_ title: String) -> UIButton {
-        // Use KeyButtonFactory for consistent styling
-        let button = KeyButtonFactory.makeControlButton(title: title, background: .systemGray6, text: .label)
+        // Use specialized spell strip button factory to avoid constraint conflicts
+        let button = KeyButtonFactory.makeSpellStripButton(title: title)
         button.addTarget(self, action: #selector(pillButtonPressed(_:)), for: .touchUpInside)
         return button
     }
@@ -344,6 +345,10 @@ final class KeyboardController: UIInputView,
     private let midRowSymbols = ["_","\\","|","~","<",">","€","£","¥","•"]
     private let botRowSymbols = [".",",","?","!","'"]
 
+    // QWERTY stagger references for dynamic margin calculation
+    private weak var topRowRef: UIStackView?
+    private weak var midRowRef: UIStackView?
+
     // Context refresh properties
     private var beforeContext: String = ""
     private var afterContext: String = ""
@@ -541,6 +546,9 @@ final class KeyboardController: UIInputView,
         
         // Ensure tone button remains visible after layout
         ensureToneButtonVisible()
+        
+        // Apply QWERTY stagger after layout
+        applyQwertyStaggerIfNeeded()
         
         guard let bg = toneButtonBackground, let g = toneGradient else { return }
         let newBounds = bg.bounds.integral
@@ -1212,6 +1220,10 @@ final class KeyboardController: UIInputView,
 
         let controlRow = controlRowStack()
 
+        // Store references for QWERTY stagger calculation
+        topRowRef = topRow
+        midRowRef = midRow
+
         mainStack.addArrangedSubview(topRow)
         mainStack.addArrangedSubview(midRow)
         mainStack.addArrangedSubview(thirdRow)
@@ -1221,9 +1233,9 @@ final class KeyboardController: UIInputView,
         keyboardStackView = mainStack
 
         NSLayoutConstraint.activate([
-            mainStack.topAnchor.constraint(equalTo: suggestionBar.bottomAnchor, constant: 12), // Increased from 8 to 12 for better spacing
-            mainStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: sideMargins),
-            mainStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -sideMargins),
+            mainStack.topAnchor.constraint(equalTo: suggestionBar.bottomAnchor, constant: 8), // Back to original spacing
+            mainStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 0), // Full width - no side margins
+            mainStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: 0), // Full width - no side margins
             mainStack.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -8)
         ])
     }
@@ -1235,8 +1247,9 @@ final class KeyboardController: UIInputView,
         stack.spacing = horizontalSpacing
 
         if centerNine && titles.count == 9 {
+            // Enable layout margins for QWERTY stagger - margins will be set dynamically
             stack.isLayoutMarginsRelativeArrangement = true
-            stack.directionalLayoutMargins = .init(top: 0, leading: 18, bottom: 0, trailing: 18)
+            // margins will be set dynamically after layout
         }
 
         for title in titles {
@@ -1248,6 +1261,32 @@ final class KeyboardController: UIInputView,
         }
 
         return stack
+    }
+
+    // MARK: - QWERTY Stagger Calculation
+    /// Calculates the indent needed for QWERTY stagger effect
+    /// The middle row (9 keys) should be centered between the top row (10 keys) columns
+    private func qwertyIndent(containerWidth: CGFloat, spacing: CGFloat) -> CGFloat {
+        // 10 columns, 9 gaps
+        let w10 = (containerWidth - spacing * 9) / 10.0
+        // shift by half a 10-col cell plus half the inter-key gap
+        return (w10 + spacing) * 0.5
+    }
+
+    /// Applies QWERTY stagger to the middle row when in letters mode
+    private func applyQwertyStaggerIfNeeded() {
+        guard currentMode == .letters, let mid = midRowRef else {
+            // Clear margins when not in letters mode
+            midRowRef?.directionalLayoutMargins = .zero
+            return
+        }
+        
+        // Use the mid row's own width for accuracy
+        let W = mid.bounds.width
+        guard W > 0, mid.arrangedSubviews.count == 9 else { return }
+        
+        let indent = qwertyIndent(containerWidth: W, spacing: horizontalSpacing)
+        mid.directionalLayoutMargins = .init(top: 0, leading: indent, bottom: 0, trailing: indent)
     }
 
     // New helper builds the z..m row with Shift on left and Delete on right
@@ -1306,27 +1345,26 @@ final class KeyboardController: UIInputView,
         stack.axis = .horizontal
         stack.spacing = horizontalSpacing
         stack.distribution = .fill
+        stack.alignment = .center
 
-        // Mode (123/ABC) - reduced font and size by 40%
+        // Mode (123/ABC)
         let mode = KeyButtonFactory.makeModeButton(title: currentMode == .letters ? "123" : "ABC")
         mode.addTarget(self, action: #selector(handleModeSwitch), for: .touchUpInside)
         mode.addTarget(self, action: #selector(specialButtonTouchDown(_:)), for: .touchDown)
         mode.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
         modeButton = mode
 
-        // Globe (super compact)
+        // Globe (smaller)
         let globe = KeyButtonFactory.makeGlobeButton()     
         globe.addTarget(self, action: #selector(handleGlobeKey), for: .touchUpInside)
         globe.addTarget(self, action: #selector(specialButtonTouchDown(_:)), for: .touchDown)
         globe.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
         globeButton = globe
-
-        // Make globe compact
         globe.accessibilityLabel = "Next Keyboard"
         globe.titleLabel?.font = .systemFont(ofSize: 13, weight: .regular)
         globe.titleLabel?.adjustsFontForContentSizeCategory = false
 
-        // Space (dominant)
+        // Space (bigger - expandable)
         let space = KeyButtonFactory.makeSpaceButton()
         space.addTarget(self, action: #selector(handleSpaceKey), for: .touchUpInside)
         space.addTarget(self, action: #selector(specialButtonTouchDown(_:)), for: .touchDown)
@@ -1334,7 +1372,7 @@ final class KeyboardController: UIInputView,
         spaceButton = space
         spaceHandler.setupSpaceButton(space)
 
-        // Secure Fix (smaller than space)
+        // Secure Fix
         let secureFix = KeyButtonFactory.makeSecureButton()
         quickFixButton = secureFix
         secureFix.addTarget(self, action: #selector(handleSecureFix), for: UIControl.Event.touchUpInside)
@@ -1345,7 +1383,7 @@ final class KeyboardController: UIInputView,
         let returnBtn = KeyButtonFactory.makeReturnButton()
         returnBtn.addTarget(self, action: #selector(handleReturnKey), for: UIControl.Event.touchUpInside)
         returnBtn.addTarget(self, action: #selector(specialButtonTouchDown(_:)), for: UIControl.Event.touchDown)
-        returnBtn.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [UIControl.Event.touchUpInside, UIControl.Event.touchUpOutside, UIControl.Event.touchCancel])
+        returnBtn.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
         returnButton = returnBtn
 
         // Order: [mode][globe][space][secureFix][return]
@@ -1355,39 +1393,27 @@ final class KeyboardController: UIInputView,
         stack.addArrangedSubview(secureFix)
         stack.addArrangedSubview(returnBtn)
 
-        // Sizing rules - let space expand, but fixed widths for other controls
-        let standardWidth: CGFloat = 68  // Back to original size
-        let returnButtonWidth: CGFloat = 51  // Back to original size  
-        let secureButtonWidth: CGFloat = 61  // Back to original size
+        // Constraint-clean layout: Equal width for 123/Secure/Return, smaller globe, expandable space
         
-        // Space is the only flexible one - use priority-based layout to prevent over-constraining
-        let spaceMin = space.widthAnchor.constraint(greaterThanOrEqualToConstant: 80)  // Reduced from 140
-        spaceMin.priority = .defaultLow  // 250, so it won't fight required constraints
-        spaceMin.identifier = "space.minWidth"
-        spaceMin.isActive = true
+        // 1. Equal width constraints for mode, secureFix, and return
+        mode.widthAnchor.constraint(equalTo: secureFix.widthAnchor).isActive = true
+        mode.widthAnchor.constraint(equalTo: returnBtn.widthAnchor).isActive = true
         
+        // 2. Globe gets smaller fixed width
+        globe.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        
+        // 3. Mode gets baseline width (others will match via equal width constraints)
+        mode.widthAnchor.constraint(equalToConstant: 68).isActive = true
+        
+        // 4. Space expands to fill remaining space - low hugging priority
         space.setContentHuggingPriority(.defaultLow, for: .horizontal)
         space.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        // Minimum widths for non-space controls - all set to lower priority to prevent conflicts
-        [mode, secureFix, returnBtn, globe].forEach { button in
-            let min: CGFloat = (button === globe) ? 34 : 56  // Smaller mins to prevent conflicts
-            let constraint = button.widthAnchor.constraint(greaterThanOrEqualToConstant: min)
-            constraint.priority = .defaultLow  // 250, prevent blocking layout
-            constraint.identifier = "control.minWidth"
-            constraint.isActive = true
-
-            button.setContentHuggingPriority(.required, for: .horizontal)
-            button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        
+        // 5. Fixed-width buttons resist expansion
+        [mode, globe, secureFix, returnBtn].forEach { button in
+            button.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+            button.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
         }
-
-        #if DEBUG
-        func assertNoDuplicateFixedWidth(_ v: UIView) {
-            let w = v.constraints.filter { $0.firstAttribute == .width && $0.relation == .equal && $0.isActive }
-            assert(w.count <= 1, "Duplicate equal width constraints on \(v): \(w)")
-        }
-        [mode, secureFix, returnBtn, globe].forEach(assertNoDuplicateFixedWidth)
-        #endif
 
         return stack
     }
@@ -1579,6 +1605,11 @@ final class KeyboardController: UIInputView,
         modeButton?.setTitle(currentMode == .letters ? "123" : "ABC", for: .normal)
         updateShiftButtonAppearance()
         updateKeycaps()
+        
+        // Apply stagger on next runloop so frames are valid
+        DispatchQueue.main.async { [weak self] in 
+            self?.applyQwertyStaggerIfNeeded() 
+        }
     }
     
     private func shouldCapitalizeKey(_ key: String) -> Bool {

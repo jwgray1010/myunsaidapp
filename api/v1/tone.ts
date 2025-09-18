@@ -100,36 +100,101 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     // - Always include { ui_tone, ui_distribution, buckets } in the response.
     
     // Map classifier → starting buckets (hint only; NOT the decider)
-    const baseMap = mapToneToBuckets(
-      { classification: result.primary_tone, confidence: result.confidence },
-      'secure',
-      data.context || 'general'
-    );
-    let uiBuckets = baseMap?.buckets || { clear: 1/3, caution: 1/3, alert: 1/3 };
+    // FIXED: Direct tone mapping instead of broken mapToneToBuckets
+    let uiBuckets = { clear: 1/3, caution: 1/3, alert: 1/3 }; // fallback
+    
+    // Define strong emotional tones that should preserve their mappings
+    const strongEmotionalTones = ['angry', 'frustrated', 'sad', 'anxious', 'negative'];
+    
+    // Direct mapping based on detected tone
+    const toneMap: Record<string, {clear: number, caution: number, alert: number}> = {
+      'angry':        { clear: 0.10, caution: 0.30, alert: 0.60 },
+      'frustrated':   { clear: 0.15, caution: 0.45, alert: 0.40 },
+      'anxious':      { clear: 0.20, caution: 0.60, alert: 0.20 },
+      'sad':          { clear: 0.25, caution: 0.60, alert: 0.15 },
+      'negative':     { clear: 0.20, caution: 0.50, alert: 0.30 },
+      'assertive':    { clear: 0.40, caution: 0.40, alert: 0.20 },
+      'positive':     { clear: 0.80, caution: 0.15, alert: 0.05 },
+      'supportive':   { clear: 0.85, caution: 0.12, alert: 0.03 },
+      'neutral':      { clear: 0.50, caution: 0.30, alert: 0.20 },
+      'tentative':    { clear: 0.30, caution: 0.60, alert: 0.10 },
+      'confident':    { clear: 0.60, caution: 0.25, alert: 0.15 }
+    };
+    
+    if (toneMap[result.primary_tone]) {
+      uiBuckets = { ...toneMap[result.primary_tone] };
+      logger.info('Direct tone mapping applied', { 
+        tone: result.primary_tone, 
+        buckets: uiBuckets 
+      });
+    } else {
+      logger.warn('No direct mapping for tone, using fallback', { 
+        tone: result.primary_tone,
+        availableTones: Object.keys(toneMap)
+      });
+    }
 
     // Optional nudges from analysis context severity if present
     const sev = (result as any).contextSeverity || { clear: 0, caution: 0, alert: 0 };
-    uiBuckets = {
-      clear: Math.max(0, (uiBuckets.clear ?? 0) + (sev.clear || 0)),
-      caution: Math.max(0, (uiBuckets.caution ?? 0) + (sev.caution || 0)),
-      alert: Math.max(0, (uiBuckets.alert ?? 0) + (sev.alert || 0)),
-    };
+    
+    logger.info('Context severity values', { 
+      tone: result.primary_tone,
+      originalBuckets: uiBuckets,
+      contextSeverity: sev 
+    });
+    
+    // COMPLETELY SKIP context severity for emotional tones - it's fundamentally broken
+    // The pattern matching is too broad and creates false positives (e.g., "me" triggering repair context for angry text)
+    if (!strongEmotionalTones.includes(result.primary_tone)) {
+      uiBuckets = {
+        clear: Math.max(0, (uiBuckets.clear ?? 0) + (sev.clear || 0)),
+        caution: Math.max(0, (uiBuckets.caution ?? 0) + (sev.caution || 0)),
+        alert: Math.max(0, (uiBuckets.alert ?? 0) + (sev.alert || 0)),
+      };
+      logger.info('Applied context severity for non-emotional tone', { afterContextSeverity: uiBuckets });
+    } else {
+      logger.info('SKIPPED context severity for emotional tone - preserving correct mapping', { 
+        tone: result.primary_tone,
+        preservedBuckets: uiBuckets,
+        skippedSeverity: sev
+      });
+    }
     
     // FeatureSpotter integration - pattern detection and tone nudging
-    const fs = new FeatureSpotterStore(userId);
-    const fsRun = fs.run(data.text, {
-      hasNegation: (result as any)?.flags?.hasNegation,
-      hasSarcasm: (result as any)?.flags?.hasSarcasm
-    });
+    // Skip FeatureSpotter for strong emotional tones to prevent overriding correct classifications
+    const skipFeatureSpotter = strongEmotionalTones.includes(result.primary_tone);
+    
+    let bucketsAfterFS = uiBuckets;
+    let fsRun: any = { matches: [], noticings: [], toneHints: { clear: 0, caution: 0, alert: 0 } };
+    
+    if (!skipFeatureSpotter) {
+      const fs = new FeatureSpotterStore(userId);
+      fsRun = fs.run(data.text, {
+        hasNegation: (result as any)?.flags?.hasNegation,
+        hasSarcasm: (result as any)?.flags?.hasSarcasm
+      });
 
-    // Nudge intensity + tone a touch (safe, bounded)
-    const toneOffsets = fsRun.toneHints; // e.g., {clear:+0.02, caution:+0.03, alert:+0.05}
-    const bumped = { ...uiBuckets };
-    (['clear','caution','alert'] as const).forEach(k => { 
-      bumped[k] = Math.max(0, bumped[k] + (toneOffsets[k] || 0)); 
-    });
-    const sum = Math.max(1e-9, bumped.clear + bumped.caution + bumped.alert);
-    const bucketsAfterFS = { clear: bumped.clear/sum, caution: bumped.caution/sum, alert: bumped.alert/sum };
+      // Nudge intensity + tone a touch (safe, bounded)
+      const toneOffsets = fsRun.toneHints; // e.g., {clear:+0.02, caution:+0.03, alert:+0.05}
+      const bumped = { ...uiBuckets };
+      (['clear','caution','alert'] as const).forEach(k => { 
+        bumped[k] = Math.max(0, bumped[k] + (toneOffsets[k] || 0)); 
+      });
+      const sum = Math.max(1e-9, bumped.clear + bumped.caution + bumped.alert);
+      bucketsAfterFS = { clear: bumped.clear/sum, caution: bumped.caution/sum, alert: bumped.alert/sum };
+      
+      logger.info('FeatureSpotter applied tone nudges', { 
+        tone: result.primary_tone,
+        originalBuckets: uiBuckets,
+        toneOffsets,
+        finalBuckets: bucketsAfterFS
+      });
+    } else {
+      logger.info('FeatureSpotter skipped for strong emotional tone', { 
+        tone: result.primary_tone,
+        preservedBuckets: uiBuckets
+      });
+    }
     
     // Update dialogue state
     new DialogueStateStore(userId).update({

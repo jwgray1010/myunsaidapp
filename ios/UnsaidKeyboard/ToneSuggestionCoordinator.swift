@@ -6,6 +6,31 @@ import QuartzCore
 import UIKit
 #endif
 
+// MARK: - Network Metrics Delegate for Debugging
+final class NetworkMetricsDelegate: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    didFinishCollecting metrics: URLSessionTaskMetrics) {
+        #if DEBUG
+        for tm in metrics.transactionMetrics {
+            // Calculate durations using date intervals
+            let dns = tm.domainLookupEndDate?.timeIntervalSince(tm.domainLookupStartDate ?? Date()) ?? 0
+            let connect = tm.connectEndDate?.timeIntervalSince(tm.connectStartDate ?? Date()) ?? 0
+            let tls = tm.secureConnectionEndDate?.timeIntervalSince(tm.secureConnectionStartDate ?? Date()) ?? 0
+            let ttfb = tm.responseStartDate?.timeIntervalSince(tm.requestStartDate ?? Date()) ?? 0
+            
+            print("⏱ Network Metrics - dns=\(String(format: "%.3f", dns))s connect=\(String(format: "%.3f", connect))s tls=\(String(format: "%.3f", tls))s ttfb=\(String(format: "%.3f", ttfb))s")
+            
+            if tls > 2.0 {
+                print("🔴 TLS handshake took \(String(format: "%.3f", tls))s - possible ATS/cert issue")
+            }
+            if connect > 3.0 {
+                print("🔴 Connect took \(String(format: "%.3f", connect))s - possible network/VPN filtering")
+            }
+        }
+        #endif
+    }
+}
+
 // MARK: - API Error Types
 enum APIError: LocalizedError {
     case authRequired
@@ -112,10 +137,22 @@ final class ToneSuggestionCoordinator {
     private func normalizedBaseURLString() -> String {
         let raw = apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         var s = raw.hasSuffix("/") ? String(raw.dropLast()) : raw
-        let lowers = s.lowercased()
-        if lowers.hasSuffix("/api/v1") { s = String(s.dropLast(7)) }
-        else if lowers.hasSuffix("/api") { s = String(s.dropLast(4)) }
-        return s // e.g. https://yourapp.vercel.app
+        
+        // Only strip /api/v1 or /api if they are path components, not part of the domain
+        // E.g., strip from "https://localhost:3000/api/v1" but NOT from "https://api.myunsaidapp.com"
+        if let url = URL(string: s), let host = url.host {
+            // If 'api' is part of the domain (like api.myunsaidapp.com), don't strip anything
+            if host.contains("api.") {
+                return s
+            }
+            
+            // Otherwise, strip /api/v1 or /api path suffixes for development URLs
+            let lowers = s.lowercased()
+            if lowers.hasSuffix("/api/v1") { s = String(s.dropLast(7)) }
+            else if lowers.hasSuffix("/api") { s = String(s.dropLast(4)) }
+        }
+        
+        return s // e.g. https://api.myunsaidapp.com or https://localhost:3000
     }
     
     // MARK: - Idempotency helper (for suggestions/observe)
@@ -130,37 +167,73 @@ final class ToneSuggestionCoordinator {
     // MARK: Configuration
     private var apiBaseURL: String { cachedAPIBaseURL }
     private var apiKey: String { cachedAPIKey }
+    
+    // MARK: - Full Access Detection
+    private var hasFullAccess: Bool {
+        // Critical: Third-party keyboards need Allow Full Access to reach the network
+        let hasAccess = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: AppGroups.id
+        ) != nil
+        
+        if !hasAccess {
+            KBDLog("❌ Full Access disabled - App Group container inaccessible", .warn, "ToneCoordinator")
+        }
+        
+        return hasAccess
+    }
+    
     private var isAPIConfigured: Bool {
+        // Check Full Access first - no point checking API config if we can't reach network
+        guard hasFullAccess else {
+            KBDLog("🔴 API blocked - Full Access required for network requests", .warn, "ToneCoordinator")
+            return false
+        }
+        
         if Date() < authBackoffUntil {
             KBDLog("🔴 API blocked due to auth backoff until \(authBackoffUntil)", .warn, "ToneCoordinator")
             return false
         }
+        
         let configured = !apiBaseURL.isEmpty && !apiKey.isEmpty
         KBDLog("🔧 API configured: \(configured) - URL: '\(apiBaseURL)', Key: '\(apiKey.prefix(10))...'", .debug, "ToneCoordinator")
         return configured
     }
     
-    // MARK: Networking (used only by suggestions/observe)
+    // MARK: Networking (improved for keyboard extension reliability)
     private lazy var session: URLSession = {
         let cfg = URLSessionConfiguration.ephemeral
-        cfg.waitsForConnectivity = false
+        
+        // Extension-optimized timeouts
+        cfg.timeoutIntervalForRequest = 12       // per I/O operation
+        cfg.timeoutIntervalForResource = 20      // whole transfer
+        cfg.waitsForConnectivity = true          // avoid immediate failure on transient loss
+        #if canImport(UIKit)
+        cfg.multipathServiceType = .handover     // smoother Wi-Fi <-> Cellular
+        #endif
+        cfg.httpMaximumConnectionsPerHost = 2
+        
+        // Network access permissions
         cfg.allowsCellularAccess = true
         cfg.allowsConstrainedNetworkAccess = true
         cfg.allowsExpensiveNetworkAccess = true
-        cfg.httpShouldUsePipelining = true
-        cfg.httpMaximumConnectionsPerHost = 2
+        cfg.httpShouldUsePipelining = false  // Can cause issues in extensions
         cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
-        cfg.timeoutIntervalForRequest = 10.0
-        cfg.timeoutIntervalForResource = 30.0
         cfg.httpCookieAcceptPolicy = .never
         cfg.httpCookieStorage = nil
+        
+        // Headers with User-Agent to avoid WAF blocking
         cfg.httpAdditionalHeaders = [
             "Accept": "application/json",
             "Accept-Encoding": "gzip",
-            "Cache-Control": "no-cache"
+            "Cache-Control": "no-cache",
+            "User-Agent": "UnsaidKeyboard/1.0 (iOS)"  // Prevent WAF rate-limiting
         ]
-        return URLSession(configuration: cfg)
+        
+        return URLSession(configuration: cfg, delegate: networkDelegate, delegateQueue: nil)
     }()
+    
+    // Network metrics delegate for debugging timeouts
+    private lazy var networkDelegate = NetworkMetricsDelegate()
     private var inFlightTask: URLSessionDataTask?
     
     // MARK: - Queue / Debounce (for suggestions only)
@@ -722,20 +795,47 @@ final class ToneSuggestionCoordinator {
     private func handleNetworkError(_ error: Error, url: URL) {
         let ns = error as NSError
         
+        // Enhanced error categorization for keyboard extensions
+        let isTimeout = ns.code == NSURLErrorTimedOut
+        let isSSLIssue = ns.code == NSURLErrorSecureConnectionFailed
+        
         #if DEBUG
-        netLog.error("🌐 \(url.absoluteString, privacy: .public) → code=\(ns.code) domain=\(ns.domain, privacy: .public)")
+        print("🌐 Network Error: \(url.absoluteString) → code=\(ns.code) domain=\(ns.domain)")
         switch ns.code {
-        case NSURLErrorNotConnectedToInternet: netLog.warning("🔌 offline: \(url, privacy: .public)")
-        case NSURLErrorTimedOut:               netLog.warning("⏱️ timeout: \(url, privacy: .public)")
-        case NSURLErrorCannotFindHost:         netLog.error("🌐 cannot find host: \(url, privacy: .public)")
-        case NSURLErrorCannotConnectToHost:    netLog.error("🔌 cannot connect: \(url, privacy: .public)")
-        default:                               netLog.error("❌ network error \(ns.code): \(error.localizedDescription)")
+        case NSURLErrorNotConnectedToInternet: 
+            print("🔌 Device offline: \(url)")
+        case NSURLErrorTimedOut:               
+            print("⏱️ Request timeout (likely Full Access disabled or WAF blocking): \(url)")
+        case NSURLErrorCannotFindHost:         
+            print("🌐 DNS resolution failed: \(url)")
+        case NSURLErrorCannotConnectToHost:    
+            print("🔌 Connection refused (server down or network filtering): \(url)")
+        case NSURLErrorSecureConnectionFailed:
+            print("🔒 TLS/SSL failure (ATS violation or cert issue): \(url)")
+        default:                               
+            print("❌ Network error \(ns.code): \(error.localizedDescription)")
         }
         #endif
         
-        Task { @MainActor in
-            self.delegate?.didReceiveAPIError(.networkError)
+        // Implement backoff for timeout errors (often Full Access related)
+        if isTimeout {
+            netBackoffUntil = Date().addingTimeInterval(60) // 1 minute backoff
+            print("⏸️ Network backoff activated for 60s due to timeout")
         }
+        
+        // Different delegate errors based on root cause
+        Task { @MainActor in
+            if isTimeout && !hasFullAccess {
+                // Timeout + no Full Access = likely permission issue
+                self.delegate?.didReceiveAPIError(.authRequired)
+            } else if isSSLIssue {
+                // SSL issues often indicate ATS problems
+                self.delegate?.didReceiveAPIError(.serverError(ns.code))
+            } else {
+                self.delegate?.didReceiveAPIError(.networkError)
+            }
+        }
+        
         throttledLog("network error \(ns.code)", category: "api")
     }
     
@@ -1081,11 +1181,45 @@ extension ToneSuggestionCoordinator {
                 caution: toneOut.buckets["caution"] ?? 0.33,
                 alert: toneOut.buckets["alert"] ?? 0.34
             )
-            let newTone = pickUiTone(newBuckets, current: lastUiTone)
+            
+            // Smart tone detection prioritizing emotional content
+            let newTone: Bucket
+            let hasEmotionalContent = containsEmotionalLanguage(trimmed)
+            
+            if hasEmotionalContent {
+                // For emotional content, prioritize alert/caution even if clear has higher percentage
+                if newBuckets.alert >= 0.25 || newBuckets.caution >= 0.25 {
+                    // Choose between alert and caution based on which is higher
+                    newTone = newBuckets.alert > newBuckets.caution ? .alert : .caution
+                    #if DEBUG
+                    coordLog.info("🎯 Emotional content detected, overriding to \(newTone.rawValue) (alert=\(String(format: "%.1f", newBuckets.alert * 100))%%, caution=\(String(format: "%.1f", newBuckets.caution * 100))%%)")
+                    #endif
+                } else {
+                    // Fallback to normal logic for edge cases
+                    newTone = pickUiTone(newBuckets, current: lastUiTone, threshold: 0.30)
+                    #if DEBUG
+                    coordLog.info("🎯 Emotional content with low confidence, using threshold logic: \(newTone.rawValue)")
+                    #endif
+                }
+            } else if let apiTone = toneOut.apiTone, apiTone != .clear {
+                // Trust API when it's not "clear" and content isn't emotional
+                newTone = apiTone
+                #if DEBUG
+                coordLog.info("🎯 Using API tone decision: \(apiTone.rawValue)")
+                #endif
+            } else {
+                // Use standard threshold logic for non-emotional content
+                newTone = pickUiTone(newBuckets, current: lastUiTone, threshold: 0.40)
+                #if DEBUG
+                coordLog.info("🎯 Standard threshold logic: \(newTone.rawValue) (clear=\(String(format: "%.1f", newBuckets.clear * 100))%%, caution=\(String(format: "%.1f", newBuckets.caution * 100))%%, alert=\(String(format: "%.1f", newBuckets.alert * 100))%%)")
+                #endif
+            }
+            
             let isSeverityDrop = severityRank(for: newTone) < severityRank(for: lastUiTone)
             let alpha = isSeverityDrop ? 0.50 : 0.30
             smoothedBuckets = smoothBuckets(prev: smoothedBuckets, curr: newBuckets, alpha: alpha)
-            let finalTone = pickUiTone(smoothedBuckets, current: lastUiTone)
+            
+            let finalTone = newTone
             
             // Extract and forward feature noticings to the delegate
             if let noticings = toneOut.metadata?.feature_noticings {
@@ -1101,6 +1235,37 @@ extension ToneSuggestionCoordinator {
             coordLog.info("🎯 Analysis failed, retaining current tone: \(error.localizedDescription)")
             #endif
         }
+    }
+    
+    // Helper to detect emotional language that should trigger alerts/cautions
+    private func containsEmotionalLanguage(_ text: String) -> Bool {
+        let lowercased = text.lowercased()
+        
+        // Strong anger/hostility indicators (should be alert)
+        let angerWords = [
+            "angry", "mad", "furious", "pissed", "rage", "livid",
+            "fucking", "damn", "shit", "asshole", "bitch", "hate",
+            "disgusting", "stupid", "idiot", "moron", "pathetic"
+        ]
+        
+        // Frustration/negative patterns (should be caution/alert)
+        let frustrationPatterns = [
+            "never listen", "don't listen", "always", "you never",
+            "frustrated", "annoyed", "irritated", "fed up",
+            "can't stand", "sick of", "tired of", "enough",
+            "disappointed", "upset", "hurt", "terrible", "awful", "horrible"
+        ]
+        
+        // Emotional intensity phrases
+        let intensityPhrases = [
+            "really angry", "so angry", "extremely", "absolutely",
+            "completely", "totally", "seriously", "literally"
+        ]
+        
+        // Check for any emotional indicators
+        return angerWords.contains { lowercased.contains($0) } ||
+               frustrationPatterns.contains { lowercased.contains($0) } ||
+               intensityPhrases.contains { lowercased.contains($0) }
     }
     
     private func smoothBuckets(
@@ -1155,7 +1320,20 @@ extension ToneSuggestionCoordinator {
     // MARK: - API Helper for Tone
     private struct ToneOut: Decodable { 
         let buckets: [String: Double]
+        let ui_tone: String?  // Trust the API's tone decision
         let metadata: ToneMetadata?
+        
+        // Computed property to convert API ui_tone to our Bucket enum
+        var apiTone: Bucket? {
+            guard let ui_tone = ui_tone else { return nil }
+            switch ui_tone.lowercased() {
+            case "clear": return .clear
+            case "caution": return .caution
+            case "alert": return .alert
+            case "neutral": return .neutral
+            default: return nil
+            }
+        }
     }
     
     private struct ToneMetadata: Decodable {
@@ -1196,9 +1374,18 @@ extension ToneSuggestionCoordinator {
         if let direct = try? JSONDecoder().decode(ToneOut.self, from: data) { return direct }
         struct Wrapped: Decodable { let data: ToneOut }
         if let wrapped = try? JSONDecoder().decode(Wrapped.self, from: data) { return wrapped.data }
-        struct UI: Decodable { let ui_distribution: [String: Double]?, buckets: [String: Double]?, metadata: ToneMetadata? }
+        struct UI: Decodable { 
+            let ui_distribution: [String: Double]?
+            let buckets: [String: Double]?
+            let ui_tone: String?
+            let metadata: ToneMetadata? 
+        }
         let ui = try JSONDecoder().decode(UI.self, from: data)
-        return ToneOut(buckets: ui.ui_distribution ?? ui.buckets ?? [:], metadata: ui.metadata)
+        return ToneOut(
+            buckets: ui.ui_distribution ?? ui.buckets ?? [:], 
+            ui_tone: ui.ui_tone,
+            metadata: ui.metadata
+        )
     }
 }
 

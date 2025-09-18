@@ -13,6 +13,22 @@ import { logger } from '../logger';
 import { dataLoader } from './dataLoader';
 import { processWithSpacy, processWithSpacySync } from './spacyBridge';
 
+// After imports & before classes
+const contextConfigData: any = dataLoader.get('contextClassifier') || {};
+const ENGINE = contextConfigData.engine || {};
+const CTX_INDEX: Record<string, any> = Object.fromEntries(
+  (Array.isArray(contextConfigData.contexts) ? contextConfigData.contexts : []).map((c: any) => [c.id, c])
+);
+
+// Handy sets from engine
+const GENERIC_CLEAR_STOPS = new Set<string>(
+  (ENGINE?.genericTokens?.globalStop || []).concat(ENGINE?.genericTokens?.pronouns || []).map((s:string)=>s.toLowerCase())
+);
+const CLEAR_MIN_TOKENS = ENGINE?.bucketGuards?.minEvidenceTokensByBucket?.clear ?? 2;
+const CLEAR_OVERSHADOW = ENGINE?.bucketGuards?.clear?.overshadowedBy || { bucket: 'alert', atOrAbove: 0.22, ratioRequiredForClear: 1.75 };
+const CLEAR_DAMPEN_ESCALATORY = ENGINE?.bucketGuards?.clear?.dampenIfEscalatoryContextsActive ?? 0.35;
+const PREFER_CAUTION_IF_BOTH = ENGINE?.bucketGuards?.caution?.preferIfClearAndAlertBoth ?? 0.18;
+
 // -----------------------------
 // Semantic Backbone Configuration
 // -----------------------------
@@ -1489,6 +1505,117 @@ class AdvancedFeatureExtractor {
   }
 }
 
+// Reuse the detectors we already have:
+function tokenizePlain(text: string): string[] {
+  return text
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\w\s]/g,' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/** Collect raw phrase evidence per bucket from the whole text */
+function collectBucketEvidence(text: string) {
+  const tokens = tokenizePlain(text);
+  const hits = detectors.scanSurface(tokens); // { bucket, weight, term, start, end }[]
+  const byBucket = { clear: 0, caution: 0, alert: 0 } as Record<Bucket, number>;
+  const termsByBucket: Record<Bucket, Set<string>> = { clear:new Set(), caution:new Set(), alert:new Set() };
+
+  for (const h of hits) {
+    byBucket[h.bucket] += Math.max(0, h.weight || 0);
+    // term length in tokens (phrase-level check)
+    const len = String(h.term || '').trim().split(/\s+/).filter(Boolean).length;
+    if (len > 0) termsByBucket[h.bucket].add(`${h.term}__LEN${len}`);
+  }
+  return { byBucket, termsByBucket, tokens };
+}
+
+/** Whether clear evidence is only generic ("I/me/we/ok") or single-token fluff */
+function clearIsOnlyGeneric(termsByBucket: Record<Bucket, Set<string>>): boolean {
+  const entries = Array.from(termsByBucket.clear);
+  if (entries.length === 0) return true;
+
+  let hasSpecific = false;
+  for (const tagged of entries) {
+    const [term, lenTag] = tagged.split('__LEN');
+    const len = parseInt(lenTag || '1', 10) || 1;
+    const t = term.toLowerCase().trim();
+    const isGeneric = GENERIC_CLEAR_STOPS.has(t);
+    // require phrase-level (>= CLEAR_MIN_TOKENS) and not on the generic stop list
+    if (len >= CLEAR_MIN_TOKENS && !isGeneric) {
+      hasSpecific = true;
+      break;
+    }
+  }
+  return !hasSpecific;
+}
+
+/** Any escalatory contexts active? (by polarity) */
+function hasEscalatoryContexts(activeContextIds: string[]): boolean {
+  for (const id of activeContextIds) {
+    const cfg = CTX_INDEX[id];
+    if (cfg?.polarity === 'escalatory') return true;
+  }
+  return false;
+}
+
+/** Apply JSON bucket guards to a {clear,caution,alert} dist, using evidence + contexts. */
+function enforceBucketGuards(
+  dist: Record<Bucket, number>,
+  evidence: ReturnType<typeof collectBucketEvidence>,
+  activeContextIds: string[]
+): Record<Bucket, number> {
+  let { clear, caution, alert } = dist;
+
+  // 1) Ignore generic/unigram "clear" evidence
+  if (ENGINE?.genericTokens?.policy?.ignoreForBuckets?.clear) {
+    if (clearIsOnlyGeneric(evidence.termsByBucket)) {
+      clear = Math.min(clear, 0.01); // essentially zero without hard zeroing
+    }
+  }
+
+  // 2) Escalatory presence dampens clear
+  if (hasEscalatoryContexts(activeContextIds) && CLEAR_DAMPEN_ESCALATORY > 0 && clear > 0) {
+    clear = clear * (1 - CLEAR_DAMPEN_ESCALATORY);
+  }
+
+  // 3) Overshadow rule: alert strong ⇒ clear must exceed ratio or be suppressed
+  if ((CLEAR_OVERSHADOW?.bucket === 'alert') && alert >= (CLEAR_OVERSHADOW?.atOrAbove ?? 0.22)) {
+    const need = alert * (CLEAR_OVERSHADOW?.ratioRequiredForClear ?? 1.75);
+    if (clear < need) {
+      // suppress clear rather than zeroing it completely
+      clear = Math.min(clear, alert * 0.25);
+    }
+  }
+
+  // 4) Prefer caution if both clear & alert noticeably present
+  if (clear >= PREFER_CAUTION_IF_BOTH && alert >= PREFER_CAUTION_IF_BOTH) {
+    const bleed = Math.min(0.15, clear * 0.25);
+    clear -= bleed;
+    caution += bleed; // move some to caution
+  }
+
+  // 5) Per-context clearGate (promote/dampen)
+  if (Array.isArray(activeContextIds) && activeContextIds.length) {
+    for (const id of activeContextIds) {
+      const cfg = CTX_INDEX[id];
+      const gate = cfg?.clearGate;
+      if (!gate) continue;
+      if (gate.mode === 'promote') {
+        clear = clear + (clear * (gate.strength ?? 0.5));
+      } else if (gate.mode === 'dampen') {
+        clear = clear * (1 - (gate.strength ?? 0.5));
+      }
+    }
+  }
+
+  // Normalize
+  const sum = Math.max(1e-9, clear + caution + alert);
+  return { clear: clear/sum, caution: caution/sum, alert: alert/sum };
+}
+
 // -----------------------------
 // Tone Analysis Service (JSON-weighted)
 // -----------------------------
@@ -2004,17 +2131,25 @@ export function mapToneToBuckets(
   }
   
   const bucketMap = data.toneBucketMapping || data.toneBucketMap || {};
-  const defaultBuckets = bucketMap.default || {};
+  const defaultBuckets = bucketMap.toneBuckets || bucketMap.default || {};
   const contextOverrides = bucketMap.contextOverrides || {};
   const intensityShifts = bucketMap.intensityShifts || {};
   
   const tone = toneResult.classification || toneResult.tone?.classification || toneResult.primary_tone || 'neutral';
   const confidence = toneResult.confidence || toneResult.tone?.confidence || 0.5;
   
+  logger.info('mapToneToBuckets debug', { 
+    tone, 
+    confidence, 
+    bucketMapKeys: Object.keys(bucketMap),
+    defaultBucketsKeys: Object.keys(defaultBuckets),
+    hasAngryMapping: !!defaultBuckets.angry
+  });
+  
   // Get base bucket probabilities with fallback
   let buckets = { clear: 0.5, caution: 0.3, alert: 0.2 }; // neutral fallback
-  if (defaultBuckets[tone]) {
-    buckets = { ...defaultBuckets[tone] };
+  if (defaultBuckets[tone]?.base) {
+    buckets = { ...defaultBuckets[tone].base };
     logger.info('Found bucket mapping for tone', { tone, buckets });
   } else {
     logger.warn('No bucket mapping found for tone, using neutral fallback', { tone, availableTones: Object.keys(defaultBuckets) });
@@ -2042,6 +2177,15 @@ export function mapToneToBuckets(
   const total = Object.values(buckets).reduce((sum, val) => sum + (val as number), 0);
   if (total > 0) {
     (['clear','caution','alert'] as Bucket[]).forEach(b => (buckets as any)[b] = (buckets as any)[b] / total);
+  }
+
+  // ✅ NEW: optional guard application if caller passed { text }
+  if (config?.text && ENGINE) {
+    const evidence = collectBucketEvidence(String(config.text || ''));
+    // derive contexts from text so we can apply clearGate/overshadow
+    const ctxDetected = detectors.detectContexts(tokenizePlain(String(config.text || '')), attachmentStyle);
+    const activeIds = (ctxDetected.allContexts || []).map((c:any) => c.id);
+    buckets = enforceBucketGuards(buckets, evidence, activeIds);
   }
   
   return {
@@ -2100,11 +2244,20 @@ export async function getGeneralToneAnalysis(text: string, attachmentStyle: stri
     
     const bucketResult = mapBucketsFromJson(result.primary_tone, context, result.intensity, (result as any).contextSeverity);
     
+    // NEW: enforce engine guards using real evidence + actual active contexts
+    const evidence = collectBucketEvidence(text);
+    const ctxTokens = tokenizePlain(text);
+    const ctxDetected = detectors.detectContexts(ctxTokens, attachmentStyle);
+    const activeIds = (ctxDetected.allContexts || []).map(c => c.id);
+
+    const guardedDist = enforceBucketGuards(bucketResult.dist, evidence, activeIds);
+    const primaryBucket = (Object.entries(guardedDist).sort((a,b)=>b[1]-a[1])[0][0]) as Bucket;
+    
     return {
       tone: result.primary_tone,
       confidence: result.confidence,
-      buckets: bucketResult.dist,
-      primary_bucket: bucketResult.primary,
+      buckets: guardedDist,               // <-- use guarded
+      primary_bucket: primaryBucket,      // <-- use guarded
       intensity: result.intensity,
       emotions: result.emotions,
       linguistic_features: result.linguistic_features,

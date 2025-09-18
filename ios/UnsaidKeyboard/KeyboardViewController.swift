@@ -10,11 +10,19 @@ final class KeyboardViewController: UIInputViewController {
         super.viewDidLoad()
 
         // Create your custom keyboard view
-        let kb = KeyboardController(frame: .zero, inputViewStyle: .default)
+        let kb = KeyboardController(frame: .zero, inputViewStyle: .keyboard)
         kb.translatesAutoresizingMaskIntoConstraints = false
 
-        // Attach it as the inputView and configure
-        self.inputView = kb
+        // Add as subview and constrain to full view size for proper width
+        view.addSubview(kb)
+        NSLayoutConstraint.activate([
+            kb.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            kb.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            kb.topAnchor.constraint(equalTo: view.topAnchor),
+            kb.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+
+        // Configure the keyboard
         kb.configure(with: self)
         self.keyboardView = kb
     }

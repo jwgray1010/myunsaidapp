@@ -70,6 +70,39 @@ final class KeyButtonFactory {
         return b
     }
 
+    /// Creates a button optimized for spell strip usage with flexible height constraints
+    static func makeSpellStripButton(title: String) -> UIButton {
+        let b = ExtendedTouchButton(type: .system)
+        b.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Use ≥44pt height constraint with high priority (not required)
+        let heightConstraint = b.heightAnchor.constraint(greaterThanOrEqualToConstant: touchTargetHeight)
+        heightConstraint.priority = .defaultHigh  // 750, allows Auto Layout flexibility
+        heightConstraint.isActive = true
+        
+        b.setTitle(title, for: .normal)
+        b.accessibilityLabel = title
+        b.contentEdgeInsets = UIEdgeInsets(top: 4, left: 4, bottom: 4, right: 4)
+        
+        b.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
+        b.titleLabel?.adjustsFontForContentSizeCategory = false
+        b.titleLabel?.adjustsFontSizeToFitWidth = true
+        b.titleLabel?.minimumScaleFactor = 0.90
+        b.setContentCompressionResistancePriority(.required, for: .horizontal)
+        
+        // Accessibility
+        b.accessibilityTraits = .button
+        b.isAccessibilityElement = true
+        b.clipsToBounds = false
+        
+        if #available(iOS 13.4, *) {
+            b.isPointerInteractionEnabled = false
+        }
+
+        applySpecialKeyStyle(to: b, background: .systemGray6, text: .label)
+        return b
+    }
+
     static func makeSpaceButton() -> UIButton {
         let b = ExtendedSpaceButton(type: .system)
         commonKeySetup(b, hPad: 4, vPad: 4)

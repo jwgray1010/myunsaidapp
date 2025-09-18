@@ -16,18 +16,14 @@
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
-		D05BB7C52E59565800E5C7B2 /* PersonalityDataBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED470B2E5911530094BD53 /* PersonalityDataBridge.swift */; };
-		D05BB7C62E59565C00E5C7B2 /* SafeKeyboardDataStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47092E5911530094BD53 /* SafeKeyboardDataStorage.swift */; };
 		D0AAA7CC2E7AF9A300990696 /* UnsaidKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D0AAA7C52E7AF9A300990696 /* UnsaidKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D0B001232E6DE1B400C8FB5C /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0B001222E6DE1B400C8FB5C /* SceneDelegate.swift */; };
-		D0F701E02E6AB78A00C3BE80 /* AppGroups.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0F701DE2E6AB78A00C3BE7E /* AppGroups.swift */; };
 		E0A12362 /* KeyboardDataSyncBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12361 /* KeyboardDataSyncBridge.swift */; };
 		E0A12371 /* BackgroundTaskManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12371A /* BackgroundTaskManager.swift */; };
 		E0A12372 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A12372A /* NotificationManager.swift */; };
 		E1448293C5E640DE84B5AF44 /* GradientView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FFA836915704AD38679F914 /* GradientView.swift */; };
 		F39A47031E1F170200E8B355 /* PersonalityDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39A47041E1F170200E8B355 /* PersonalityDataManager.swift */; };
 		F39A47051E1F170300E8B355 /* UnsaidKeyboardHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39A46FF1E1F170000E8B355 /* UnsaidKeyboardHelper.swift */; };
-		F39A47141E1F170400E8B355 /* 000_UnsaidSharedTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0ED47122E5911540094BD53 /* 000_UnsaidSharedTypes.swift */; };
 		F3A001101E1F170500E8B355 /* UnsaidKeyboardBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A001001E1F170500E8B355 /* UnsaidKeyboardBridge.swift */; };
 		F3A001111E1F170500E8B355 /* KeyboardAnalyticsBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A001011E1F170500E8B355 /* KeyboardAnalyticsBridge.swift */; };
 		F3A001121E1F170500E8B355 /* PersonalityDataPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A001021E1F170500E8B355 /* PersonalityDataPlugin.swift */; };
@@ -96,35 +92,11 @@
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		9F1867C0296BED52B9AB16EC /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		B214A6858BAB21475015F446 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		D06776992E7AD52800033899 /* LayoutUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutUtilities.swift; sourceTree = "<group>"; };
 		D0990F8A1822F327B3322151 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
-		D0AAA7BD2E7AF71200990696 /* KeyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyButton.swift; sourceTree = "<group>"; };
-		D0AAA7BF2E7AF74C00990696 /* KBDLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBDLogging.swift; sourceTree = "<group>"; };
 		D0AAA7C52E7AF9A300990696 /* UnsaidKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UnsaidKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0B001222E6DE1B400C8FB5C /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		D0B001242E6E95A500C8FB5C /* unsaid_logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = unsaid_logo.png; sourceTree = "<group>"; };
-		D0ED46FB2E5910DC0094BD53 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
-		D0ED46FD2E5910DC0094BD53 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		D0ED47062E5911520094BD53 /* LightweightSpellChecker.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LightweightSpellChecker.swift; sourceTree = "<group>"; };
-		D0ED47072E5911520094BD53 /* ToneSuggestionCoordinator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ToneSuggestionCoordinator.swift; sourceTree = "<group>"; };
-		D0ED47082E5911530094BD53 /* UnsaidKeyboard-Bridging-Header.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = "UnsaidKeyboard-Bridging-Header.mm"; sourceTree = "<group>"; };
-		D0ED47092E5911530094BD53 /* SafeKeyboardDataStorage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SafeKeyboardDataStorage.swift; sourceTree = "<group>"; };
-		D0ED470A2E5911530094BD53 /* KeyboardController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeyboardController.swift; sourceTree = "<group>"; };
-		D0ED470B2E5911530094BD53 /* PersonalityDataBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PersonalityDataBridge.swift; sourceTree = "<group>"; };
-		D0ED470C2E5911530094BD53 /* UnsaidKeyboard.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = UnsaidKeyboard.entitlements; sourceTree = "<group>"; };
-		D0ED47122E5911540094BD53 /* 000_UnsaidSharedTypes.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = 000_UnsaidSharedTypes.swift; sourceTree = "<group>"; };
-		D0F701DE2E6AB78A00C3BE7E /* AppGroups.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = AppGroups.swift; path = ../Runner/AppGroups.swift; sourceTree = "<group>"; };
 		D8F124A3A0498C53B70A3114 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		DBBD51BB0CCFD0647B7647B5 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		E0A123442E5912000094BD53 /* EnhancedCommunicatorService.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EnhancedCommunicatorService.swift; sourceTree = "<group>"; };
-		E0A123462E5912010094BD53 /* KeyButtonFactory.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeyButtonFactory.swift; sourceTree = "<group>"; };
-		E0A123482E5912020094BD53 /* SuggestionChipView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SuggestionChipView.swift; sourceTree = "<group>"; };
-		E0A12349 /* DeleteManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DeleteManager.swift; sourceTree = "<group>"; };
-		E0A12351 /* KeyPreviewManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeyPreviewManager.swift; sourceTree = "<group>"; };
-		E0A12353 /* SecureFixManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SecureFixManager.swift; sourceTree = "<group>"; };
-		E0A12355 /* SpaceHandler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SpaceHandler.swift; sourceTree = "<group>"; };
-		E0A12357 /* SuggestionChipManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SuggestionChipManager.swift; sourceTree = "<group>"; };
-		E0A12359 /* SpellCheckerIntegration.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SpellCheckerIntegration.swift; sourceTree = "<group>"; };
 		E0A12361 /* KeyboardDataSyncBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeyboardDataSyncBridge.swift; sourceTree = "<group>"; };
 		E0A12371A /* BackgroundTaskManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = BackgroundTaskManager.swift; path = ../Runner/BackgroundTaskManager.swift; sourceTree = "<group>"; };
 		E0A12372A /* NotificationManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = NotificationManager.swift; path = ../Runner/NotificationManager.swift; sourceTree = "<group>"; };
@@ -135,9 +107,6 @@
 		F3A001011E1F170500E8B355 /* KeyboardAnalyticsBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardAnalyticsBridge.swift; sourceTree = "<group>"; };
 		F3A001021E1F170500E8B355 /* PersonalityDataPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalityDataPlugin.swift; sourceTree = "<group>"; };
 		FA247EB4F594405FA72FB2A8 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
-		HD1234567890ABCDEF123457 /* HapticsDriver.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HapticsDriver.swift; sourceTree = "<group>"; };
-		NG1234567890ABCDEF123456 /* NetGate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NetGate.swift; sourceTree = "<group>"; };
-		TH1234567890ABCDEF123457 /* TimerHub.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TimerHub.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -148,10 +117,17 @@
 			);
 			target = D0AAA7C42E7AF9A300990696 /* UnsaidKeyboard */;
 		};
+		D0AAAA2E2E7B9DD200990696 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				AppGroups.swift,
+			);
+			target = 97C146ED1CF9000F007C117D /* Runner */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		D0AAA7C62E7AF9A300990696 /* UnsaidKeyboard */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (D0AAA7CD2E7AF9A400990696 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = UnsaidKeyboard; sourceTree = "<group>"; };
+		D0AAA7C62E7AF9A300990696 /* UnsaidKeyboard */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (D0AAAA2E2E7B9DD200990696 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, D0AAA7CD2E7AF9A400990696 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = UnsaidKeyboard; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -214,7 +190,6 @@
 			children = (
 				9740EEB11CF90186004384FC /* Flutter */,
 				97C146F01CF9000F007C117D /* Runner */,
-				D0ED46FA2E5910DC0094BD53 /* UnsaidKeyboard */,
 				D0AAA7C62E7AF9A300990696 /* UnsaidKeyboard */,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
@@ -270,72 +245,6 @@
 				3F9DF5AB046A74937BD3FC61 /* Pods-RunnerTests.profile.xcconfig */,
 			);
 			path = Pods;
-			sourceTree = "<group>";
-		};
-		D0ED46FA2E5910DC0094BD53 /* UnsaidKeyboard */ = {
-			isa = PBXGroup;
-			children = (
-				D0ED470A2E5911530094BD53 /* KeyboardController.swift */,
-				D06776992E7AD52800033899 /* LayoutUtilities.swift */,
-				D0ED46FB2E5910DC0094BD53 /* KeyboardViewController.swift */,
-				D0AAA7BF2E7AF74C00990696 /* KBDLogging.swift */,
-				D0ED47122E5911540094BD53 /* 000_UnsaidSharedTypes.swift */,
-				D0F701DE2E6AB78A00C3BE7E /* AppGroups.swift */,
-				E0A123442E5912000094BD53 /* EnhancedCommunicatorService.swift */,
-				D0ED47062E5911520094BD53 /* LightweightSpellChecker.swift */,
-				D0ED470B2E5911530094BD53 /* PersonalityDataBridge.swift */,
-				D0ED47092E5911530094BD53 /* SafeKeyboardDataStorage.swift */,
-				D0B001242E6E95A500C8FB5C /* unsaid_logo.png */,
-				D0ED47072E5911520094BD53 /* ToneSuggestionCoordinator.swift */,
-				HD1234567890ABCDEF123457 /* HapticsDriver.swift */,
-				E0A12363 /* Managers */,
-				E0A12364 /* Services */,
-				E0A12365 /* UI */,
-				E0A12366 /* Utils */,
-				D0ED47082E5911530094BD53 /* UnsaidKeyboard-Bridging-Header.mm */,
-				D0ED470C2E5911530094BD53 /* UnsaidKeyboard.entitlements */,
-				D0ED46FD2E5910DC0094BD53 /* Info.plist */,
-			);
-			path = UnsaidKeyboard;
-			sourceTree = "<group>";
-		};
-		E0A12363 /* Managers */ = {
-			isa = PBXGroup;
-			children = (
-				E0A12349 /* DeleteManager.swift */,
-				E0A12351 /* KeyPreviewManager.swift */,
-				E0A12353 /* SecureFixManager.swift */,
-				E0A12355 /* SpaceHandler.swift */,
-				E0A12357 /* SuggestionChipManager.swift */,
-			);
-			path = Managers;
-			sourceTree = "<group>";
-		};
-		E0A12364 /* Services */ = {
-			isa = PBXGroup;
-			children = (
-				E0A12359 /* SpellCheckerIntegration.swift */,
-			);
-			path = Services;
-			sourceTree = "<group>";
-		};
-		E0A12365 /* UI */ = {
-			isa = PBXGroup;
-			children = (
-				E0A123462E5912010094BD53 /* KeyButtonFactory.swift */,
-				E0A123482E5912020094BD53 /* SuggestionChipView.swift */,
-			);
-			path = UI;
-			sourceTree = "<group>";
-		};
-		E0A12366 /* Utils */ = {
-			isa = PBXGroup;
-			children = (
-				D0AAA7BD2E7AF71200990696 /* KeyButton.swift */,
-				NG1234567890ABCDEF123456 /* NetGate.swift */,
-				TH1234567890ABCDEF123457 /* TimerHub.swift */,
-			);
-			path = Utils;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -594,12 +503,8 @@
 				F39A47031E1F170200E8B355 /* PersonalityDataManager.swift in Sources */,
 				E1448293C5E640DE84B5AF44 /* GradientView.swift in Sources */,
 				02A4807D7767461AB72E0C48 /* PersonalityKeys.swift in Sources */,
-				D05BB7C52E59565800E5C7B2 /* PersonalityDataBridge.swift in Sources */,
-				D0F701E02E6AB78A00C3BE80 /* AppGroups.swift in Sources */,
 				F39A47051E1F170300E8B355 /* UnsaidKeyboardHelper.swift in Sources */,
-				F39A47141E1F170400E8B355 /* 000_UnsaidSharedTypes.swift in Sources */,
 				D0B001232E6DE1B400C8FB5C /* SceneDelegate.swift in Sources */,
-				D05BB7C62E59565C00E5C7B2 /* SafeKeyboardDataStorage.swift in Sources */,
 				F3A001101E1F170500E8B355 /* UnsaidKeyboardBridge.swift in Sources */,
 				F3A001111E1F170500E8B355 /* KeyboardAnalyticsBridge.swift in Sources */,
 				F3A001121E1F170500E8B355 /* PersonalityDataPlugin.swift in Sources */,
