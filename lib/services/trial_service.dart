@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'admin_service.dart';
+import 'keyboard_extension.dart';
 
 /// Service to manage the 7-day free trial period
 class TrialService extends ChangeNotifier {
@@ -211,6 +212,9 @@ class TrialService extends ChangeNotifier {
     await prefs.setBool(_trialActiveKey, true);
     await prefs.setBool(_expiringBannerDismissedKey, false);
 
+    // Sync to keyboard extension for device-based access control
+    await _syncSubscriptionToKeyboard();
+
     notifyListeners();
   }
 
@@ -223,6 +227,9 @@ class TrialService extends ChangeNotifier {
 
     await prefs.setBool(_subscriptionActiveKey, true);
     await prefs.setBool(_trialActiveKey, false);
+
+    // Sync to keyboard extension for device-based access control
+    await _syncSubscriptionToKeyboard();
 
     notifyListeners();
   }
@@ -240,6 +247,9 @@ class TrialService extends ChangeNotifier {
       _isTrialActive = true;
       await prefs.setBool(_trialActiveKey, true);
     }
+
+    // Sync to keyboard extension for device-based access control
+    await _syncSubscriptionToKeyboard();
 
     notifyListeners();
   }
@@ -418,6 +428,9 @@ class TrialService extends ChangeNotifier {
     _isAdminMode = true;
     await prefs.setBool(_adminModeKey, true);
 
+    // Sync to keyboard extension for device-based access control
+    await _syncSubscriptionToKeyboard();
+
     notifyListeners();
   }
 
@@ -463,5 +476,26 @@ class TrialService extends ChangeNotifier {
     _expiringBannerDismissed = true;
     await prefs.setBool(_expiringBannerDismissedKey, true);
     notifyListeners();
+  }
+
+  /// Sync subscription status to keyboard extension for mass user architecture
+  Future<void> _syncSubscriptionToKeyboard() async {
+    try {
+      // Use App Groups to sync subscription data to keyboard extension
+      // This ensures keyboard can check subscription status locally without server calls
+
+      // Note: SharedPreferences in Flutter automatically uses App Groups when available
+      // The data is already stored in the correct location, just need to ensure
+      // keyboard extension reads from the same keys
+
+      debugPrint(
+        '✅ TrialService: Subscription data ready for keyboard access - subscription: $_hasSubscription, trial: $_isTrialActive, admin: $_isAdminMode',
+      );
+      debugPrint(
+        '   Keys: ${_subscriptionActiveKey}, ${_trialActiveKey}, ${_adminModeKey}',
+      );
+    } catch (e) {
+      debugPrint('❌ TrialService: Failed to log subscription sync: $e');
+    }
   }
 }

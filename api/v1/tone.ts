@@ -6,8 +6,6 @@ import { success } from '../_lib/http';
 import { toneRequestSchema } from '../_lib/schemas/toneRequest';
 import { toneAnalysisService, mapToneToBuckets } from '../_lib/services/toneAnalysis';
 import { CommunicatorProfile } from '../_lib/services/communicatorProfile';
-import { FeatureSpotterStore } from '../_lib/services/featureSpotter.store';
-import { DialogueStateStore } from '../_lib/services/dialogueState';
 import { logger } from '../_lib/logger';
 import { ensureBoot } from '../_lib/bootstrap';
 import { spacyClient } from '../_lib/services/spacyClient';
@@ -66,33 +64,33 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     // Boot already done above; nothing to do here.
 
     // Initialize user profile
-    // const profile = new CommunicatorProfile({
-    //   userId
-    // });
-    // await profile.init();
+    const profile = new CommunicatorProfile({
+      userId
+    });
+    await profile.init();
     
     // Get attachment estimate
-    // const attachmentEstimate = profile.getAttachmentEstimate();
-    // const isNewUser = !attachmentEstimate.primary || attachmentEstimate.confidence < 0.3;
+    const attachmentEstimate = profile.getAttachmentEstimate();
+    const isNewUser = !attachmentEstimate.primary || attachmentEstimate.confidence < 0.3;
     
     // Perform advanced analysis using the dedicated service
     const result = await toneAnalysisService.analyzeAdvancedTone(data.text, {
       context: data.context,
-      // attachmentStyle: attachmentEstimate.primary || undefined,
+      attachmentStyle: attachmentEstimate.primary || undefined,
       // relationshipStage: data.meta?.relationshipStage,
       includeAttachmentInsights: true,
       deepAnalysis: true,
-      // isNewUser,
+      isNewUser,
       userProfile: {
         id: userId,
-        // attachment: attachmentEstimate.primary,
-        // secondary: attachmentEstimate.secondary,
-        // windowComplete: attachmentEstimate.windowComplete
+        attachment: attachmentEstimate.primary,
+        secondary: attachmentEstimate.secondary,
+        windowComplete: attachmentEstimate.windowComplete
       }
     });
     
     // Add communication to profile history
-    // profile.addCommunication(data.text, data.context, result.primary_tone);
+    profile.addCommunication(data.text, data.context || 'general', result.primary_tone);
     
     // Copilot: Final pill color must be 'alert' | 'caution' | 'clear' | 'neutral'.
     // - Never set from raw labels like "angry"; labels only influence ui_distribution.
@@ -160,47 +158,12 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       });
     }
     
-    // FeatureSpotter integration - pattern detection and tone nudging
-    // Skip FeatureSpotter for strong emotional tones to prevent overriding correct classifications
-    const skipFeatureSpotter = strongEmotionalTones.includes(result.primary_tone);
-    
+    // Session-only processing - no persistent storage for mass user scalability
+    // Feature spotting patterns now handled on device via SafeKeyboardDataStorage
     let bucketsAfterFS = uiBuckets;
-    let fsRun: any = { matches: [], noticings: [], toneHints: { clear: 0, caution: 0, alert: 0 } };
     
-    if (!skipFeatureSpotter) {
-      const fs = new FeatureSpotterStore(userId);
-      fsRun = fs.run(data.text, {
-        hasNegation: (result as any)?.flags?.hasNegation,
-        hasSarcasm: (result as any)?.flags?.hasSarcasm
-      });
-
-      // Nudge intensity + tone a touch (safe, bounded)
-      const toneOffsets = fsRun.toneHints; // e.g., {clear:+0.02, caution:+0.03, alert:+0.05}
-      const bumped = { ...uiBuckets };
-      (['clear','caution','alert'] as const).forEach(k => { 
-        bumped[k] = Math.max(0, bumped[k] + (toneOffsets[k] || 0)); 
-      });
-      const sum = Math.max(1e-9, bumped.clear + bumped.caution + bumped.alert);
-      bucketsAfterFS = { clear: bumped.clear/sum, caution: bumped.caution/sum, alert: bumped.alert/sum };
-      
-      logger.info('FeatureSpotter applied tone nudges', { 
-        tone: result.primary_tone,
-        originalBuckets: uiBuckets,
-        toneOffsets,
-        finalBuckets: bucketsAfterFS
-      });
-    } else {
-      logger.info('FeatureSpotter skipped for strong emotional tone', { 
-        tone: result.primary_tone,
-        preservedBuckets: uiBuckets
-      });
-    }
-    
-    // Update dialogue state
-    new DialogueStateStore(userId).update({
-      lastContext: (data.context || 'general') as any,
-      lastTone: undefined // Will be set after ui_tone calculation
-    }, data.text);
+    // Session-only dialogue context - no persistent state for mass user scalability
+    // Dialogue state now handled on device via SafeKeyboardDataStorage
     
     // Use the feature-spotted buckets for final calculation
     uiBuckets = bucketsAfterFS;
@@ -214,11 +177,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     // Final pill color via 3-way tie rule (neutral only when all three within .05)
     const ui_tone = pickUiTone(uiBuckets);
     
-    // Update dialogue state with final tone
-    new DialogueStateStore(userId).update({
-      lastContext: (data.context || 'general') as any,
-      lastTone: ui_tone as any
-    });
+    // Session-only final tone tracking - no persistent state for mass user scalability
 
     const processingTime = Date.now() - startTime;
     
@@ -228,8 +187,9 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       tone: result.primary_tone,
       confidence: result.confidence,
       ui_tone,
-      featureSpotterMatches: fsRun.matches.length,
-      featureSpotterNoticings: fsRun.noticings.length
+      // Feature spotting now handled on device - no server-side tracking
+      featureSpotterMatches: 0,
+      featureSpotterNoticings: 0
     });
     
     const response = {
@@ -237,8 +197,8 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       userId,
       // echo original text if you want the response to be self-describing (optional)
       text: data.text,
-      // attachmentEstimate,
-      // isNewUser,
+      attachmentEstimate,
+      isNewUser,
       tone: result.primary_tone,
       confidence: result.confidence,
       // ➕ UI fields used by the iOS pill:
@@ -263,7 +223,8 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       metadata: {
         processingTimeMs: processingTime,
         model_version: 'v1.0.0-advanced',
-        feature_noticings: fsRun.noticings
+        // Feature noticings now handled on device for mass user scalability
+        feature_noticings: []
       }
     };
     

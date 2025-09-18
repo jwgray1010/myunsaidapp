@@ -171,26 +171,16 @@ async function updateUserSubscription(userId: string, subscription: {
   verifiedAt: string;
   expiresAt?: string;
 }): Promise<void> {
-  // Update in-memory subscription store (replace with database in production)
-  const subscriptionStore = (global as any).subscriptionStore || {};
-  (global as any).subscriptionStore = subscriptionStore;
+  // Mass user architecture: No server-side storage for subscription data
+  // Subscription status is stored on device via main Flutter app SharedPreferences
+  // and synced to keyboard extension via SafeKeyboardDataStorage
+  
+  logger.info('Receipt verified - subscription status should be stored on device', { 
+    userId, 
+    subscription,
+    note: 'Server does not store subscription data for mass user scalability'
+  });
 
-  subscriptionStore[userId] = {
-    active: true,
-    expiresAt: subscription.expiresAt
-  };
-
-  logger.info('Updated user subscription in store', { userId, subscription });
-
-  // TODO: Update user's subscription status in your database
-  // This would typically update a database like:
-  // await db.users.update(userId, {
-  //   subscription: {
-  //     ...subscription,
-  //     status: 'active'
-  //   }
-  // });
-
-  // For the trial guard to work, we need to mark this user as having premium access
-  // This could be done via a database update or cache invalidation
+  // API only verifies receipt and returns result
+  // Main app is responsible for storing subscription status locally
 }

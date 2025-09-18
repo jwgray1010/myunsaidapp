@@ -9,8 +9,6 @@ import { dataLoader } from '../_lib/services/dataLoader';
 import { mapToneToBuckets, toneAnalysisService } from '../_lib/services/toneAnalysis';
 import { adjustToneByAttachment, applyThresholdShift } from '../_lib/services/utils/attachmentToneAdjust';
 import { CommunicatorProfile } from '../_lib/services/communicatorProfile';
-import { FeatureSpotterStore } from '../_lib/services/featureSpotter.store';
-import { DialogueStateStore } from '../_lib/services/dialogueState';
 import { logger } from '../_lib/logger';
 import { ensureBoot } from '../_lib/bootstrap';
 import * as path from 'path';
@@ -205,28 +203,16 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       throw suggestionError;
     }
 
-    // FeatureSpotter integration - run pattern detection
-    const fs = new FeatureSpotterStore(userId);
-    const fsRun = fs.run(data.text, {
-      hasNegation: suggestionAnalysis.analysis.flags.hasNegation,
-      hasSarcasm: suggestionAnalysis.analysis.flags.hasSarcasm
-    });
-
-    // Make the noticings & matches visible for UX / analytics
+        // Session-based processing - no server-side storage for mass users
+    // FeatureSpotter patterns would be handled by device storage in production
+    
+    // Make the noticings & matches visible for UX / analytics (simulated for session)
     suggestionAnalysis.analysis.flags.phraseEdgeHits = [
-      ...(suggestionAnalysis.analysis.flags.phraseEdgeHits || []),
-      ...fsRun.matches.map(m => m.featureId)
+      ...(suggestionAnalysis.analysis.flags.phraseEdgeHits || [])
     ];
-    (suggestionAnalysis as any).analysis.flags.featureNoticings = fsRun.noticings;
+    (suggestionAnalysis as any).analysis.flags.featureNoticings = [];
 
-    // Update dialogue state
-    new DialogueStateStore(userId).update({
-      lastContext: (suggestionAnalysis.context || 'general') as any,
-      lastTone: undefined // Will be set after ui_tone calculation
-    }, data.text);
-
-    // Aggregate into profile learning
-    fs.aggregateToProfile(fsRun, profile);
+    // Session-only processing - no persistent dialogue state for mass users
 
     // 3) Use detected context for history
     const detectedContext = suggestionAnalysis.analysis?.context?.label || data.context || 'general';
@@ -250,14 +236,13 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
 
     const intensityScore = suggestionAnalysis.analysis?.flags?.intensityScore ?? 0.5;
 
-    // Apply feature spotter attachment hints to base buckets
-    const attachmentHintDelta = fsRun.attachmentHints[attachmentStyle] || 0;
+    // Session-only tone bucket processing (no server-side feature hints for mass users)
     const baseBucketsWithFS = {
-      clear: Math.max(0, baseBuckets.clear + (fsRun.toneHints.clear || 0)),
-      caution: Math.max(0, baseBuckets.caution + (fsRun.toneHints.caution || 0)),
-      alert: Math.max(0, baseBuckets.alert + (fsRun.toneHints.alert || 0))
+      clear: Math.max(0, baseBuckets.clear),
+      caution: Math.max(0, baseBuckets.caution),
+      alert: Math.max(0, baseBuckets.alert)
     };
-    // Normalize after FS hints
+    // Normalize base buckets
     const fsSum = baseBucketsWithFS.clear + baseBucketsWithFS.caution + baseBucketsWithFS.alert || 1;
     baseBucketsWithFS.clear /= fsSum;
     baseBucketsWithFS.caution /= fsSum;
@@ -280,11 +265,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
 
     const ui_tone = finalPrimary; // 'clear' | 'caution' | 'alert'
     
-    // Update dialogue state with final tone
-    new DialogueStateStore(userId).update({
-      lastContext: (suggestionAnalysis.context || 'general') as any,
-      lastTone: ui_tone as any
-    });
+    // Session-only processing - no persistent dialogue state for mass users
     
     const processingTime = Date.now() - startTime;
     
@@ -304,12 +285,24 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       ui_distribution: uiBuckets,
       client_seq: data.client_seq || data.clientSeq,
       original_analysis: {
-        tone: ui_tone,
-        sentiment: 0, // Default sentiment
-        clarity_score: 0.5, // Default clarity
-        empathy_score: 0.5, // Default empathy
-        attachment_indicators: [],
-        communication_patterns: []
+        tone: toneResult?.classification || ui_tone,
+        confidence: toneResult?.confidence || 0.5,
+        sentiment: fullToneAnalysis?.sentiment_score || 0,
+        sentiment_score: fullToneAnalysis?.sentiment_score || 0,
+        intensity: fullToneAnalysis?.intensity || 0.5,
+        clarity_score: 0.5, // Default clarity (could be enhanced)
+        empathy_score: 0.5, // Default empathy (could be enhanced)
+        
+        // 🎯 COMPLETE: Include all rich analysis data in response
+        linguistic_features: fullToneAnalysis?.linguistic_features,
+        context_analysis: fullToneAnalysis?.context_analysis,
+        attachment_indicators: fullToneAnalysis?.attachmentInsights || [],
+        attachmentInsights: fullToneAnalysis?.attachmentInsights || [],
+        communication_patterns: fullToneAnalysis?.communicationPatterns || [],
+        
+        // UI consistency fields
+        ui_tone: fullToneAnalysis?.ui_tone || ui_tone,
+        ui_distribution: fullToneAnalysis?.ui_distribution || uiBuckets
       },
       ok: true,
       success: true,
@@ -335,7 +328,14 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
         attachment_informed: true,
         suggestion_count: suggestionAnalysis.suggestions.length,
         status: 'active', // Always active - learning happens in background
-        feature_noticings: fsRun.noticings
+        feature_noticings: [], // Session-only processing for mass users
+        
+        // 🎯 ENHANCED: Track complete analysis data usage for optimization
+        tone_analysis_source: (fullToneAnalysis ? 'coordinator_cache' : 'fresh_analysis') as 'coordinator_cache' | 'fresh_analysis' | 'override',
+        complete_analysis_available: !!fullToneAnalysis,
+        linguistic_features_used: !!(fullToneAnalysis?.linguistic_features && Object.keys(fullToneAnalysis.linguistic_features).length > 0),
+        context_analysis_used: !!(fullToneAnalysis?.context_analysis && Object.keys(fullToneAnalysis.context_analysis).length > 0),
+        attachment_insights_count: fullToneAnalysis?.attachmentInsights?.length || 0
       }
     };
     

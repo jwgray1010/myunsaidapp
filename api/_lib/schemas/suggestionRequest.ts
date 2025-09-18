@@ -72,25 +72,63 @@ export const suggestionItemSchema = z.object({
 
 export type SuggestionItem = z.infer<typeof suggestionItemSchema>;
 
-// Analysis results schema
+// Analysis results schema - Enhanced to include complete therapy-relevant data
 export const originalAnalysisSchema = z.object({
   tone: z.string().describe('Detected tone of the original message'),
+  confidence: z.number().min(0).max(1).describe('Tone detection confidence'),
   sentiment: z.number().min(-1).max(1).describe('Sentiment score (-1 to 1)'),
+  sentiment_score: z.number().min(-1).max(1).optional().describe('Alternative sentiment score field'),
+  intensity: z.number().min(0).max(1).optional().describe('Emotional intensity score'),
   clarity_score: z.number().min(0).max(1).describe('Clarity score (0 to 1)'),
   empathy_score: z.number().min(0).max(1).describe('Empathy score (0 to 1)'),
+  
+  // Enhanced linguistic and contextual analysis
+  linguistic_features: z.object({
+    formality_level: z.number().min(0).max(1).optional(),
+    emotional_complexity: z.number().min(0).max(1).optional(),
+    assertiveness: z.number().min(0).max(1).optional(),
+    empathy_indicators: z.array(z.string()).optional(),
+    potential_misunderstandings: z.array(z.string()).optional(),
+  }).optional().describe('Linguistic feature analysis'),
+  
+  context_analysis: z.object({
+    appropriateness_score: z.number().min(0).max(1).optional(),
+    relationship_impact: z.enum(['positive', 'neutral', 'negative']).optional(),
+    suggested_adjustments: z.array(z.string()).optional(),
+    relationship_dynamic: z.string().optional(),
+    communication_pattern: z.string().optional(),
+    escalation_risk: z.enum(['low', 'medium', 'high']).optional(),
+  }).optional().describe('Contextual relationship analysis'),
+  
   attachment_indicators: z.array(z.string()).optional().describe('Detected attachment style indicators'),
+  attachmentInsights: z.array(z.string()).optional().describe('Attachment-specific insights'),
   communication_patterns: z.array(z.string()).optional().describe('Identified communication patterns'),
+  
+  // UI consistency fields
+  ui_tone: z.enum(['clear','caution','alert']).optional().describe('UI bucket for the pill color'),
+  ui_distribution: z.object({
+    clear: z.number().min(0).max(1).optional(),
+    caution: z.number().min(0).max(1).optional(),
+    alert: z.number().min(0).max(1).optional(),
+  }).optional().describe('Bucket probabilities used to derive ui_tone'),
 });
 
 export type OriginalAnalysis = z.infer<typeof originalAnalysisSchema>;
 
-/** METADATA — allow backend keys via passthrough */
+/** METADATA — Enhanced to track complete analysis processing */
 export const responseMetadataSchema = z.object({
   suggestion_count: z.number(),
   processingTimeMs: z.number(),
   model_version: z.string(),
   features_used: z.array(z.string()).optional(),
   attachment_style_applied: z.string().optional(),
+  
+  // Enhanced analysis tracking
+  tone_analysis_source: z.enum(['coordinator_cache', 'fresh_analysis', 'override']).optional().describe('Source of tone analysis data'),
+  complete_analysis_available: z.boolean().optional().describe('Whether complete linguistic and contextual analysis was available'),
+  linguistic_features_used: z.boolean().optional().describe('Whether linguistic features were available and used'),
+  context_analysis_used: z.boolean().optional().describe('Whether context analysis was available and used'),
+  attachment_insights_count: z.number().optional().describe('Number of attachment insights processed'),
 
   // backend present keys (allowed, not required)
   status: z.string().optional(),

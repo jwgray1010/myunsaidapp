@@ -1202,6 +1202,23 @@ extension ToneSuggestionCoordinator {
     private func analyze(_ sentence: String) async {
         let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let apiBase = cachedAPIBaseURL.nilIfEmpty else { return }
+        
+        // Check subscription status locally before making API calls (mass user architecture)
+        let storage = SafeKeyboardDataStorage.shared
+        guard storage.hasAccessToFeatures() else {
+            Task { @MainActor in
+                if storage.hasActiveTrial() {
+                    let daysRemaining = storage.getTrialDaysRemaining()
+                    self.delegate?.didReceiveAPIError(.paymentRequired)
+                    self.throttledLog("Trial access: \(daysRemaining) days remaining", category: "subscription")
+                } else {
+                    self.delegate?.didReceiveAPIError(.paymentRequired)
+                    self.throttledLog("No subscription access - trial expired", category: "subscription")
+                }
+            }
+            return
+        }
+        
         do {
             let toneOut = try await postTone(base: apiBase, text: trimmed, token: cachedAPIKey.nilIfEmpty)
             let newBuckets = (

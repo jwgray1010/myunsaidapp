@@ -665,20 +665,25 @@ class AnalysisOrchestrator {
       richToneData = {
         emotions: fullToneAnalysis.emotions,
         intensity: fullToneAnalysis.metadata?.analysis_depth ? fullToneAnalysis.metadata.analysis_depth : intensityScore,
-        sentiment_score: fullToneAnalysis.confidence, // Approximate mapping
-        linguistic_features: {
-          formality_level: 0.5, // Default values - could be extracted if available
+        sentiment_score: fullToneAnalysis.sentiment_score || fullToneAnalysis.confidence, // Use actual sentiment score if available
+        
+        // 🎯 CRITICAL FIX: Use ACTUAL linguistic features from coordinator, not defaults!
+        linguistic_features: fullToneAnalysis.linguistic_features || {
+          formality_level: 0.5, // Fallback only if missing
           emotional_complexity: Object.keys(fullToneAnalysis.emotions?.emotions || {}).length > 0 ? 0.7 : 0.3,
           assertiveness: (fullToneAnalysis.emotions?.emotions?.anger || fullToneAnalysis.emotions?.emotions?.confident || 0) * 0.8,
           empathy_indicators: fullToneAnalysis.attachmentInsights || [],
           potential_misunderstandings: []
         },
-        context_analysis: {
+        
+        // 🎯 CRITICAL FIX: Use ACTUAL context analysis from coordinator, not defaults!
+        context_analysis: fullToneAnalysis.context_analysis || {
           appropriateness_score: fullToneAnalysis.confidence,
           relationship_impact: fullToneAnalysis.ui_tone === 'alert' ? 'negative' : 
                               fullToneAnalysis.ui_tone === 'caution' ? 'neutral' : 'positive',
           suggested_adjustments: fullToneAnalysis.suggestions?.map(s => s.text) || []
         },
+        
         ui_tone: fullToneAnalysis.ui_tone,
         ui_distribution: fullToneAnalysis.ui_distribution,
         evidence: fullToneAnalysis.evidence

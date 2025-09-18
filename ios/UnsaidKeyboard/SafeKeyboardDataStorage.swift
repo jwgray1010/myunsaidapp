@@ -25,6 +25,11 @@ final class SafeKeyboardDataStorage {
         static let pendingSuggestions  = "pending_suggestion_data"
         static let storageMetadata     = "keyboard_storage_metadata"
         static let lastSyncTimestamp   = "last_sync_timestamp"
+        // Subscription status synced from main app (use same keys as TrialService)
+        static let subscriptionActive  = "subscription_active"
+        static let trialActive         = "trial_active"
+        static let adminModeActive     = "admin_mode_active"
+        static let trialStartDate      = "trial_start_date"
     }
 
     // MARK: - Codable payloads (compact & type-safe)
@@ -381,5 +386,49 @@ private struct RingBuffer<Element> {
     func makeArray(max: Int) -> [Element] {
         if buffer.count <= max { return buffer }
         return Array(buffer.suffix(max))
+    }
+}
+
+// MARK: - Subscription Status Access
+extension SafeKeyboardDataStorage {
+    
+    /// Check if user has active subscription (synced from main app)
+    func hasActiveSubscription() -> Bool {
+        return sharedDefaults.bool(forKey: StorageKeys.subscriptionActive)
+    }
+    
+    /// Check if user has active trial (synced from main app)
+    func hasActiveTrial() -> Bool {
+        return sharedDefaults.bool(forKey: StorageKeys.trialActive)
+    }
+    
+    /// Check if user is in admin mode (synced from main app)
+    func isAdminMode() -> Bool {
+        return sharedDefaults.bool(forKey: StorageKeys.adminModeActive)
+    }
+    
+    /// Get trial start date (synced from main app)
+    func getTrialStartDate() -> Date? {
+        let timestamp = sharedDefaults.double(forKey: StorageKeys.trialStartDate)
+        guard timestamp > 0 else { return nil }
+        return Date(timeIntervalSince1970: timestamp)
+    }
+    
+    /// Check if user has access to premium features
+    func hasAccessToFeatures() -> Bool {
+        // Allow access if subscription, trial, or admin mode
+        return hasActiveSubscription() || hasActiveTrial() || isAdminMode()
+    }
+    
+    /// Get days remaining in trial
+    func getTrialDaysRemaining() -> Int {
+        guard hasActiveTrial(), let startDate = getTrialStartDate() else { return 0 }
+        
+        let now = Date()
+        let trialEnd = startDate.addingTimeInterval(7 * 24 * 60 * 60) // 7 days
+        let secondsRemaining = trialEnd.timeIntervalSince(now)
+        let daysRemaining = Int(ceil(secondsRemaining / (24 * 60 * 60)))
+        
+        return max(0, daysRemaining)
     }
 }

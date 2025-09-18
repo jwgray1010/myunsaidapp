@@ -16,7 +16,7 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
       tone_analysis: '/api/v1/tone',
       suggestions: '/api/v1/suggestions',
       communicator: '/api/v1/communicator',
-      trial_status: '/api/v1/trial-status',
+      // trial_status removed - now handled on device for mass user scalability
     },
     features: env.ENABLED_FEATURES.split(','),
     rate_limits: {

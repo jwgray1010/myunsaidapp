@@ -17,15 +17,14 @@ import { logger } from './logger';
  *   return res.json({ result: 'allowed' });
  * });
  * 
- * // Combined: Auth + Trial Guard (recommended)
- * import { withTrialGuard } from './middleware/trialGuard';
- * export default withAuth(withTrialGuard({ feature: 'tone-analysis' })(async (req, res, auth) => {
- *   // 401 if anonymous, 402 if trial expired, 200 if allowed
+ * // Combined: Auth only (mass user architecture - no server-side trial checks)
+ * export default withAuth(async (req, res, auth) => {
+ *   // Device handles subscription/trial checking before API calls
  *   return res.json({ result: 'premium feature' });
- * }));
+ * });
  * 
- * // Or use the combined helper:
- * export default withAuthAndTrialGuard('tone-analysis', { feature: 'tone-analysis' })(async (req, res, auth) => {
+ * // Or use the combined helper (trial checking disabled for mass users):
+ * export default withAuthAndTrialGuard('tone-analysis')(async (req, res, auth) => {
  *   return res.json({ result: 'premium feature' });
  * });
  */
@@ -146,17 +145,15 @@ export function withPermission(permission: string) {
     });
 }
 
-/// Combined middleware: Auth + Trial Guard (recommended order)
+/// Combined middleware: Auth only (DISABLED trial guard for mass user architecture)
+/// For mass users, subscription/trial checking is now handled on device
 export function withAuthAndTrialGuard(permission?: string, trialConfig?: any) {
   return (handler: (req: VercelRequest, res: VercelResponse, auth: AuthContext) => Promise<void>) => {
-    // First check auth (401 if anonymous)
+    // Mass user architecture: Only check auth, no server-side trial checking
+    // Subscription/trial status is checked on device before API calls
     const authMiddleware = permission ? withPermission(permission) : withAuth;
     
-    // Then check trial/payment (402 if expired)
-    const trialMiddleware = trialConfig ? 
-      require('./middleware/trialGuard').withTrialGuard(trialConfig) : 
-      (h: any) => h;
-    
-    return authMiddleware(trialMiddleware(handler));
+    // Skip trial middleware - device handles subscription access control
+    return authMiddleware(handler);
   };
 }

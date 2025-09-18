@@ -93,6 +93,27 @@ export const toneResponseSchema = z.object({
   client_seq: z.number().optional().describe('Echoed client sequence for last-writer-wins'),
   // Enhanced response fields
   emotions: emotionAnalysisSchema.optional().describe('Emotion analysis results'),
+  intensity: z.number().min(0).max(1).optional().describe('Emotional intensity score'),
+  sentiment_score: z.number().min(-1).max(1).optional().describe('Sentiment polarity score (-1 negative to +1 positive)'),
+  
+  // Advanced linguistic and contextual analysis
+  linguistic_features: z.object({
+    formality_level: z.number().min(0).max(1).optional(),
+    emotional_complexity: z.number().min(0).max(1).optional(),
+    assertiveness: z.number().min(0).max(1).optional(),
+    empathy_indicators: z.array(z.string()).optional(),
+    potential_misunderstandings: z.array(z.string()).optional(),
+  }).passthrough().optional().describe('Linguistic feature analysis'),
+  
+  context_analysis: z.object({
+    appropriateness_score: z.number().min(0).max(1).optional(),
+    relationship_impact: z.enum(['positive', 'neutral', 'negative']).optional(),
+    suggested_adjustments: z.array(z.string()).optional(),
+    relationship_dynamic: z.string().optional(),
+    communication_pattern: z.string().optional(),
+    escalation_risk: z.enum(['low', 'medium', 'high']).optional(),
+  }).passthrough().optional().describe('Contextual relationship analysis'),
+  
   suggestions: z.array(z.object({
     text: z.string(),
     reason: z.string(),
