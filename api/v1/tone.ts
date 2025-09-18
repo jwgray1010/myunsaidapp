@@ -4,7 +4,7 @@ import { withCors, withMethods, withValidation, withErrorHandling, withLogging }
 import { toneAnalysisRateLimit } from '../_lib/rateLimit';
 import { success } from '../_lib/http';
 import { toneRequestSchema } from '../_lib/schemas/toneRequest';
-import { toneAnalysisService, mapToneToBuckets } from '../_lib/services/toneAnalysis';
+import { toneAnalysisService, mapToneToBuckets, getGeneralToneAnalysis } from '../_lib/services/toneAnalysis';
 import { CommunicatorProfile } from '../_lib/services/communicatorProfile';
 import { logger } from '../_lib/logger';
 import { ensureBoot } from '../_lib/bootstrap';
@@ -97,76 +97,29 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     // - Use pickUiTone(ui_distribution) which returns 'neutral' only if all three buckets are within 0.05.
     // - Always include { ui_tone, ui_distribution, buckets } in the response.
     
-    // Map classifier → starting buckets (hint only; NOT the decider)
-    // FIXED: Direct tone mapping instead of broken mapToneToBuckets
-    let uiBuckets = { clear: 1/3, caution: 1/3, alert: 1/3 }; // fallback
+    // Use modern bucket mapping with context-aware guardrails (instead of hard-coded mapping)
+    const primaryContext = (result as any).primaryContext || "general";
+    const contextSeverity = (result as any).contextSeverity || { clear: 0, caution: 0, alert: 0 };
+    const metaClassifier = (result as any).metaClassifier || { pAlert: 0, pCaution: 0 };
+    const intensity = result.intensity || 0.5;
+    const attachmentStyle = req.body.attachment_style || "secure";
+    const inputText = req.body.text || "";
     
-    // Define strong emotional tones that should preserve their mappings
-    const strongEmotionalTones = ['angry', 'frustrated', 'sad', 'anxious', 'negative'];
+    // Get sophisticated bucket mapping using modern approach
+    const advancedResult = await getGeneralToneAnalysis(inputText, attachmentStyle, primaryContext);
     
-    // Direct mapping based on detected tone
-    const toneMap: Record<string, {clear: number, caution: number, alert: number}> = {
-      'angry':        { clear: 0.10, caution: 0.30, alert: 0.60 },
-      'frustrated':   { clear: 0.15, caution: 0.45, alert: 0.40 },
-      'anxious':      { clear: 0.20, caution: 0.60, alert: 0.20 },
-      'sad':          { clear: 0.25, caution: 0.60, alert: 0.15 },
-      'negative':     { clear: 0.20, caution: 0.50, alert: 0.30 },
-      'assertive':    { clear: 0.40, caution: 0.40, alert: 0.20 },
-      'positive':     { clear: 0.80, caution: 0.15, alert: 0.05 },
-      'supportive':   { clear: 0.85, caution: 0.12, alert: 0.03 },
-      'neutral':      { clear: 0.50, caution: 0.30, alert: 0.20 },
-      'tentative':    { clear: 0.30, caution: 0.60, alert: 0.10 },
-      'confident':    { clear: 0.60, caution: 0.25, alert: 0.15 }
-    };
+    // Use the advanced analysis buckets which include all guardrails and context-awareness
+    let uiBuckets = advancedResult.buckets;
     
-    if (toneMap[result.primary_tone]) {
-      uiBuckets = { ...toneMap[result.primary_tone] };
-      logger.info('Direct tone mapping applied', { 
-        tone: result.primary_tone, 
-        buckets: uiBuckets 
-      });
-    } else {
-      logger.warn('No direct mapping for tone, using fallback', { 
-        tone: result.primary_tone,
-        availableTones: Object.keys(toneMap)
-      });
-    }
-
-    // Optional nudges from analysis context severity if present
-    const sev = (result as any).contextSeverity || { clear: 0, caution: 0, alert: 0 };
-    
-    logger.info('Context severity values', { 
-      tone: result.primary_tone,
-      originalBuckets: uiBuckets,
-      contextSeverity: sev 
+    logger.info('Json bucket mapping applied', { 
+      tone: result.primary_tone, 
+      context: primaryContext,
+      intensity: intensity,
+      metaClassifier: metaClassifier,
+      contextSeverity: contextSeverity,
+      buckets: uiBuckets,
+      guardrailsApplied: true
     });
-    
-    // COMPLETELY SKIP context severity for emotional tones - it's fundamentally broken
-    // The pattern matching is too broad and creates false positives (e.g., "me" triggering repair context for angry text)
-    if (!strongEmotionalTones.includes(result.primary_tone)) {
-      uiBuckets = {
-        clear: Math.max(0, (uiBuckets.clear ?? 0) + (sev.clear || 0)),
-        caution: Math.max(0, (uiBuckets.caution ?? 0) + (sev.caution || 0)),
-        alert: Math.max(0, (uiBuckets.alert ?? 0) + (sev.alert || 0)),
-      };
-      logger.info('Applied context severity for non-emotional tone', { afterContextSeverity: uiBuckets });
-    } else {
-      logger.info('SKIPPED context severity for emotional tone - preserving correct mapping', { 
-        tone: result.primary_tone,
-        preservedBuckets: uiBuckets,
-        skippedSeverity: sev
-      });
-    }
-    
-    // Session-only processing - no persistent storage for mass user scalability
-    // Feature spotting patterns now handled on device via SafeKeyboardDataStorage
-    let bucketsAfterFS = uiBuckets;
-    
-    // Session-only dialogue context - no persistent state for mass user scalability
-    // Dialogue state now handled on device via SafeKeyboardDataStorage
-    
-    // Use the feature-spotted buckets for final calculation
-    uiBuckets = bucketsAfterFS;
     
     // Normalize
     {

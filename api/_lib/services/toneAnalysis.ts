@@ -2460,8 +2460,8 @@ export class ToneAnalysisService {
     const pAlert = this.metaAlertProb(metaFeatures, this.W_ALERT);
     const pCaution = this.metaCautionProb(metaFeatures, this.W_CAUTION);
     
-    // Blend into scores (bounded, won't blow up)
-    out.angry += pAlert * 1.4;
+    // Blend into scores (bounded, won't blow up) - reduced multiplier to prevent positive message misclassification
+    out.angry += pAlert * 0.3;
     out.frustrated += Math.max(0, pCaution - pAlert * 0.3) * 0.9;
     
     logger.info(`🧠 Meta-classifier: pAlert=${pAlert.toFixed(3)}, pCaution=${pCaution.toFixed(3)}`);

@@ -432,6 +432,12 @@ class DataLoaderService {
         }
       );
 
+      // Add attachment tone weights for style-specific tone adjustments
+      this.cache.attachmentToneWeights = this.readJsonSafe<any>(
+        'attachment_tone_weights.json',
+        { version: '0', overrides: {} }
+      );
+
       this.initialized = true;
       logger.info('Data cache initialized successfully');
     } catch (error) {
