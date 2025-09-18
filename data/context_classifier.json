@@ -1,17 +1,106 @@
 {
-  "version": "2.0",
-  "schemaVersion": "2.0.0",
-  "lastUpdated": "2025-09-14",
-  "description": "Enhanced context classifier with smart schema: weighted patterns, priority-based deconfliction, cooldowns, counter-cues, and attachment gates",
+  "version": "2.1.0",
+  "schemaVersion": "2.1.0",
+  "lastUpdated": "2025-09-17",
+  "description": "Hybrid, sentence-aware context classifier with bucket guards that prevent generic tokens from flipping tone to clear. Adds per-bucket evidence rules, conflict resolution, and gating hints—all JSON-driven.",
   "features": {
-    "weightedPatterns": "Regex and n-gram patterns with custom weights",
-    "prioritySystem": "Context priority for conflict resolution",
-    "cooldownMechanics": "Timing controls and saturation limits",
-    "counterCues": "Dampening patterns to reduce false positives",
-    "positionBoosts": "Start/end position and formatting awareness",
-    "attachmentGates": "Style-specific context filtering and dampening",
-    "severityMapping": "Direct bucket impact beyond confidence boosts"
+    "weightedPatterns": "Regex/token/ngram patterns with custom weights",
+    "prioritySystem": "Context priority + polarity-aware conflicts",
+    "cooldownMechanics": "Per-context sentence-gap cooldown + saturation limits",
+    "counterCues": "Local dampeners to reduce false positives (humor/negation/etc.)",
+    "positionBoosts": "Start/end/all-caps boosts per sentence",
+    "attachmentGates": "Style-specific allow/dampen rules",
+    "severityMapping": "Direct bucket impact beyond confidence boosts",
+    "sentenceHybrid": "Per-sentence scoring + global aggregation",
+    "bucketGuards": "Per-bucket evidence requirements and overshadow rules",
+    "uiSelection": "Stable tone selection with alert-dominance and caution preference"
   },
+
+  "engine": {
+    "normalization": {
+      "lower": true,
+      "unicode_nfkc": true,
+      "collapse_whitespace": true,
+      "strip_punct_except_emojis": true
+    },
+
+    "sentenceSegmentation": {
+      "primary": "spacy",
+      "fallbackRegex": "(?<=[.!?])\\s+(?=[A-Z0-9\"“(])"
+    },
+
+    "formatCues": {
+      "allCaps": { "alert": 0.06, "clear": -0.02 },
+      "exclamationsPerSentence": { "alert": 0.02 }
+    },
+
+    "windowing": {
+      "defaultWindowTokens": 24,
+      "localNegationWindowTokens": 8,
+      "localSarcasmWindowTokens": 8
+    },
+
+    "negation": {
+      "patterns": [
+        "\\bnot\\b", "\\bnever\\b", "\\bno\\b", "\\bisn’t\\b|\\bisn't\\b", "\\baren’t\\b|\\baren't\\b"
+      ],
+      "effect": { "clear": 0, "caution": -0.06, "alert": -0.06 }
+    },
+
+    "sarcasm": {
+      "patterns": ["/s\\b", "\\bjk\\b", "just kidding", "as if", "yeah right"],
+      "effect": { "alert": -0.12, "caution": -0.06, "clear": 0.06 }
+    },
+
+    "genericTokens": {
+      "globalStop": ["ok", "okay"],
+      "pronouns": ["i","me","my","mine","we","us","our","ours","im","i’m","i‘m","i am"],
+      "policy": {
+        "ignoreForBuckets": { "clear": true, "caution": false, "alert": false },
+        "maxPointsPerGenericToken": 0
+      }
+    },
+
+    "bucketGuards": {
+      "minEvidenceTokensByBucket": { "clear": 2, "caution": 1, "alert": 1 },
+      "clear": {
+        "requireDeescalatoryContext": true,
+        "eligibleContexts": [
+          "CTX_REPAIR","CTX_HUMOR","CTX_EMPATHY","CTX_GRATITUDE","CTX_SUPPORT","CTX_PRAISE","CTX_NEGOTIATION","CTX_PLANNING","CTX_WORK","CTX_INTIMACY"
+        ],
+        "disallowTokens": ["i","me","my","mine","we","us","our","ours","im","i’m","i‘m","i am","ok","okay"],
+        "cancelIfLocalNegation": true,
+        "cancelIfLocalSarcasm": false,
+        "dampenIfEscalatoryContextsActive": 0.35,
+        "overshadowedBy": { "bucket": "alert", "atOrAbove": 0.22, "ratioRequiredForClear": 1.75 }
+      },
+      "caution": {
+        "preferIfClearAndAlertBoth": 0.18
+      },
+      "alert": {
+        "allCapsMultiplier": 1.1,
+        "exclamationMultiplier": 1.05
+      }
+    },
+
+    "conflictResolution": {
+      "priorityWins": true,
+      "polarityBias": { "escalatory": 0.06, "deescalatory": 0.04 },
+      "maxContextsPerSentence": 3,
+      "repeatDecayDefault": 0.75,
+      "cooldownSentenceMs": 300
+    },
+
+    "uiSelection": {
+      "method": "bucket-max-with-guards",
+      "tieBreak": ["caution","clear","alert"],
+      "stability": {
+        "minChangeDelta": 0.08,
+        "requireTwoSentencesForFlip": true
+      }
+    }
+  },
+
   "contexts": [
     {
       "id": "CTX_CONFLICT",
@@ -21,25 +110,9 @@
       "polarity": "escalatory",
       "windowTokens": 32,
       "scope": "message",
+      "clearGate": { "mode": "dampen", "strength": 0.65 },
       "toneCues": [
-        "argue",
-        "fight",
-        "mad",
-        "blame",
-        "yell",
-        "accuse",
-        "shout",
-        "threaten",
-        "disrespect",
-        "disrespectful",
-        "raise your voice",
-        "talking over me",
-        "name-calling",
-        "gaslighting",
-        "stop twisting my words",
-        "that's unfair",
-        "that's unfair",
-        "not fair"
+        "argue","fight","mad","blame","yell","accuse","shout","threaten","disrespect","disrespectful","raise your voice","talking over me","name-calling","gaslighting","stop twisting my words","that's unfair","that's unfair","not fair"
       ],
       "toneCuesWeighted": [
         {"pattern": "\\b(yell|shout|scream|screaming)\\b", "weight": 0.25, "type": "regex"},
@@ -50,92 +123,41 @@
         {"pattern": "you never", "weight": 0.22, "type": "ngram"},
         {"pattern": "\\b(shut\\s+up|stfu)\\b", "weight": 0.30, "type": "regex"}
       ],
-      "counterCues": ["jk", "kidding", "lol", "🙂", "😉", "haha", "just teasing"],
-      "positionBoost": { 
-        "start": 0.04, 
-        "end": 0.02, 
-        "allCaps": 0.05 
-      },
+      "counterCues": ["jk","kidding","lol","🙂","😉","haha","just teasing"],
+      "positionBoost": { "start": 0.04, "end": 0.02, "allCaps": 0.05 },
       "repeatDecay": 0.6,
       "cooldown_ms": 400,
       "maxBoostsPerMessage": 3,
-      "excludeIfContexts": ["humor", "repair"],
-      "requiresAny": ["you", "we", "us"],
-      "confidenceBoosts": {
-        "alert": 0.25,
-        "caution": 0.05
-      },
-      "severity": { 
-        "alert": 0.2, 
-        "caution": 0.1 
-      },
+      "excludeIfContexts": ["humor","repair"],
+      "requiresAny": ["you","we","us"],
+      "confidenceBoosts": { "alert": 0.25, "caution": 0.05 },
+      "severity": { "alert": 0.2, "caution": 0.1 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.10,
-          "caution": 0.15
-        },
-        "avoidant": {
-          "caution": 0.20,
-          "clear": 0.05
-        },
-        "disorganized": {
-          "alert": 0.20,
-          "caution": 0.10
-        },
-        "secure": {
-          "clear": 0.20
-        }
+        "anxious": { "alert": 0.10, "caution": 0.15 },
+        "avoidant": { "caution": 0.20, "clear": 0.05 },
+        "disorganized": { "alert": 0.20, "caution": 0.10 },
+        "secure": { "clear": 0.20 }
       },
-      "attachmentGates": {
-        "avoidant": { 
-          "allow": ["boundary", "withdrawal"], 
-          "dampening": 0.7 
-        }
-      }
+      "attachmentGates": { "avoidant": { "allow": ["boundary","withdrawal"], "dampening": 0.7 } }
     },
+
     {
       "id": "CTX_PLANNING",
       "context": "planning",
       "description": "Logistics and scheduling",
+      "clearGate": { "mode": "neutral", "strength": 1.0 },
       "toneCues": [
-        "schedule",
-        "plan",
-        "calendar",
-        "reschedule",
-        "availability",
-        "deadline",
-        "what time",
-        "which day",
-        "what date",
-        "meeting time",
-        "put it on the calendar",
-        "send an invite",
-        "RSVP",
-        "eta",
-        "book",
-        "confirm",
-        "time slot",
-        "availability window"
+        "schedule","plan","calendar","reschedule","availability","deadline","what time","which day","what date","meeting time","put it on the calendar","send an invite","RSVP","eta","book","confirm","time slot","availability window"
       ],
-      "confidenceBoosts": {
-        "clear": 0.20
-      },
+      "confidenceBoosts": { "clear": 0.20 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.10,
-          "clear": 0.05
-        },
-        "avoidant": {
-          "clear": 0.10
-        },
-        "disorganized": {
-          "caution": 0.10
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.10, "clear": 0.05 },
+        "avoidant": { "clear": 0.10 },
+        "disorganized": { "caution": 0.10 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_REPAIR",
       "context": "repair",
@@ -144,19 +166,9 @@
       "polarity": "deescalatory",
       "windowTokens": 40,
       "scope": "message",
+      "clearGate": { "mode": "promote", "strength": 1.0 },
       "toneCues": [
-        "sorry",
-        "apologize",
-        "my fault",
-        "own up",
-        "forgive",
-        "make up",
-        "my bad",
-        "I apologize",
-        "owning it",
-        "I was wrong",
-        "make things right",
-        "make amends"
+        "sorry","apologize","my fault","own up","forgive","make up","my bad","I apologize","owning it","I was wrong","make things right","make amends"
       ],
       "toneCuesWeighted": [
         {"pattern": "\\b(sorry|apologize|apologies)\\b", "weight": 0.25, "type": "regex"},
@@ -165,161 +177,74 @@
         {"pattern": "make\\s+(it\\s+right|amends|up\\s+to\\s+you)", "weight": 0.22, "type": "regex"},
         {"pattern": "forgive\\s+me", "weight": 0.35, "type": "regex"}
       ],
-      "counterCues": ["but", "however", "except", "still", "though"],
-      "positionBoost": { 
-        "start": 0.08, 
-        "end": 0.06, 
-        "allCaps": 0.02 
-      },
+      "counterCues": ["but","however","except","still","though"],
+      "positionBoost": { "start": 0.08, "end": 0.06, "allCaps": 0.02 },
       "repeatDecay": 0.8,
       "cooldown_ms": 200,
       "maxBoostsPerMessage": 4,
-      "requiresAny": ["sorry", "apologize", "my fault", "my bad", "forgive", "make up", "make amends", "I was wrong", "I apologize", "owning it"],
-      "confidenceBoosts": {
-        "clear": 0.25,
-        "caution": 0.05
-      },
-      "severity": { 
-        "clear": 0.20, 
-        "caution": -0.10 
-      },
+      "requiresAny": ["sorry","apologize","my fault","my bad","forgive","make up","make amends","I was wrong","I apologize","owning it"],
+      "confidenceBoosts": { "clear": 0.25, "caution": 0.05 },
+      "severity": { "clear": 0.20, "caution": -0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "clear": 0.15
-        },
-        "avoidant": {
-          "caution": 0.10
-        },
-        "disorganized": {
-          "alert": 0.05,
-          "caution": 0.05
-        },
-        "secure": {
-          "clear": 0.20
-        }
+        "anxious": { "clear": 0.15 },
+        "avoidant": { "caution": 0.10 },
+        "disorganized": { "alert": 0.05, "caution": 0.05 },
+        "secure": { "clear": 0.20 }
       },
-      "attachmentGates": {
-        "avoidant": { 
-          "dampening": 0.8 
-        }
-      }
+      "attachmentGates": { "avoidant": { "dampening": 0.8 } }
     },
+
     {
       "id": "CTX_BOUNDARY",
       "context": "boundary",
       "description": "Stating limits or rules",
+      "clearGate": { "mode": "neutral", "strength": 1.0 },
       "toneCues": [
-        "need space",
-        "stop",
-        "can’t",
-        "can't",
-        "cant",
-        "not okay",
-        "limit",
-        "boundary",
-        "respect",
-        "not acceptable",
-        "crossed the line",
-        "this is my limit",
-        "respect my boundary",
-        "respect my space",
-        "stop texting me",
-        "do not contact",
-        "that's not okay",
-        "that’s not okay"
+        "need space","stop","can’t","can't","cant","not okay","limit","boundary","respect","not acceptable","crossed the line","this is my limit","respect my boundary","respect my space","stop texting me","do not contact","that's not okay","that’s not okay"
       ],
-      "confidenceBoosts": {
-        "alert": 0.15,
-        "caution": 0.20
-      },
+      "confidenceBoosts": { "alert": 0.15, "caution": 0.20 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.10
-        },
-        "avoidant": {
-          "clear": 0.15
-        },
-        "disorganized": {
-          "alert": 0.15
-        },
-        "secure": {
-          "clear": 0.20
-        }
+        "anxious": { "alert": 0.10 },
+        "avoidant": { "clear": 0.15 },
+        "disorganized": { "alert": 0.15 },
+        "secure": { "clear": 0.20 }
       }
     },
+
     {
       "id": "CTX_SUPPORT",
       "context": "support",
       "description": "Offering care or encouragement",
+      "clearGate": { "mode": "promote", "strength": 1.0 },
       "toneCues": [
-        "proud",
-        "cheer",
-        "encourage",
-        "you can",
-        "believe in you",
-        "back you up",
-        "got you",
-        "here for you",
-        "you’ve got this",
-        "you've got this",
-        "rooting for you",
-        "proud of you"
+        "proud","cheer","encourage","you can","believe in you","back you up","got you","here for you","you’ve got this","you've got this","rooting for you","proud of you"
       ],
-      "confidenceBoosts": {
-        "clear": 0.25
-      },
+      "confidenceBoosts": { "clear": 0.25 },
       "attachmentAdjustments": {
-        "anxious": {
-          "clear": 0.15
-        },
-        "avoidant": {
-          "caution": 0.10
-        },
-        "disorganized": {
-          "caution": 0.10
-        },
-        "secure": {
-          "clear": 0.20
-        }
+        "anxious": { "clear": 0.15 },
+        "avoidant": { "caution": 0.10 },
+        "disorganized": { "caution": 0.10 },
+        "secure": { "clear": 0.20 }
       }
     },
+
     {
       "id": "CTX_DISCLOSURE",
       "context": "disclosure",
       "description": "Revealing personal or sensitive information",
+      "clearGate": { "mode": "neutral", "strength": 1.0 },
       "toneCues": [
-        "secret",
-        "share",
-        "honest",
-        "truth",
-        "confess",
-        "admit",
-        "be honest",
-        "open up",
-        "come clean",
-        "to tell you the truth",
-        "tell you the truth",
-        "come out with"
+        "secret","share","honest","truth","confess","admit","be honest","open up","come clean","to tell you the truth","tell you the truth","come out with"
       ],
-      "confidenceBoosts": {
-        "caution": 0.20,
-        "clear": 0.10
-      },
+      "confidenceBoosts": { "caution": 0.20, "clear": 0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.15
-        },
-        "avoidant": {
-          "alert": 0.10
-        },
-        "disorganized": {
-          "caution": 0.10
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.15 },
+        "avoidant": { "alert": 0.10 },
+        "disorganized": { "caution": 0.10 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_HUMOR",
       "context": "humor",
@@ -328,25 +253,9 @@
       "polarity": "deescalatory",
       "windowTokens": 20,
       "scope": "local",
+      "clearGate": { "mode": "promote", "strength": 0.8 },
       "toneCues": [
-        "lol",
-        "haha",
-        "funny",
-        "joke",
-        "tease",
-        "banter",
-        "jk",
-        "kidding",
-        "just teasing",
-        "lolol",
-        "lmao",
-        "lmfao",
-        "rofl",
-        "😂",
-        "🤣",
-        "😅",
-        "😜",
-        "😉"
+        "lol","haha","funny","joke","tease","banter","jk","kidding","just teasing","lolol","lmao","lmfao","rofl","😂","🤣","😅","😜","😉"
       ],
       "toneCuesWeighted": [
         {"pattern": "\\b(lol|haha|lmao|rofl)\\b", "weight": 0.20, "type": "regex"},
@@ -355,340 +264,157 @@
         {"pattern": "/s\\b", "weight": 0.35, "type": "regex"},
         {"pattern": "\\bjk\\b", "weight": 0.22, "type": "token"}
       ],
-      "deescalates": ["conflict", "escalation", "blame"],
-      "positionBoost": { 
-        "start": 0.02, 
-        "end": 0.08, 
-        "allCaps": -0.02 
-      },
+      "deescalates": ["conflict","escalation","blame"],
+      "positionBoost": { "start": 0.02, "end": 0.08, "allCaps": -0.02 },
       "repeatDecay": 0.9,
       "cooldown_ms": 100,
       "maxBoostsPerMessage": 5,
-      "confidenceBoosts": {
-        "clear": 0.20
-      },
-      "severity": { 
-        "clear": 0.15, 
-        "alert": -0.20,
-        "caution": -0.10 
-      },
+      "confidenceBoosts": { "clear": 0.20 },
+      "severity": { "clear": 0.15, "alert": -0.20, "caution": -0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.10
-        },
-        "avoidant": {
-          "clear": 0.10
-        },
-        "disorganized": {
-          "caution": 0.10
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.10 },
+        "avoidant": { "clear": 0.10 },
+        "disorganized": { "caution": 0.10 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_INTIMACY",
       "context": "intimacy",
       "description": "Affectionate or close exchange",
+      "clearGate": { "mode": "promote", "strength": 0.8 },
       "toneCues": [
-        "love",
-        "miss you",
-        "hug",
-        "kiss",
-        "affection",
-        "sweet",
-        "babe",
-        "baby",
-        "miss u",
-        "xoxo",
-        "mwah",
-        "cuddle",
-        "snuggle",
-        "❤️",
-        "😘"
+        "love","miss you","hug","kiss","affection","sweet","babe","baby","miss u","xoxo","mwah","cuddle","snuggle","❤️","😘"
       ],
-      "confidenceBoosts": {
-        "clear": 0.25
-      },
+      "confidenceBoosts": { "clear": 0.25 },
       "attachmentAdjustments": {
-        "anxious": {
-          "clear": 0.10
-        },
-        "avoidant": {
-          "caution": 0.15
-        },
-        "disorganized": {
-          "alert": 0.10
-        },
-        "secure": {
-          "clear": 0.20
-        }
+        "anxious": { "clear": 0.10 },
+        "avoidant": { "caution": 0.15 },
+        "disorganized": { "alert": 0.10 },
+        "secure": { "clear": 0.20 }
       }
     },
+
     {
       "id": "CTX_NEGOTIATION",
       "context": "negotiation",
       "description": "Trying to reach agreement",
+      "clearGate": { "mode": "promote", "strength": 0.6 },
       "toneCues": [
-        "compromise",
-        "deal",
-        "agree",
-        "meet halfway",
-        "terms",
-        "middle ground",
-        "meet in the middle",
-        "tradeoff",
-        "terms we can agree",
-        "deal we both"
+        "compromise","deal","agree","meet halfway","terms","middle ground","meet in the middle","tradeoff","terms we can agree","deal we both"
       ],
-      "confidenceBoosts": {
-        "caution": 0.15,
-        "clear": 0.15
-      },
+      "confidenceBoosts": { "caution": 0.15, "clear": 0.15 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.10
-        },
-        "avoidant": {
-          "clear": 0.10
-        },
-        "disorganized": {
-          "alert": 0.10
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.10 },
+        "avoidant": { "clear": 0.10 },
+        "disorganized": { "alert": 0.10 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_WORK",
       "context": "work/school",
       "description": "Task or duty-related discussion",
+      "clearGate": { "mode": "neutral", "strength": 1.0 },
       "toneCues": [
-        "assignment",
-        "project",
-        "school",
-        "due",
-        "grades",
-        "meeting",
-        "shift",
-        "deadline",
-        "deliverable",
-        "report",
-        "sprint",
-        "quarter",
-        "exam",
-        "midterm",
-        "grade",
-        "syllabus",
-        "project brief"
+        "assignment","project","school","due","grades","meeting","shift","deadline","deliverable","report","sprint","quarter","exam","midterm","grade","syllabus","project brief"
       ],
-      "confidenceBoosts": {
-        "clear": 0.20
-      },
+      "confidenceBoosts": { "clear": 0.20 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.10
-        },
-        "avoidant": {
-          "clear": 0.10
-        },
-        "disorganized": {
-          "caution": 0.05
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.10 },
+        "avoidant": { "clear": 0.10 },
+        "disorganized": { "caution": 0.05 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_MISUNDERSTANDING",
       "context": "misunderstanding",
       "description": "Confusion or crossed signals in communication",
+      "clearGate": { "mode": "neutral", "strength": 0.8 },
       "toneCues": [
-        "misunderstood",
-        "mixed up",
-        "wrong impression",
-        "didn't mean",
-        "didnt mean",
-        "didn’t mean",
-        "confuse",
-        "that's not what I meant",
-        "that’s not what I meant",
-        "you took it the wrong way",
-        "miscommunication",
-        "mixed signals"
+        "misunderstood","mixed up","wrong impression","didn't mean","didnt mean","didn’t mean","confuse","that's not what I meant","that’s not what I meant","you took it the wrong way","miscommunication","mixed signals"
       ],
-      "confidenceBoosts": {
-        "caution": 0.25
-      },
+      "confidenceBoosts": { "caution": 0.25 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.05,
-          "caution": 0.15
-        },
-        "avoidant": {
-          "clear": 0.05
-        },
-        "disorganized": {
-          "caution": 0.20
-        },
-        "secure": {
-          "clear": 0.10
-        }
+        "anxious": { "alert": 0.05, "caution": 0.15 },
+        "avoidant": { "clear": 0.05 },
+        "disorganized": { "caution": 0.20 },
+        "secure": { "clear": 0.10 }
       }
     },
+
     {
       "id": "CTX_REQUEST",
       "context": "request",
       "description": "Asking for help or a favor",
+      "clearGate": { "mode": "neutral", "strength": 0.8 },
       "toneCues": [
-        "can you",
-        "please",
-        "favor",
-        "help",
-        "would you",
-        "could you",
-        "do you mind",
-        "could you please",
-        "would you mind",
-        "help me out",
-        "any chance you could",
-        "pls",
-        "plz"
+        "can you","please","favor","help","would you","could you","do you mind","could you please","would you mind","help me out","any chance you could","pls","plz"
       ],
-      "confidenceBoosts": {
-        "caution": 0.15,
-        "clear": 0.10
-      },
+      "confidenceBoosts": { "caution": 0.15, "clear": 0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.15
-        },
-        "avoidant": {
-          "alert": 0.05
-        },
-        "disorganized": {
-          "caution": 0.10
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.15 },
+        "avoidant": { "alert": 0.05 },
+        "disorganized": { "caution": 0.10 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_CRITIQUE",
       "context": "critique",
       "description": "Providing feedback or criticism",
+      "clearGate": { "mode": "dampen", "strength": 0.6 },
       "toneCues": [
-        "feedback",
-        "improve",
-        "should have",
-        "should’ve",
-        "would’ve",
-        "mistake",
-        "issue",
-        "constructive feedback",
-        "suggestion",
-        "could improve",
-        "room for improvement",
-        "that didn’t work",
-        "this came out wrong",
-        "this part is wrong"
+        "feedback","improve","should have","should’ve","would’ve","mistake","issue","constructive feedback","suggestion","could improve","room for improvement","that didn’t work","this came out wrong","this part is wrong"
       ],
-      "confidenceBoosts": {
-        "alert": 0.20,
-        "caution": 0.10
-      },
+      "confidenceBoosts": { "alert": 0.20, "caution": 0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.15
-        },
-        "avoidant": {
-          "caution": 0.15
-        },
-        "disorganized": {
-          "alert": 0.10
-        },
-        "secure": {
-          "clear": 0.10
-        }
+        "anxious": { "alert": 0.15 },
+        "avoidant": { "caution": 0.15 },
+        "disorganized": { "alert": 0.10 },
+        "secure": { "clear": 0.10 }
       }
     },
+
     {
       "id": "CTX_GRATITUDE",
       "context": "gratitude",
       "description": "Expressing thanks or appreciation",
+      "clearGate": { "mode": "promote", "strength": 1.0 },
       "toneCues": [
-        "thank you",
-        "grateful",
-        "appreciate",
-        "means a lot",
-        "thanks",
-        "appreciate you",
-        "means so much",
-        "thanks so much",
-        "tysm",
-        "thx",
-        "grateful for you",
-        "🙏"
+        "thank you","grateful","appreciate","means a lot","thanks","appreciate you","means so much","thanks so much","tysm","thx","grateful for you","🙏"
       ],
-      "confidenceBoosts": {
-        "clear": 0.25
-      },
+      "confidenceBoosts": { "clear": 0.25 },
       "attachmentAdjustments": {
-        "anxious": {
-          "clear": 0.10
-        },
-        "avoidant": {
-          "caution": 0.05
-        },
-        "disorganized": {
-          "clear": 0.10
-        },
-        "secure": {
-          "clear": 0.20
-        }
+        "anxious": { "clear": 0.10 },
+        "avoidant": { "caution": 0.05 },
+        "disorganized": { "clear": 0.10 },
+        "secure": { "clear": 0.20 }
       }
     },
+
     {
       "id": "CTX_DECISION",
       "context": "decision",
       "description": "Choosing between options or resolving uncertainty",
+      "clearGate": { "mode": "neutral", "strength": 0.8 },
       "toneCues": [
-        "decide",
-        "choice",
-        "option",
-        "pick",
-        "resolve",
-        "final",
-        "decide together",
-        "pick one",
-        "make the call",
-        "pros and cons",
-        "finalize",
-        "locked in"
+        "decide","choice","option","pick","resolve","final","decide together","pick one","make the call","pros and cons","finalize","locked in"
       ],
-      "confidenceBoosts": {
-        "caution": 0.20,
-        "clear": 0.10
-      },
+      "confidenceBoosts": { "caution": 0.20, "clear": 0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.20
-        },
-        "avoidant": {
-          "clear": 0.15
-        },
-        "disorganized": {
-          "alert": 0.05
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.20 },
+        "avoidant": { "clear": 0.15 },
+        "disorganized": { "alert": 0.05 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_ESCALATION",
       "context": "escalation",
@@ -697,25 +423,9 @@
       "polarity": "escalatory",
       "windowTokens": 24,
       "scope": "message",
+      "clearGate": { "mode": "dampen", "strength": 0.75 },
       "toneCues": [
-        "always",
-        "never",
-        "done with this",
-        "fed up",
-        "sick of",
-        "can't stand",
-        "cant stand",
-        "every time",
-        "as usual",
-        "I'm done",
-        "im done",
-        "I'm done",
-        "over this",
-        "can't deal",
-        "cant deal",
-        "so sick of this",
-        "I can't stand this",
-        "I cant stand this"
+        "always","never","done with this","fed up","sick of","can't stand","cant stand","every time","as usual","I'm done","im done","I'm done","over this","can't deal","cant deal","so sick of this","I can't stand this","I cant stand this"
       ],
       "toneCuesWeighted": [
         {"pattern": "\\b(always|never)\\b", "weight": 0.20, "type": "regex"},
@@ -724,757 +434,374 @@
         {"pattern": "can't\\s+(stand|deal|take)", "weight": 0.22, "type": "regex"},
         {"pattern": "every\\s+(damn|fucking|single)\\s+time", "weight": 0.35, "type": "regex"}
       ],
-      "counterCues": ["sometimes", "maybe", "might", "could be", "perhaps"],
-      "positionBoost": { 
-        "start": 0.06, 
-        "end": 0.04, 
-        "allCaps": 0.08 
-      },
+      "counterCues": ["sometimes","maybe","might","could be","perhaps"],
+      "positionBoost": { "start": 0.06, "end": 0.04, "allCaps": 0.08 },
       "repeatDecay": 0.5,
       "cooldown_ms": 300,
       "maxBoostsPerMessage": 2,
-      "excludeIfContexts": ["humor", "repair"],
-      "confidenceBoosts": {
-        "alert": 0.30
-      },
-      "severity": { 
-        "alert": 0.25, 
-        "caution": 0.15 
-      },
+      "excludeIfContexts": ["humor","repair"],
+      "confidenceBoosts": { "alert": 0.30 },
+      "severity": { "alert": 0.25, "caution": 0.15 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.20
-        },
-        "avoidant": {
-          "caution": 0.10
-        },
-        "disorganized": {
-          "alert": 0.20
-        },
-        "secure": {
-          "caution": 0.10
-        }
+        "anxious": { "alert": 0.20 },
+        "avoidant": { "caution": 0.10 },
+        "disorganized": { "alert": 0.20 },
+        "secure": { "caution": 0.10 }
       }
     },
+
     {
       "id": "CTX_MEMORY",
       "context": "memory",
       "description": "Referencing past events or nostalgia",
+      "clearGate": { "mode": "neutral", "strength": 0.8 },
       "toneCues": [
-        "remember",
-        "back then",
-        "used to",
-        "last time",
-        "nostalgic",
-        "throwback",
-        "remember when",
-        "back in the day",
-        "last time we"
+        "remember","back then","used to","last time","nostalgic","throwback","remember when","back in the day","last time we"
       ],
-      "confidenceBoosts": {
-        "clear": 0.15,
-        "caution": 0.05
-      },
+      "confidenceBoosts": { "clear": 0.15, "caution": 0.05 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.10
-        },
-        "avoidant": {
-          "alert": 0.05
-        },
-        "disorganized": {
-          "caution": 0.10
-        },
-        "secure": {
-          "clear": 0.10
-        }
+        "anxious": { "caution": 0.10 },
+        "avoidant": { "alert": 0.05 },
+        "disorganized": { "caution": 0.10 },
+        "secure": { "clear": 0.10 }
       }
     },
+
     {
       "id": "CTX_PRAISE",
       "context": "praise",
       "description": "Giving compliments or positive recognition",
+      "clearGate": { "mode": "promote", "strength": 1.0 },
       "toneCues": [
-        "great job",
-        "amazing",
-        "so proud",
-        "awesome",
-        "impressed",
-        "so impressed",
-        "you crushed it",
-        "nailed it",
-        "well done",
-        "👏"
+        "great job","amazing","so proud","awesome","impressed","so impressed","you crushed it","nailed it","well done","👏"
       ],
-      "confidenceBoosts": {
-        "clear": 0.25
-      },
+      "confidenceBoosts": { "clear": 0.25 },
       "attachmentAdjustments": {
-        "anxious": {
-          "clear": 0.15
-        },
-        "avoidant": {
-          "caution": 0.10
-        },
-        "disorganized": {
-          "clear": 0.10
-        },
-        "secure": {
-          "clear": 0.20
-        }
+        "anxious": { "clear": 0.15 },
+        "avoidant": { "caution": 0.10 },
+        "disorganized": { "clear": 0.10 },
+        "secure": { "clear": 0.20 }
       }
     },
+
     {
       "id": "CTX_RUPTURE",
       "context": "rupture",
       "description": "Breakdown or distancing in the relationship",
+      "clearGate": { "mode": "dampen", "strength": 0.8 },
       "toneCues": [
-        "over",
-        "ending",
-        "space",
-        "leave me alone",
-        "don’t care",
-        "don't care",
-        "done",
-        "I'm done",
-        "im done",
-        "we're over",
-        "were over",
-        "don't care anymore",
-        "I’m out",
-        "I'm out",
-        "done talking",
-        "whatever"
+        "over","ending","space","leave me alone","don’t care","don't care","done","I'm done","im done","we're over","were over","don't care anymore","I’m out","I'm out","done talking","whatever"
       ],
-      "confidenceBoosts": {
-        "alert": 0.25,
-        "caution": 0.10
-      },
+      "confidenceBoosts": { "alert": 0.25, "caution": 0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.20
-        },
-        "avoidant": {
-          "clear": 0.15
-        },
-        "disorganized": {
-          "alert": 0.20
-        },
-        "secure": {
-          "caution": 0.10
-        }
+        "anxious": { "alert": 0.20 },
+        "avoidant": { "clear": 0.15 },
+        "disorganized": { "alert": 0.20 },
+        "secure": { "caution": 0.10 }
       }
     },
+
     {
       "id": "CTX_REASSURANCE",
       "context": "reassurance",
       "description": "Seeking or giving emotional confirmation",
+      "clearGate": { "mode": "promote", "strength": 0.6 },
       "toneCues": [
-        "okay?",
-        "still love",
-        "with me",
-        "right?",
-        "promise",
-        "safe",
-        "still with me?",
-        "are we okay?",
-        "promise me",
-        "we’re good?",
-        "we're good?",
-        "need to know I’m safe with you",
-        "still love me?"
+        "okay?","still love","with me","right?","promise","safe","still with me?","are we okay?","promise me","we’re good?","we're good?","need to know I’m safe with you","still love me?"
       ],
-      "confidenceBoosts": {
-        "caution": 0.15,
-        "clear": 0.10
-      },
+      "confidenceBoosts": { "caution": 0.15, "clear": 0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.20
-        },
-        "avoidant": {
-          "alert": 0.05
-        },
-        "disorganized": {
-          "caution": 0.15
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.20 },
+        "avoidant": { "alert": 0.05 },
+        "disorganized": { "caution": 0.15 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_DEFENSE",
       "context": "defense",
       "description": "Protecting oneself from criticism or attack",
+      "clearGate": { "mode": "dampen", "strength": 0.7 },
       "toneCues": [
-        "not true",
-        "that’s unfair",
-        "that's unfair",
-        "you’re wrong",
-        "you're wrong",
-        "defend",
-        "justify",
-        "that’s not true",
-        "that's not true",
-        "you’re twisting it",
-        "you're twisting it",
-        "justify myself",
-        "explain myself",
-        "you’ve got it wrong",
-        "you've got it wrong"
+        "not true","that’s unfair","that's unfair","you’re wrong","you're wrong","defend","justify","that’s not true","that's not true","you’re twisting it","you're twisting it","justify myself","explain myself","you’ve got it wrong","you've got it wrong"
       ],
-      "confidenceBoosts": {
-        "alert": 0.20,
-        "caution": 0.15
-      },
+      "confidenceBoosts": { "alert": 0.20, "caution": 0.15 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.15
-        },
-        "avoidant": {
-          "caution": 0.15
-        },
-        "disorganized": {
-          "alert": 0.20
-        },
-        "secure": {
-          "caution": 0.10
-        }
+        "anxious": { "alert": 0.15 },
+        "avoidant": { "caution": 0.15 },
+        "disorganized": { "alert": 0.20 },
+        "secure": { "caution": 0.10 }
       }
     },
+
     {
       "id": "CTX_WITHDRAWAL",
       "context": "withdrawal",
       "description": "Pulling away emotionally or physically",
+      "clearGate": { "mode": "dampen", "strength": 0.8 },
       "toneCues": [
-        "leave me",
-        "don’t talk",
-        "don't talk",
-        "alone",
-        "space",
-        "done talking",
-        "not now",
-        "need space right now",
-        "I need space right now",
-        "don’t talk to me",
-        "don't talk to me",
-        "leave me alone",
-        "idc",
-        "going offline"
+        "leave me","don’t talk","don't talk","alone","space","done talking","not now","need space right now","I need space right now","don’t talk to me","don't talk to me","leave me alone","idc","going offline"
       ],
-      "confidenceBoosts": {
-        "alert": 0.25,
-        "caution": 0.10
-      },
+      "confidenceBoosts": { "alert": 0.25, "caution": 0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.20
-        },
-        "avoidant": {
-          "clear": 0.20
-        },
-        "disorganized": {
-          "alert": 0.20
-        },
-        "secure": {
-          "caution": 0.10
-        }
+        "anxious": { "alert": 0.20 },
+        "avoidant": { "clear": 0.20 },
+        "disorganized": { "alert": 0.20 },
+        "secure": { "caution": 0.10 }
       }
     },
+
     {
       "id": "CTX_CO_PARENTING",
       "context": "co-parenting",
       "description": "Discussions about children, parenting, or shared responsibilities",
+      "clearGate": { "mode": "neutral", "strength": 0.9 },
       "toneCues": [
-        "kids",
-        "child",
-        "custody",
-        "drop off",
-        "drop-off",
-        "pick up",
-        "pick-up",
-        "school",
-        "parenting",
-        "bedtime",
-        "visitation",
-        "custody schedule",
-        "parenting plan",
-        "pediatrician",
-        "homework",
-        "teacher meeting",
-        "bedtime routine",
-        "school run"
+        "kids","child","custody","drop off","drop-off","pick up","pick-up","school","parenting","bedtime","visitation","custody schedule","parenting plan","pediatrician","homework","teacher meeting","bedtime routine","school run"
       ],
-      "confidenceBoosts": {
-        "caution": 0.20,
-        "clear": 0.10
-      },
+      "confidenceBoosts": { "caution": 0.20, "clear": 0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.20
-        },
-        "avoidant": {
-          "clear": 0.15
-        },
-        "disorganized": {
-          "alert": 0.15,
-          "caution": 0.10
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.20 },
+        "avoidant": { "clear": 0.15 },
+        "disorganized": { "alert": 0.15, "caution": 0.10 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_DATING",
       "context": "dating",
       "description": "Romantic or relationship-building exchanges",
+      "clearGate": { "mode": "promote", "strength": 0.6 },
       "toneCues": [
-        "date",
-        "dinner",
-        "go out",
-        "crush",
-        "flirt",
-        "romantic",
-        "ask out",
-        "see you",
-        "date night",
-        "grab dinner",
-        "go out with you",
-        "ask you out",
-        "see you again",
-        "coffee date",
-        "romantic plan"
+        "date","dinner","go out","crush","flirt","romantic","ask out","see you","date night","grab dinner","go out with you","ask you out","see you again","coffee date","romantic plan"
       ],
-      "confidenceBoosts": {
-        "clear": 0.20
-      },
+      "confidenceBoosts": { "clear": 0.20 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.15,
-          "clear": 0.10
-        },
-        "avoidant": {
-          "caution": 0.10
-        },
-        "disorganized": {
-          "alert": 0.10
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.15, "clear": 0.10 },
+        "avoidant": { "caution": 0.10 },
+        "disorganized": { "alert": 0.10 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_FINANCIAL",
       "context": "financial",
       "description": "Money, spending, or budgeting matters",
+      "clearGate": { "mode": "neutral", "strength": 0.8 },
       "toneCues": [
-        "bill",
-        "money",
-        "budget",
-        "pay",
-        "rent",
-        "cost",
-        "spend",
-        "save",
-        "rent is due",
-        "utilities",
-        "electric bill",
-        "insurance",
-        "budgeting",
-        "expense",
-        "credit card",
-        "bank",
-        "loan",
-        "split the bill",
-        "pay back"
+        "bill","money","budget","pay","rent","cost","spend","save","rent is due","utilities","electric bill","insurance","budgeting","expense","credit card","bank","loan","split the bill","pay back"
       ],
-      "confidenceBoosts": {
-        "caution": 0.20
-      },
+      "confidenceBoosts": { "caution": 0.20 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.10,
-          "caution": 0.15
-        },
-        "avoidant": {
-          "clear": 0.10
-        },
-        "disorganized": {
-          "caution": 0.10
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "alert": 0.10, "caution": 0.15 },
+        "avoidant": { "clear": 0.10 },
+        "disorganized": { "caution": 0.10 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_SOCIAL",
       "context": "social",
       "description": "Friends, social life, or outside relationships",
+      "clearGate": { "mode": "neutral", "strength": 0.8 },
       "toneCues": [
-        "party",
-        "friends",
-        "hang out",
-        "social",
-        "invite",
-        "group",
-        "night out",
-        "friends over",
-        "group chat",
-        "RSVP"
+        "party","friends","hang out","social","invite","group","night out","friends over","group chat","RSVP"
       ],
-      "confidenceBoosts": {
-        "clear": 0.15,
-        "caution": 0.05
-      },
+      "confidenceBoosts": { "clear": 0.15, "caution": 0.05 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.15
-        },
-        "avoidant": {
-          "alert": 0.05
-        },
-        "disorganized": {
-          "caution": 0.10
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.15 },
+        "avoidant": { "alert": 0.05 },
+        "disorganized": { "caution": 0.10 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_VULNERABILITY",
       "context": "vulnerability",
       "description": "Expressions of fear, insecurity, or emotional exposure",
+      "clearGate": { "mode": "neutral", "strength": 0.6 },
       "toneCues": [
-        "scared",
-        "worried",
-        "ashamed",
-        "embarrassed",
-        "lonely",
-        "guilty",
-        "afraid",
-        "insecure",
-        "anxious",
-        "feels scary"
+        "scared","worried","ashamed","embarrassed","lonely","guilty","afraid","insecure","anxious","feels scary"
       ],
-      "confidenceBoosts": {
-        "caution": 0.25,
-        "clear": 0.05
-      },
+      "confidenceBoosts": { "caution": 0.25, "clear": 0.05 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.20
-        },
-        "avoidant": {
-          "alert": 0.10
-        },
-        "disorganized": {
-          "alert": 0.15,
-          "caution": 0.15
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.20 },
+        "avoidant": { "alert": 0.10 },
+        "disorganized": { "alert": 0.15, "caution": 0.15 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_PRESENCE",
       "context": "presence",
       "description": "Attention, distraction, or availability in the moment",
+      "clearGate": { "mode": "neutral", "strength": 0.7 },
       "toneCues": [
-        "listening",
-        "pay attention",
-        "with me",
-        "focused",
-        "ignore",
-        "distracted",
-        "put the phone down",
-        "be present",
-        "listening to me",
-        "you’re not here with me",
-        "you're not here with me"
+        "listening","pay attention","with me","focused","ignore","distracted","put the phone down","be present","listening to me","you’re not here with me","you're not here with me"
       ],
-      "confidenceBoosts": {
-        "caution": 0.20
-      },
+      "confidenceBoosts": { "caution": 0.20 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.15,
-          "caution": 0.15
-        },
-        "avoidant": {
-          "clear": 0.10
-        },
-        "disorganized": {
-          "alert": 0.10
-        },
-        "secure": {
-          "clear": 0.10
-        }
+        "anxious": { "alert": 0.15, "caution": 0.15 },
+        "avoidant": { "clear": 0.10 },
+        "disorganized": { "alert": 0.10 },
+        "secure": { "clear": 0.10 }
       }
     },
+
     {
       "id": "CTX_JEALOUSY",
       "context": "jealousy",
       "description": "Comparison, insecurity, or emotional threat",
+      "clearGate": { "mode": "dampen", "strength": 0.7 },
       "toneCues": [
-        "jealous",
-        "other guy",
-        "other girl",
-        "better than me",
-        "attention",
-        "flirt with",
-        "competition",
-        "DMs",
-        "IG likes",
-        "Instagram likes",
-        "snap",
-        "ex",
-        "talking to her",
-        "talking to him",
-        "flirting",
-        "attention on them"
+        "jealous","other guy","other girl","better than me","attention","flirt with","competition","DMs","IG likes","Instagram likes","snap","ex","talking to her","talking to him","flirting","attention on them"
       ],
-      "confidenceBoosts": {
-        "alert": 0.25,
-        "caution": 0.15
-      },
+      "confidenceBoosts": { "alert": 0.25, "caution": 0.15 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.20
-        },
-        "avoidant": {
-          "caution": 0.15
-        },
-        "disorganized": {
-          "alert": 0.20
-        },
-        "secure": {
-          "caution": 0.10
-        }
+        "anxious": { "alert": 0.20 },
+        "avoidant": { "caution": 0.15 },
+        "disorganized": { "alert": 0.20 },
+        "secure": { "caution": 0.10 }
       }
     },
+
     {
       "id": "CTX_META",
       "context": "meta",
       "description": "Talking about the relationship itself",
+      "clearGate": { "mode": "neutral", "strength": 0.9 },
       "toneCues": [
-        "our relationship",
-        "we need to talk",
-        "us",
-        "how we are",
-        "between us",
-        "where we stand",
-        "check in about us",
-        "define the relationship",
-        "DTR",
-        "how we’re doing",
-        "how we're doing"
+        "our relationship","we need to talk","us","how we are","between us","where we stand","check in about us","define the relationship","DTR","how we’re doing","how we're doing"
       ],
-      "confidenceBoosts": {
-        "caution": 0.20,
-        "clear": 0.10
-      },
+      "confidenceBoosts": { "caution": 0.20, "clear": 0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "caution": 0.15
-        },
-        "avoidant": {
-          "alert": 0.15
-        },
-        "disorganized": {
-          "alert": 0.10
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "caution": 0.15 },
+        "avoidant": { "alert": 0.15 },
+        "disorganized": { "alert": 0.10 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_ROUTINE",
       "context": "routine",
       "description": "Everyday check-ins and daily life updates",
+      "clearGate": { "mode": "promote", "strength": 0.5 },
       "toneCues": [
-        "morning",
-        "night",
-        "breakfast",
-        "home",
-        "heading out",
-        "daily",
-        "routine",
-        "morning update",
-        "headed home",
-        "on my way",
-        "goodnight",
-        "daily check-in"
+        "morning","night","breakfast","home","heading out","daily","routine","morning update","headed home","on my way","goodnight","daily check-in"
       ],
-      "confidenceBoosts": {
-        "clear": 0.20
-      },
+      "confidenceBoosts": { "clear": 0.20 },
       "attachmentAdjustments": {
-        "anxious": {
-          "clear": 0.10
-        },
-        "avoidant": {
-          "clear": 0.05
-        },
-        "disorganized": {
-          "caution": 0.05
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "clear": 0.10 },
+        "avoidant": { "clear": 0.05 },
+        "disorganized": { "caution": 0.05 },
+        "secure": { "clear": 0.15 }
       }
     },
+
     {
       "id": "CTX_SAFETY",
       "context": "safety",
       "description": "Expressions of physical or emotional safety concerns",
+      "clearGate": { "mode": "dampen", "strength": 0.8 },
       "toneCues": [
-        "safe",
-        "danger",
-        "scared",
-        "threat",
-        "afraid",
-        "not okay",
-        "protect",
-        "unsafe",
-        "panic",
-        "in danger",
-        "threatening",
-        "creepy",
-        "not okay being alone",
-        "protect me",
-        "feel threatened"
+        "safe","danger","scared","threat","afraid","not okay","protect","unsafe","panic","in danger","threatening","creepy","not okay being alone","protect me","feel threatened"
       ],
-      "confidenceBoosts": {
-        "alert": 0.30,
-        "caution": 0.10
-      },
+      "confidenceBoosts": { "alert": 0.30, "caution": 0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.20
-        },
-        "avoidant": {
-          "caution": 0.10
-        },
-        "disorganized": {
-          "alert": 0.20,
-          "caution": 0.15
-        },
-        "secure": {
-          "clear": 0.10
-        }
+        "anxious": { "alert": 0.20 },
+        "avoidant": { "caution": 0.10 },
+        "disorganized": { "alert": 0.20, "caution": 0.15 },
+        "secure": { "clear": 0.10 }
       }
     },
+
     {
       "id": "CTX_EMPATHY",
       "context": "empathy",
       "description": "Recognizing or validating another’s feelings",
+      "clearGate": { "mode": "promote", "strength": 1.0 },
       "toneCues": [
-        "I understand",
-        "that must feel",
-        "sorry you feel",
-        "I get it",
-        "empathize",
-        "I hear you",
-        "I get how that feels",
-        "that must be hard",
-        "makes sense you’d feel",
-        "I see your point"
+        "I understand","that must feel","sorry you feel","I get it","empathize","I hear you","I get how that feels","that must be hard","makes sense you’d feel","I see your point"
       ],
-      "confidenceBoosts": {
-        "clear": 0.25
-      },
+      "confidenceBoosts": { "clear": 0.25 },
       "attachmentAdjustments": {
-        "anxious": {
-          "clear": 0.15
-        },
-        "avoidant": {
-          "caution": 0.10
-        },
-        "disorganized": {
-          "caution": 0.10
-        },
-        "secure": {
-          "clear": 0.20
-        }
+        "anxious": { "clear": 0.15 },
+        "avoidant": { "caution": 0.10 },
+        "disorganized": { "caution": 0.10 },
+        "secure": { "clear": 0.20 }
       }
     },
+
     {
       "id": "CTX_BLAME",
       "context": "blame",
       "description": "Assigning fault or responsibility",
+      "clearGate": { "mode": "dampen", "strength": 0.8 },
       "toneCues": [
-        "your fault",
-        "because of you",
-        "blame",
-        "caused this",
-        "responsible for",
-        "this is on you",
-        "on you",
-        "you caused this"
+        "your fault","because of you","blame","caused this","responsible for","this is on you","on you","you caused this"
       ],
-      "confidenceBoosts": {
-        "alert": 0.25,
-        "caution": 0.10
-      },
+      "confidenceBoosts": { "alert": 0.25, "caution": 0.10 },
       "attachmentAdjustments": {
-        "anxious": {
-          "alert": 0.20
-        },
-        "avoidant": {
-          "caution": 0.15
-        },
-        "disorganized": {
-          "alert": 0.20
-        },
-        "secure": {
-          "caution": 0.10
-        }
+        "anxious": { "alert": 0.20 },
+        "avoidant": { "caution": 0.15 },
+        "disorganized": { "alert": 0.20 },
+        "secure": { "caution": 0.10 }
       }
     },
+
     {
       "id": "CTX_PRACTICAL",
       "context": "practical",
       "description": "Household, chores, or logistics of daily tasks",
+      "clearGate": { "mode": "neutral", "strength": 1.0 },
       "toneCues": [
-        "groceries",
-        "laundry",
-        "clean",
-        "dishes",
-        "fix",
-        "house",
-        "chores",
-        "take out the trash",
-        "load the dishwasher",
-        "vacuum",
-        "clean up",
-        "fix the sink",
-        "chores list",
-        "grocery run"
+        "groceries","laundry","clean","dishes","fix","house","chores","take out the trash","load the dishwasher","vacuum","clean up","fix the sink","chores list","grocery run"
       ],
-      "confidenceBoosts": {
-        "clear": 0.20
-      },
+      "confidenceBoosts": { "clear": 0.20 },
       "attachmentAdjustments": {
-        "anxious": {
-          "clear": 0.10
-        },
-        "avoidant": {
-          "clear": 0.10
-        },
-        "disorganized": {
-          "caution": 0.05
-        },
-        "secure": {
-          "clear": 0.15
-        }
+        "anxious": { "clear": 0.10 },
+        "avoidant": { "clear": 0.10 },
+        "disorganized": { "caution": 0.05 },
+        "secure": { "clear": 0.15 }
       }
     }
-  ]
+  ],
+
+  "tests": {
+    "notes": "Simple harness to guard against false-clear flips.",
+    "cases": [
+      {
+        "text": "I’m done. You never listen. Stop twisting my words.",
+        "expectUiTone": "alert",
+        "reason": "Escalation + conflict outweigh any generic first-person tokens."
+      },
+      {
+        "text": "I was wrong earlier — I’m sorry for snapping. Can we reset?",
+        "expectUiTone": "clear",
+        "reason": "Repair context promotes clear via phrase-level evidence."
+      },
+      {
+        "text": "Ok. I get it. But you ALWAYS do this.",
+        "expectUiTone": "alert",
+        "reason": "Generic ‘ok’ ignored; ALWAYS + critique drives alert."
+      },
+      {
+        "text": "We need to talk about pickup at 5 and the calendar move.",
+        "expectUiTone": "clear",
+        "reason": "Planning/Co-parenting logistics; no escalation present."
+      },
+      {
+        "text": "lol that came out wrong — sorry about that",
+        "expectUiTone": "clear",
+        "reason": "Humor + repair de-escalate and promote clear."
+      }
+    ]
+  }
 }

@@ -834,9 +834,9 @@ final class KeyboardController: UIInputView,
         let g = CAGradientLayer()
         g.startPoint = CGPoint(x: 0, y: 0)
         g.endPoint = CGPoint(x: 1, y: 1)
-        g.cornerRadius = 18  // Match smaller background circle
         g.masksToBounds = true
         g.colors = [UIColor.white.cgColor, UIColor.white.cgColor]  // Start with white visible
+        // Don't set frame/cornerRadius here - will be set in layoutSubviews after Auto Layout
         toneButtonBackground.layer.insertSublayer(g, at: 0)
         toneGradient = g
 
@@ -848,6 +848,9 @@ final class KeyboardController: UIInputView,
 
         // Add actions
         toneButton.addTarget(self, action: #selector(toneButtonPressed(_:)), for: .touchUpInside)
+        
+        // ✅ CRITICAL: Trigger initial layout pass to set gradient frame after creation
+        setNeedsLayout()
 
         undoButton.addTarget(self, action: #selector(undoButtonPressed(_:)), for: .touchUpInside)
 
@@ -1023,6 +1026,9 @@ final class KeyboardController: UIInputView,
     // MARK: - Tone Status Management
 
     private func setToneStatus(_ tone: ToneStatus, animated: Bool = true) {
+        // 🎨 APPLY - Log the apply request
+        print("🎨 APPLY requested: current=\(currentTone.rawValue) -> new=\(tone.rawValue) animated=\(animated)")
+        
         #if DEBUG
         if logGate.allow("tone_set", tone.rawValue) {
             KBDLog("🎯 setToneStatus(\(tone.rawValue)) animated=\(animated) bg=\(self.toneButtonBackground != nil) btn=\(self.toneButton != nil)", .info, "KeyboardController")
@@ -1040,9 +1046,13 @@ final class KeyboardController: UIInputView,
             (toneGradient?.colors == nil) ||
             (bg.layer.animation(forKey: "alertPulse") == nil && tone == .alert)
         
-        guard tone != currentTone || bg.alpha < 0.99 || visualOutOfSync else {
-            return // skip redundant work, but allow refresh when visual state is stale
-        }
+        // TEMPORARILY DISABLED: Skip redundant tone check for debugging
+        // guard tone != currentTone || bg.alpha < 0.99 || visualOutOfSync else {
+        //     print("🎨 APPLY skipped: redundant tone=\(tone.rawValue) (same as current)")
+        //     return // skip redundant work, but allow refresh when visual state is stale
+        // }
+        
+        print("🎨 APPLY proceeding: tone=\(tone.rawValue) visualOutOfSync=\(visualOutOfSync)")
 
         // Ensure background is definitely visible
         bg.isHidden = false
@@ -1098,6 +1108,9 @@ final class KeyboardController: UIInputView,
             bg.layer.shadowOpacity = targetShadow
         }
         self.toneAnimator = animator
+
+        // ✅ CRITICAL: Trigger layout pass to update gradient frame after tone changes
+        setNeedsLayout()
 
         // Crossfade gradient colors using Core Animation (keeps UIKit animator in sync)
         if let g = toneGradient {
@@ -1781,6 +1794,10 @@ final class KeyboardController: UIInputView,
         
         currentUITone = toneStatus
         setToneStatus(toneStatus)
+        
+        // ✅ CRITICAL: Trigger layout pass after tone data changes
+        setNeedsLayout()
+        
         if toneStatus != .neutral {    // only mark when "real" tone lands
             lastToneChangeAt = CACurrentMediaTime()
         }

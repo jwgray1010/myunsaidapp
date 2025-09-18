@@ -203,10 +203,11 @@ final class ToneSuggestionCoordinator {
     private lazy var session: URLSession = {
         let cfg = URLSessionConfiguration.ephemeral
         
-        // Extension-optimized timeouts
-        cfg.timeoutIntervalForRequest = 12       // per I/O operation
-        cfg.timeoutIntervalForResource = 20      // whole transfer
-        cfg.waitsForConnectivity = true          // avoid immediate failure on transient loss
+        // Keyboard extension optimized for fail-fast behavior
+        cfg.timeoutIntervalForRequest = 5        // fail fast on I/O operations
+        cfg.timeoutIntervalForResource = 8       // fail fast on whole transfer
+        cfg.waitsForConnectivity = false         // fail fast in extension context
+        cfg.networkServiceType = .responsiveData // prioritize responsiveness
         #if canImport(UIKit)
         cfg.multipathServiceType = .handover     // smoother Wi-Fi <-> Cellular
         #endif
@@ -359,6 +360,14 @@ final class ToneSuggestionCoordinator {
         #endif
         
         setupWorkQueueIdentification()
+        
+        // 📦 Check if triggerwords data is bundled in extension
+        let triggerwordsURL = Bundle.main.url(forResource: "tone_triggerwords", withExtension: "json")
+        print("📦 triggerwords.json present in extension bundle? \(triggerwordsURL != nil)")
+        if let url = triggerwordsURL {
+            print("📦 triggerwords.json path: \(url.path)")
+        }
+        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.startNetworkMonitoringSafely() }
         #if DEBUG
         KBDLog("🧠 Personality Data Bridge Status:", .debug, "ToneCoordinator")
@@ -598,7 +607,8 @@ final class ToneSuggestionCoordinator {
         }
         throttledLog("suggestions features: \((safePayload["features"] as? [String])?.joined(separator: ",") ?? "<none>")", category: "api")
         
-        callEndpoint(path: "api/v1/suggestions", payload: safePayload) { [weak self] data in
+        // Use retry wrapper for suggestions to handle transient network errors
+        callEndpointWithRetry(path: "api/v1/suggestions", payload: safePayload) { [weak self] data in
             guard let self else { completion(nil); return }
             guard requestID == self.latestRequestID else { completion(nil); return }
             
@@ -781,11 +791,13 @@ final class ToneSuggestionCoordinator {
                 self.onQ { self.inFlightRequests[requestHash] = task }
                 
                 // Debug logging before starting the request
-                KBDLog("🌐 \(req.httpMethod ?? "POST") \(req.url!.absoluteString)", .debug, "Network")
-                KBDLog("🌐 Headers: \(req.allHTTPHeaderFields ?? [:])", .debug, "Network")
+                #if DEBUG
+                print("🌐 \(req.httpMethod ?? "POST") \(req.url!.absoluteString)")
+                print("🌐 Headers: \(req.allHTTPHeaderFields ?? [:])")
                 if let body = req.httpBody { 
-                    KBDLog("🌐 Body: \(String(data: body, encoding: .utf8) ?? "<non-utf8>")", .debug, "Network")
+                    print("🌐 Body: \(String(data: body, encoding: .utf8) ?? "<non-utf8>")")
                 }
+                #endif
                 
                 task.resume()
             }
@@ -801,6 +813,7 @@ final class ToneSuggestionCoordinator {
         
         #if DEBUG
         print("🌐 Network Error: \(url.absoluteString) → code=\(ns.code) domain=\(ns.domain)")
+        print("❌ \(error.localizedDescription) code:\(ns.code)")
         switch ns.code {
         case NSURLErrorNotConnectedToInternet: 
             print("🔌 Device offline: \(url)")
@@ -812,6 +825,16 @@ final class ToneSuggestionCoordinator {
             print("🔌 Connection refused (server down or network filtering): \(url)")
         case NSURLErrorSecureConnectionFailed:
             print("🔒 TLS/SSL failure (ATS violation or cert issue): \(url)")
+        case NSURLErrorNetworkConnectionLost:
+            print("📱 Network connection lost during request: \(url)")
+        case NSURLErrorDNSLookupFailed:
+            print("🌐 DNS lookup failed: \(url)")
+        case NSURLErrorInternationalRoamingOff:
+            print("✈️ International roaming disabled: \(url)")
+        case NSURLErrorCallIsActive:
+            print("📞 Call is active, data restricted: \(url)")
+        case NSURLErrorDataNotAllowed:
+            print("📵 Data not allowed on device: \(url)")
         default:                               
             print("❌ Network error \(ns.code): \(error.localizedDescription)")
         }
@@ -837,6 +860,54 @@ final class ToneSuggestionCoordinator {
         }
         
         throttledLog("network error \(ns.code)", category: "api")
+    }
+    
+    // MARK: - Retry Logic for Transient Errors
+    private func isTransientNetworkError(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        
+        let transientCodes: Set<URLError.Code> = [
+            .timedOut,
+            .cannotFindHost,
+            .cannotConnectToHost,
+            .networkConnectionLost,
+            .dnsLookupFailed,
+            .notConnectedToInternet,
+            .internationalRoamingOff,
+            .callIsActive,
+            .dataNotAllowed
+        ]
+        
+        return transientCodes.contains(urlError.code)
+    }
+    
+    private func callEndpointWithRetry(path: String, payload: [String: Any], completion: @escaping ([String: Any]?) -> Void) {
+        let delays: [TimeInterval] = [0.2, 0.5, 1.0]  // Exponential backoff delays
+        
+        func attemptRequest(attemptIndex: Int) {
+            callEndpoint(path: path, payload: payload) { [weak self] result in
+                guard let self = self else { 
+                    completion(nil)
+                    return 
+                }
+                
+                // If successful or we've exhausted retries, return result
+                if result != nil || attemptIndex >= delays.count {
+                    completion(result)
+                    return
+                }
+                
+                // For failed requests, check if we should retry
+                let delay = delays[attemptIndex]
+                self.throttledLog("Retrying request in \(delay)s (attempt \(attemptIndex + 2)/\(delays.count + 1))", category: "api")
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    attemptRequest(attemptIndex: attemptIndex + 1)
+                }
+            }
+        }
+        
+        attemptRequest(attemptIndex: 0)
     }
     
     // MARK: - Personality payload (cached)
@@ -924,7 +995,7 @@ final class ToneSuggestionCoordinator {
     private func getEmotionalState() -> String { "neutral" }
     private func getUserId() -> String {
         let userIdKey = "unsaid_user_id"
-        let appGroupId = AppGroups.id
+        let appGroupId = "group.com.example.unsaid"  // AppGroups.id
         if let sharedDefaults = UserDefaults(suiteName: appGroupId),
            let userId = sharedDefaults.string(forKey: userIdKey) { return userId }
         let fallbackId = UUID().uuidString
@@ -1027,6 +1098,12 @@ final class ToneSuggestionCoordinator {
     
     func debugTestToneAPI(with text: String = "You never listen to me and it's really frustrating") {
         KBDLog("🧪 Testing tone API with text: '\(text)'", .info)
+        
+        // 🧪 Quick sanity test - Test aggressive phrase locally
+        let testPhrase = "I fucking hate you!"
+        print("🧪 SANITY TEST: Testing aggressive phrase '\(testPhrase)'")
+        let hasEmotional = containsEmotionalLanguage(testPhrase)
+        print("🧪 containsEmotionalLanguage('\(testPhrase)') = \(hasEmotional)")
         
         guard self.isAPIConfigured else {
             KBDLog("🧪 API not configured - cannot test", .error)
@@ -1182,6 +1259,9 @@ extension ToneSuggestionCoordinator {
                 alert: toneOut.buckets["alert"] ?? 0.34
             )
             
+            // 🔎 ANALYZED - Log buckets before any processing
+            print("🔎 ANALYZED text='\(trimmed.prefix(50))' buckets: clear=\(String(format: "%.3f", newBuckets.clear)) caution=\(String(format: "%.3f", newBuckets.caution)) alert=\(String(format: "%.3f", newBuckets.alert))")
+            
             // Smart tone detection prioritizing emotional content
             let newTone: Bucket
             let hasEmotionalContent = containsEmotionalLanguage(trimmed)
@@ -1197,6 +1277,7 @@ extension ToneSuggestionCoordinator {
                 } else {
                     // Fallback to normal logic for edge cases
                     newTone = pickUiTone(newBuckets, current: lastUiTone, threshold: 0.30)
+                    print("🎯 BUCKETS clear=\(String(format: "%.3f", newBuckets.clear)) caution=\(String(format: "%.3f", newBuckets.caution)) alert=\(String(format: "%.3f", newBuckets.alert)) threshold=0.30 -> uiTone=\(newTone.rawValue)")
                     #if DEBUG
                     coordLog.info("🎯 Emotional content with low confidence, using threshold logic: \(newTone.rawValue)")
                     #endif
@@ -1210,6 +1291,7 @@ extension ToneSuggestionCoordinator {
             } else {
                 // Use standard threshold logic for non-emotional content
                 newTone = pickUiTone(newBuckets, current: lastUiTone, threshold: 0.40)
+                print("🎯 BUCKETS clear=\(String(format: "%.3f", newBuckets.clear)) caution=\(String(format: "%.3f", newBuckets.caution)) alert=\(String(format: "%.3f", newBuckets.alert)) threshold=0.40 -> uiTone=\(newTone.rawValue)")
                 #if DEBUG
                 coordLog.info("🎯 Standard threshold logic: \(newTone.rawValue) (clear=\(String(format: "%.1f", newBuckets.clear * 100))%%, caution=\(String(format: "%.1f", newBuckets.caution * 100))%%, alert=\(String(format: "%.1f", newBuckets.alert * 100))%%)")
                 #endif
@@ -1309,6 +1391,9 @@ extension ToneSuggestionCoordinator {
     
     @MainActor
     private func maybeUpdateIndicator(to newTone: Bucket) {
+        // 📨 PUBLISH - Log the publish decision  
+        print("📨 PUBLISH current=\(lastUiTone.rawValue) -> new=\(newTone.rawValue) (will update: \(newTone != lastUiTone))")
+        
         guard newTone != lastUiTone else { return }
         lastUiTone = newTone
         onToneUpdate?(newTone, true)

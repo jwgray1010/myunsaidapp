@@ -255,15 +255,17 @@ class _KeyboardIntroScreenProfessionalState
 
     // Try to use the keyboard manager first (for platform-specific deep linking)
     try {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           'KeyboardIntro: Calling UnsaidKeyboardExtension.openKeyboardSettings()',
         );
+      }
       await UnsaidKeyboardExtension.openKeyboardSettings();
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           'KeyboardIntro: UnsaidKeyboardExtension.openKeyboardSettings() completed',
         );
+      }
 
       // Auto-detect enablement after returning from Settings
       _awaitReturnCheck();
@@ -281,8 +283,9 @@ class _KeyboardIntroScreenProfessionalState
         );
       }
     } catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('KeyboardIntro: UnsaidKeyboardExtension failed: $e');
+      }
       // Fallback to general settings
       const url = 'app-settings:';
       final uri = Uri.parse(url);

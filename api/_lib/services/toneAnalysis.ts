@@ -29,6 +29,60 @@ const CLEAR_OVERSHADOW = ENGINE?.bucketGuards?.clear?.overshadowedBy || { bucket
 const CLEAR_DAMPEN_ESCALATORY = ENGINE?.bucketGuards?.clear?.dampenIfEscalatoryContextsActive ?? 0.35;
 const PREFER_CAUTION_IF_BOTH = ENGINE?.bucketGuards?.caution?.preferIfClearAndAlertBoth ?? 0.18;
 
+// === Profanity helpers (inline, v1.3.1) =====================================
+type ProfSeverity = 'mild'|'moderate'|'strong';
+type ProfHit = {
+  term: string;
+  severity: ProfSeverity;
+  start: number;
+  end: number;
+  partialMatch?: boolean;
+  targetedSecondPerson?: boolean;
+};
+
+// Conversational context memory for micro-awareness
+interface ConversationMemory {
+  lastTone: Bucket | null;
+  lastTimestamp: number;
+  lastSecondPersonCount: number;
+  lastAddressee: string | null;
+}
+
+// Global conversation memory map
+const conversationMemory = new Map<string, ConversationMemory>();
+
+// Tolerant normalization for masked swears and unicode weirdness
+function normalizeForProfanity(raw: string): string {
+  let s = raw.normalize('NFKC').toLowerCase();
+  s = s.replace(/\s+/g, ' ').trim();
+  
+  // Enhanced homoglyph and leetspeak normalization
+  const HOMOGLYPH_MAP: Record<string, string> = {
+    '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't',
+    '@': 'a', '$': 's', '!': 'i', '|': 'l'
+  };
+  
+  for (const [glyph, replacement] of Object.entries(HOMOGLYPH_MAP)) {
+    s = s.replace(new RegExp(glyph, 'g'), replacement);
+  }
+  
+  // collapse extreme elongations: fuuuuuck -> fff
+  s = s.replace(/(.)\1{3,}/g, '$1$1$1');
+  // light diacritic strip (ASCII fold) — safe enough for our words
+  try { s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch {}
+  // common masked forms
+  const map: Record<string,string> = {
+    'f*ck':'fuck','f**k':'fuck','f#ck':'fuck','f@ck':'fuck','f-ck':'fuck','f—ck':'fuck',
+    "f'ing":"fucking","effing":"fucking","fkn":"fucking",
+    'sh*t':'shit','bi*ch':'bitch','a**hole':'asshole','d*ck':'dick'
+  };
+  for (const [k,v] of Object.entries(map)) {
+    const safe = k.replace(/[-/\\^$+?.()|[\]{}]/g, '\\$&').replace(/\*/g, '.?');
+    s = s.replace(new RegExp(safe, 'g'), v);
+  }
+  return s;
+}
+
 // Fallback control (env kill switch)
 const DISABLE_WEIGHT_FALLBACKS = process.env.DISABLE_WEIGHT_FALLBACKS === '1';
 
@@ -901,6 +955,35 @@ class ToneDetectors {
     this.profanity = profanityWords;
     logger.info(`Loaded ${profanityWords.length} profanity words: ${profanityWords.slice(0, 10).join(', ')}...`);
 
+    // Step 2: Extend profanity index with morphological variants (auto-generated from base forms)
+    const profanityWithVariants = new Set(profanityWords);
+    const morphVariants = (base: string): string[] => {
+      if (!base || base.length < 3) return [base];
+      return [
+        // Progressive/gerund forms
+        base.endsWith('e') ? base.slice(0,-1) + 'ing' : base + 'ing',
+        // Past tense
+        base.endsWith('e') ? base + 'd' : (base.endsWith('y') && !base.match(/[aeiou]y$/)) 
+          ? base.slice(0,-1) + 'ied' : base + 'ed',
+        // Plural/3rd person
+        base.endsWith('s') || base.endsWith('sh') || base.endsWith('ch') || base.endsWith('x') || base.endsWith('z')
+          ? base + 'es' : base.endsWith('y') && !base.match(/[aeiou]y$/)
+          ? base.slice(0,-1) + 'ies' : base + 's',
+        // Simple variants
+        base + 'er', base + 'ing', base + 'ed'
+      ].filter((v,i,arr) => v.length >= 3 && arr.indexOf(v) === i);
+    };
+    
+    for (const word of profanityWords) {
+      if (word && word.length >= 3) {
+        for (const variant of morphVariants(word)) {
+          profanityWithVariants.add(variant);
+        }
+      }
+    }
+    this.profanity = Array.from(profanityWithVariants);
+    logger.info(`Extended profanity index: ${profanityWords.length} base → ${this.profanity.length} total (+${this.profanity.length - profanityWords.length} variants)`);
+
     // Load tone patterns (optional, won't break boot if missing)
     const tonePatterns = dataLoader.get('tonePatterns') || dataLoader.get('tone_patterns'); // array
     if (Array.isArray(tonePatterns)) {
@@ -1271,14 +1354,14 @@ class ToneDetectors {
     return Math.max(0, finalBump * lengthScale);
   }
   containsProfanity(text: string) { 
-    const T = text.toLowerCase(); 
+    const normalizedText = normalizeForProfanity(text);
     // Use word boundaries to avoid false positives like "class" triggering "ass"
     const found = this.profanity.some(w => {
       // Create word boundary regex for each profanity word
       const regex = new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-      return regex.test(T);
+      return regex.test(normalizedText);
     });
-    logger.info(`Profanity check: text="${T}", profanityWords=[${this.profanity.slice(0, 5).join(', ')}...], found=${found}`);
+    logger.info(`Profanity check: text="${normalizedText}", profanityWords=[${this.profanity.slice(0, 5).join(', ')}...], found=${found}`);
     return found;
   }
 
@@ -1290,23 +1373,35 @@ class ToneDetectors {
     hasTargetedSecondPerson: boolean;
     severity: 'mild' | 'moderate' | 'strong' | 'none';
   } {
-    const T = text.toLowerCase();
-    const matches: string[] = [];
-    let maxSeverity: 'mild' | 'moderate' | 'strong' | 'none' = 'none';
+    const normalizedText = normalizeForProfanity(text);
+    const hits: ProfHit[] = [];
+    let maxSeverity: ProfSeverity | 'none' = 'none';
     
-    // Get profanity data with severity levels
+    // Get profanity data with severity levels from JSON
     const prof = dataLoader.get('profanityLexicons');
     if (prof?.categories) {
       for (const category of prof.categories) {
         if (category.triggerWords && Array.isArray(category.triggerWords)) {
+          const severity = (category.severity as ProfSeverity) || 'mild';
+          
           for (const word of category.triggerWords) {
-            const regex = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-            if (regex.test(T)) {
-              matches.push(word);
+            const normalizedWord = normalizeForProfanity(word);
+            const regex = new RegExp(`\\b${normalizedWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+            let match;
+            
+            while ((match = regex.exec(normalizedText)) !== null) {
+              hits.push({
+                term: word,
+                severity,
+                start: match.index,
+                end: match.index + match[0].length
+              });
+              
               // Track highest severity
-              if (category.severity === 'strong') maxSeverity = 'strong';
-              else if (category.severity === 'moderate' && maxSeverity !== 'strong') maxSeverity = 'moderate';
-              else if (category.severity === 'mild' && maxSeverity === 'none') maxSeverity = 'mild';
+              if (severity === 'strong' || (severity === 'moderate' && maxSeverity !== 'strong') || 
+                  (severity === 'mild' && maxSeverity === 'none')) {
+                maxSeverity = severity;
+              }
             }
           }
         }
@@ -1314,17 +1409,125 @@ class ToneDetectors {
     }
 
     // Check for second-person targeting
-    const hasSecondPerson = /\byou(r|'re|re|)\b/.test(T);
-    const hasTargetedSecondPerson = matches.length > 0 && hasSecondPerson;
+    const hasSecondPerson = /\byou(r|'re|re|)\b/.test(normalizedText);
+    const hasTargetedSecondPerson = hits.length > 0 && hasSecondPerson;
 
     return {
-      hasProfanity: matches.length > 0,
-      count: matches.length,
-      matches,
+      hasProfanity: hits.length > 0,
+      count: hits.length,
+      matches: hits.map(h => h.term),
       hasTargetedSecondPerson,
       severity: maxSeverity
     };
   }
+
+  // Step 5: New method with detailed hit positions and severity support
+  scanProfanityWithDetails(text: string): ProfHit[] {
+    const normalizedText = normalizeForProfanity(text);
+    const hits: ProfHit[] = [];
+    
+    // Get profanity data with severity levels
+    const prof = dataLoader.get('profanityLexicons');
+    if (!prof?.categories) return hits;
+    
+    for (const category of prof.categories) {
+      if (!category.triggerWords || !Array.isArray(category.triggerWords)) continue;
+      
+      const severity = (category.severity as ProfSeverity) || 'mild';
+      
+      for (const word of category.triggerWords) {
+        const normalizedWord = normalizeForProfanity(word);
+        const regex = new RegExp(`\\b${normalizedWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+        let match;
+        
+        while ((match = regex.exec(normalizedText)) !== null) {
+          // Check for second-person targeting context
+          const beforeMatch = normalizedText.slice(Math.max(0, match.index - 20), match.index);
+          const afterMatch = normalizedText.slice(match.index + match[0].length, match.index + match[0].length + 20);
+          const contextText = beforeMatch + match[0] + afterMatch;
+          const hasTargeting = /\byou(r|'re|re|)\b/.test(contextText);
+          
+          hits.push({
+            term: word,
+            severity,
+            start: match.index,
+            end: match.index + match[0].length,
+            targetedSecondPerson: hasTargeting
+          });
+        }
+      }
+    }
+    
+    // Sort by position for consistent ordering
+    return hits.sort((a, b) => a.start - b.start);
+  }
+
+  // Steps 6-7: Streaming profanity detection for live typing
+  scanProfanityStreaming(text: string, isPartial: boolean = false): ProfHit[] {
+    const normalizedText = normalizeForProfanity(text);
+    const hits: ProfHit[] = [];
+    
+    // Get profanity data
+    const prof = dataLoader.get('profanityLexicons');
+    if (!prof?.categories) return hits;
+    
+    for (const category of prof.categories) {
+      if (!category.triggerWords || !Array.isArray(category.triggerWords)) continue;
+      
+      const severity = (category.severity as ProfSeverity) || 'mild';
+      
+      for (const word of category.triggerWords) {
+        const normalizedWord = normalizeForProfanity(word);
+        
+        if (isPartial) {
+          // For partial text, check if the end of text could be starting a profanity word
+          // Look for partial matches where the text ends mid-word
+          const textWords = normalizedText.split(/\s+/);
+          const lastWord = textWords[textWords.length - 1] || '';
+          
+          if (lastWord.length >= 2 && normalizedWord.startsWith(lastWord)) {
+            const textStart = normalizedText.lastIndexOf(lastWord);
+            hits.push({
+              term: word,
+              severity,
+              start: textStart,
+              end: textStart + lastWord.length,
+              partialMatch: true
+            });
+          }
+        }
+        
+        // Standard full-word matches
+        const regex = new RegExp(`\\b${normalizedWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+        let match;
+        
+        while ((match = regex.exec(normalizedText)) !== null) {
+          // Check for second-person targeting context
+          const beforeMatch = normalizedText.slice(Math.max(0, match.index - 20), match.index);
+          const afterMatch = normalizedText.slice(match.index + match[0].length, match.index + match[0].length + 20);
+          const contextText = beforeMatch + match[0] + afterMatch;
+          const hasTargeting = /\byou(r|'re|re|)\b/.test(contextText);
+          
+          hits.push({
+            term: word,
+            severity,
+            start: match.index,
+            end: match.index + match[0].length,
+            partialMatch: false,
+            targetedSecondPerson: hasTargeting
+          });
+        }
+      }
+    }
+    
+    // Sort by position and prioritize complete matches over partial ones
+    return hits.sort((a, b) => {
+      if (a.start !== b.start) return a.start - b.start;
+      // Complete matches first, then partial
+      return (a.partialMatch ? 1 : 0) - (b.partialMatch ? 1 : 0);
+    });
+  }
+
   getProfanityCount() { return this.profanity.length; }
 }
 
@@ -1412,10 +1615,31 @@ export class ToneStream {
   private buffer = '';
   private contextKey: string;
   private attachmentStyle: string;
+  
+  // Provisional lock mechanism for streaming stability
+  private lockUntil = 0;
+  private lockTone: Bucket | null = null;
 
   constructor(contextKey: string, attachmentStyle: string) {
     this.contextKey = contextKey;
     this.attachmentStyle = attachmentStyle;
+  }
+
+  // Lock tone for specified duration to prevent flicker
+  private tryLock(tone: Bucket, ms = 1200) {
+    this.lockTone = tone;
+    this.lockUntil = Date.now() + ms;
+    logger.info(`🔒 Tone locked: ${tone} for ${ms}ms`);
+  }
+
+  // Get current tone distribution with lock consideration
+  getCurrent(): Record<Bucket, number> {
+    if (Date.now() < this.lockUntil && this.lockTone) {
+      const locked: Record<Bucket, number> = { clear: 0, caution: 0, alert: 0 };
+      locked[this.lockTone] = 1;
+      return locked;
+    }
+    return { ...this.lastDist };
   }
 
   feedChar(ch: string) {
@@ -1443,7 +1667,7 @@ export class ToneStream {
     const bump = detectors.intensityBump(txt);
     log.alert += bump * 0.6; log.caution += bump * 0.2;
 
-    // Guardrail: profanity instantly nudges toward alert
+    // Enhanced guardrail: profanity instantly nudges toward alert
     const profanityCheck = detectors.analyzeProfanity(txt);
     if (profanityCheck.hasProfanity) { 
       // Scale alert boost by severity
@@ -1452,7 +1676,43 @@ export class ToneStream {
       else if (profanityCheck.severity === 'moderate') alertBoost = 0.4;
       
       log.alert += alertBoost; 
-      log.clear -= 0.1; 
+      log.clear -= 0.1;
+      
+      // Trigger provisional lock for strong profanity
+      if (profanityCheck.severity === 'strong' || profanityCheck.hasTargetedSecondPerson) {
+        this.tryLock('alert', 1200);
+      }
+    }
+
+    // Check for high-impact triggers that should lock alert tone
+    let shouldLockAlert = false;
+    let shouldLockCaution = false;
+    
+    // Threat patterns
+    if (/\b(i('| )?ll|i will|im (?:gonna|going to))\b.*\b(hurt|hit|ruin|report|expose|fire|destroy)\b|\bor else\b/i.test(txt)) {
+      log.alert += 0.8;
+      shouldLockAlert = true;
+    }
+    
+    // Targeted imperatives with "you"
+    if (/\b(you|ur|youre|you're|u|ya)\b/i.test(txt) && 
+        /\b(shut|stop|leave|go|die|listen|get|move)\b/i.test(txt)) {
+      log.alert += 0.6;
+      shouldLockAlert = true;
+    }
+    
+    // Dismissive with heat
+    if (/\b(whatever|obviously|as usual)\b/i.test(txt) && 
+        (/[!?]{2,}/.test(txt) || /\b(you|your)\b/i.test(txt))) {
+      log.caution += 0.4;
+      shouldLockCaution = true;
+    }
+    
+    // Apply provisional locks for streaming stability
+    if (shouldLockAlert) {
+      this.tryLock('alert', 1000);
+    } else if (shouldLockCaution) {
+      this.tryLock('caution', 800);
     }
 
     // Optional clamp to avoid runaway
@@ -1506,10 +1766,23 @@ export class ToneStream {
       alert: this.alpha*dist.alert + (1-this.alpha)*this.lastDist.alert
     });
 
+    // Update conversation memory for hysteresis tracking
+    const primaryTone: Bucket = this.lastDist.alert > this.lastDist.caution && this.lastDist.alert > this.lastDist.clear ? 'alert' :
+                               this.lastDist.caution > this.lastDist.clear ? 'caution' : 'clear';
+    
+    const fieldId = `stream_${this.contextKey}_${this.attachmentStyle}`;
+    const secondPersonCount = (txt.match(/\b(you|your|ur)\b/gi) || []).length;
+    const addressee = txt.match(/@[\w._-]+/) ? txt.match(/@[\w._-]+/)![0] : null;
+    
+    conversationMemory.set(fieldId, {
+      lastTone: primaryTone,
+      lastTimestamp: Date.now(),
+      lastSecondPersonCount: secondPersonCount,
+      lastAddressee: addressee
+    });
+
     this.tokens = [];
   }
-
-  getCurrent() { return { ...this.lastDist }; }
 }
 
 export class ToneLiveController {
@@ -1709,7 +1982,314 @@ export class ToneAnalysisService {
     return W;
   }
 
-  private _scoreTones(fr: any, text: string, attachmentStyle: string, contextHint: string) {
+// ========= High-Impact Alert/Caution Detection Functions =========
+
+  // 1) Targeted imperative detection: "you" + imperative verb within 4 tokens → alert
+  private targetedImperative(doc: any): boolean {
+    if (!doc?.tokens) return false;
+    
+    const youIdx = new Set(
+      doc.tokens
+        .filter((t: any) => /\b(you|ur|youre|you're|u|ya)\b/i.test(t.text || ''))
+        .map((t: any) => t.i || 0)
+    );
+    
+    for (const t of doc.tokens) {
+      if (t.pos === 'VERB' || t.pos === 'VB') {
+        // Check window of 4 tokens around verb
+        for (let j = Math.max(0, t.i - 4); j <= Math.min(doc.tokens.length - 1, t.i + 4); j++) {
+          if (youIdx.has(j)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // 2) Threat intent detection: "I'll hurt you", "or else", etc.
+  private detectThreatIntent(text: string): boolean {
+    const THREAT_RE = /\b(i('| )?ll|i will|im (?:gonna|going to))\b.*\b(hurt|hit|ruin|report|expose|fire|destroy|kill|harm|get|make you|fuck you up)\b|\bor else\b|\bi will make you\b/i;
+    return THREAT_RE.test(text);
+  }
+
+  // 3) Dismissive markers for caution: "whatever", "obviously", etc.
+  private detectDismissiveMarkers(text: string): number {
+    const DISMISSIVE_PATTERNS = [
+      /\bwhatever\b/i,
+      /\bobviously\b/i, 
+      /\bas usual\b/i,
+      /\bsure\s*🙄/i,
+      /\bof course\b.*\bnot\b/i,
+      /\bgreat\b.*(?:\.|!{1,3})\s*$/i  // sarcastic "great."
+    ];
+    
+    let score = 0;
+    for (const pattern of DISMISSIVE_PATTERNS) {
+      if (pattern.test(text)) score += 0.3;
+    }
+    
+    // Check for repair cues that might negate dismissiveness
+    const REPAIR_CUES = /\b(let's|we should|how about|maybe we|i think we should|let me|can we)\b/i;
+    if (score > 0 && REPAIR_CUES.test(text)) {
+      score *= 0.4; // Reduce but don't eliminate
+    }
+    
+    return Math.min(1.0, score);
+  }
+
+  // 4) Rhetorical question heat: multiple ?! or "why are you so [insult]"
+  private detectRhetoricalQuestionHeat(text: string): number {
+    let score = 0;
+    
+    // Multiple punctuation marks
+    if (/[?!]{2,}/.test(text)) score += 0.4;
+    
+    // "Why are you so [negative adjective]" pattern
+    if (/\bwhy\s+are\s+you\s+(so\s+)?(stupid|dumb|incompetent|ridiculous|useless|pathetic|annoying|selfish)\b/i.test(text)) {
+      score += 0.6;
+    }
+    
+    // General hostile questioning pattern
+    if (/\bwhy\s+do\s+you\s+(always|never|constantly)\b/i.test(text)) {
+      score += 0.3;
+    }
+    
+    return Math.min(1.0, score);
+  }
+
+  // 5) Enhanced homoglyph and leetspeak normalization
+  private normalizeConfusables(text: string): string {
+    const HOMOGLYPH_MAP: Record<string, string> = {
+      '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't',
+      '@': 'a', '$': 's', '!': 'i', '|': 'l', '()': 'o'
+    };
+    
+    let normalized = text;
+    for (const [glyph, replacement] of Object.entries(HOMOGLYPH_MAP)) {
+      normalized = normalized.replace(new RegExp(glyph, 'g'), replacement);
+    }
+    
+    return normalized;
+  }
+
+  // 6) Emoji escalation detection
+  private detectEmojiEscalation(text: string): { angerBoost: number; sarcasmBoost: number } {
+    const ANGER_EMOJI = /💢|😡|🤬|🖕|🚫|🔥/;
+    const FAKE_SOFTENER = /🙂/;
+    
+    let angerBoost = 0;
+    let sarcasmBoost = 0;
+    
+    if (ANGER_EMOJI.test(text)) {
+      angerBoost += 0.4;
+    }
+    
+    // Detect fake softener: 🙂 with insults/profanity
+    if (FAKE_SOFTENER.test(text) && 
+        (/\b(you|your|ur)\b/i.test(text)) && 
+        (detectors.analyzeProfanity(text).hasProfanity || /\b(stupid|idiot|clown|loser|pathetic)\b/i.test(text))) {
+      sarcasmBoost += 0.3;
+      angerBoost += 0.2; // Also bump anger for sarcastic hostility
+    }
+    
+    return { angerBoost, sarcasmBoost };
+  }
+
+  // 7) Belittling constructions and stronger intent cues
+  private detectBelittlingConstructions(text: string): { cautionBoost: number; disableSofteners: boolean } {
+    const BELITTLING_PATTERNS = [
+      /\bno offense,?\s+but\b/i,
+      /\bwith all due respect,?\s+/i,
+      /\bcalm down\b/i,
+      /\brelax\b(?:\s|$)/i,
+      /\btake it easy\b/i,
+      /\bjust saying\b/i,
+      /\bdon't get me wrong,?\s+but\b/i
+    ];
+    
+    let cautionBoost = 0;
+    let disableSofteners = false;
+    
+    for (const pattern of BELITTLING_PATTERNS) {
+      if (pattern.test(text)) {
+        cautionBoost += 0.4;
+        disableSofteners = true; // Disable softeners for the next clause
+        logger.info(`😒 Belittling construction detected: ${pattern.source}`);
+      }
+    }
+    
+    return { cautionBoost, disableSofteners };
+  }
+
+  // 8) Enhanced irony/sarcasm detection
+  private detectAdvancedSarcasm(text: string): number {
+    let sarcasmScore = 0;
+    
+    // Praise + insult pattern: "Great job, genius"
+    if (/\b(great|nice|good|excellent|perfect|wonderful)\b.*\b(genius|hero|einstein|brilliant)\b/i.test(text) &&
+        /[.!,]/.test(text)) {
+      sarcasmScore += 0.6;
+    }
+    
+    // Backhanded compliments with "but"
+    if (/\bnot\s+(stupid|dumb|incompetent)\b.*\bbut\b/i.test(text)) {
+      sarcasmScore += 0.4;
+    }
+    
+    // Fake positivity with 🙂 and criticism
+    if (/🙂/.test(text) && /\b(you|your)\b/i.test(text) && 
+        /\b(need to|should|have to|must|better)\b/i.test(text)) {
+      sarcasmScore += 0.5;
+    }
+    
+    return Math.min(1.0, sarcasmScore);
+  }
+
+  // 9) Prosody-like signals from text
+  private detectProsodySignals(text: string): { intensityBoost: number; cautionBoost: number } {
+    let intensityBoost = 0;
+    let cautionBoost = 0;
+    
+    // Ellipses after "you" or commands (passive aggression)
+    if (/\b(you|your)\b.*\.{2,}/i.test(text) || /\w+\.{2,}/.test(text)) {
+      cautionBoost += 0.3;
+      intensityBoost += 0.2;
+    }
+    
+    // Word stretch (re-elongation after normalization)
+    const stretchMatches = text.match(/\b\w*([a-z])\1{2,}\w*\b/gi);
+    if (stretchMatches && stretchMatches.length > 0) {
+      intensityBoost += Math.min(0.4, stretchMatches.length * 0.1);
+    }
+    
+    // Interrobang patterns
+    if (/\?!|\!\?/.test(text)) {
+      if (/\b(you|your|ur)\b/i.test(text)) {
+        cautionBoost += 0.4; // Alert if targeted
+      } else {
+        cautionBoost += 0.2; // General emphasis
+      }
+    }
+    
+    return { intensityBoost, cautionBoost };
+  }
+
+  // 10) Conversation awareness with micro-context
+  private updateConversationMemory(fieldId: string, currentTone: Bucket, text: string): void {
+    const secondPersonCount = (text.match(/\b(you|your|ur)\b/gi) || []).length;
+    const addressee = text.match(/@[\w._-]+/) ? text.match(/@[\w._-]+/)![0] : null;
+    
+    conversationMemory.set(fieldId, {
+      lastTone: currentTone,
+      lastTimestamp: Date.now(),
+      lastSecondPersonCount: secondPersonCount,
+      lastAddressee: addressee
+    });
+  }
+
+  private checkConversationHysteresis(fieldId: string, text: string): { cautionBoost: number; alertBoost: number } {
+    const memory = conversationMemory.get(fieldId);
+    if (!memory) return { cautionBoost: 0, alertBoost: 0 };
+    
+    const timeSinceLastMs = Date.now() - memory.lastTimestamp;
+    if (timeSinceLastMs > 10000) return { cautionBoost: 0, alertBoost: 0 }; // Too old, ignore
+    
+    let cautionBoost = 0;
+    let alertBoost = 0;
+    
+    // If previous was alert and current contains defensive markers, keep caution
+    if (memory.lastTone === 'alert' && 
+        /\b(i'm just saying|relax|calm down|whatever|fine)\b/i.test(text)) {
+      cautionBoost += 0.4;
+    }
+    
+    // Two consecutive absolutes with second person within 5 seconds → escalate
+    const currentSecondPerson = (text.match(/\b(you|your|ur)\b/gi) || []).length;
+    const hasAbsolutes = /\b(always|never|every time|constantly|literally)\b/i.test(text);
+    
+    if (timeSinceLastMs < 5000 && 
+        memory.lastSecondPersonCount > 0 && currentSecondPerson > 0 && 
+        hasAbsolutes) {
+      alertBoost += 0.6;
+      logger.info('🔄 Conversation hysteresis: consecutive absolutes + second person → alert escalation');
+    }
+    
+    return { cautionBoost, alertBoost };
+  }
+
+  // 11) Evidential confidence and explanation
+  private computeEvidentialConfidence(signals: string[], weights: number[]): { confidence: number; explanation: string[] } {
+    if (signals.length === 0) return { confidence: 1.0, explanation: [] };
+    
+    const avgWeight = weights.reduce((sum, w) => sum + w, 0) / weights.length;
+    const evidence = signals.length * avgWeight;
+    
+    // Reduce confidence when signals disagree (e.g., positive + insult)
+    const hasPositive = signals.some(s => s.includes('positive') || s.includes('supportive'));
+    const hasNegative = signals.some(s => s.includes('anger') || s.includes('threat') || s.includes('profanity'));
+    
+    let confidence = Math.min(1.0, evidence / 2.0);
+    if (hasPositive && hasNegative) {
+      confidence *= 0.7; // Conflicting signals reduce confidence
+    }
+    
+    // Return top 3 signals for explanation
+    const topSignals = signals
+      .map((signal, i) => ({ signal, weight: weights[i] || 0 }))
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 3)
+      .map(item => item.signal);
+    
+    return { confidence, explanation: topSignals };
+  }
+
+  // ========= Meta-Classifier for Human-like Judgments =========
+  
+  // Utility functions for learned layer
+  private sigmoid(z: number): number {
+    return 1 / (1 + Math.exp(-z));
+  }
+
+  private metaAlertProb(x: number[], w: number[]): number {
+    let z = 0;
+    for (let i = 0; i < x.length; i++) {
+      z += (w[i] || 0) * x[i];
+    }
+    return this.sigmoid(z);
+  }
+
+  private metaCautionProb(x: number[], w: number[]): number {
+    let z = 0;
+    for (let i = 0; i < x.length; i++) {
+      z += (w[i] || 0) * x[i];
+    }
+    return this.sigmoid(z);
+  }
+
+  // Build feature vector for meta-classifier
+  private buildMetaFeatures(text: string, f: any, profanityAnalysis: any, doc: any, contextDetection: any): number[] {
+    const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+    
+    return [
+      profanityAnalysis.severity === 'strong' ? 1 : 0,                    // [0] strong profanity
+      profanityAnalysis.severity === 'moderate' ? 1 : 0,                  // [1] moderate profanity
+      profanityAnalysis.hasTargetedSecondPerson ? 1 : 0,                  // [2] targeted profanity
+      doc ? (this.targetedImperative(doc) ? 1 : 0) : 0,                   // [3] targeted imperative
+      this.detectThreatIntent(text) ? 1 : 0,                              // [4] threat patterns
+      clamp01((f.lng_absolutes || 0) / 3),                                // [5] absolutes (normalized)
+      clamp01((f.int_exc || 0) / 3) + clamp01((f.int_q || 0) / 3) + clamp01(f.int_caps_ratio || 0), // [6] punctuation heat
+      /💢|😡|🤬|🖕/.test(text) ? 1 : 0,                                    // [7] anger emojis
+      /\bwhy\b.*\b(stupid|dumb|ridiculous|incompetent)\b/i.test(text) ? 1 : 0, // [8] hostile questioning
+      /(?:obviously|clearly|as usual)\b/i.test(text) ? 1 : 0,             // [9] dismissive markers
+      contextDetection.primaryContext?.includes('conflict') ? 1 : 0,       // [10] conflict context
+      doc?.sarcasmCue ? 1 : 0                                             // [11] sarcasm cue
+    ];
+  }
+
+  // Conservatively initialized weights (will be refined with data)
+  private readonly W_ALERT = [1.4, 0.9, 1.2, 0.9, 1.1, 0.6, 0.7, 0.5, 0.7, 0.5, 0.4, 0.4];
+  private readonly W_CAUTION = [0.2, 0.5, 0.4, 0.3, 0.2, 0.8, 0.7, 0.2, 0.6, 0.7, 0.3, 0.5];
+
+  private _scoreTones(fr: any, text: string, attachmentStyle: string, contextHint: string, doc?: any) {
     const f = fr.features || {};
     const W = this._weights(contextHint);
     const out: any = { 
@@ -1719,6 +2299,75 @@ export class ToneAnalysisService {
 
     // Enhanced profanity analysis (single call, structured result)
     const profanityAnalysis = detectors.analyzeProfanity(text);
+
+    // ========= Apply High-Impact Alert/Caution Detection Upgrades =========
+    
+    // 1) Targeted imperative detection
+    const hasTargetedImperative = doc ? this.targetedImperative(doc) : false;
+    if (hasTargetedImperative) {
+      out.angry += 1.0;
+      logger.info('🎯 Targeted imperative detected → alert boost');
+    }
+
+    // 2) Threat intent detection
+    if (this.detectThreatIntent(text)) {
+      out.angry += 1.2;
+      logger.info('⚠️ Threat intent detected → alert boost');
+    }
+
+    // 3) Dismissive markers
+    const dismissiveScore = this.detectDismissiveMarkers(text);
+    if (dismissiveScore > 0) {
+      out.frustrated += dismissiveScore * 0.8;
+      out.angry += dismissiveScore * 0.4;
+      logger.info(`😤 Dismissive markers detected (${dismissiveScore.toFixed(2)}) → caution boost`);
+    }
+
+    // 4) Rhetorical question heat
+    const questionHeat = this.detectRhetoricalQuestionHeat(text);
+    if (questionHeat > 0) {
+      out.frustrated += questionHeat;
+      out.angry += questionHeat * 0.6;
+      logger.info(`❓ Rhetorical question heat (${questionHeat.toFixed(2)}) → caution boost`);
+    }
+
+    // 5) Emoji escalation detection
+    const emojiDetection = this.detectEmojiEscalation(text);
+    if (emojiDetection.angerBoost > 0) {
+      out.angry += emojiDetection.angerBoost;
+      logger.info(`😡 Anger emoji boost (${emojiDetection.angerBoost.toFixed(2)})`);
+    }
+    if (emojiDetection.sarcasmBoost > 0) {
+      out.angry += emojiDetection.sarcasmBoost;
+      out.frustrated += emojiDetection.sarcasmBoost * 0.7;
+      logger.info(`🙂 Fake softener sarcasm boost (${emojiDetection.sarcasmBoost.toFixed(2)})`);
+    }
+
+    // 6) Belittling constructions
+    const belittlingDetection = this.detectBelittlingConstructions(text);
+    if (belittlingDetection.cautionBoost > 0) {
+      out.frustrated += belittlingDetection.cautionBoost;
+      out.angry += belittlingDetection.cautionBoost * 0.6;
+      logger.info(`😒 Belittling construction boost (${belittlingDetection.cautionBoost.toFixed(2)})`);
+    }
+
+    // 7) Advanced sarcasm detection
+    const sarcasmScore = this.detectAdvancedSarcasm(text);
+    if (sarcasmScore > 0) {
+      out.angry += sarcasmScore * 0.8;
+      out.frustrated += sarcasmScore * 0.6;
+      logger.info(`😏 Advanced sarcasm detected (${sarcasmScore.toFixed(2)})`);
+    }
+
+    // 8) Prosody signals
+    const prosodySignals = this.detectProsodySignals(text);
+    if (prosodySignals.cautionBoost > 0) {
+      out.frustrated += prosodySignals.cautionBoost;
+      out.angry += prosodySignals.cautionBoost * 0.5;
+      logger.info(`⌨️ Prosody signals (${prosodySignals.cautionBoost.toFixed(2)})`);
+    }
+
+    // ========= End Individual Upgrades =========
 
     // ✅ Enhanced context detection with smart schema
     const tokens = text.toLowerCase().split(/\s+/).filter(Boolean);
@@ -1740,6 +2389,37 @@ export class ToneAnalysisService {
     logger.info('Profanity analysis', profanityAnalysis);
     logger.info('Context multipliers loaded', { contextHint, multipliers: Object.keys(contextMultipliers).length });
     logger.info('Attachment bias loaded', { attachmentStyle, biases: Object.keys(attachmentBias).length });
+
+    // ========= Meta-Classifier Integration =========
+    
+    // Build feature vector for learned layer
+    const metaFeatures = this.buildMetaFeatures(text, f, profanityAnalysis, doc, contextDetection);
+    
+    // Compute meta-classifier probabilities
+    const pAlert = this.metaAlertProb(metaFeatures, this.W_ALERT);
+    const pCaution = this.metaCautionProb(metaFeatures, this.W_CAUTION);
+    
+    // Blend into scores (bounded, won't blow up)
+    out.angry += pAlert * 1.4;
+    out.frustrated += Math.max(0, pCaution - pAlert * 0.3) * 0.9;
+    
+    logger.info(`🧠 Meta-classifier: pAlert=${pAlert.toFixed(3)}, pCaution=${pCaution.toFixed(3)}`);
+
+    // ========= Conversation Awareness =========
+    
+    // Check conversation hysteresis (requires fieldId - we'll use a hash of text for now)
+    const fieldId = `field_${require('crypto').createHash('md5').update(text.substring(0, 50)).digest('hex').substring(0, 8)}`;
+    const hysteresis = this.checkConversationHysteresis(fieldId, text);
+    
+    if (hysteresis.cautionBoost > 0) {
+      out.frustrated += hysteresis.cautionBoost;
+      out.angry += hysteresis.cautionBoost * 0.5;
+    }
+    if (hysteresis.alertBoost > 0) {
+      out.angry += hysteresis.alertBoost;
+    }
+
+    // ========= End Advanced Upgrades =========
 
     // Emotion-driven
     out.angry      += (f.emo_anger || 0) * W.emo;
@@ -1877,8 +2557,33 @@ export class ToneAnalysisService {
       fr.profanityAnalysis = profanityAnalysis;
     }
 
+    // Compute evidential confidence and explanation
+    const detectedSignals: string[] = [];
+    const signalWeights: number[] = [];
+    
+    if (hasTargetedImperative) { detectedSignals.push('targeted imperative'); signalWeights.push(1.0); }
+    if (this.detectThreatIntent(text)) { detectedSignals.push('threat intent'); signalWeights.push(1.2); }
+    if (profanityAnalysis.hasProfanity) { 
+      detectedSignals.push(`${profanityAnalysis.severity} profanity`); 
+      signalWeights.push(profanityAnalysis.severity === 'strong' ? 1.4 : profanityAnalysis.severity === 'moderate' ? 0.9 : 0.5); 
+    }
+    if (emojiDetection.angerBoost > 0) { detectedSignals.push('anger emojis'); signalWeights.push(0.5); }
+    if (dismissiveScore > 0) { detectedSignals.push('dismissive language'); signalWeights.push(0.4); }
+    if (questionHeat > 0) { detectedSignals.push('hostile questioning'); signalWeights.push(0.7); }
+    if (pAlert > 0.7) { detectedSignals.push('meta-classifier alert'); signalWeights.push(pAlert * 1.4); }
+    if (pCaution > 0.6) { detectedSignals.push('meta-classifier caution'); signalWeights.push(pCaution * 0.9); }
+    
+    const evidentialResult = this.computeEvidentialConfidence(detectedSignals, signalWeights);
+
     for (const k of Object.keys(out)) out[k] = Math.max(0, out[k]);
-    return { scores: out, intensity };
+    return { 
+      scores: out, 
+      intensity, 
+      confidence: evidentialResult.confidence,
+      explanation: evidentialResult.explanation,
+      metaClassifier: { pAlert, pCaution },
+      signals: detectedSignals
+    };
   }
 
   private _softmaxScores(scores: any) {
@@ -1981,7 +2686,7 @@ export class ToneAnalysisService {
       const resolved = resolveContextKey(contextForWeights);
       logger.info('weights.context_resolved', resolved);
       
-      const { scores, intensity: baseIntensity } = this._scoreTones(fr, text, style, contextForWeights);
+      const { scores, intensity: baseIntensity } = this._scoreTones(fr, text, style, contextForWeights, doc);
       const intensity = clamp01(baseIntensity + advBump + excl + q + caps);
       
       // 🔒 Hard-floor: profanity + 2nd-person targeting => angry

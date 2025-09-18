@@ -1,6 +1,6 @@
 {
-  "version": "2.1.0",
-  "notes": "Production-hardened and backward compatible. toneBuckets/base feeds AdviceEngine.resolveToneBucket. bucketPolicies holds alert/caution/clear suggestion rules. Context overrides and intensity shifts included for stability.",
+  "version": "2.1.1",
+  "notes": "Production-hardened and backward compatible. Includes clear-eligibility guards so generic tokens cannot flip tense messages to clear.",
   "defaultBucket": "general_support",
 
   "engine": {
@@ -17,7 +17,8 @@
     "combination": {
       "contextMode": "additive",
       "attachmentMode": "additive",
-      "normalizeMode": "l1"
+      "normalizeMode": "l1",
+      "mathDomain": "logit"
     },
     "thresholds": {
       "mode": "soft"
@@ -58,19 +59,30 @@
     }
   },
 
+  "eligibility": {
+    "clear": {
+      "requirePhraseLevel": true,
+      "minNgram": 2,
+      "excludeTokens": ["i", "me", "my", "mine", "we", "us", "our", "ok", "okay", "k"],
+      "overshadow": { "by": "alert", "min": 0.22, "ratio": 1.75 },
+      "preferCautionIfBoth": 0.18
+    }
+  },
+
   "toneBuckets": {
-    "angry":        { "base": { "clear": 0.10, "caution": 0.30, "alert": 0.60 } },
-    "frustrated":   { "base": { "clear": 0.15, "caution": 0.45, "alert": 0.40 } },
-    "anxious":      { "base": { "clear": 0.20, "caution": 0.60, "alert": 0.20 } },
-    "sad":          { "base": { "clear": 0.25, "caution": 0.60, "alert": 0.15 } },
-    "assertive":    { "base": { "clear": 0.40, "caution": 0.40, "alert": 0.20 } },
-    "positive":     { "base": { "clear": 0.80, "caution": 0.15, "alert": 0.05 } },
-    "supportive":   { "base": { "clear": 0.85, "caution": 0.12, "alert": 0.03 } },
-    "neutral":      { "base": { "clear": 0.50, "caution": 0.30, "alert": 0.20 } },
-    "tentative":    { "base": { "clear": 0.30, "caution": 0.60, "alert": 0.10 } },
-    "confident":    { "base": { "clear": 0.60, "caution": 0.25, "alert": 0.15 } },
-    "negative":     { "base": { "clear": 0.20, "caution": 0.50, "alert": 0.30 } },
-    "safety_concern": { "base": { "clear": 0.05, "caution": 0.25, "alert": 0.70 } }
+    "general_support": { "base": { "clear": 0.70, "caution": 0.25, "alert": 0.05 } },
+    "angry":           { "base": { "clear": 0.10, "caution": 0.30, "alert": 0.60 } },
+    "frustrated":      { "base": { "clear": 0.15, "caution": 0.45, "alert": 0.40 } },
+    "anxious":         { "base": { "clear": 0.20, "caution": 0.60, "alert": 0.20 } },
+    "sad":             { "base": { "clear": 0.25, "caution": 0.60, "alert": 0.15 } },
+    "assertive":       { "base": { "clear": 0.40, "caution": 0.40, "alert": 0.20 } },
+    "positive":        { "base": { "clear": 0.80, "caution": 0.15, "alert": 0.05 } },
+    "supportive":      { "base": { "clear": 0.85, "caution": 0.12, "alert": 0.03 } },
+    "neutral":         { "base": { "clear": 0.50, "caution": 0.30, "alert": 0.20 } },
+    "tentative":       { "base": { "clear": 0.30, "caution": 0.60, "alert": 0.10 } },
+    "confident":       { "base": { "clear": 0.60, "caution": 0.25, "alert": 0.15 } },
+    "negative":        { "base": { "clear": 0.20, "caution": 0.50, "alert": 0.30 } },
+    "safety_concern":  { "base": { "clear": 0.05, "caution": 0.25, "alert": 0.70 } }
   },
 
   "contextOverrides": {
@@ -96,15 +108,15 @@
       "intensityFactor": 1.20,
       "categories": ["conflict", "rupture", "anger", "shutdown"],
       "suggestionBuckets": [
-        { "id": "deescalation",     "weight": 0.40 },
-        { "id": "repair_language",  "weight": 0.35 },
+        { "id": "deescalation",      "weight": 0.40 },
+        { "id": "repair_language",   "weight": 0.35 },
         { "id": "pause_before_reply","weight": 0.25 }
       ],
       "attachmentOverrides": {
-        "anxious":     [ { "id": "self_soothing",   "weight": 0.30 }, { "id": "clarity_request", "weight": 0.20 } ],
-        "avoidant":    [ { "id": "validation_prompt","weight": 0.25 }, { "id": "gentle_reconnect","weight": 0.25 } ],
-        "disorganized":[ { "id": "grounding",       "weight": 0.30 }, { "id": "repair_language", "weight": 0.30 } ],
-        "secure":      [ { "id": "direct_repair",   "weight": 0.35 }, { "id": "clarity_request", "weight": 0.15 } ]
+        "anxious":      [ { "id": "self_soothing",    "weight": 0.30 }, { "id": "clarity_request",  "weight": 0.20 } ],
+        "avoidant":     [ { "id": "validation_prompt","weight": 0.25 }, { "id": "gentle_reconnect","weight": 0.25 } ],
+        "disorganized": [ { "id": "grounding",        "weight": 0.30 }, { "id": "repair_language",  "weight": 0.30 } ],
+        "secure":       [ { "id": "direct_repair",    "weight": 0.35 }, { "id": "clarity_request",  "weight": 0.15 } ]
       },
       "contextBoosts": {
         "conflict": { "deescalation": 0.15, "repair_language": 0.10 },
@@ -124,10 +136,10 @@
         { "id": "clarity_request",   "weight": 0.20 }
       ],
       "attachmentOverrides": {
-        "anxious":     [ { "id": "reassurance",      "weight": 0.40 } ],
-        "avoidant":    [ { "id": "autonomy_respect", "weight": 0.25 } ],
-        "disorganized":[ { "id": "containment",      "weight": 0.30 } ],
-        "secure":      [ { "id": "reframe_positive", "weight": 0.25 } ]
+        "anxious":      [ { "id": "reassurance",       "weight": 0.40 } ],
+        "avoidant":     [ { "id": "autonomy_respect",  "weight": 0.25 } ],
+        "disorganized": [ { "id": "containment",       "weight": 0.30 } ],
+        "secure":       [ { "id": "reframe_positive",  "weight": 0.25 } ]
       },
       "contextBoosts": {
         "insecurity": { "reassurance": 0.20 },
@@ -147,10 +159,10 @@
         { "id": "secure_fix",  "weight": 0.25 }
       ],
       "attachmentOverrides": {
-        "anxious":     [ { "id": "gratitude",          "weight": 0.30 } ],
-        "avoidant":    [ { "id": "praise",             "weight": 0.25 } ],
-        "disorganized":[ { "id": "validation_prompt",  "weight": 0.25 } ],
-        "secure":      [ { "id": "expansion",          "weight": 0.30 } ]
+        "anxious":      [ { "id": "gratitude",          "weight": 0.30 } ],
+        "avoidant":     [ { "id": "praise",             "weight": 0.25 } ],
+        "disorganized": [ { "id": "validation_prompt",  "weight": 0.25 } ],
+        "secure":       [ { "id": "expansion",          "weight": 0.30 } ]
       },
       "contextBoosts": {
         "repair": { "affirmation": 0.15 },
@@ -161,23 +173,23 @@
   },
 
   "bucketDefinitions": {
-    "deescalation":       { "description": "Helps slow conflict and reduce intensity", "adviceTags": ["pause","slow_down","take_space"], "rewriteStyles": ["neutralize_intensity","gentle_tone"] },
-    "repair_language":    { "description": "Encourages micro-apologies, repair attempts, or reconnection bids", "adviceTags": ["repair","reconnect","acknowledge"], "rewriteStyles": ["soften_blame","add_accountability"] },
-    "pause_before_reply": { "description": "Suggests waiting before responding to prevent escalation", "adviceTags": ["delay","mindful_pause"], "rewriteStyles": ["remove_urgency"] },
-    "validation_prompt":  { "description": "Encourages validating the other’s perspective", "adviceTags": ["validation","empathy"], "rewriteStyles": ["acknowledge_feeling"] },
-    "gentle_reconnect":   { "description": "Promotes soft outreach after tension", "adviceTags": ["soft_startup","invite_reconnect"], "rewriteStyles": ["tentative_opener"] },
-    "self_soothing":      { "description": "Prompts anxious users to regulate before messaging", "adviceTags": ["self_regulation","containment"], "rewriteStyles": ["delay_message","reframe_anxiety"] },
-    "clarity_request":    { "description": "Encourages asking directly instead of spiraling", "adviceTags": ["clarity","direct_request"], "rewriteStyles": ["turn_question_clear"] },
-    "affirmation":        { "description": "Promotes praise, reassurance, or secure affirmations", "adviceTags": ["praise","affirmation"], "rewriteStyles": ["add_affection","highlight_strength"] },
-    "expansion":          { "description": "Promotes curiosity and expanding the dialogue", "adviceTags": ["curiosity","openness"], "rewriteStyles": ["add_question","invite_deeper"] },
-    "secure_fix":         { "description": "Default secure attachment rewrite bucket", "adviceTags": ["secure","balanced"], "rewriteStyles": ["direct_secure_fix"] },
-    "reassurance":        { "description": "Addresses insecurity directly with stable reassurance", "adviceTags": ["reassure"], "rewriteStyles": ["direct_reassure"] },
-    "autonomy_respect":   { "description": "Signals respect for space/independence", "adviceTags": ["autonomy","respect"], "rewriteStyles": ["acknowledge_space"] },
-    "containment":        { "description": "Contain emotional flooding with concise structure", "adviceTags": ["contain","structure"], "rewriteStyles": ["tighten_message"] },
-    "reframe_positive":   { "description": "Gently reframe to a constructive lens", "adviceTags": ["reframe"], "rewriteStyles": ["soft_positive_reframe"] },
-    "grounding":          { "description": "Nervous-system downshift before repair", "adviceTags": ["ground","self_regulate"], "rewriteStyles": ["breath_then_text"] },
-    "direct_repair":      { "description": "Secure, direct repair attempt", "adviceTags": ["repair","secure"], "rewriteStyles": ["direct_apology"] },
-    "gratitude":          { "description": "Name specific appreciations", "adviceTags": ["gratitude"], "rewriteStyles": ["add_specific_thanks"] },
-    "praise":             { "description": "Noticing strengths & efforts", "adviceTags": ["praise"], "rewriteStyles": ["call_out_strength"] }
+    "deescalation":        { "description": "Helps slow conflict and reduce intensity", "adviceTags": ["pause","slow_down","take_space"], "rewriteStyles": ["neutralize_intensity","gentle_tone"] },
+    "repair_language":     { "description": "Encourages micro-apologies, repair attempts, or reconnection bids", "adviceTags": ["repair","reconnect","acknowledge"], "rewriteStyles": ["soften_blame","add_accountability"] },
+    "pause_before_reply":  { "description": "Suggests waiting before responding to prevent escalation", "adviceTags": ["delay","mindful_pause"], "rewriteStyles": ["remove_urgency"] },
+    "validation_prompt":   { "description": "Encourages validating the other’s perspective", "adviceTags": ["validation","empathy"], "rewriteStyles": ["acknowledge_feeling"] },
+    "gentle_reconnect":    { "description": "Promotes soft outreach after tension", "adviceTags": ["soft_startup","invite_reconnect"], "rewriteStyles": ["tentative_opener"] },
+    "self_soothing":       { "description": "Prompts anxious users to regulate before messaging", "adviceTags": ["self_regulation","containment"], "rewriteStyles": ["delay_message","reframe_anxiety"] },
+    "clarity_request":     { "description": "Encourages asking directly instead of spiraling", "adviceTags": ["clarity","direct_request"], "rewriteStyles": ["turn_question_clear"] },
+    "affirmation":         { "description": "Promotes praise, reassurance, or secure affirmations", "adviceTags": ["praise","affirmation"], "rewriteStyles": ["add_affection","highlight_strength"] },
+    "expansion":           { "description": "Promotes curiosity and expanding the dialogue", "adviceTags": ["curiosity","openness"], "rewriteStyles": ["add_question","invite_deeper"] },
+    "secure_fix":          { "description": "Default secure attachment rewrite bucket", "adviceTags": ["secure","balanced"], "rewriteStyles": ["direct_secure_fix"] },
+    "reassurance":         { "description": "Addresses insecurity directly with stable reassurance", "adviceTags": ["reassure"], "rewriteStyles": ["direct_reassure"] },
+    "autonomy_respect":    { "description": "Signals respect for space/independence", "adviceTags": ["autonomy","respect"], "rewriteStyles": ["acknowledge_space"] },
+    "containment":         { "description": "Contain emotional flooding with concise structure", "adviceTags": ["contain","structure"], "rewriteStyles": ["tighten_message"] },
+    "reframe_positive":    { "description": "Gently reframe to a constructive lens", "adviceTags": ["reframe"], "rewriteStyles": ["soft_positive_reframe"] },
+    "grounding":           { "description": "Nervous-system downshift before repair", "adviceTags": ["ground","self_regulate"], "rewriteStyles": ["breath_then_text"] },
+    "direct_repair":       { "description": "Secure, direct repair attempt", "adviceTags": ["repair","secure"], "rewriteStyles": ["direct_apology"] },
+    "gratitude":           { "description": "Name specific appreciations", "adviceTags": ["gratitude"], "rewriteStyles": ["add_specific_thanks"] },
+    "praise":              { "description": "Noticing strengths & efforts", "adviceTags": ["praise"], "rewriteStyles": ["call_out_strength"] }
   }
 }
