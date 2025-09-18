@@ -1,0 +1,349 @@
+[
+  {
+    "text": "You're fucking stupid",
+    "category": "Strong Profanity + Targeting",
+    "expected": "alert",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "That's fucking annoying",
+    "category": "Strong Profanity (non-targeted)",
+    "expected": "caution",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "F*ck this sh*t",
+    "category": "Masked Profanity",
+    "expected": "caution",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "You're f'ing ridiculous",
+    "category": "Masked Profanity + Targeting",
+    "expected": "alert",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "You shut up right now",
+    "category": "Targeted Imperative",
+    "expected": "alert",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "You need to stop this",
+    "category": "Soft Imperative",
+    "expected": "caution",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "Just listen to me",
+    "category": "General Imperative",
+    "expected": "caution",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "You go away",
+    "category": "Targeted Imperative",
+    "expected": "alert",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "I'll make you regret this",
+    "category": "Threat Intent",
+    "expected": "alert",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "I'm gonna report you",
+    "category": "Threat Intent",
+    "expected": "alert",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "Do that or else",
+    "category": "Threat Intent",
+    "expected": "alert",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "I will destroy your reputation",
+    "category": "Threat Intent",
+    "expected": "alert",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "No offense, but you're an idiot",
+    "category": "Belittling + Insult",
+    "expected": "alert",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "With all due respect, that's stupid",
+    "category": "Belittling Construction",
+    "expected": "caution",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "Calm down, you're overreacting",
+    "category": "Dismissive Command",
+    "expected": "caution",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "Just saying, you're wrong",
+    "category": "Passive Belittling",
+    "expected": "caution",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "Great job, genius 🙂",
+    "category": "Sarcastic Praise + Fake Softener",
+    "expected": "caution",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "You're not stupid, but clearly you don't get it",
+    "category": "Backhanded Compliment",
+    "expected": "caution",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "Perfect work as usual 🙂",
+    "category": "Sarcasm with Emoji",
+    "expected": "caution",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "Why are you so incompetent??",
+    "category": "Hostile Question + Heat",
+    "expected": "alert",
+    "actual": "unknown",
+    "correct": false,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
+  },
+  {
+    "text": "Why do you always do this?!",
+    "category": "Rhetorical Question",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "What is wrong with you???",
+    "category": "Multiple Question Marks",
+    "expected": "alert",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "Whatever, you never listen",
+    "category": "Dismissive Language",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "Obviously you don't understand",
+    "category": "Dismissive Adverb",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "As usual, you're late",
+    "category": "Dismissive Pattern",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "You always do this...",
+    "category": "Ellipses + Targeting",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "Reallllly interesting point",
+    "category": "Word Stretching",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "What?! Are you serious?!",
+    "category": "Interrobang Pattern",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "You're an idiot 😡",
+    "category": "Anger Emoji + Insult",
+    "expected": "alert",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "Thanks for nothing 🖕",
+    "category": "Middle Finger Emoji",
+    "expected": "alert",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "You're so helpful 🙂",
+    "category": "Fake Softener Sarcasm",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "You constantly make these mistakes",
+    "category": "Absolutes + Targeting",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "This is literally the worst",
+    "category": "Hyperbolic Language",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "You NEVER listen to anyone",
+    "category": "Caps + Absolutes",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "I appreciate your help",
+    "category": "Positive Expression",
+    "expected": "clear",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "That's a good point",
+    "category": "Supportive",
+    "expected": "clear",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "Let me think about that",
+    "category": "Neutral/Thoughtful",
+    "expected": "clear",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "I understand your perspective",
+    "category": "Empathetic",
+    "expected": "clear",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "Look, I'm not trying to be mean, but you're really struggling here",
+    "category": "Softener + Criticism",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "I love how you always find a way to mess this up 🙂",
+    "category": "Sarcasm + Pattern + Emoji",
+    "expected": "alert",
+    "actual": "error",
+    "correct": false
+  },
+  {
+    "text": "You know what? Fine. Do whatever you want.",
+    "category": "Resignation + Dismissiveness",
+    "expected": "caution",
+    "actual": "error",
+    "correct": false
+  }
+]

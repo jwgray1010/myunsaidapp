@@ -1566,6 +1566,8 @@ function mapBucketsFromJson(
 
   // Check if this tone should use meta-classifier results
   if (toneConfig?.meta_classifier && metaClassifier) {
+    logger.info(`🎯 Meta-classifier override available for tone: ${toneLabel}, pAlert=${metaClassifier.pAlert.toFixed(3)}, pCaution=${metaClassifier.pCaution.toFixed(3)}`);
+    
     const { pAlert, pCaution } = metaClassifier;
     
     // Use meta-classifier probabilities to determine distribution
@@ -2748,44 +2750,39 @@ export class ToneAnalysisService {
       const { scores, intensity: baseIntensity } = this._scoreTones(fr, text, style, contextForWeights, doc);
       const intensity = clamp01(baseIntensity + advBump + excl + q + caps);
       
-      // 🔒 Hard-floor: profanity + 2nd-person targeting => angry
+      // �️ Smart Safety Rails: Boost meta-classifier signals instead of hardcoded overrides
       const T = text.toLowerCase();
       const secondPerson = /\byou(r|'re|re|)\b/.test(T) || (fr.features?.lng_second ?? 0) > 0;
       
       // Use enhanced profanity analysis from scoring
       const profanityAnalysis = (fr as any).profanityAnalysis || detectors.analyzeProfanity(text);
       
-      logger.info(`Hard-floor check: text="${text}", hasProfanity=${profanityAnalysis.hasProfanity}, hasTargetedSecondPerson=${profanityAnalysis.hasTargetedSecondPerson}, severity=${profanityAnalysis.severity}, matches=${profanityAnalysis.matches.join(',')}`);
+      logger.info(`Safety rail check: text="${text}", hasProfanity=${profanityAnalysis.hasProfanity}, hasTargetedSecondPerson=${profanityAnalysis.hasTargetedSecondPerson}, severity=${profanityAnalysis.severity}, matches=${profanityAnalysis.matches.join(',')}`);
       
-      // Enhanced hard-floor with severity consideration  
-      // Trigger for: targeted profanity, OR moderate/strong profanity + 2nd-person, OR strong profanity alone
-      if (profanityAnalysis.hasTargetedSecondPerson || 
-          (profanityAnalysis.hasProfanity && (profanityAnalysis.severity === 'strong' || profanityAnalysis.severity === 'moderate') && secondPerson) ||
-          (profanityAnalysis.hasProfanity && profanityAnalysis.severity === 'strong')) {
+      // Smart safety rails: boost alert signals for dangerous content without hardcoding distributions
+      let safetyBoost = 0;
+      let safetyReason = '';
+      
+      if (profanityAnalysis.hasTargetedSecondPerson) {
+        safetyBoost = 0.8; // Very high boost for targeted profanity
+        safetyReason = 'targeted profanity detected';
+      } else if (profanityAnalysis.hasProfanity && profanityAnalysis.severity === 'strong') {
+        safetyBoost = 0.6; // High boost for strong profanity
+        safetyReason = 'strong profanity detected';
+      } else if (profanityAnalysis.hasProfanity && profanityAnalysis.severity === 'moderate' && secondPerson) {
+        safetyBoost = 0.4; // Moderate boost for moderate profanity + targeting
+        safetyReason = 'moderate profanity with targeting detected';
+      }
+      
+      if (safetyBoost > 0) {
+        logger.info(`🛡️ SAFETY RAIL TRIGGERED: ${safetyReason} => boosting alert signal by ${safetyBoost}`);
         
-        const triggerReason = profanityAnalysis.hasTargetedSecondPerson ? 'targeted profanity' : 
-                            profanityAnalysis.severity === 'strong' ? 'strong profanity' : 
-                            'moderate profanity + 2nd-person';
-        logger.info(`🔒 HARD-FLOOR TRIGGERED: ${triggerReason} => forcing angry tone`);
+        // Boost the alert features that meta-classifier will consider
+        // This lets the meta-classifier make the final decision with enhanced signal strength
+        scores.angry = Math.max(scores.angry ?? 0, (scores.angry ?? 0) + safetyBoost);
         
-        // Scale intervention by severity
-        let angerBoost = 1.2;
-        let supportivePenalty = 0.5;
-        let positivePenalty = 0.4;
-        
-        if (profanityAnalysis.severity === 'strong') {
-          angerBoost = 1.5;
-          supportivePenalty = 0.7;
-          positivePenalty = 0.6;
-        } else if (profanityAnalysis.severity === 'moderate') {
-          angerBoost = 1.0;  // Still significant boost for moderate + targeting
-          supportivePenalty = 0.4;
-          positivePenalty = 0.3;
-        }
-        
-        scores.angry = Math.max(scores.angry ?? 0, angerBoost);
-        scores.supportive = Math.max(0, (scores.supportive ?? 0) - supportivePenalty);
-        scores.positive   = Math.max(0, (scores.positive   ?? 0) - positivePenalty);
+        // Note: Profanity signals are already added to detectedSignals in _scoreTones method
+        // This safety rail just boosts the scores, letting meta-classifier make final bucketing decision
       }
       
       logger.info('Tones scored', { scores, intensity });
@@ -2795,13 +2792,8 @@ export class ToneAnalysisService {
       let classification = this._primaryFromDist(distribution);
       let confidence = distribution[classification] || 0.33;
       
-      // Override for profanity + 2nd-person targeting or strong profanity
-      if (profanityAnalysis.hasTargetedSecondPerson || 
-          (profanityAnalysis.hasProfanity && (profanityAnalysis.severity === 'strong' || profanityAnalysis.severity === 'moderate') && secondPerson) ||
-          (profanityAnalysis.hasProfanity && profanityAnalysis.severity === 'strong')) {
-        classification = 'angry';
-        confidence = Math.max(confidence, 0.75);
-      }
+      // Note: Removed old hard-floor classification override - safety rails now boost signals instead
+      // This allows meta-classifier to make intelligent bucketing decisions
       
       logger.info('Classification computed', { classification, confidence, distribution });
 
