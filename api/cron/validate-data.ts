@@ -1,18 +1,7 @@
 // api/cron/validate-data.ts
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { withMethods, withErrorHandling, withLogging } from '../_lib/wrappers';
-i      {
-        name: 'negation_indicators.json',
-        getter: () => dataLoader.getNegationIndicators(),
-        validate: (d) => {
-          const errors: string[] = [];
-          // Handle object with version and negation_indicators array
-          const indicators = Array.isArray(d?.negation_indicators) ? d.negation_indicators : [];
-          if (!d?.version) errors.push('Missing version field');
-          if (indicators.length === 0) errors.push('No negation indicators loaded');
-          return { errors, recordCount: indicators.length };
-        }
-      },s, error as httpError } from '../_lib/http';
+import { success, error as httpError } from '../_lib/http';
 import { dataLoader } from '../_lib/services/dataLoader';
 import { logger } from '../_lib/logger';
 
@@ -183,46 +172,70 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
       },
       {
         name: 'negation_indicators.json',
-        getter: () => dataLoader.getNegationIndicators(), // {version, negation_indicators: []} or {version, patterns: []} depending on file
+        getter: () => dataLoader.getNegationIndicators(),
         validate: (d) => {
           const errors: string[] = [];
+          if (!d) {
+            errors.push('Data not loaded or null');
+            return { errors, recordCount: 0 };
+          }
           const items = Array.isArray(d?.negation_indicators)
             ? d.negation_indicators
             : Array.isArray(d?.patterns)
               ? d.patterns
               : [];
+          if (!d?.version) errors.push('Missing version field');
           if (items.length === 0) errors.push('No negation indicators loaded');
           return { errors, recordCount: items.length };
         }
       },
       {
         name: 'profanity_lexicons.json',
-        getter: () => dataLoader.getProfanityLexicons(), // {version, words: []}
+        getter: () => dataLoader.getProfanityLexicons(),
         validate: (d) => {
           const errors: string[] = [];
-          const words = Array.isArray(d?.words) ? d.words : [];
-          if (words.length === 0) errors.push('No profanity words loaded');
-          return { errors, recordCount: words.length };
+          if (!d) {
+            errors.push('Data not loaded or null');
+            return { errors, recordCount: 0 };
+          }
+          // Handle {rules: [...]} format or {words: [...]} format
+          const items = Array.isArray(d?.rules) ? d.rules : (Array.isArray(d?.words) ? d.words : []);
+          if (!d?.version) errors.push('Missing version field');
+          if (items.length === 0) errors.push('No profanity words loaded');
+          return { errors, recordCount: items.length };
         }
       },
       {
         name: 'sarcasm_indicators.json',
-        getter: () => dataLoader.getSarcasmIndicators(), // {version, sarcasm_indicators: []}
+        getter: () => dataLoader.getSarcasmIndicators(),
         validate: (d) => {
           const errors: string[] = [];
+          if (!d) {
+            errors.push('Data not loaded or null');
+            return { errors, recordCount: 0 };
+          }
           const items = Array.isArray(d?.sarcasm_indicators) ? d.sarcasm_indicators : [];
+          if (!d?.version) errors.push('Missing version field');
           if (items.length === 0) errors.push('No sarcasm indicators loaded');
           return { errors, recordCount: items.length };
         }
       },
       {
         name: 'weight_modifiers.json',
-        getter: () => dataLoader.getWeightModifiers(), // {version, modifiers: []}
+        getter: () => dataLoader.getWeightModifiers(),
         validate: (d) => {
           const errors: string[] = [];
+          if (!d) {
+            errors.push('Data not loaded or null');
+            return { errors, recordCount: 0 };
+          }
+          // Handle {byContext: {...}} format or {modifiers: [...]} format
+          const contextCount = d?.byContext ? Object.keys(d.byContext).length : 0;
           const modifiers = Array.isArray(d?.modifiers) ? d.modifiers : [];
-          if (modifiers.length === 0) errors.push('No weight modifiers loaded');
-          return { errors, recordCount: modifiers.length };
+          const totalItems = Math.max(contextCount, modifiers.length);
+          if (!d?.version) errors.push('Missing version field');
+          if (totalItems === 0) errors.push('No weight modifiers loaded');
+          return { errors, recordCount: totalItems };
         }
       },
       {
