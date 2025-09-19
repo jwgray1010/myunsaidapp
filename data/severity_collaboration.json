@@ -33,20 +33,25 @@
       "audit"
     ],
     "combination": {
-      "biasMode": "additive",              
-      "cooccurrenceMode": "additive",
+      "biasMode": "saturated_additive",              
+      "cooccurrenceMode": "saturated_additive",
       "negSarMode": "additive",
       "attachmentMode": "additive"
     },
     "bandPolicy": {
       "bounds": "left_inclusive_right_exclusive", 
-      "ties": "prefer_higher_band"                 
+      "ties": "prefer_lower_band"                 
     },
     "missingLinks": {
       "onMissing": "fallback_zero",       
       "logWarning": true
     },
-    "nanHandling": "coerce_to_zero"        
+    "nanHandling": "coerce_to_zero",
+    "caps": {
+      "biasTotalCap": 0.08,
+      "cooccurrenceTotalCap": 0.05,
+      "channelRoleProfileTotalCap": 0.05
+    }
   },
 
   "defaults": {
@@ -56,16 +61,29 @@
     "decay": { "half_life_ms": 900000 },
     "window_ms": 180000,
     "minThreshold": 0.30,
-    "maxThreshold": 0.85,
+    "maxThreshold": 0.849,
     "requireContentTriggers": true,
-    "allowContextOnly": ["CTX_SAFETY","CTX_REPAIR","CTX_BOUNDARY"],  
+    "allowContextOnly": ["CTX_SAFETY","CTX_REPAIR","CTX_BOUNDARY","CTX_VALIDATION"],  
+    "blendWeights": {                             
+      "triggerScore":        0.36,
+      "contextScore":        0.20,
+      "intensity":           0.12,
+      "negationSarcasm":     0.08,
+      "attachmentAdjustments": 0.12,
+      "preferenceAdjustments": 0.07,
+      "thesaurusAugment":    0.05,
+      "cooccurrenceBoosts":  0.12,
+      "channelRoleProfileBias": 0.05
+    },
+    "legacyWeights": {
       "contextScore": 0.20,
       "intensityScore": 0.12,
       "negationSarcasm": -0.08,
       "attachmentAdj": 0.12,
       "preferenceAdj": 0.07,
       "cooccurrenceBoost": 0.12
-    },
+    }
+  },
 
   "channels": {
     "sms":   { "toneBias": { "alert": 0.00, "caution": 0.01, "clear": 0.00 } },
@@ -83,7 +101,8 @@
     "high_sensitivity": { "sarcasmPenalty": 1.3, "negationPenalty": 1.2, "intensityBoost": 1.1 },
     "low_reactivity":   { "intensityBoost": 0.9, "alertClamp": -0.02 },
     "semantics": {
-      "alertClamp": "DEPRECATED_as_clamp; interpret as additive alert bias applied post-aggregate, pre-clamp. Negative values reduce alert."
+      "alertBias": -0.02,
+      "note": "applied post-aggregate, pre-clamp; negative reduces alert"
     }
   },
 
@@ -167,7 +186,7 @@
   "byRecency": {
     "repeatWithin_ms": 120000,
     "stacking": { "alert": 0.02, "caution": 0.01, "clear": 0.00 },
-    "cap": 0.06,
+    "cap": 0.04,
     "applyMode": "additive"
   },
 
@@ -203,7 +222,7 @@
   ],
 
   "severityBands": {
-    "alert":   { "low": [0.55, 0.62], "med": [0.62, 0.72], "high": [0.72, 0.85] },
+    "alert":   { "low": [0.55, 0.62], "med": [0.62, 0.72], "high": [0.72, 0.851] },
     "caution": { "low": [0.40, 0.45], "med": [0.45, 0.52], "high": [0.52, 0.65] },
     "clear":   { "low": [0.35, 0.40], "med": [0.40, 0.48], "high": [0.48, 0.60] }
   },

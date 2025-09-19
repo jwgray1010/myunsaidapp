@@ -1,23 +1,23 @@
 {
   "version": "1.2",
-  "notes": "Sarcasm/irony signal pack with scoring & guards. Backward-compatible with prior ids.",
+  "notes": "Sarcasm signal pack with scoring & guards. Backward-compatible with prior ids.",
   "settings": {
     "detect": true,
     "blend_weights": { "regex": 0.45, "features": 0.35, "context": 0.20 },
     "fire_threshold": 0.65,
-    "cooldown_ms": 180,
+    "cooldown_ms": 800,
     "guards": {
-      "ignore_zones": ["code_block", "url", "quote_block>direct", "inline_citation"],
+      "ignore_zones": ["code_block", "url", "quote_block>direct", "inline_citation", "username", "hashtag"],
       "max_quote_len": 120,
       "min_token_len": 3
     },
     "features": {
-      "caps_ratio_min": 0.25,
-      "exclaim_or_qmark_burst": 2,
+      "caps_ratio_min": 0.35,
+      "exclaim_or_qmark_burst": 3,
       "ellipsis": true,
       "slash_s": true,
       "emoji_eye_roll": ["🙄","😒"],
-      "banter_softeners": ["lol","lmao","jk","j/k","😉","😅"]
+      "banter_softeners": ["lol","lmao","jk","j/k","😉","😅","😂"]
     },
     "multilingual": {
       "enabled": true,
@@ -27,11 +27,11 @@
   },
 
   "calibration": {
-    "impact_floor": -0.15,
-    "impact_cap": -0.6,
-    "attach_mod_cap": 0.2,
-    "context_mod_cap": 0.25,
-    "tone_mod_cap": 0.2
+    "impact_floor": -0.12,
+    "impact_cap": -0.5,
+    "attach_mod_cap": 0.16,
+    "context_mod_cap": 0.20,
+    "tone_mod_cap": 0.16
   },
 
   "sarcasm_indicators": [
@@ -74,14 +74,14 @@
     {
       "id": "SARC_NICE_JOB_IRONY",
       "pattern": "\\b(nice|great|awesome)\\s+(job|work|one|going)\\b",
-      "impact": -0.28,
+      "impact": -0.18,
       "description": "praise words used ironically",
       "scopeTokens": 10,
       "applyTo": ["patterns"],
-      "toneAdjustments": { "alert": 0.10 },
-      "contextAdjustments": { "conflict": 0.12 },
-      "attachmentAdjustments": { "anxious": 0.04 },
-      "exceptions": ["genuine praise with positive valence nearby (e.g., 👍, 🙂, thanks)"]
+      "toneAdjustments": { "alert": 0.06 },
+      "contextAdjustments": { "conflict": 0.08 },
+      "attachmentAdjustments": { "anxious": 0.03 },
+      "exceptions": ["genuine praise with positive valence nearby (e.g., 👍, 🙂, thanks, !!, 😊)","enthusiastic caps","multiple exclamation marks"]
     },
     {
       "id": "SARC_THANKS_FOR_NOTHING",
@@ -134,14 +134,14 @@
     {
       "id": "SARC_EXCESS_CAPS",
       "pattern": "\\b(OKAY|SURE|RIGHT)\\b",
-      "impact": -0.22,
+      "impact": -0.15,
       "description": "sarcastic single-word caps",
       "scopeTokens": 4,
       "applyTo": ["features","patterns"],
-      "toneAdjustments": { "alert": 0.10 },
-      "contextAdjustments": { "conflict": 0.10 },
+      "toneAdjustments": { "alert": 0.06 },
+      "contextAdjustments": { "conflict": 0.08 },
       "attachmentAdjustments": {},
-      "exceptions": ["acronyms context"]
+      "exceptions": ["acronyms context","enthusiastic punctuation (!! or 😊)","thank you context","positive emoji nearby"]
     },
     {
       "id": "SARC_RHETORICAL_REALLY",

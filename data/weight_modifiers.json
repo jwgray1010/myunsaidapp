@@ -1,12 +1,20 @@
 {
   "version": "1.2.0",
-  "notes": "Fallback-aware, additive deltas to base weights inside toneAnalysis.ts. Exact → alias → family → general → code_default.",
+  "notes": "Fallback-aware, additive deltas to base weights inside toneAnalysis.ts. Exact → alias → family → general → code_default. REQUIRES: resolveContextKey() integration in TS for alias/family mapping to work.",
   "mergeStrategy": "additive_deltas",
+  "implementation": {
+    "aliasResolution": "REQUIRES TS integration - aliasMap won't work without resolveContextKey() adapter",
+    "familyResolution": "REQUIRES TS integration - CTX_* → family mapping needs resolver",
+    "envKillSwitch": "REQUIRES TS integration - env check not implemented in current toneAnalysis.ts",
+    "suggestionBounds": "NOT USED - minSuggestionWeight/maxSuggestionWeight not consumed by toneAnalysis.ts"
+  },
   "bounds": { 
     "min": 0.0, 
     "max": 1.0,
+    "note": "min/max are used by TS for weight clamping",
     "minSuggestionWeight": -2.0,
-    "maxSuggestionWeight": 3.0
+    "maxSuggestionWeight": 3.0,
+    "suggestionNote": "NOT CONSUMED by toneAnalysis.ts - these bounds are ignored"
   },
 
   "baseWeights": {
@@ -24,7 +32,8 @@
     "order": ["exact", "alias", "family", "general", "code_default"],
     "telemetryEvent": "weights.fallback",
     "enabled": true,
-    "envKillSwitch": "DISABLE_WEIGHT_FALLBACKS"
+    "envKillSwitch": "DISABLE_WEIGHT_FALLBACKS",
+    "note": "envKillSwitch requires TS integration - currently not checked by toneAnalysis.ts"
   },
 
   "aliasMap": {
@@ -80,6 +89,7 @@
   },
 
   "byContext": {
+    "code_default":     { "emo": 0.00, "ctx": 0.00, "attach": 0.00, "ling": 0.00, "intensity": 0.00, "negPenalty": 0.00, "sarcPenalty": 0.00, "absolutesBoost": 0.00 },
     "general":          { "emo": 0.00, "ctx": 0.00, "attach": 0.00, "ling": 0.00, "intensity": 0.00, "negPenalty": 0.00, "sarcPenalty": 0.00, "absolutesBoost": 0.00 },
 
     "conflict":         { "emo": 0.05, "ctx": 0.02, "attach": 0.00, "ling": 0.02, "intensity": 0.03, "negPenalty": 0.06, "sarcPenalty": 0.05, "absolutesBoost": 0.05 },
@@ -117,30 +127,5 @@
     "empathy":          { "emo": 0.05, "ctx": 0.01, "attach": 0.01, "ling": 0.01, "intensity": -0.02, "negPenalty": -0.02, "sarcPenalty": -0.02, "absolutesBoost": -0.02 },
     "blame":            { "emo": 0.03, "ctx": 0.01, "attach": 0.00, "ling": 0.02, "intensity": 0.02, "negPenalty": 0.05, "sarcPenalty": 0.03, "absolutesBoost": 0.04 },
     "practical":        { "emo": -0.02, "ctx": 0.03, "attach": 0.00, "ling": 0.03, "intensity": -0.01, "negPenalty": 0.00, "sarcPenalty": 0.00, "absolutesBoost": -0.01 }
-  },
-
-  "adviceRankOverrides": {
-    "byContext": {
-      "general": {
-        "toneMatch": 0.10,
-        "contextMatch": 0.05
-      },
-      "conflict": {
-        "toneMatch": 0.25,
-        "negationPenalty": -0.10,
-        "sarcasmPenalty": -0.10,
-        "phraseEdgeBoost": 0.10
-      },
-      "repair": {
-        "contextMatch": 0.15,
-        "intensityBoost": -0.10,
-        "severityFit": 0.10
-      },
-      "planning": {
-        "contextMatch": 0.20,
-        "intensityBoost": -0.05,
-        "toneMatch": -0.05
-      }
-    }
   }
 }

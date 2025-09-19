@@ -101,7 +101,6 @@
 
   "bucketHints": {
     "angry":          { "alert": 0.10, "caution": 0.05 },
-    "supportive":     { "clear": 0.10 },
     "safety_concern": { "alert": 0.15, "caution": 0.05 }
   }
 }
