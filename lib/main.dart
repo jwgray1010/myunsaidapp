@@ -65,16 +65,20 @@ void main() async {
   Future(() async {
     // Prevent duplicate initialization attempts
     if (_firebaseInitialized) {
-      print("🚀 [FLUTTER DEBUG] Firebase initialization already in progress, skipping");
+      print(
+        "🚀 [FLUTTER DEBUG] Firebase initialization already in progress, skipping",
+      );
       return;
     }
     _firebaseInitialized = true;
-    
+
     Timeline.startSync('firebase_init');
     try {
       print("🚀 [FLUTTER DEBUG] Initializing Firebase (background)...");
-      print("🚀 [FLUTTER DEBUG] Current Firebase apps count: ${Firebase.apps.length}");
-      
+      print(
+        "🚀 [FLUTTER DEBUG] Current Firebase apps count: ${Firebase.apps.length}",
+      );
+
       if (Firebase.apps.isEmpty) {
         print("🚀 [FLUTTER DEBUG] No Firebase apps found, initializing...");
         await Firebase.initializeApp(
@@ -83,7 +87,9 @@ void main() async {
         print("🚀 [FLUTTER DEBUG] Firebase initialization completed");
       } else {
         print("ℹ️ Firebase already initialized – skipping duplicate init");
-        print("ℹ️ Existing apps: ${Firebase.apps.map((app) => app.name).toList()}");
+        print(
+          "ℹ️ Existing apps: ${Firebase.apps.map((app) => app.name).toList()}",
+        );
       }
       print(
         "🚀 [FLUTTER DEBUG] Firebase initialized successfully (background)",
@@ -259,8 +265,12 @@ class UnsaidApp extends StatelessWidget {
                                   // Store user ID for keyboard extension access
                                   final userId = result.user?.uid;
                                   if (userId != null) {
-                                    await UnsaidKeyboardExtension.setUserId(userId);
-                                    print('Stored user ID for keyboard extension: $userId');
+                                    await UnsaidKeyboardExtension.setUserId(
+                                      userId,
+                                    );
+                                    print(
+                                      'Stored user ID for keyboard extension: $userId',
+                                    );
                                   }
                                   Navigator.pushReplacementNamed(
                                     context,
@@ -295,7 +305,9 @@ class UnsaidApp extends StatelessWidget {
                               final userId = cred.user?.uid;
                               if (userId != null) {
                                 await UnsaidKeyboardExtension.setUserId(userId);
-                                print('Stored user ID for keyboard extension: $userId');
+                                print(
+                                  'Stored user ID for keyboard extension: $userId',
+                                );
                               }
                               if (context.mounted) {
                                 Navigator.pushReplacementNamed(

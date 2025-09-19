@@ -174,6 +174,14 @@ class AssessmentIntegration {
       'boundary_forward': 'boundary_forward',
       'deescalator': 'deescalator',
       'balanced': 'balanced',
+      // Communication-style fallbacks:
+      'gentle_communicator': 'deescalator',
+      'measured_communicator': 'balanced',
+      'moderate_communicator': 'balanced',
+      'expressive_communicator': 'dating_sensitive',
+      'direct_communicator': 'boundary_forward',
+      'witty_communicator': 'balanced',
+      'sarcastic_communicator': 'boundary_forward',
     };
 
     final fallbackProfile = fallbackMap[primaryProfile] ?? 'balanced';
@@ -304,18 +312,13 @@ class AssessmentIntegration {
   }
 
   static bool _shouldGateRecommendations(AttachmentScores scores) {
-    // Gate recommendations if:
-    // - Attention check failed
-    // - Very low reliability
-    // - Extreme social desirability (fake good)
+    final lowConsistency = scores.reliabilityAlpha < 0.5; // now "consistency"
+    final veryHighSD = scores.socialDesirability > 0.85;
 
     if (!scores.attentionPassed) return true;
-    if (scores.reliabilityAlpha < 0.5) return true;
-    if (scores.socialDesirability > 0.85) return true;
+    if (veryHighSD && lowConsistency) return true;
 
-    // Cautious confidence level should gate more aggressive suggestions
-    if (scores.confidenceLabel == 'Cautious') return true;
-
+    // Do NOT gate solely due to 'Cautious'
     return false;
   }
 
@@ -331,9 +334,9 @@ class AssessmentIntegration {
       case 'Moderate':
         return 0.85;
       case 'Cautious':
-        return 0.7;
+        return 0.75; // was 0.7
       default:
-        return 0.6;
+        return 0.7;
     }
   }
 

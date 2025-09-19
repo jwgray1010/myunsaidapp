@@ -40,7 +40,7 @@ class AuthService extends ChangeNotifier {
     _authInstance.authStateChanges().listen((u) async {
       _user = u;
       notifyListeners();
-      
+
       // Update keyboard extension user ID based on auth state
       if (u != null && !u.isAnonymous) {
         // User signed in - store user ID for keyboard extension
@@ -48,7 +48,9 @@ class AuthService extends ChangeNotifier {
         // Refresh admin status to sync admin privileges to keyboard extension
         await AdminService.instance.refreshAdminStatus();
         if (kDebugMode) {
-          print('🔐 Firebase auth → ${u.uid} (stored for keyboard extension, admin status refreshed)');
+          print(
+            '🔐 Firebase auth → ${u.uid} (stored for keyboard extension, admin status refreshed)',
+          );
         }
       } else {
         // User signed out or anonymous - clear user ID and admin status
@@ -58,7 +60,9 @@ class AuthService extends ChangeNotifier {
           if (u == null) {
             print('🔐 Firebase auth → signed out (cleared keyboard extension)');
           } else {
-            print('🔐 Firebase auth → ${u.uid} (anonymous - cleared keyboard extension)');
+            print(
+              '🔐 Firebase auth → ${u.uid} (anonymous - cleared keyboard extension)',
+            );
           }
         }
       }
@@ -66,20 +70,21 @@ class AuthService extends ChangeNotifier {
 
     // Seed current user (if already signed in).
     _user = _authInstance.currentUser;
-    
+
     // Store user ID for keyboard extension if user is already signed in
     if (_user != null && !_user!.isAnonymous) {
       await UnsaidKeyboardExtension.setUserId(_user!.uid);
       // Refresh admin status to sync admin privileges to keyboard extension
       await AdminService.instance.refreshAdminStatus();
     }
-    
+
     _isInitialized = true;
 
     if (kDebugMode) {
       // ignore: avoid_print
       print(
-          '✅ AuthService initialized lazily. Current user: ${_user?.uid ?? 'none'}');
+        '✅ AuthService initialized lazily. Current user: ${_user?.uid ?? 'none'}',
+      );
     }
   }
 
@@ -152,7 +157,8 @@ class AuthService extends ChangeNotifier {
           if (attempts == 2) {
             if (kDebugMode) {
               print(
-                  '❌ Sign in with Apple availability check failed after 3 attempts: $e');
+                '❌ Sign in with Apple availability check failed after 3 attempts: $e',
+              );
             }
             return null;
           }
@@ -171,7 +177,7 @@ class AuthService extends ChangeNotifier {
       final apple = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
-          AppleIDAuthorizationScopes.fullName
+          AppleIDAuthorizationScopes.fullName,
         ],
       );
 
@@ -184,7 +190,8 @@ class AuthService extends ChangeNotifier {
       _user = res.user;
 
       // Fill displayName once, if Apple provided it.
-      final needsName = _user != null &&
+      final needsName =
+          _user != null &&
           (_user!.displayName == null || _user!.displayName!.isEmpty);
       final fullName = [
         apple.givenName ?? '',
@@ -295,8 +302,10 @@ class AuthService extends ChangeNotifier {
         }
         return null;
       }
-      final cred =
-          EmailAuthProvider.credential(email: email, password: password);
+      final cred = EmailAuthProvider.credential(
+        email: email,
+        password: password,
+      );
       final res = await u.linkWithCredential(cred);
       _user = res.user;
       if (kDebugMode) {

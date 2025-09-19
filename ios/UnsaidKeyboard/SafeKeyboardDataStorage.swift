@@ -416,8 +416,12 @@ extension SafeKeyboardDataStorage {
     
     /// Check if user has access to premium features
     func hasAccessToFeatures() -> Bool {
+        // TEMP: Always allow access for testing - remove this override when done!
+        return true
+        
+        // Original logic (commented out for testing):
         // Allow access if subscription, trial, or admin mode
-        return hasActiveSubscription() || hasActiveTrial() || isAdminMode()
+        // return hasActiveSubscription() || hasActiveTrial() || isAdminMode()
     }
     
     /// Get days remaining in trial

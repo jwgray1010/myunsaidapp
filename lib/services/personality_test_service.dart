@@ -18,7 +18,8 @@ class PersonalityTestService {
       // Admin bypass: admins can always retake the test
       if (AdminService.instance.canRetakePersonalityTest) {
         AdminService.instance.logAdminAction(
-            'Checking personality test completion (admin can retake)');
+          'Checking personality test completion (admin can retake)',
+        );
         return false; // Always allow admin to retake
       }
 
@@ -57,7 +58,8 @@ class PersonalityTestService {
 
   /// Process personality test answers and store results for keyboard access
   static Future<void> _processAndStorePersonalityResults(
-      List<String> answers) async {
+    List<String> answers,
+  ) async {
     try {
       // Get the randomized questions to match answers
       final questions = RandomizedPersonalityTest.getRandomizedQuestions();
@@ -70,10 +72,13 @@ class PersonalityTestService {
         final question = questions[i];
 
         // Find which option was selected by comparing the answer text
-        final optionIndex =
-            question.options.indexWhere((option) => option.text == answer);
+        final optionIndex = question.options.indexWhere(
+          (option) => option.text == answer,
+        );
         if (optionIndex != -1) {
-          final type = question.options[optionIndex].type;
+          final selectedOption = question.options[optionIndex];
+
+          final type = selectedOption.type;
           if (type != null) {
             counts[type] = (counts[type] ?? 0) + 1;
           }
@@ -149,7 +154,8 @@ class PersonalityTestService {
       if (kDebugMode) {
         print('✅ Personality results processed and stored for keyboard access');
         print(
-            '   - Dominant type: $dominantType (${typeLabels[dominantType]})');
+          '   - Dominant type: $dominantType (${typeLabels[dominantType]})',
+        );
         print('   - Attachment style: $attachmentStyle');
         print('   - Communication style: $commStyle');
       }

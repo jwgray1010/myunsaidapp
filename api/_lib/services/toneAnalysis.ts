@@ -62,6 +62,17 @@ export function resetConversationMemory(fieldId?: string): void {
   }
 }
 
+// === Therapeutic Communication Lexicons (relationship-focused analysis) ====
+// Therapist-vibe lexicons (small, precise, tunable)
+const ABSOLUTISTS = new Set(['always','never','every','everyone','noone','nobody','forever']);
+const BLAME_VERBS = new Set(['blame','fault','ruin','sabotage','gaslight']);
+const DEMAND_PHRASES = [/you\s+need\s+to/i, /you\s+should/i, /you\s+have\s+to/i, /you\s+must/i];
+const REQUEST_PHRASES = [/could\s+you/i, /would\s+you/i, /can\s+we/i, /let'?s/i, /would\s+it\s+help/i, /open\s+to/i];
+const OWNERSHIP_OPENERS = [/^i\s+(feel|felt|am|was|need|want)\b/i, /\bi\s+(feel|felt|am|was|need|want)\b/i];
+const REPAIR_PHRASES = [/i\s+hear\s+you/i, /i\s+want\s+to\s+understand/i, /help\s+me\s+understand/i, /that\s+makes\s+sense/i, /thanks\s+for\s+sharing/i];
+const HEDGES = new Set(['maybe','perhaps','might','could','possibly','i think','i wonder','it seems']);
+const EMOTION_I = new Set(['hurt','angry','upset','sad','afraid','scared','worried','anxious','overwhelmed','confused','frustrated']);
+
 // Tolerant normalization for masked swears and unicode weirdness
 function normalizeForProfanity(raw: string): string {
   let s = raw.normalize('NFKC').toLowerCase();
@@ -74,7 +85,8 @@ function normalizeForProfanity(raw: string): string {
   };
   
   for (const [glyph, replacement] of Object.entries(HOMOGLYPH_MAP)) {
-    s = s.replace(new RegExp(glyph, 'g'), replacement);
+    const escapedGlyph = glyph.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    s = s.replace(new RegExp(escapedGlyph, 'g'), replacement);
   }
   
   // collapse extreme elongations: fuuuuuck -> fff
@@ -320,6 +332,27 @@ function resolveContextKey(rawCtx: string): ResolvedContext {
 
   // 5) code_default (no JSON deltas)
   return { key: '__code_default__', reason: `fallback:code_default(${ctx})` };
+}
+
+// ===== Therapeutic Communication Utilities =====
+
+/**
+ * Extract second-person token spans (you/your/ur/u) from spaCy tokens
+ * Returns array of token indices that contain second-person references
+ */
+function extractSecondPersonTokenSpans(tokens: any[]): Array<{start: number; end: number}> {
+  const spans: Array<{start: number; end: number}> = [];
+  const secondPersonPattern = /\b(you|your|ur|u|ya|youre|you're)\b/i;
+  
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    const text = token.text || token.lemma || '';
+    if (secondPersonPattern.test(text.toLowerCase())) {
+      spans.push({ start: i, end: i });
+    }
+  }
+  
+  return spans;
 }
 
 // ===== Tone Bucket Mapping helpers (v2.1.1) =====
@@ -2266,6 +2299,103 @@ export class ToneAnalysisService {
     return { confidence, explanation: topSignals };
   }
 
+  // 12) Therapeutic communication analysis (relationship-focused tone assessment)
+  private computeTherapySignals(text: string, tokens: any[], extras: {
+    secondPersonIdxs: number[];            // from PRON_2P spans
+    intensity: number;                     // existing intensity score [0..1]
+    sarcasmProb: number;                   // existing sarcasm prob [0..1]
+    targetedAgg?: { score: number; override?: 'alert'|'caution'|null }; // from aggression logic
+  }) {
+    const lower = text.toLowerCase();
+
+    // Token helpers
+    const toks = tokens.map(t => (t.lemma || t.text || '').toLowerCase());
+    const hasYou = extras.secondPersonIdxs.length > 0;
+    const hasAbsolutistNearYou = (() => {
+      if (!hasYou) return false;
+      const win = 4;
+      return extras.secondPersonIdxs.some(i => {
+        for (let j = Math.max(0, i-win); j <= Math.min(toks.length-1, i+win); j++) {
+          if (ABSOLUTISTS.has(toks[j])) return true;
+        }
+        return false;
+      });
+    })();
+
+    // Ownership & repair cues
+    const ownership = OWNERSHIP_OPENERS.some(rx => rx.test(lower));
+    const hasRepair = REPAIR_PHRASES.some(rx => rx.test(lower));
+    const hasRequest = REQUEST_PHRASES.some(rx => rx.test(lower));
+    const hasDemand = DEMAND_PHRASES.some(rx => rx.test(lower));
+    const hasHedge = Array.from(HEDGES).some(h => lower.includes(h));
+
+    // Emotion vocab when owned by "I" (very positive indicator)
+    const iEmotion = ownership && Array.from(EMOTION_I).some(e => 
+      lower.includes(`i ${e}`) || lower.includes(`i'm ${e}`) || lower.includes(`i am ${e}`)
+    );
+
+    // Blame-y cue set (soft)
+    const hasBlameVerb = Array.from(BLAME_VERBS).some(b => lower.includes(b));
+    const blameWithYou = hasYou && (hasBlameVerb || hasDemand || hasAbsolutistNearYou);
+
+    // Start with neutral baseline
+    let clearScore = 0.3, cautionScore = 0.3, alertScore = 0.4;
+
+    // Positive moves (pull toward CLEAR)
+    if (ownership)      clearScore += 0.25;
+    if (hasRepair)      clearScore += 0.25;
+    if (hasRequest)     clearScore += 0.15;
+    if (hasHedge)       clearScore += 0.1;
+    if (iEmotion)       clearScore += 0.15;
+
+    // Risk moves (push to CAUTION/ALERT)
+    if (blameWithYou)   cautionScore += 0.25;
+    if (hasDemand)      cautionScore += 0.15;
+    if (hasAbsolutistNearYou) cautionScore += 0.15;
+
+    // Intensity nudges (not decisive)
+    cautionScore += Math.min(0.1, extras.intensity * 0.12);
+    alertScore   += Math.min(0.1, Math.max(0, extras.intensity - 0.6) * 0.4);
+
+    // Sarcasm softens a touch
+    clearScore += Math.min(0.05, extras.sarcasmProb * 0.05);
+
+    // Targeted aggression takes precedence if present
+    if (extras.targetedAgg?.override === 'alert') {
+      alertScore = Math.max(alertScore, 0.85);
+      cautionScore = Math.max(cautionScore, 0.1);
+      clearScore = Math.min(clearScore, 0.05);
+    } else if (extras.targetedAgg?.override === 'caution') {
+      cautionScore = Math.max(cautionScore, 0.65);
+      clearScore = Math.max(clearScore, 0.2);
+      alertScore = Math.min(alertScore, 0.2);
+    }
+
+    // Normalize to probabilities
+    const sum = clearScore + cautionScore + alertScore || 1;
+    const probs = {
+      clear:   clearScore / sum,
+      caution: cautionScore / sum,
+      alert:   alertScore / sum
+    };
+
+    // Decision thresholds (tunable, conservative)
+    let tone: 'clear'|'caution'|'alert' = 'clear';
+    if (probs.alert >= 0.70) tone = 'alert';
+    else if (probs.caution >= 0.55) tone = 'caution';
+    else tone = 'clear';
+
+    return {
+      probs,
+      tone,
+      cues: {
+        ownership, hasRepair, hasRequest, hasHedge, iEmotion,
+        hasDemand, hasBlameVerb, hasAbsolutistNearYou, hasYou,
+        intensity: extras.intensity, sarcasm: extras.sarcasmProb
+      }
+    };
+  }
+
   // ========= Meta-Classifier for Human-like Judgments =========
   
   // Utility functions for learned layer
@@ -2313,6 +2443,64 @@ export class ToneAnalysisService {
   private readonly W_ALERT = [1.4, 0.9, 1.2, 0.9, 1.1, 0.6, 0.7, 0.5, 0.7, 0.5, 0.4, 0.4];
   private readonly W_CAUTION = [0.2, 0.5, 0.4, 0.3, 0.2, 0.8, 0.7, 0.2, 0.6, 0.7, 0.3, 0.5];
 
+  // Therapist-style scoring (ownership/repair vs blame/demand). Low-FP, tunable.
+  private therapyScore(text: string, doc: any, f: any) {
+    const lower = text.toLowerCase();
+
+    // tiny, safe lexicons
+    const ABS = /\b(always|never|every|everyone|nobody|no one|forever)\b/i;
+    const DEMAND = /\byou\s+(need to|should|have to|must)\b/i;
+    const REQ = /\b(could you|would you|can we|let'?s|would it help|open to)\b/i;
+    const OWN_OPEN = /\bi\s+(feel|felt|am|was|need|want)\b/i;
+    const REPAIR = /\b(i (hear|get) you|i want to understand|help me understand|makes sense|thanks for sharing)\b/i;
+    const HEDGE = /\b(maybe|perhaps|might|could|possibly|i think|i wonder|it seems)\b/i;
+
+    // 2nd-person proximity (from spaCy tokens)
+    const toks = (doc?.tokens || []).map((t:any)=>String(t.lemma||t.text||'').toLowerCase());
+    const youIdx: number[] = [];
+    toks.forEach((t:string,i:number)=>{ if (/(^you$|^your$|^ur$|^u$|^youre$|^you're$)/.test(t)) youIdx.push(i); });
+    const hasYou = youIdx.length > 0;
+    const absNearYou = hasYou && youIdx.some(i => toks.slice(Math.max(0,i-4), i+5).some((w: string) => /^(always|never|every|everyone|nobody|noone)$/.test(w)));
+
+    // measures
+    const ownership = OWN_OPEN.test(lower);
+    const repair = REPAIR.test(lower);
+    const request = REQ.test(lower);
+    const hedge = HEDGE.test(lower);
+    const demand = DEMAND.test(lower);
+    const blamey = hasYou && (demand || absNearYou);
+
+    // intensity from your features (bounded nudge)
+    const intensity = Math.max(0, Math.min(1, (f?.int_modscore||0) + (f?.int_caps_ratio||0) + (f?.int_exc||0)*0.08 + (f?.int_q||0)*0.05));
+
+    let clear = 0.3, caution = 0.3, alert = 0.4;
+
+    // de-escalators
+    if (ownership) clear += 0.25;
+    if (repair)    clear += 0.25;
+    if (request)   clear += 0.15;
+    if (hedge)     clear += 0.10;
+
+    // escalators (only with "you")
+    if (blamey)    caution += 0.25;
+    if (demand)    caution += 0.15;
+    if (absNearYou) caution += 0.15;
+
+    // intensity nudges, capped (doesn't decide on its own)
+    caution += Math.min(0.10, intensity * 0.12);
+    alert   += Math.min(0.10, Math.max(0, intensity - 0.6) * 0.4);
+
+    // normalize
+    const sum = clear + caution + alert || 1;
+    const probs = { clear: clear/sum, caution: caution/sum, alert: alert/sum };
+
+    let tone: 'clear'|'caution'|'alert' = 'clear';
+    if (probs.alert >= 0.70) tone = 'alert';
+    else if (probs.caution >= 0.55) tone = 'caution';
+
+    return { tone, probs, cues: { ownership, repair, request, hedge, demand, absNearYou, hasYou, intensity } };
+  }
+
   private _scoreTones(fr: any, text: string, attachmentStyle: string, contextHint: string, doc?: any) {
     const f = fr.features || {};
     
@@ -2338,6 +2526,41 @@ export class ToneAnalysisService {
     // Enhanced profanity analysis (single call, structured result) - Fix #5: Cache profanity analysis
     const profanityAnalysis = detectors.analyzeProfanity(text);
     (fr as any).profanityAnalysis = profanityAnalysis; // Store for reuse to avoid redundant calls
+
+    // Therapist-style layer (rewards ownership/repair; penalizes blame only when directed)
+    const therapy = this.therapyScore(text, doc, f);
+
+    // Nudge scores instead of hard override
+    if (therapy.tone === 'alert') {
+      out.angry = Math.max(out.angry, out.angry + 0.6);
+      out.frustrated += 0.25;
+    } else if (therapy.tone === 'caution') {
+      out.frustrated = Math.max(out.frustrated, out.frustrated + 0.45);
+      out.angry += 0.15;
+    } else {
+      // clear: amplify supportive/positive a bit
+      out.supportive += 0.25;
+      out.positive += 0.10;
+    }
+
+    // keep cues for telemetry/UX
+    (fr as any).therapeutic = { tone: therapy.tone, probs: therapy.probs, cues: therapy.cues };
+
+    // Log therapeutic analysis for observability
+    logger.info('🧠 TherapyTone', {
+      tone: therapy.tone,
+      probs: therapy.probs,
+      cues: {
+        ownership: therapy.cues.ownership,
+        repair: therapy.cues.repair,
+        request: therapy.cues.request,
+        hedge: therapy.cues.hedge,
+        demand: therapy.cues.demand,
+        absNearYou: therapy.cues.absNearYou,
+        hasYou: therapy.cues.hasYou,
+        intensity: therapy.cues.intensity
+      }
+    });
 
     // ========= Apply High-Impact Alert/Caution Detection Upgrades =========
     
@@ -2750,6 +2973,35 @@ export class ToneAnalysisService {
       const { scores, intensity: baseIntensity } = this._scoreTones(fr, text, style, contextForWeights, doc);
       const intensity = clamp01(baseIntensity + advBump + excl + q + caps);
       
+      // === Therapeutic Communication Analysis ===
+      // Second-person token indices
+      const secondPersonSpans = extractSecondPersonTokenSpans(doc.tokens);
+      const secondPersonIdxs = secondPersonSpans.flatMap(s =>
+        Array.from({length: (s.end - s.start + 1)}, (_,k) => s.start + k)
+      );
+
+      // OPTIONAL: if targeted aggression is available from earlier analysis
+      const targetedAgg = (fr as any)._targetedAgg || null;
+
+      // Compute therapeutic tone features
+      const therapy = this.computeTherapySignals(
+        text,
+        doc.tokens,
+        {
+          secondPersonIdxs,
+          intensity,
+          sarcasmProb: doc.sarcasmCue ? 0.3 : 0,
+          targetedAgg: targetedAgg ? { score: targetedAgg.score, override: targetedAgg.override as any } : undefined
+        }
+      );
+
+      logger.info('🧠 TherapyTone', {
+        tone: therapy.tone,
+        probs: therapy.probs,
+        cues: therapy.cues,
+        targetedAgg: targetedAgg?.override || 'none'
+      });
+      
       // �️ Smart Safety Rails: Boost meta-classifier signals instead of hardcoded overrides
       const T = text.toLowerCase();
       const secondPerson = /\byou(r|'re|re|)\b/.test(T) || (fr.features?.lng_second ?? 0) > 0;
@@ -2864,6 +3116,13 @@ export class ToneAnalysisService {
       // ✅ Add context severity for bucket mapping
       (result as any).contextSeverity = (fr as any).contextSeverity;
 
+      // ✅ Add therapeutic tone features for relationship-aware analysis
+      (result as any).therapeutic = {
+        tone: therapy.tone,           // 'clear' | 'caution' | 'alert'
+        probs: therapy.probs,         // {clear, caution, alert}
+        cues: therapy.cues            // useful for explanations/UI hints
+      };
+
       // Add semantic backbone debug info if enabled
       if (ENABLE_SB && nudgedResult.debug) {
         (result as any).semanticBackbone = nudgedResult.debug;
@@ -2954,6 +3213,7 @@ export function mapToneToBuckets(
   const tone = toneResult.classification || toneResult.tone?.classification || toneResult.primary_tone || 'neutral';
   const confidence = toneResult.confidence || toneResult.tone?.confidence || 0.5;
   
+  
   logger.info('mapToneToBuckets debug', { 
     tone, 
     confidence, 
@@ -2974,6 +3234,16 @@ export function mapToneToBuckets(
   // Apply context overrides if available
   if (contextOverrides[contextKey] && contextOverrides[contextKey][tone]) {
     buckets = { ...buckets, ...contextOverrides[contextKey][tone] };
+  }
+  
+  // Apply gentle therapeutic nudging (≤10% adjustment)
+  if ((config as any)?.therapeutic?.tone) {
+    const t = (config as any).therapeutic.tone as 'clear'|'caution'|'alert';
+    if (t === 'alert')    buckets.alert  = Math.min(1, buckets.alert + 0.10);
+    if (t === 'caution')  buckets.caution= Math.min(1, buckets.caution + 0.08);
+    if (t === 'clear')    buckets.clear  = Math.min(1, buckets.clear + 0.08);
+    const total = (buckets.clear + buckets.caution + buckets.alert) || 1;
+    buckets.clear /= total; buckets.caution /= total; buckets.alert /= total;
   }
   
   // Apply intensity shifts based on confidence (proxy)
@@ -3038,7 +3308,10 @@ export function createToneAnalyzer(config: any = {}): any {
       };
     },
     mapToneToBuckets(toneResult: any, attachmentStyle: string = 'secure', contextKey: string = 'default') {
-      return mapToneToBuckets(toneResult, attachmentStyle, contextKey, data, config);
+      return mapToneToBuckets(toneResult, attachmentStyle, contextKey, data, {
+        ...config,
+        therapeutic: toneResult.therapeutic
+      });
     },
     getConfig() { return { ...config, tier }; },
     updateConfig(newConfig: any) { Object.assign(config, newConfig); return this; }

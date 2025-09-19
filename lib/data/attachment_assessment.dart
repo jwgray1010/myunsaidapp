@@ -472,7 +472,7 @@ final List<PersonalityQuestion> goalItems = [
 
   // Communication Style: Profanity Usage
   const PersonalityQuestion(
-    id: "G8",
+    id: "G11",
     question:
         "How often do you use strong language or profanity when you're frustrated or angry?",
     isGoal: true,
@@ -507,7 +507,7 @@ final List<PersonalityQuestion> goalItems = [
 
   // Communication Style: Sarcasm Usage
   const PersonalityQuestion(
-    id: "G9",
+    id: "G12",
     question: "How often do you use sarcasm or irony in your communication?",
     isGoal: true,
     options: [
@@ -593,6 +593,14 @@ class AttachmentAssessment {
   static ({AttachmentScores scores, GoalRoutingResult routing}) run(
     Map<String, int> responses,
   ) {
+    // Back-compat for older saved results where we used G8/G9 twice
+    if (responses.containsKey('G8') && !responses.containsKey('G11')) {
+      responses['G11'] = responses['G8']!; // old profanity -> new
+    }
+    if (responses.containsKey('G9') && !responses.containsKey('G12')) {
+      responses['G12'] = responses['G9']!; // old sarcasm -> new
+    }
+
     final scores = _scoreAttachment(responses);
     final routing = _routeGoals(responses);
     return (scores: scores, routing: routing);
@@ -646,11 +654,12 @@ class AttachmentAssessment {
     int avoidance = map100(avdMean).round();
 
     // 3) Reliability (Cronbach's alpha) across the 12 core items
-    final alpha = _cronbachAlpha(scoredAll);
+    final alpha = _splitHalfConsistency(scoredAll);
 
     // 4) Attention check
     final attnVal = responses["CHK_ATTEN"];
-    final attentionPassed = (attnVal == 4); // "Agree" per instruction
+    final attentionPassed =
+        (attnVal == 4 || attnVal == 5); // "Agree" or "Strongly Agree"
 
     // 5) Social desirability (mean of SD items -> normalize to 0..1)
     final sdVals = [
@@ -684,68 +693,68 @@ class AttachmentAssessment {
     );
   }
 
-  static double _cronbachAlpha(List<double> items) {
-    // We need item variances and total variance across the vector-of-items per person.
-    // Here we approximate alpha across items by simulating a "scale" as the sum of items
-    // and computing alpha with the item-wise variance set:
-    //
-    // alpha = k/(k-1) * (1 - sum(Var(item_i)) / Var(totalScore))
-    //
-    // Since we only have a single respondent vector here, we approximate variance by
-    // expected Likert variance stabilization: we'll compute across-item variance
-    // using deviations from the item mean. For small k, this is a rough proxy.
-    //
-    final k = items.length;
-    if (k < 3) return 0.0;
-
-    // item variances (with ddof=1 guard)
+  static double _splitHalfConsistency(List<double> items) {
+    if (items.length < 6) return 0.0;
+    final odd = <double>[];
+    final even = <double>[];
+    for (int i = 0; i < items.length; i++) {
+      (i % 2 == 0 ? odd : even).add(items[i]);
+    }
+    double mean(List<double> xs) => xs.reduce((a, b) => a + b) / xs.length;
     double varOf(List<double> xs) {
       if (xs.length < 2) return 0.0;
-      final m = xs.reduce((a, b) => a + b) / xs.length;
-      double s2 = 0.0;
+      final m = mean(xs);
+      var s2 = 0.0;
       for (final x in xs) {
-        s2 += pow(x - m, 2).toDouble();
+        s2 += (x - m) * (x - m);
       }
       return s2 / (xs.length - 1);
     }
 
-    // For this single profile, we treat each item as a "variable" and estimate variance across items
-    // by assuming typical dispersion per Likert; to keep it deterministic, compute the observed variance
-    // of items themselves and scale.
-    // Better: approximate item variance by local neighborhood (here we just use a mild constant).
-    // To keep alpha within a usable range, we derive totalScore variance via a heuristic:
-    final acrossItemVar = varOf(items);
-    // Sane floor so alpha doesn't blow up:
-    final assumedItemVar = max(0.5, acrossItemVar);
-    final sumItemVar = assumedItemVar * k;
+    double cov(List<double> a, List<double> b) {
+      final mA = mean(a), mB = mean(b);
+      var c = 0.0;
+      for (var i = 0; i < a.length; i++) {
+        c += (a[i] - mA) * (b[i] - mB);
+      }
+      return c / (a.length - 1);
+    }
 
-    // Approximate variance of the sum:
-    final varTotal = max(sumItemVar * 0.8, 1.0); // conservative coupling
-
-    final alpha = (k / (k - 1)) * (1 - (sumItemVar / varTotal));
-    // Clamp to [0, 1]
-    return alpha.clamp(0.0, 1.0);
+    final r = cov(odd, even) / (sqrt(varOf(odd) * varOf(even)));
+    final sb = (2 * r) / (1 + r); // Spearman–Brown
+    return sb.isNaN ? 0.0 : sb.clamp(0.0, 1.0);
   }
 
   static String _quadrant(int anxiety, int avoidance, bool disorg) {
     if (disorg) return "disorganized_lean";
+    const low = 45, high = 55; // ±5 dampens flapping
 
-    final aHigh = anxiety >= 55, aLow = anxiety < 45;
-    final vHigh = avoidance >= 55, vLow = avoidance < 45;
+    final aHigh = anxiety >= high;
+    final aLow = anxiety <= low;
+    final vHigh = avoidance >= high;
+    final vLow = avoidance <= low;
 
     if (aLow && vLow) return "secure";
     if (aHigh && !vHigh) return "anxious";
     if (vHigh && !aHigh) return "avoidant";
 
-    return "mixed"; // gray zones or cross-over without paradox flag
+    // If near the diagonals but paradox is not endorsed, keep 'mixed'
+    return "mixed";
   }
 
-  static String _confidenceLabel(double alpha, int anxiety, int avoidance) {
-    // Lower confidence in gray zones or low alpha
-    final grayA = (anxiety >= 45 && anxiety <= 55);
-    final grayV = (avoidance >= 45 && avoidance <= 55);
-    if (alpha >= 0.75 && !(grayA || grayV)) return "High";
-    if (alpha >= 0.60) return "Moderate";
+  static String _confidenceLabel(
+    double consistency,
+    int anxiety,
+    int avoidance,
+  ) {
+    // distance from center (50,50)
+    final dx = (anxiety - 50).abs();
+    final dv = (avoidance - 50).abs();
+    final radial = sqrt(dx * dx + dv * dv); // 0..~70
+
+    // Combine: strong signal far from center + decent consistency
+    if (consistency >= 0.65 && radial >= 20) return "High";
+    if (consistency >= 0.50 && radial >= 12) return "Moderate";
     return "Cautious";
   }
 
@@ -778,14 +787,29 @@ class AttachmentAssessment {
   }
 
   static String _primaryProfileFrom(Set<String> tags) {
+    // Strong/explicit profiles first
     if (tags.contains("coparenting_support")) return "coparenting_support";
     if (tags.contains("boundary_forward")) return "boundary_forward";
     if (tags.contains("dating_sensitive")) return "dating_sensitive";
-    if (tags.contains("secure_training")) return "secure_training";
     if (tags.contains("deescalator")) return "deescalator";
     if (tags.contains("empathetic_mirror")) return "empathetic_mirror";
     if (tags.contains("balanced")) return "balanced";
-    // Default fallback:
+    if (tags.contains("secure_training")) return "secure_training";
+
+    // Communication-style tags → nearest core profile
+    const styleMap = {
+      "gentle_communicator": "deescalator",
+      "measured_communicator": "balanced",
+      "moderate_communicator": "balanced",
+      "expressive_communicator": "dating_sensitive",
+      "direct_communicator": "boundary_forward",
+      "witty_communicator": "balanced",
+      "sarcastic_communicator": "boundary_forward",
+    };
+    for (final t in tags) {
+      if (styleMap.containsKey(t)) return styleMap[t]!;
+    }
+
     return "secure_training";
   }
 }
@@ -802,7 +826,7 @@ class AttachmentAssessment {
 ///   "CHK_ATTEN": 4, "SD1": 4, "SD2": 3, "PX1": 4,
 ///   // --- Goals ---
 ///   "G1": 4, "G2": 3, "G3": 1, "G4": 4, "G5": 1,
-///   "G6": 4, "G7": 3, "G8": 3, "G9": 5, "G10": 5,
+///   "G6": 4, "G7": 3, "G11": 3, "G12": 5, "G10": 5,
 /// };
 ///
 /// final result = AttachmentAssessment.run(responses);

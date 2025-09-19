@@ -167,6 +167,8 @@ class _SettingsScreenProfessionalState
   bool _backupOn = true;
   double _fontSize = 14.0;
   String _language = 'English';
+  int _profanityLevel = 2;
+  int _sarcasmLevel = 2;
 
   // Debounce
   Timer? _deb;
@@ -220,6 +222,8 @@ class _SettingsScreenProfessionalState
         _backupOn = _settings.getBackupEnabled();
         _fontSize = _settings.getFontSize();
         _language = _settings.getLanguage();
+        _profanityLevel = _settings.getProfanityLevel();
+        _sarcasmLevel = _settings.getSarcasmLevel();
         _loading = false;
       });
     } catch (e) {
@@ -236,6 +240,8 @@ class _SettingsScreenProfessionalState
         'tone': _tone.toLowerCase(),
         'aiAnalysisEnabled': _ai,
         'realTimeAnalysis': _realtime,
+        'profanityLevel': _profanityLevel,
+        'sarcasmLevel': _sarcasmLevel,
       });
     } catch (_) {
       /*silent*/
@@ -272,6 +278,15 @@ class _SettingsScreenProfessionalState
   Future<void> _saveString(
     Future<void> Function(String) f,
     String v, {
+    bool touchesKeyboard = false,
+  }) async {
+    await f(v);
+    if (touchesKeyboard) _scheduleKeyboardSync();
+  }
+
+  Future<void> _saveInt(
+    Future<void> Function(int) f,
+    int v, {
     bool touchesKeyboard = false,
   }) async {
     await f(v);
@@ -455,6 +470,46 @@ class _SettingsScreenProfessionalState
           max: 24,
           divisions: 14,
           labelFor: (v) => '${v.round()}pt',
+        ),
+      ]),
+      SettingSection('Communication Preferences', Icons.chat_bubble_outline, [
+        SettingTile.slider(
+          title: 'Profanity Tolerance',
+          subtitle: _getProfanityLabel(_profanityLevel),
+          leading: Icons.warning_outlined,
+          getterDouble: () => _profanityLevel.toDouble(),
+          onChangedDouble: (v) async {
+            final intValue = v.round();
+            setState(() => _profanityLevel = intValue);
+            await _saveInt(
+              _settings.setProfanityLevel,
+              intValue,
+              touchesKeyboard: true,
+            );
+          },
+          min: 1,
+          max: 5,
+          divisions: 4,
+          labelFor: (v) => _getProfanityLabel(v.round()),
+        ),
+        SettingTile.slider(
+          title: 'Sarcasm Tolerance',
+          subtitle: _getSarcasmLabel(_sarcasmLevel),
+          leading: Icons.sentiment_satisfied_outlined,
+          getterDouble: () => _sarcasmLevel.toDouble(),
+          onChangedDouble: (v) async {
+            final intValue = v.round();
+            setState(() => _sarcasmLevel = intValue);
+            await _saveInt(
+              _settings.setSarcasmLevel,
+              intValue,
+              touchesKeyboard: true,
+            );
+          },
+          min: 1,
+          max: 5,
+          divisions: 4,
+          labelFor: (v) => _getSarcasmLabel(v.round()),
         ),
       ]),
       SettingSection('Privacy', Icons.privacy_tip, [
@@ -650,6 +705,42 @@ class _SettingsScreenProfessionalState
         ),
       ]),
     ];
+  }
+
+  /// Get profanity tolerance label based on level (1-5)
+  String _getProfanityLabel(int level) {
+    switch (level) {
+      case 1:
+        return 'Very Low - Flag most strong language';
+      case 2:
+        return 'Low - Flag common profanity';
+      case 3:
+        return 'Medium - Flag moderate profanity';
+      case 4:
+        return 'High - Flag only strong profanity';
+      case 5:
+        return 'Very High - Rarely flag profanity';
+      default:
+        return 'Medium';
+    }
+  }
+
+  /// Get sarcasm tolerance label based on level (1-5)
+  String _getSarcasmLabel(int level) {
+    switch (level) {
+      case 1:
+        return 'Very Low - Flag most sarcastic tones';
+      case 2:
+        return 'Low - Flag obvious sarcasm';
+      case 3:
+        return 'Medium - Flag moderate sarcasm';
+      case 4:
+        return 'High - Flag only strong sarcasm';
+      case 5:
+        return 'Very High - Rarely flag sarcasm';
+      default:
+        return 'Medium';
+    }
   }
 
   /// --- UI -------------------------------------------------------------------

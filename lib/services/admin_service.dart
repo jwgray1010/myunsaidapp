@@ -38,7 +38,9 @@ class AdminService {
         // Sync admin status to keyboard extension
         await UnsaidKeyboardExtension.setAdminStatus(true);
         if (kDebugMode) {
-          print('🔧 Admin status granted via Firebase claims, synced to keyboard extension');
+          print(
+            '🔧 Admin status granted via Firebase claims, synced to keyboard extension',
+          );
         }
         return;
       }
@@ -57,7 +59,9 @@ class AdminService {
       // Sync admin status to keyboard extension
       await UnsaidKeyboardExtension.setAdminStatus(_isAdmin);
       if (_isAdmin) {
-        print('🔧 Admin status granted via debug allowlist (${user.email}), synced to keyboard extension');
+        print(
+          '🔧 Admin status granted via debug allowlist (${user.email}), synced to keyboard extension',
+        );
       }
       return;
     }

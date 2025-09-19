@@ -408,9 +408,6 @@ final class KeyboardController: UIInputView,
             if let button = self?.toneButton {
                 button.isHidden = false
                 button.alpha = 1.0
-                #if DEBUG
-                    KBDLog("ToneButton: post-config state -> visible, alpha=\(button.alpha), hidden=\(button.isHidden)", .debug, "KeyboardController")
-                #endif
             }
         }
         
@@ -821,12 +818,6 @@ final class KeyboardController: UIInputView,
         self.toneButton = toneButton
         self.undoButton = undoButton
         
-        // Debug logging for button lifecycle
-        #if DEBUG
-        logger.info("ToneButton: didAdd - button added to view hierarchy")
-        logger.info("ToneButton: state -> visible, alpha=\(toneButton.alpha), hidden=\(toneButton.isHidden)")
-        #endif
-
         // ✅ CRITICAL: Configure chip manager with suggestion bar so chips anchor properly
         self.suggestionChipManager.configure(suggestionBar: pBar)
 
@@ -912,9 +903,6 @@ final class KeyboardController: UIInputView,
         if let button = self.toneButton {
             button.isHidden = false
             button.alpha = 1.0
-            #if DEBUG
-            logger.info("ToneButton: initial state -> visible, alpha=\(button.alpha), hidden=\(button.isHidden)")
-            #endif
         }
         
         // Force layout pass to ensure gradient frame is correct  
@@ -925,9 +913,6 @@ final class KeyboardController: UIInputView,
             if let button = self?.toneButton {
                 button.isHidden = false
                 button.alpha = 1.0
-                #if DEBUG
-                self?.logger.info("ToneButton: post-layout state -> visible, alpha=\(button.alpha), hidden=\(button.isHidden)")
-                #endif
             }
         }
         
@@ -1062,9 +1047,6 @@ final class KeyboardController: UIInputView,
         if let button = toneButton {
             button.isHidden = false
             button.alpha = max(button.alpha, 1.0)
-            #if DEBUG
-            logger.info("ToneButton: state -> visible, alpha=\(button.alpha), hidden=\(button.isHidden)")
-            #endif
         }
 
         // Destination visual state
@@ -1815,9 +1797,6 @@ final class KeyboardController: UIInputView,
             if let button = self.toneButton {
                 button.isHidden = false
                 button.alpha = 1.0
-                #if DEBUG
-                self.logger.info("ToneButton: ensured visible - alpha=\(button.alpha), hidden=\(button.isHidden)")
-                #endif
             }
             
             if let background = self.toneButtonBackground {
@@ -2046,7 +2025,6 @@ final class KeyboardController: UIInputView,
             if let button = toneButton {
                 logger.info("🎨 Tone button background color: \(button.backgroundColor?.debugDescription ?? "nil")")
                 logger.info("🎨 Tone button tint color: \(button.tintColor?.debugDescription ?? "nil")")
-                logger.info("🎨 Tone button alpha: \(button.alpha)")
                 logger.info("🎨 Tone button is hidden: \(button.isHidden)")
             } else {
                 logger.error("🎨 Tone button is nil!")

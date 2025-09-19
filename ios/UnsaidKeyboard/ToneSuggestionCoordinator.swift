@@ -1205,6 +1205,8 @@ extension ToneSuggestionCoordinator {
         
         // Check subscription status locally before making API calls (mass user architecture)
         let storage = SafeKeyboardDataStorage.shared
+        // TEMP: Comment out subscription check for testing
+        /*
         guard storage.hasAccessToFeatures() else {
             Task { @MainActor in
                 if storage.hasActiveTrial() {
@@ -1218,6 +1220,7 @@ extension ToneSuggestionCoordinator {
             }
             return
         }
+        */
         
         do {
             let toneOut = try await postTone(base: apiBase, text: trimmed, token: cachedAPIKey.nilIfEmpty)

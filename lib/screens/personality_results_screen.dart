@@ -303,7 +303,7 @@ class _PersonalityResultsScreenState extends State<PersonalityResultsScreen>
                       case 2:
                         return RadarChartTitle(
                           text:
-                              'Reliability\n${(widget.scores.reliabilityAlpha * 100).round()}%',
+                              'Consistency\n${(widget.scores.reliabilityAlpha * 100).round()}%',
                         );
                       default:
                         return const RadarChartTitle(text: '');
@@ -363,7 +363,7 @@ class _PersonalityResultsScreenState extends State<PersonalityResultsScreen>
 
             // Reliability
             _buildQualityRow(
-              'Reliability (α)',
+              'Consistency',
               '${(widget.scores.reliabilityAlpha * 100).round()}%',
               widget.scores.reliabilityAlpha > 0.7
                   ? Icons.psychology

@@ -9,8 +9,9 @@ import 'keyboard_data_service.dart';
 import 'package:flutter/services.dart';
 
 class KeyboardManager extends ChangeNotifier {
-  static const MethodChannel _channel =
-      MethodChannel('com.unsaid/keyboard_analytics');
+  static const MethodChannel _channel = MethodChannel(
+    'com.unsaid/keyboard_analytics',
+  );
 
   static final KeyboardManager _instance = KeyboardManager._internal();
   factory KeyboardManager() => _instance;
@@ -46,6 +47,8 @@ class KeyboardManager extends ChangeNotifier {
     'relationshipContext': 'Dating',
     'attachmentStyle': 'Secure Attachment',
     'communicationStyle': 'Secure Attachment',
+    'profanityLevel': 2,
+    'sarcasmLevel': 2,
   };
 
   // Store recent emotion/tone history for analytics
@@ -132,7 +135,8 @@ class KeyboardManager extends ChangeNotifier {
 
   // Store analysis data for conversation tracking
   Future<void> _storeAnalysisForConversation(
-      Map<String, dynamic> analysis) async {
+    Map<String, dynamic> analysis,
+  ) async {
     try {
       final messageData = {
         'text': analysis['original_message'] ?? analysis['original_text'] ?? '',
@@ -287,12 +291,13 @@ class KeyboardManager extends ChangeNotifier {
   /// Sync pending data from keyboard storage to app
   Future<void> _syncPendingKeyboardData() async {
     try {
-      final keyboardData =
-          await _keyboardDataService.retrievePendingKeyboardData();
+      final keyboardData = await _keyboardDataService
+          .retrievePendingKeyboardData();
 
       if (keyboardData != null && keyboardData.hasData) {
         print(
-            '📱 Syncing ${keyboardData.totalItems} items from keyboard storage...');
+          '📱 Syncing ${keyboardData.totalItems} items from keyboard storage...',
+        );
 
         // Process the stored keyboard data
         await _keyboardDataService.processKeyboardData(keyboardData);
@@ -596,8 +601,9 @@ class KeyboardManager extends ChangeNotifier {
 
     // Calculate confidence (0.0 to 1.0)
     final totalScore = gentleScore + directScore + balancedScore;
-    final confidence =
-        totalScore > 0 ? (maxScore.toDouble() / totalScore) : 0.5;
+    final confidence = totalScore > 0
+        ? (maxScore.toDouble() / totalScore)
+        : 0.5;
 
     return {
       'dominant_tone': dominantTone,
@@ -849,12 +855,13 @@ class KeyboardManager extends ChangeNotifier {
 
     try {
       // First try to get processed data from keyboard storage
-      final keyboardData =
-          await _keyboardDataService.retrievePendingKeyboardData();
+      final keyboardData = await _keyboardDataService
+          .retrievePendingKeyboardData();
 
       if (keyboardData != null && keyboardData.hasData) {
         print(
-            '📱 Retrieved analysis from keyboard storage: ${keyboardData.summary}');
+          '📱 Retrieved analysis from keyboard storage: ${keyboardData.summary}',
+        );
 
         // Process and format the stored data
         final comprehensiveAnalysis = _formatKeyboardStorageData(
@@ -919,8 +926,8 @@ class KeyboardManager extends ChangeNotifier {
           analysis['message'],
           {
             'child_age': analysis['context']['child_age'],
-            'developmental_considerations': analysis['coparenting_analysis']
-                ['child_impact_analysis'],
+            'developmental_considerations':
+                analysis['coparenting_analysis']['child_impact_analysis'],
           },
         );
       }
@@ -984,7 +991,7 @@ class KeyboardManager extends ChangeNotifier {
       'collaboration_potential': 0.8,
       'suggestions': [
         'Keep the focus on the child',
-        'Use collaborative language'
+        'Use collaborative language',
       ],
       'tone_recommendations': ['neutral', 'collaborative'],
     };
@@ -1008,7 +1015,8 @@ class KeyboardManager extends ChangeNotifier {
   }
 
   List<String> _generateIntegratedSuggestions(
-      Map<String, dynamic>? toneAnalysis) {
+    Map<String, dynamic>? toneAnalysis,
+  ) {
     final suggestions = <String>[];
 
     if (toneAnalysis != null) {
@@ -1031,8 +1039,9 @@ class KeyboardManager extends ChangeNotifier {
   Future<Map<String, dynamic>> getComprehensiveRealData() async {
     try {
       final analytics = await _channel.invokeMethod('getKeyboardAnalytics');
-      final interactions =
-          await _channel.invokeMethod('getKeyboardInteractions');
+      final interactions = await _channel.invokeMethod(
+        'getKeyboardInteractions',
+      );
       return {
         'real_data': true,
         'analytics': analytics,
@@ -1109,7 +1118,8 @@ class KeyboardManager extends ChangeNotifier {
               latestAnalytics['coparenting']['childFocus'] ?? 0.7,
           'collaboration_potential':
               latestAnalytics['coparenting']['collaboration'] ?? 0.8,
-          'suggestions': latestAnalytics['coparenting']['suggestions'] ??
+          'suggestions':
+              latestAnalytics['coparenting']['suggestions'] ??
               ['Keep focus on child'],
           'tone_recommendations': ['collaborative', 'respectful'],
         };
@@ -1121,8 +1131,8 @@ class KeyboardManager extends ChangeNotifier {
           'primary_emotion':
               latestAnalytics['emotional']['primaryEmotion'] ?? 'neutral',
           'intensity': latestAnalytics['emotional']['intensity'] ?? 0.5,
-          'regulation_suggestions': latestAnalytics['emotional']
-                  ['suggestions'] ??
+          'regulation_suggestions':
+              latestAnalytics['emotional']['suggestions'] ??
               ['Consider your emotional state'],
         };
       }
@@ -1133,9 +1143,11 @@ class KeyboardManager extends ChangeNotifier {
           'predicted_outcome':
               latestAnalytics['predictive']['outcome'] ?? 'neutral',
           'confidence': latestAnalytics['predictive']['confidence'] ?? 0.7,
-          'risk_factors': latestAnalytics['predictive']['risks'] ??
+          'risk_factors':
+              latestAnalytics['predictive']['risks'] ??
               ['unclear communication'],
-          'recommendations': latestAnalytics['predictive']['recommendations'] ??
+          'recommendations':
+              latestAnalytics['predictive']['recommendations'] ??
               ['Be specific'],
         };
       }
@@ -1146,8 +1158,9 @@ class KeyboardManager extends ChangeNotifier {
     if (keyboardData.suggestions.isNotEmpty) {
       for (final suggestionData in keyboardData.suggestions) {
         if (suggestionData['suggestions'] is List) {
-          suggestions
-              .addAll((suggestionData['suggestions'] as List).cast<String>());
+          suggestions.addAll(
+            (suggestionData['suggestions'] as List).cast<String>(),
+          );
         }
       }
     }

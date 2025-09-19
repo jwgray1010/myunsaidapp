@@ -488,7 +488,9 @@ class UnsaidKeyboardExtension {
       final bool? result = await _channel.invokeMethod('setUserId', {
         'userId': userId,
       });
-      print('UnsaidKeyboardExtension: Set user ID for keyboard extension: $userId');
+      print(
+        'UnsaidKeyboardExtension: Set user ID for keyboard extension: $userId',
+      );
       return result ?? false;
     } on PlatformException catch (e) {
       print('Error setting user ID for keyboard extension: ${e.message}');
@@ -514,7 +516,9 @@ class UnsaidKeyboardExtension {
       final bool? result = await _channel.invokeMethod('setAdminStatus', {
         'isAdmin': isAdmin,
       });
-      print('UnsaidKeyboardExtension: Set admin status for keyboard extension: $isAdmin');
+      print(
+        'UnsaidKeyboardExtension: Set admin status for keyboard extension: $isAdmin',
+      );
       return result ?? false;
     } on PlatformException catch (e) {
       print('Error setting admin status for keyboard extension: ${e.message}');
