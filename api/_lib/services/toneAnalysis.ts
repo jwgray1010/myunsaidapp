@@ -2922,7 +2922,7 @@ export function loadAllData(baseDir?: string): any {
     toneTriggerwords: dataLoader.get('toneTriggerWords') || dataLoader.get('toneTriggerwords'),
     intensityModifiers: dataLoader.get('intensityModifiers'),
     sarcasmIndicators: dataLoader.get('sarcasmIndicators'),
-    negationIndicators: dataLoader.get('negationIndicators') || dataLoader.get('negationPatterns'),
+    negationIndicators: dataLoader.get('negationPatterns') || dataLoader.get('negationIndicators'),
     phraseEdges: dataLoader.get('phraseEdges'),
     semanticThesaurus: dataLoader.get('semanticThesaurus'),
     toneBucketMap: dataLoader.get('toneBucketMapping') || dataLoader.get('toneBucketMap'),

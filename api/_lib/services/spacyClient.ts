@@ -263,7 +263,7 @@ export class SpacyService {
 
   private _loadAll(): void {
     this.contextClassifiers  = this._readJsonSafe('context_classifier.json', { contexts: [] });
-    this.negationIndicators  = this._readJsonSafe('negation_indicators.json', { patterns: [] });
+    this.negationIndicators  = this._readJsonSafe('negation_patterns.json', { patterns: [] });
     this.sarcasmIndicators   = this._readJsonSafe('sarcasm_indicators.json', { patterns: [] });
     this.intensityModifiers  = this._readJsonSafe('intensity_modifiers.json', { modifiers: [] });
     this.phraseEdges         = this._readJsonSafe('phrase_edges.json', { edges: [] });

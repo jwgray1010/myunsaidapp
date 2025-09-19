@@ -492,7 +492,7 @@ class TrialService extends ChangeNotifier {
         '✅ TrialService: Subscription data ready for keyboard access - subscription: $_hasSubscription, trial: $_isTrialActive, admin: $_isAdminMode',
       );
       debugPrint(
-        '   Keys: ${_subscriptionActiveKey}, ${_trialActiveKey}, ${_adminModeKey}',
+        '   Keys: $_subscriptionActiveKey, $_trialActiveKey, $_adminModeKey',
       );
     } catch (e) {
       debugPrint('❌ TrialService: Failed to log subscription sync: $e');
