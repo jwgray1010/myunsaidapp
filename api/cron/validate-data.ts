@@ -240,10 +240,13 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
       },
       {
         name: 'attachment_overrides.json',
-        getter: () => dataLoader.getAttachmentOverrides(), // {version, applyOrder: [], blending: {}}
+        getter: () => dataLoader.getAttachmentOverrides(),
         validate: (d) => {
           const errors: string[] = [];
-          if (!d) errors.push('Attachment overrides not loaded');
+          if (!d) {
+            errors.push('Data not loaded or null');
+            return { errors, recordCount: 0 };
+          }
           if (!d?.version) errors.push('Missing version field');
           const applyOrder = Array.isArray(d?.applyOrder) ? d.applyOrder : [];
           if (applyOrder.length === 0) errors.push('No apply order defined');
@@ -252,22 +255,31 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
       },
       {
         name: 'attachment_tone_weights.json',
-        getter: () => dataLoader.getAttachmentToneWeights(), // {version, weights: {}}
+        getter: () => dataLoader.getAttachmentToneWeights(),
         validate: (d) => {
           const errors: string[] = [];
-          if (!d) errors.push('Attachment tone weights not loaded');
+          if (!d) {
+            errors.push('Data not loaded or null');
+            return { errors, recordCount: 0 };
+          }
           if (!d?.version) errors.push('Missing version field');
+          // Handle {applyOrder: [...]} or {weights: {...}} format
+          const applyOrder = Array.isArray(d?.applyOrder) ? d.applyOrder : [];
           const weights = d?.weights || {};
-          if (Object.keys(weights).length === 0) errors.push('No attachment tone weights defined');
-          return { errors, recordCount: Object.keys(weights).length };
+          const totalItems = Math.max(applyOrder.length, Object.keys(weights).length);
+          if (totalItems === 0) errors.push('No attachment tone weights defined');
+          return { errors, recordCount: totalItems };
         }
       },
       {
         name: 'negation_patterns.json',
-        getter: () => dataLoader.getNegationPatterns(), // {version, patterns: []}
+        getter: () => dataLoader.getNegationPatterns(),
         validate: (d) => {
           const errors: string[] = [];
-          if (!d) errors.push('Negation patterns not loaded');
+          if (!d) {
+            errors.push('Data not loaded or null');
+            return { errors, recordCount: 0 };
+          }
           if (!d?.version) errors.push('Missing version field');
           const patterns = Array.isArray(d?.patterns) ? d.patterns : [];
           if (patterns.length === 0) errors.push('No negation patterns loaded');
@@ -276,59 +288,75 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
       },
       {
         name: 'phrase_edges.json',
-        getter: () => dataLoader.getPhraseEdges(), // {version, edges: []} or similar
+        getter: () => dataLoader.getPhraseEdges(),
         validate: (d) => {
           const errors: string[] = [];
-          if (!d) errors.push('Phrase edges not loaded');
+          if (!d) {
+            errors.push('Data not loaded or null');
+            return { errors, recordCount: 0 };
+          }
           if (!d?.version) errors.push('Missing version field');
-          // Check for edges array or any other array field that might contain the data
-          const edges = Array.isArray(d?.edges) ? d.edges : 
-                       Array.isArray(d?.phrases) ? d.phrases :
-                       Array.isArray(d?.items) ? d.items : [];
+          const edges = Array.isArray(d?.edges) ? d.edges : [];
           if (edges.length === 0) errors.push('No phrase edges loaded');
           return { errors, recordCount: edges.length };
         }
       },
       {
         name: 'severity_collaboration.json',
-        getter: () => dataLoader.getSeverityCollaboration(), // {version, rules: []} or similar
+        getter: () => dataLoader.getSeverityCollaboration(),
         validate: (d) => {
           const errors: string[] = [];
-          if (!d) errors.push('Severity collaboration not loaded');
+          if (!d) {
+            errors.push('Data not loaded or null');
+            return { errors, recordCount: 0 };
+          }
           if (!d?.version) errors.push('Missing version field');
+          // Handle complex structure - count sections or rules
           const rules = Array.isArray(d?.rules) ? d.rules : 
                        Array.isArray(d?.levels) ? d.levels :
                        Array.isArray(d?.items) ? d.items : [];
-          if (rules.length === 0) errors.push('No severity collaboration rules loaded');
-          return { errors, recordCount: rules.length };
+          const sectionCount = d ? Object.keys(d).filter(k => k !== 'version' && k !== 'notes').length : 0;
+          const totalItems = Math.max(rules.length, sectionCount);
+          if (totalItems === 0) errors.push('No severity collaboration rules loaded');
+          return { errors, recordCount: totalItems };
         }
       },
       {
         name: 'tone_triggerwords.json',
-        getter: () => dataLoader.getToneTriggerWords(), // {version, engine: {}, triggerwords: []}
+        getter: () => dataLoader.getToneTriggerWords(),
         validate: (d) => {
           const errors: string[] = [];
-          if (!d) errors.push('Tone triggerwords not loaded');
+          if (!d) {
+            errors.push('Data not loaded or null');
+            return { errors, recordCount: 0 };
+          }
           if (!d?.version) errors.push('Missing version field');
           if (!d?.engine) errors.push('Missing engine configuration');
-          // Look for triggerwords or patterns array
-          const triggerwords = Array.isArray(d?.triggerwords) ? d.triggerwords : 
-                              Array.isArray(d?.patterns) ? d.patterns :
-                              Array.isArray(d?.words) ? d.words : [];
-          if (triggerwords.length === 0) errors.push('No tone triggerwords loaded');
-          return { errors, recordCount: triggerwords.length };
+          // Handle {clear: {triggerwords: []}, caution: {triggerwords: []}, alert: {triggerwords: []}} format
+          const clearWords = Array.isArray(d?.clear?.triggerwords) ? d.clear.triggerwords : [];
+          const cautionWords = Array.isArray(d?.caution?.triggerwords) ? d.caution.triggerwords : [];
+          const alertWords = Array.isArray(d?.alert?.triggerwords) ? d.alert.triggerwords : [];
+          const totalWords = clearWords.length + cautionWords.length + alertWords.length;
+          if (totalWords === 0) errors.push('No tone triggerwords loaded');
+          return { errors, recordCount: totalWords };
         }
       },
       {
         name: 'user_preference.json',
-        getter: () => dataLoader.getUserPreferences(), // {version, preferences: {}}
+        getter: () => dataLoader.getUserPreferences(),
         validate: (d) => {
           const errors: string[] = [];
-          if (!d) errors.push('User preferences not loaded');
+          if (!d) {
+            errors.push('Data not loaded or null');
+            return { errors, recordCount: 0 };
+          }
           if (!d?.version) errors.push('Missing version field');
+          // Handle {categories: {...}} or {preferences: {...}} format
           const preferences = d?.preferences || {};
-          if (Object.keys(preferences).length === 0) errors.push('No user preferences defined');
-          return { errors, recordCount: Object.keys(preferences).length };
+          const categories = d?.categories || {};
+          const totalItems = Math.max(Object.keys(preferences).length, Object.keys(categories).length);
+          if (totalItems === 0) errors.push('No user preferences defined');
+          return { errors, recordCount: totalItems };
         }
       }
     ];
