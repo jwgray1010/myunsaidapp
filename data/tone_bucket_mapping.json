@@ -64,7 +64,7 @@
       "requirePhraseLevel": false,
       "minNgram": 1,
       "excludeTokens": ["i", "me", "my", "mine", "we", "us", "our", "ok", "okay", "k"],
-      "overshadow": { "by": "alert", "min": 0.35, "ratio": 2.25 },
+      "overshadow": { "by": "alert", "min": 0.85, "ratio": 2.25 },
       "preferCautionIfBoth": 0.25
     }
   },
