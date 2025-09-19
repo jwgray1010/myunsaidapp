@@ -61,11 +61,11 @@
 
   "eligibility": {
     "clear": {
-      "requirePhraseLevel": true,
-      "minNgram": 2,
+      "requirePhraseLevel": false,
+      "minNgram": 1,
       "excludeTokens": ["i", "me", "my", "mine", "we", "us", "our", "ok", "okay", "k"],
-      "overshadow": { "by": "alert", "min": 0.22, "ratio": 1.75 },
-      "preferCautionIfBoth": 0.18
+      "overshadow": { "by": "alert", "min": 0.35, "ratio": 2.25 },
+      "preferCautionIfBoth": 0.25
     }
   },
 
