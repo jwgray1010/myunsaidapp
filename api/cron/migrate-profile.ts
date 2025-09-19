@@ -43,11 +43,12 @@ async function migrateOne(userId: string): Promise<MigrationResult> {
     await profile.init();
 
     // Read profile version/state to determine if migration is needed.
-    // You should replace these getters with your real version/flags.
-    const prevVersion = profile.getVersion?.() || '1.0.0';
+    // For now, we'll use a simple version tracking approach
+    // In a real implementation, this would read from the profile data
+    const prevVersion = '1.0.0'; // Default version for existing profiles
     const targetVersion = '2.0.0';
 
-    const attachmentEstimate = profile.getAttachmentEstimate?.() || { windowComplete: false, confidence: 0 };
+    const attachmentEstimate = profile.getAttachmentEstimate();
     let needsMigration = false;
 
     // Example, deterministic checks:
@@ -59,7 +60,8 @@ async function migrateOne(userId: string): Promise<MigrationResult> {
       changes.push('Updated confidence calculation algorithm');
       needsMigration = true;
     }
-    if (prevVersion !== targetVersion) {
+    // Version-based migration check
+    if (prevVersion < targetVersion) {
       changes.push(`Schema bump ${prevVersion} -> ${targetVersion}`);
       needsMigration = true;
     }
