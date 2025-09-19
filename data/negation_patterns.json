@@ -5,9 +5,9 @@
     "regexFlags": "iu",
     "normalize": ["NFC","trim","squashSpaces"],
     "apostropheClass": "['’`´]",
-    "tokenBoundary": "(?:(?<=\\W)|^)(?=\\P{M}*\\p{L}|\\d)|(?<=\\p{L}|\\d)(?=\\W|$)",
+    "tokenBoundary": "\\b",
     "maxInputChars": 2400,
-    "timeoutMs": 16,
+    "timeoutMs": 24,
     "dedupeWindowMs": 600,
     "exceptZones": ["url","email","code_block","quoted_title"],
     "quotedSpeechDampen": { "reduce": 0.25, "maxQuoteLen": 160 }
@@ -34,7 +34,7 @@
 
   "operators": {
     "doubleNegation": {
-      "enabled": true,
+      "enabled": false,
       "windowTokens": 8,
       "cancelImpact": true,
       "minIndicators": 2,
@@ -72,7 +72,7 @@
   "indicators": [
     {
       "id": "NEG_SIMPLE_NOT",
-      "pattern": "(?<=^|\\W)not\\b|\\b(n${APO}?t)\\b",
+      "pattern": "\\bnot\\b|\\b[nN]${APO}?t\\b",
       "impact": -0.25,
       "description": "direct negation (not / n't)",
       "scopeTokens": 6,
@@ -112,7 +112,7 @@
     },
     {
       "id": "NEG_NO",
-      "pattern": "(?<=^|\\W)no\\b(?!\\s+(?:one|body|thing|where|problem|worries|doubt))",
+      "pattern": "(?:^|\\W)no\\b(?!\\s+(?:one|body|thing|where|problem|worries|doubt|pressure))",
       "impact": -0.21,
       "description": "determinative no",
       "scopeTokens": 5,
@@ -146,7 +146,7 @@
     },
     {
       "id": "NEG_WITHOUT",
-      "pattern": "(?<=^|\\W)without\\b",
+      "pattern": "(?:^|\\W)without\\b",
       "impact": -0.22,
       "description": "absence marker",
       "scopeTokens": 7,
@@ -161,7 +161,8 @@
       "description": "minimizers / near-negation",
       "scopeTokens": 6,
       "applyTo": ["patterns","triggers"],
-      "exceptions": ["can hardly wait"]
+      "exceptions": ["can hardly wait"],
+      "contextAdjustments": { "planning": -0.04 }
     },
     {
       "id": "NEG_UNLESS_EXCEPT",
@@ -300,7 +301,7 @@
     },
     {
       "id": "NEG_PREFIX_UN_IM_IN_IR_IL_NON",
-      "pattern": "(?<!\\w)(un|im|in|ir|il|non)[-]?(?:\\p{L}{3,})\\b",
+      "pattern": "(?:^|[^\\p{L}\\p{N}_])(un|im|in|ir|il|non)-?(?:\\p{L}{3,})\\b",
       "impact": -0.10,
       "description": "affixal negation (weak, contextual)",
       "scopeTokens": 5,
