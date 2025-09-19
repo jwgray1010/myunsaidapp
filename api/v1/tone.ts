@@ -4,7 +4,7 @@ import { withCors, withMethods, withValidation, withErrorHandling, withLogging }
 import { toneAnalysisRateLimit } from '../_lib/rateLimit';
 import { success } from '../_lib/http';
 import { toneRequestSchema } from '../_lib/schemas/toneRequest';
-import { toneAnalysisService, mapToneToBuckets, getGeneralToneAnalysis } from '../_lib/services/toneAnalysis';
+import { toneAnalysisService, mapToneToBuckets, getGeneralToneAnalysis, resetConversationMemory } from '../_lib/services/toneAnalysis';
 import { CommunicatorProfile } from '../_lib/services/communicatorProfile';
 import { logger } from '../_lib/logger';
 import { ensureBoot } from '../_lib/bootstrap';
@@ -47,6 +47,11 @@ function primaryBucket(buckets: Record<'clear'|'caution'|'alert', number>) {
 
 const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
   await bootPromise; // ensures zero boot work on the request
+
+  // Fix #6: Reset conversation memory if requested for testing isolation
+  if (data.reset_memory === true) {
+    resetConversationMemory(data.field_id);
+  }
 
   const startTime = Date.now();
   const userId = getUserId(req);

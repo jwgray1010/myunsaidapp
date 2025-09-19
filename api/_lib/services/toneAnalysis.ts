@@ -51,6 +51,17 @@ interface ConversationMemory {
 // Global conversation memory map
 const conversationMemory = new Map<string, ConversationMemory>();
 
+// Fix #6: Reset conversation memory for testing isolation
+export function resetConversationMemory(fieldId?: string): void {
+  if (fieldId) {
+    conversationMemory.delete(fieldId);
+    logger.info(`🧹 Conversation memory reset for field: ${fieldId}`);
+  } else {
+    conversationMemory.clear();
+    logger.info('🧹 All conversation memory cleared for testing');
+  }
+}
+
 // Tolerant normalization for masked swears and unicode weirdness
 function normalizeForProfanity(raw: string): string {
   let s = raw.normalize('NFKC').toLowerCase();
@@ -1548,7 +1559,8 @@ function mapBucketsFromJson(
   intensity: number,
   contextSeverity?: Record<Bucket, number>,
   metaClassifier?: { pAlert: number, pCaution: number },
-  bypassOverrides?: boolean // New parameter to skip all overrides for testing
+  bypassOverrides?: boolean, // New parameter to skip all overrides for testing
+  text?: string // Add text parameter for Fix #6 dynamic thresholds
 ): { primary: Bucket, dist: Record<Bucket, number>, meta: any } {
   const map = dataLoader.get('toneBucketMapping') || dataLoader.get('toneBucketMap') || {};
   const TB = map.toneBuckets || {};
@@ -1579,64 +1591,35 @@ function mapBucketsFromJson(
     logger.info(`🎯 Meta-classifier override available for tone: ${toneLabel}, pAlert=${metaClassifier.pAlert.toFixed(3)}, pCaution=${metaClassifier.pCaution.toFixed(3)}`);
     
     const { pAlert, pCaution } = metaClassifier;
+    const pClear = Math.max(0, 1 - pAlert - pCaution);
+
+    // Treat meta as a *prior*; blend in logit space so neither side hard-clamps the other
+    const meta = { clear: pClear, caution: pCaution, alert: pAlert };
+    const EPS = 1e-6;
+    const basez = {
+      clear: logit(Math.max(EPS, base.clear)),
+      caution: logit(Math.max(EPS, base.caution)),
+      alert: logit(Math.max(EPS, base.alert)),
+    };
+    const metaz = {
+      clear: logit(Math.max(EPS, meta.clear)),
+      caution: logit(Math.max(EPS, meta.caution)),
+      alert: logit(Math.max(EPS, meta.alert)),
+    };
+
+    // Influence λ rises with meta certainty but stays bounded
+    const influence = Math.max(pAlert, pCaution);             // how "sure" meta is
+    const lambda = Math.min(0.55, 0.85 * influence);          // ≤ 0.55 cap prevents override dominance
+
+    const mixed = normBuckets({
+      clear: ilogit((1 - lambda) * basez.clear   + lambda * metaz.clear),
+      caution: ilogit((1 - lambda) * basez.caution + lambda * metaz.caution),
+      alert: ilogit((1 - lambda) * basez.alert  + lambda * metaz.alert),
+    });
+
+    logger.info(`🧠 Meta-classifier logit blend: pAlert=${pAlert.toFixed(3)}, pCaution=${pCaution.toFixed(3)}, λ=${lambda.toFixed(3)} → buckets=${JSON.stringify(mixed)}`);
     
-    // Only apply meta-classifier if there's significant confidence (not equal probabilities)
-    // This prevents 50/50 meta-classifier results from corrupting good base distributions
-    const maxConfidence = Math.max(pAlert, pCaution);
-    const confidenceThreshold = 0.65; // Only override if meta-classifier is quite confident
-    
-    if (maxConfidence < confidenceThreshold) {
-      logger.info(`🚫 Meta-classifier confidence too low (${maxConfidence.toFixed(3)} < ${confidenceThreshold}), using base distribution`);
-      // Skip meta-classifier override and use base distribution
-    } else {
-      // Use meta-classifier probabilities to determine distribution
-      // Higher pCaution than pAlert should favor caution bucket
-      // High pAlert (>0.7) should favor alert bucket
-      // Otherwise use balanced approach
-      
-      const pClear = Math.max(0, 1 - pAlert - pCaution); // Remaining probability for clear
-      
-      let metaBuckets: Record<Bucket, number>;
-      
-      if (pAlert > 0.7) {
-        // High alert confidence - use alert-dominant distribution
-        metaBuckets = {
-          clear: Math.max(0.05, pClear * 0.3),
-          caution: Math.max(0.15, pCaution * 0.6),
-          alert: Math.max(0.4, pAlert * 0.8)
-        };
-      } else if (pCaution > pAlert && pCaution > 0.6) {
-        // Higher caution confidence - use caution-dominant distribution  
-        metaBuckets = {
-          clear: Math.max(0.1, pClear * 0.5),
-          caution: Math.max(0.4, pCaution * 0.7),
-          alert: Math.max(0.1, pAlert * 0.5)
-        };
-      } else {
-        // Balanced or unclear - use base distribution with meta-classifier influence
-        const influence = Math.max(pAlert, pCaution);
-        const metaWeight = Math.min(0.7, influence); // Don't let meta-classifier completely override
-        
-        metaBuckets = {
-          clear: base.clear * (1 - metaWeight) + (pClear * 0.4) * metaWeight,
-          caution: base.caution * (1 - metaWeight) + (pCaution * 0.6) * metaWeight,
-          alert: base.alert * (1 - metaWeight) + (pAlert * 0.6) * metaWeight
-        };
-      }
-      
-      // Normalize to ensure sum = 1
-      const sum = metaBuckets.clear + metaBuckets.caution + metaBuckets.alert;
-      if (sum > 0) {
-        metaBuckets.clear /= sum;
-        metaBuckets.caution /= sum; 
-        metaBuckets.alert /= sum;
-      }
-      
-      logger.info(`🧠 Meta-classifier override: pAlert=${pAlert.toFixed(3)}, pCaution=${pCaution.toFixed(3)} → buckets=${JSON.stringify(metaBuckets)}`);
-      
-      // Use meta-classifier determined buckets as the starting point
-      Object.assign(base, metaBuckets);
-    }
+    Object.assign(base, mixed);
   }
 
   // Context overrides (small nudges; logit domain blends nicer)
@@ -1658,8 +1641,25 @@ function mapBucketsFromJson(
     }
   }
 
-  // Intensity shifts (prob domain ok; magnitudes are small)
-  const thr = IS?.thresholds || { low:0.15, med:0.35, high:0.60 };
+  // Intensity shifts (prob domain ok; magnitudes are small) - Fix #6: Dynamic thresholds
+  const baseThresholds = { low:0.15, med:0.35, high:0.60 };
+  
+  // Adjust thresholds based on content characteristics for better context sensitivity
+  let adjustedThresholds = baseThresholds;
+  if (text) {
+    const hasPositiveWords = /\b(love|amazing|great|awesome|wonderful|excited|happy)\b/i.test(text);
+    const hasNegativeWords = /\b(hate|angry|stupid|worst|terrible|frustrated)\b/i.test(text);
+    
+    if (hasPositiveWords && !hasNegativeWords) {
+      // Raise thresholds for positive content to prevent false alerts
+      adjustedThresholds = { low: 0.25, med: 0.50, high: 0.75 };
+    } else if (hasNegativeWords) {
+      // Lower thresholds for negative content to catch subtle issues
+      adjustedThresholds = { low: 0.10, med: 0.25, high: 0.45 };
+    }
+  }
+  
+  const thr = IS?.thresholds || adjustedThresholds;
   const key = intensity >= thr.high ? 'high' : intensity >= thr.med ? 'med' : 'low';
   if (IS?.[key]) {
     const s = IS[key];
@@ -1704,8 +1704,8 @@ export class ToneStream {
     this.attachmentStyle = attachmentStyle;
   }
 
-  // Lock tone for specified duration to prevent flicker
-  private tryLock(tone: Bucket, ms = 1200) {
+  // Lock tone for specified duration to prevent flicker - Fix #4: Reduce default lock time
+  private tryLock(tone: Bucket, ms = 600) {  // Reduced default from 1200ms to 600ms
     this.lockTone = tone;
     this.lockUntil = Date.now() + ms;
     logger.info(`🔒 Tone locked: ${tone} for ${ms}ms`);
@@ -1759,7 +1759,7 @@ export class ToneStream {
       
       // Trigger provisional lock for strong profanity
       if (profanityCheck.severity === 'strong' || profanityCheck.hasTargetedSecondPerson) {
-        this.tryLock('alert', 1200);
+        this.tryLock('alert', 500);  // Reduced from 1200ms
       }
     }
 
@@ -1787,11 +1787,11 @@ export class ToneStream {
       shouldLockCaution = true;
     }
     
-    // Apply provisional locks for streaming stability
+    // Apply provisional locks for streaming stability - Fix #4: Reduce sticky alert locks
     if (shouldLockAlert) {
-      this.tryLock('alert', 1000);
+      this.tryLock('alert', 400);  // Reduced from 1000ms to 400ms
     } else if (shouldLockCaution) {
-      this.tryLock('caution', 800);
+      this.tryLock('caution', 400); // Reduced from 800ms to 400ms  
     }
 
     // Optional clamp to avoid runaway
@@ -2376,8 +2376,9 @@ export class ToneAnalysisService {
       anxious: 0, angry: 0, frustrated: 0, sad: 0, assertive: 0 
     };
 
-    // Enhanced profanity analysis (single call, structured result)
+    // Enhanced profanity analysis (single call, structured result) - Fix #5: Cache profanity analysis
     const profanityAnalysis = detectors.analyzeProfanity(text);
+    (fr as any).profanityAnalysis = profanityAnalysis; // Store for reuse to avoid redundant calls
 
     // ========= Apply High-Impact Alert/Caution Detection Upgrades =========
     
@@ -2478,9 +2479,9 @@ export class ToneAnalysisService {
     const pAlert = this.metaAlertProb(metaFeatures, this.W_ALERT);
     const pCaution = this.metaCautionProb(metaFeatures, this.W_CAUTION);
     
-    // Blend into scores (bounded, won't blow up) - reduced multiplier to prevent positive message misclassification
-    out.angry += pAlert * 0.3;
-    out.frustrated += Math.max(0, pCaution - pAlert * 0.3) * 0.9;
+    // REMOVED: Double counting meta-classifier into scores - only apply at bucket level
+    // out.angry += pAlert * 0.3;
+    // out.frustrated += Math.max(0, pCaution - pAlert * 0.3) * 0.9;
     
     logger.info(`🧠 Meta-classifier: pAlert=${pAlert.toFixed(3)}, pCaution=${pCaution.toFixed(3)}`);
 
@@ -2574,11 +2575,15 @@ export class ToneAnalysisService {
       out.supportive += (f.attach_secure || 0) * 0.25 * (attachmentBias.solution || 1.0); 
     }
 
-    // Intensity (punctuation, caps, elongation, modifiers)
+    // Intensity (punctuation, caps, elongation, modifiers) 
+    // Fix #3: Gate caps by negativity to prevent enthusiasm misclassification
+    const hasNegativeTone = (f.angry || 0) + (f.frustrated || 0) + (f.hostile || 0) > 0.1;
+    const capsContribution = hasNegativeTone ? (f.int_caps_ratio || 0) * 0.8 : (f.int_caps_ratio || 0) * 0.15;
+    
     const intensity = clamp01(
       (f.int_q || 0) * 0.05 + 
       (f.int_exc || 0) * 0.08 + 
-      (f.int_caps_ratio || 0) * 0.8 + 
+      capsContribution + 
       (f.int_elong || 0) * 0.08 + 
       (f.int_modscore || 0)
     );
@@ -2751,11 +2756,16 @@ export class ToneAnalysisService {
       fr.features.neg_present = doc.negScopes.length > 0 ? 0.3 : 0;
       fr.features.sarc_present = doc.sarcasmCue ? 0.3 : 0;
 
-      // POS-aware intensity facets
+      // POS-aware intensity facets - Fix #3: Gate caps by negativity
       const advBump = doc.tokens.filter(t => t.pos === 'ADV').length * 0.04;
       const excl = (text.match(/!/g)||[]).length * 0.08;
       const q = (text.match(/\?/g)||[]).length * 0.04;
-      const caps = (text.match(/[A-Z]{2,}/g)||[]).length * 0.12;
+      
+      // Only treat caps as intensity for negative contexts
+      const hasNegativeWords = /(hate|angry|mad|stupid|worst|terrible|awful|damn|hell)/.test(text.toLowerCase());
+      const caps = hasNegativeWords ? 
+        (text.match(/[A-Z]{2,}/g)||[]).length * 0.12 : 
+        (text.match(/[A-Z]{2,}/g)||[]).length * 0.03;
 
       // Score
       logger.info('Scoring tones');
@@ -3080,7 +3090,8 @@ export async function getGeneralToneAnalysis(text: string, attachmentStyle: stri
       result.intensity, 
       (result as any).contextSeverity,
       result.metaClassifier,
-      bypassOverrides
+      bypassOverrides,
+      text // Add text for Fix #6 dynamic thresholds
     );
     
     // ✅ Apply clear-eligibility guards now that we have the raw user text:
