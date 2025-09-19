@@ -596,6 +596,7 @@ class DataLoaderService {
       'profanity_lexicons.json',
       'weight_modifiers.json',
       'attachment_overrides.json',
+      'attachment_tone_weights.json',
       'onboarding_playbook.json',
       'severity_collaboration.json',
       'semantic_thesaurus.json',
