@@ -1559,17 +1559,13 @@ function mapBucketsFromJson(
   intensity: number,
   contextSeverity?: Record<Bucket, number>,
   metaClassifier?: { pAlert: number, pCaution: number },
-  bypassOverrides?: boolean, // New parameter to skip all overrides for testing
-  text?: string // Add text parameter for Fix #6 dynamic thresholds
+  bypassOverrides?: boolean, // Deprecated - no longer used
+  text?: string // Deprecated - no longer used
 ): { primary: Bucket, dist: Record<Bucket, number>, meta: any } {
   const map = dataLoader.get('toneBucketMapping') || dataLoader.get('toneBucketMap') || {};
   const TB = map.toneBuckets || {};
-  const CO = map.contextOverrides || {};
-  const IS = map.intensityShifts || {};
-  const engine = map.engine || {};
-  const mathDomain = engine?.combination?.mathDomain || 'prob'; // 'prob' | 'logit'
 
-  // Base (supports your defaultBucket)
+  // Get base distribution from tone configuration - NO OVERRIDES
   const toneConfig = TB[toneLabel] || {};
   const base =
     toneConfig?.base ||
@@ -1577,112 +1573,25 @@ function mapBucketsFromJson(
     TB['neutral']?.base ||
     { clear:0.5, caution:0.3, alert:0.2 };
 
-  let dist: Record<Bucket, number> = { ...base };
-
-  // DEFAULT TO BYPASS MODE: Skip all overrides unless explicitly disabled
-  // This prevents attachment adjustments, meta-classifier blending, and other corruption
-  const shouldBypass = bypassOverrides !== false; // Default true, only false if explicitly set
-  if (shouldBypass) {
-    logger.info(`🚫 DEFAULT BYPASS: Using pure base distribution for tone: ${toneLabel}`, { base });
-    const primary = (Object.entries(dist).sort((a,b)=>b[1]-a[1])[0][0]) as Bucket;
-    return { primary, dist, meta: { intensity, key: 'bypass', mathDomain: 'pure_base' } };
-  }
-
-  // Check if this tone should use meta-classifier results
-  if (toneConfig?.meta_classifier && metaClassifier) {
-    logger.info(`🎯 Meta-classifier override available for tone: ${toneLabel}, pAlert=${metaClassifier.pAlert.toFixed(3)}, pCaution=${metaClassifier.pCaution.toFixed(3)}`);
-    
-    const { pAlert, pCaution } = metaClassifier;
-    const pClear = Math.max(0, 1 - pAlert - pCaution);
-
-    // Treat meta as a *prior*; blend in logit space so neither side hard-clamps the other
-    const meta = { clear: pClear, caution: pCaution, alert: pAlert };
-    const EPS = 1e-6;
-    const basez = {
-      clear: logit(Math.max(EPS, base.clear)),
-      caution: logit(Math.max(EPS, base.caution)),
-      alert: logit(Math.max(EPS, base.alert)),
-    };
-    const metaz = {
-      clear: logit(Math.max(EPS, meta.clear)),
-      caution: logit(Math.max(EPS, meta.caution)),
-      alert: logit(Math.max(EPS, meta.alert)),
-    };
-
-    // Influence λ rises with meta certainty but stays bounded
-    const influence = Math.max(pAlert, pCaution);             // how "sure" meta is
-    const lambda = Math.min(0.55, 0.85 * influence);          // ≤ 0.55 cap prevents override dominance
-
-    const mixed = normBuckets({
-      clear: ilogit((1 - lambda) * basez.clear   + lambda * metaz.clear),
-      caution: ilogit((1 - lambda) * basez.caution + lambda * metaz.caution),
-      alert: ilogit((1 - lambda) * basez.alert  + lambda * metaz.alert),
-    });
-
-    logger.info(`🧠 Meta-classifier logit blend: pAlert=${pAlert.toFixed(3)}, pCaution=${pCaution.toFixed(3)}, λ=${lambda.toFixed(3)} → buckets=${JSON.stringify(mixed)}`);
-    
-    Object.assign(base, mixed);
-  }
-
-  // Context overrides (small nudges; logit domain blends nicer)
-  if (CO[contextKey]?.[toneLabel]) {
-    const o = CO[contextKey][toneLabel];
-    if (mathDomain === 'logit') {
-      const z = { clear: logit(dist.clear), caution: logit(dist.caution), alert: logit(dist.alert) };
-      dist = normBuckets({
-        clear: ilogit(z.clear + (o.clear||0)),
-        caution: ilogit(z.caution + (o.caution||0)),
-        alert: ilogit(z.alert + (o.alert||0)),
-      });
-    } else {
-      dist = normBuckets({
-        clear: Math.max(0, dist.clear + (o.clear||0)),
-        caution: Math.max(0, dist.caution + (o.caution||0)),
-        alert: Math.max(0, dist.alert + (o.alert||0)),
-      });
-    }
-  }
-
-  // Intensity shifts (prob domain ok; magnitudes are small) - Fix #6: Dynamic thresholds
-  const baseThresholds = { low:0.15, med:0.35, high:0.60 };
+  // Use pure base distribution - no modifications
+  const dist: Record<Bucket, number> = { ...base };
   
-  // Adjust thresholds based on content characteristics for better context sensitivity
-  let adjustedThresholds = baseThresholds;
-  if (text) {
-    const hasPositiveWords = /\b(love|amazing|great|awesome|wonderful|excited|happy)\b/i.test(text);
-    const hasNegativeWords = /\b(hate|angry|stupid|worst|terrible|frustrated)\b/i.test(text);
-    
-    if (hasPositiveWords && !hasNegativeWords) {
-      // Raise thresholds for positive content to prevent false alerts
-      adjustedThresholds = { low: 0.25, med: 0.50, high: 0.75 };
-    } else if (hasNegativeWords) {
-      // Lower thresholds for negative content to catch subtle issues
-      adjustedThresholds = { low: 0.10, med: 0.25, high: 0.45 };
-    }
-  }
+  logger.info(`✅ PURE BASE: Using clean base distribution for tone: ${toneLabel}`, { base, dist });
   
-  const thr = IS?.thresholds || adjustedThresholds;
-  const key = intensity >= thr.high ? 'high' : intensity >= thr.med ? 'med' : 'low';
-  if (IS?.[key]) {
-    const s = IS[key];
-    dist = normBuckets({
-      clear: Math.max(0, dist.clear + (s.clear||0)),
-      caution: Math.max(0, dist.caution + (s.caution||0)),
-      alert: Math.max(0, dist.alert + (s.alert||0)),
-    });
-  }
-
-  // Direct bucket nudges from upstream context detection (optional)
-  if (contextSeverity) {
-    dist = normBuckets({
-      clear: Math.max(0, dist.clear + (contextSeverity.clear||0)),
-      caution: Math.max(0, dist.caution + (contextSeverity.caution||0)),
-      alert: Math.max(0, dist.alert + (contextSeverity.alert||0)),
-    });
-  }
-
+  // Return primary bucket based on highest probability
   const primary = (Object.entries(dist).sort((a,b)=>b[1]-a[1])[0][0]) as Bucket;
-  return { primary, dist, meta: { intensity, key, mathDomain } };
+  
+  return { 
+    primary, 
+    dist, 
+    meta: { 
+      toneLabel, 
+      contextKey, 
+      intensity, 
+      source: 'pure_base',
+      overridesRemoved: true 
+    } 
+  };
 }
 
 // -----------------------------
@@ -3078,7 +2987,7 @@ export function createToneAnalyzer(config: any = {}): any {
 // -----------------------------
 // Quick analysis function for testing (compatibility)
 // -----------------------------
-export async function getGeneralToneAnalysis(text: string, attachmentStyle: string = 'secure', context: string = 'general', bypassOverrides: boolean = false): Promise<any> {
+export async function getGeneralToneAnalysis(text: string, attachmentStyle: string = 'secure', context: string = 'general'): Promise<any> {
   try {
     const result = await toneAnalysisService.analyzeAdvancedTone(text, {
       context,
@@ -3086,24 +2995,21 @@ export async function getGeneralToneAnalysis(text: string, attachmentStyle: stri
       includeAttachmentInsights: false
     });
     
+    // Get pure base distribution without any overrides or guards
     const bucketResult = mapBucketsFromJson(
       result.primary_tone, 
       context, 
-      result.intensity, 
-      (result as any).contextSeverity,
-      result.metaClassifier,
-      bypassOverrides,
-      text // Add text for Fix #6 dynamic thresholds
+      result.intensity
     );
     
-    // ✅ Apply clear-eligibility guards now that we have the raw user text:
-    const guardedDist = bypassOverrides ? bucketResult.dist : enforceBucketGuardsV2(bucketResult.dist, text, attachmentStyle);
-    const primaryBucket = (Object.entries(guardedDist).sort((a,b)=>b[1]-a[1])[0][0]) as Bucket;
+    // Use the clean distribution directly - no guards, no overrides
+    const cleanDist = bucketResult.dist;
+    const primaryBucket = (Object.entries(cleanDist).sort((a,b)=>b[1]-a[1])[0][0]) as Bucket;
     
     return {
       tone: result.primary_tone,
       confidence: result.confidence,
-      buckets: guardedDist,
+      buckets: cleanDist,
       primary_bucket: primaryBucket,
       intensity: result.intensity,
       emotions: result.emotions,
