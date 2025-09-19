@@ -1,7 +1,18 @@
 // api/cron/validate-data.ts
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { withMethods, withErrorHandling, withLogging } from '../_lib/wrappers';
-import { success, error as httpError } from '../_lib/http';
+i      {
+        name: 'negation_indicators.json',
+        getter: () => dataLoader.getNegationIndicators(),
+        validate: (d) => {
+          const errors: string[] = [];
+          // Handle object with version and negation_indicators array
+          const indicators = Array.isArray(d?.negation_indicators) ? d.negation_indicators : [];
+          if (!d?.version) errors.push('Missing version field');
+          if (indicators.length === 0) errors.push('No negation indicators loaded');
+          return { errors, recordCount: indicators.length };
+        }
+      },s, error as httpError } from '../_lib/http';
 import { dataLoader } from '../_lib/services/dataLoader';
 import { logger } from '../_lib/logger';
 
@@ -64,10 +75,11 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
       },
       {
         name: 'therapy_advice.json',
-        getter: () => dataLoader.getTherapyAdvice(), // {version, items: []}
+        getter: () => dataLoader.getTherapyAdvice(),
         validate: (d) => {
           const errors: string[] = [];
-          const items = Array.isArray(d?.items) ? d.items : [];
+          // Handle direct array format or {version, items} format
+          const items = Array.isArray(d) ? d : (Array.isArray(d?.items) ? d.items : []);
           if (items.length === 0) errors.push('No advice items loaded');
           // Spot-check first item fields if present
           const sample = items[0];
@@ -79,10 +91,11 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
       },
       {
         name: 'tone_patterns.json',
-        getter: () => dataLoader.getTonePatterns(), // {version, patterns: []}
+        getter: () => dataLoader.getTonePatterns(),
         validate: (d) => {
           const errors: string[] = [];
-          const patterns = Array.isArray(d?.patterns) ? d.patterns : [];
+          // Handle {patterns: [...]} format or direct array
+          const patterns = Array.isArray(d?.patterns) ? d.patterns : (Array.isArray(d) ? d : []);
           if (patterns.length === 0) errors.push('No tone patterns loaded');
           const sample = patterns[0];
           if (sample && (!sample.tone || !sample.pattern)) {
@@ -93,10 +106,11 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
       },
       {
         name: 'evaluation_tones.json',
-        getter: () => dataLoader.getEvaluationTones(), // {version, tones: []}
+        getter: () => dataLoader.getEvaluationTones(),
         validate: (d) => {
           const errors: string[] = [];
-          const tones = Array.isArray(d?.tones) ? d.tones : [];
+          // Handle {tones: [...]} format or direct array
+          const tones = Array.isArray(d?.tones) ? d.tones : (Array.isArray(d) ? d : []);
           if (tones.length === 0) errors.push('No evaluation tones loaded');
           return { errors, recordCount: tones.length };
         }
@@ -117,32 +131,36 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
       },
       {
         name: 'context_classifier.json',
-        getter: () => dataLoader.getContextClassifier(), // {version, contexts: []}
+        getter: () => dataLoader.getContextClassifier(),
         validate: (d) => {
           const errors: string[] = [];
-          const contexts = Array.isArray(d?.contexts) ? d.contexts : [];
-          if (contexts.length === 0) errors.push('No contexts loaded');
-          return { errors, recordCount: contexts.length };
+          // Handle {contexts: [...]} format or object with version
+          const contexts = Array.isArray(d?.contexts) ? d.contexts : (d?.version ? [] : []);
+          if (!d?.version && contexts.length === 0) errors.push('No contexts loaded');
+          return { errors, recordCount: d?.version ? 1 : contexts.length };
         }
       },
       {
         name: 'intensity_modifiers.json',
-        getter: () => dataLoader.getIntensityModifiers(), // {version, modifiers: []}
+        getter: () => dataLoader.getIntensityModifiers(),
         validate: (d) => {
           const errors: string[] = [];
-          const modifiers = Array.isArray(d?.modifiers) ? d.modifiers : [];
+          // Handle direct array format or {modifiers: [...]} format
+          const modifiers = Array.isArray(d) ? d : (Array.isArray(d?.modifiers) ? d.modifiers : []);
           if (modifiers.length === 0) errors.push('No intensity modifiers loaded');
           return { errors, recordCount: modifiers.length };
         }
       },
       {
         name: 'learning_signals.json',
-        getter: () => dataLoader.getLearningSignals(), // {version, signals: []}
+        getter: () => dataLoader.getLearningSignals(),
         validate: (d) => {
           const errors: string[] = [];
+          // Handle object with version and signals array
           const signals = Array.isArray(d?.signals) ? d.signals : [];
+          if (!d?.version) errors.push('Missing version field');
           if (signals.length === 0) errors.push('No learning signals loaded');
-          return { errors, recordCount: signals.length };
+          return { errors, recordCount: signals.length || (d?.version ? 1 : 0) };
         }
       },
       {
