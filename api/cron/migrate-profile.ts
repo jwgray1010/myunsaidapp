@@ -1,9 +1,10 @@
 // api/cron/migrate-profile.ts
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { withCors, withMethods, withErrorHandling, withLogging } from '../_lib/wrappers';
-import { success } from '../_lib/http';
+import { success, error as httpError } from '../_lib/http';
 import { CommunicatorProfile } from '../_lib/services/communicatorProfile';
 import { logger } from '../_lib/logger';
+// import { trackApiCall } from '../_lib/metrics'; // optional
 
 interface MigrationResult {
   userId: string;
@@ -23,123 +24,166 @@ interface ProfileMigrationReport {
   overallStatus: 'success' | 'partial' | 'failed';
 }
 
+const CRON_SECRET = process.env.CRON_SECRET || '';
+
+function isAuthorizedCron(req: VercelRequest): boolean {
+  // Accept either explicit shared secret or Vercel cron header + secret
+  const auth = (req.headers['x-cron-secret'] || req.headers['authorization'] || '').toString();
+  const vercelCron = req.headers['x-vercel-cron'] === '1';
+  if (!CRON_SECRET) return vercelCron; // if you trust Vercel header alone
+  return auth === CRON_SECRET || (vercelCron && auth === CRON_SECRET);
+}
+
+async function migrateOne(userId: string): Promise<MigrationResult> {
+  const changes: string[] = [];
+  const errors: string[] = [];
+
+  try {
+    const profile = new CommunicatorProfile({ userId });
+    await profile.init();
+
+    // Read profile version/state to determine if migration is needed.
+    // You should replace these getters with your real version/flags.
+    const prevVersion = profile.getVersion?.() || '1.0.0';
+    const targetVersion = '2.0.0';
+
+    const attachmentEstimate = profile.getAttachmentEstimate?.() || { windowComplete: false, confidence: 0 };
+    let needsMigration = false;
+
+    // Example, deterministic checks:
+    if (!attachmentEstimate.windowComplete) {
+      changes.push('Initialized attachment analysis window');
+      needsMigration = true;
+    }
+    if ((attachmentEstimate.confidence ?? 0) < 0.5) {
+      changes.push('Updated confidence calculation algorithm');
+      needsMigration = true;
+    }
+    if (prevVersion !== targetVersion) {
+      changes.push(`Schema bump ${prevVersion} -> ${targetVersion}`);
+      needsMigration = true;
+    }
+
+    if (needsMigration) {
+      // Perform your concrete migration steps here:
+      // await profile.migrateTo(targetVersion);
+      // await profile.save();
+      logger.info('Profile migrated', { userId, changes, targetVersion });
+    }
+
+    return {
+      userId,
+      migrated: needsMigration,
+      previousVersion: prevVersion,
+      currentVersion: targetVersion,
+      changes,
+      errors,
+    };
+  } catch (e: any) {
+    const msg = e?.message || 'Unknown error';
+    logger.error('Profile migration failed', { userId, error: msg });
+    errors.push(`Migration failed: ${msg}`);
+    return {
+      userId,
+      migrated: false,
+      previousVersion: undefined,
+      currentVersion: '2.0.0',
+      changes,
+      errors,
+    };
+  }
+}
+
+async function runWithLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<any>) {
+  const queue = new Set<Promise<any>>();
+  const results: any[] = [];
+
+  for (const item of items) {
+    const p = fn(item).then((r) => {
+      queue.delete(p);
+      return r;
+    });
+    queue.add(p);
+    if (queue.size >= limit) await Promise.race(queue);
+    results.push(p);
+  }
+  return Promise.all(results);
+}
+
 const handler = async (req: VercelRequest, res: VercelResponse) => {
   const startTime = Date.now();
-  
+
+  if (!isAuthorizedCron(req)) {
+    return httpError(res, 'Unauthorized cron', 401);
+  }
+
   try {
     logger.info('Starting profile migration cron job');
-    
-    // Mock user IDs for migration (in production, this would come from a database)
+
+    // TODO: replace with DB-sourced IDs; paginate if large
     const userIds = [
       'user_001', 'user_002', 'user_003', 'user_004', 'user_005',
       'test_user', 'demo_user', 'anonymous'
     ];
-    
-    const results: MigrationResult[] = [];
-    
-    for (const userId of userIds) {
-      try {
-        const profile = new CommunicatorProfile({ userId });
-        await profile.init();
-        
-        // Check if profile needs migration
-        const attachmentEstimate = profile.getAttachmentEstimate();
-        const changes: string[] = [];
-        
-        // Mock migration logic - in production, this would check version compatibility
-        let needsMigration = false;
-        
-        // Example migration scenarios
-        if (!attachmentEstimate.windowComplete) {
-          changes.push('Initialized attachment analysis window');
-          needsMigration = true;
-        }
-        
-        if (attachmentEstimate.confidence < 0.5) {
-          changes.push('Updated confidence calculation algorithm');
-          needsMigration = true;
-        }
-        
-        // Simulate data structure updates
-        if (Math.random() > 0.7) { // Random migration need for demo
-          changes.push('Updated learning signals format');
-          changes.push('Migrated communication history structure');
-          needsMigration = true;
-        }
-        
-        results.push({
-          userId,
-          migrated: needsMigration,
-          previousVersion: needsMigration ? '1.0.0' : '2.0.0',
-          currentVersion: '2.0.0',
-          changes,
-          errors: []
-        });
-        
-        if (needsMigration) {
-          logger.info('Profile migrated', { userId, changes });
-        }
-        
-      } catch (error) {
-        results.push({
-          userId,
-          migrated: false,
-          currentVersion: '2.0.0',
-          changes: [],
-          errors: [`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`]
-        });
-        
-        logger.error('Profile migration failed', { userId, error });
-      }
-    }
-    
+
+    // Bounded concurrency (tune limit to your DB/API constraints)
+    const concurrency = Number(process.env.CRON_CONCURRENCY || 4);
+    const results = await runWithLimit(userIds, concurrency, migrateOne);
+
     const migratedProfiles = results.filter(r => r.migrated).length;
     const failedProfiles = results.filter(r => r.errors.length > 0).length;
     const totalProfiles = results.length;
-    
+
     let overallStatus: 'success' | 'partial' | 'failed' = 'success';
     if (failedProfiles > 0) {
-      overallStatus = failedProfiles > totalProfiles * 0.5 ? 'failed' : 'partial';
+      overallStatus = failedProfiles >= totalProfiles ? 'failed' : 'partial';
     }
-    
-    const report: ProfileMigrationReport = {
-      timestamp: new Date().toISOString(),
-      totalProfiles,
-      migratedProfiles,
-      failedProfiles,
-      results,
-      overallStatus
-    };
-    
+
     const processingTime = Date.now() - startTime;
-    
+
     logger.info('Profile migration completed', {
       processingTimeMs: processingTime,
       totalProfiles,
       migratedProfiles,
       failedProfiles,
-      status: overallStatus
+      status: overallStatus,
     });
-    
-    success(res, {
+
+    // Optionally record metrics
+    // trackApiCall('/api/cron/migrate-profile', 'POST', overallStatus === 'failed' ? 500 : 200, processingTime);
+
+    // Keep the response compact; full detail is in logs
+    const report: ProfileMigrationReport = {
+      timestamp: new Date().toISOString(),
+      totalProfiles,
+      migratedProfiles,
+      failedProfiles,
+      results,          // if this is too big, omit or truncate
+      overallStatus
+    };
+
+    // If everything failed, you may want to use a 500
+    const status = overallStatus === 'failed' ? 500 : 200;
+
+    return success(res, {
       report,
-      metadata: {
+      meta: {
         processingTimeMs: processingTime,
         cronJob: 'migrate-profile',
-        version: '1.0.0'
+        version: '2.0.0',
+        concurrency
       }
-    });
-    
-  } catch (error) {
-    logger.error('Profile migration cron job failed:', error);
-    throw error;
+    }, status);
+
+  } catch (e) {
+    logger.error('Profile migration cron job failed', { error: e instanceof Error ? e.message : String(e) });
+    throw e; // withErrorHandling will format the error response
   }
 };
 
 export default withErrorHandling(
+  // Cron endpoints usually don’t need CORS; keep it if you call across origins.
   withLogging(
-    withCors(
-      withMethods(['GET', 'POST'], handler)
-    )
+    withMethods(['POST'], handler)
   )
 );

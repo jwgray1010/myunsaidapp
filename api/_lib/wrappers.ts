@@ -100,42 +100,28 @@ export function withLogging(handler: Handler): Handler {
   };
 }
 
-// Simple in-memory rate limiter (use Redis/KV in production)
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
-
+// Rate limiting for serverless - should use external service (Redis, KV, etc.)
+// This is a placeholder that sets headers but doesn't actually limit
 export function withRateLimit(windowMs: number = 15 * 60 * 1000, maxRequests: number = 100): (handler: Handler) => Handler {
   return (handler: Handler): Handler => {
     return async (req: VercelRequest, res: VercelResponse) => {
-      const key = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
-      const now = Date.now();
+      // For serverless, rate limiting should be handled by:
+      // 1. Vercel Edge Functions rate limiting
+      // 2. External service (Redis, Upstash, etc.)
+      // 3. API Gateway rate limiting
       
-      // Clean up expired entries
-      Array.from(rateLimitStore.entries()).forEach(([k, v]) => {
-        if (v.resetTime <= now) {
-          rateLimitStore.delete(k);
-        }
-      });
-      
-      const current = rateLimitStore.get(key as string);
-      
-      if (!current) {
-        rateLimitStore.set(key as string, { count: 1, resetTime: now + windowMs });
-      } else if (current.resetTime <= now) {
-        rateLimitStore.set(key as string, { count: 1, resetTime: now + windowMs });
-      } else if (current.count >= maxRequests) {
-        res.setHeader('X-RateLimit-Limit', maxRequests.toString());
-        res.setHeader('X-RateLimit-Remaining', '0');
-        res.setHeader('X-RateLimit-Reset', Math.ceil(current.resetTime / 1000).toString());
-        return tooManyRequests(res);
-      } else {
-        current.count++;
-        rateLimitStore.set(key as string, current);
-      }
-      
-      const limit = rateLimitStore.get(key as string)!;
+      // Set rate limit headers for client awareness
       res.setHeader('X-RateLimit-Limit', maxRequests.toString());
-      res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - limit.count).toString());
-      res.setHeader('X-RateLimit-Reset', Math.ceil(limit.resetTime / 1000).toString());
+      res.setHeader('X-RateLimit-Remaining', maxRequests.toString());
+      res.setHeader('X-RateLimit-Reset', Math.ceil((Date.now() + windowMs) / 1000).toString());
+      
+      // TODO: Implement actual rate limiting with external service
+      // Example with Upstash Redis:
+      // const redis = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL });
+      // const key = `rate_limit:${ip}:${Math.floor(Date.now() / windowMs)}`;
+      // const count = await redis.incr(key);
+      // if (count === 1) await redis.expire(key, Math.ceil(windowMs / 1000));
+      // if (count > maxRequests) return tooManyRequests(res);
       
       return handler(req, res);
     };

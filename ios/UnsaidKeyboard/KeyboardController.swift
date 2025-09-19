@@ -1865,21 +1865,6 @@ final class KeyboardController: UIInputView,
         }
     }
     
-    func didReceiveFeatureNoticings(_ noticings: [String]) {
-        logger.info("🎯 Received \(noticings.count) feature noticings from FeatureSpotter")
-        
-        // Display feature noticings as helpful suggestions using the existing suggestion chip system
-        if !noticings.isEmpty {
-            // Use the first noticing as the primary suggestion with a distinct tone
-            suggestionChipManager.showSuggestion(text: noticings[0], tone: .clear)
-            
-            // Log all noticings for debugging
-            for (i, notice) in noticings.enumerated() {
-                logger.info("  Feature noticing \(i+1): \(notice)")
-            }
-        }
-    }
-    
     // MARK: - Error Handling
     
     /// Shows an error message to the user via a temporary overlay or alert

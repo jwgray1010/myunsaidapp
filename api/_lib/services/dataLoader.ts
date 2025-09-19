@@ -38,13 +38,16 @@ class DataLoaderService {
     logger.info(`Data path exists: ${fs.existsSync(this.dataPath)}`);
     
     // List files in the data directory for debugging
-    try {
-      if (fs.existsSync(this.dataPath)) {
-        const files = fs.readdirSync(this.dataPath);
-        logger.info(`Files in data directory: ${files.join(', ')}`);
+    const VERBOSE_DATA_LOGS = process.env.VERBOSE_DATA_LOGS === '1';
+    if (VERBOSE_DATA_LOGS) {
+      try {
+        if (fs.existsSync(this.dataPath)) {
+          const files = fs.readdirSync(this.dataPath);
+          logger.info(`Files in data directory: ${files.join(', ')}`);
+        }
+      } catch (err) {
+        logger.warn(`Could not list files in data directory: ${err}`);
       }
-    } catch (err) {
-      logger.warn(`Could not list files in data directory: ${err}`);
     }
 
     // Pre-initialize synchronously to avoid async issues
@@ -64,11 +67,14 @@ class DataLoaderService {
       } else {
         logger.warn(`File not found: ${filepath}`);
         // List directory contents for debugging
-        try {
-          const dirContents = fs.readdirSync(this.dataPath);
-          logger.info(`Data directory contents: ${dirContents.join(', ')}`);
-        } catch (dirError) {
-          logger.error(`Cannot read data directory ${this.dataPath}:`, dirError);
+        const VERBOSE_DATA_LOGS = process.env.VERBOSE_DATA_LOGS === '1';
+        if (VERBOSE_DATA_LOGS) {
+          try {
+            const dirContents = fs.readdirSync(this.dataPath);
+            logger.info(`Data directory contents: ${dirContents.join(', ')}`);
+          } catch (dirError) {
+            logger.error(`Cannot read data directory ${this.dataPath}:`, dirError);
+          }
         }
         return fallback;
       }
@@ -112,7 +118,14 @@ class DataLoaderService {
 
       this.cache.toneTriggerWords = this.readJsonSafe<any>(
         'tone_triggerwords.json',
-        { version: '0', triggers: [] }
+        {
+          version: '0',
+          clear:   { triggerwords: [] },
+          caution: { triggerwords: [] },
+          alert:   { triggerwords: [] },
+          engine:  { genericTokens: {}, bucketGuards: {}, contextScopes: {} },
+          weights: { contextMultipliers: {} }
+        }
       );
 
       this.cache.intensityModifiers = this.readJsonSafe<any>(
@@ -157,7 +170,14 @@ class DataLoaderService {
 
       this.cache.profanityLexicons = this.readJsonSafe<any>(
         'profanity_lexicons.json',
-        { version: '0', words: [] }
+        {
+          version: '0',
+          categories: [
+            { id: 'mild',     severity: 'mild',     triggerWords: [] },
+            { id: 'moderate', severity: 'moderate', triggerWords: [] },
+            { id: 'strong',   severity: 'strong',   triggerWords: [] }
+          ]
+        }
       );
 
       this.cache.weightModifiers = this.readJsonSafe<any>(
@@ -237,6 +257,16 @@ class DataLoaderService {
             low:  { alert: -0.10, caution: +0.08, clear: +0.02 },
             med:  { alert:  0.00, caution:  0.00, clear:  0.00 },
             high: { alert: +0.12, caution: -0.08, clear: -0.04 }
+          },
+          // new-style mirror for mapBucketsFromJson() that expects toneBuckets[tone].base
+          toneBuckets: {
+            neutral:    { base: { clear: 0.70, caution: 0.25, alert: 0.05 } },
+            positive:   { base: { clear: 0.80, caution: 0.18, alert: 0.02 } },
+            supportive: { base: { clear: 0.85, caution: 0.13, alert: 0.02 } },
+            angry:      { base: { clear: 0.05, caution: 0.30, alert: 0.65 } },
+            frustrated: { base: { clear: 0.10, caution: 0.55, alert: 0.35 } },
+            anxious:    { base: { clear: 0.15, caution: 0.60, alert: 0.25 } },
+            sad:        { base: { clear: 0.25, caution: 0.60, alert: 0.15 } }
           }
         }
       );
@@ -290,7 +320,14 @@ class DataLoaderService {
 
       this.cache.toneTriggerWords = this.readJsonSafe<any>(
         'tone_triggerwords.json',
-        { version: '0', triggers: [] }
+        {
+          version: '0',
+          clear:   { triggerwords: [] },
+          caution: { triggerwords: [] },
+          alert:   { triggerwords: [] },
+          engine:  { genericTokens: {}, bucketGuards: {}, contextScopes: {} },
+          weights: { contextMultipliers: {} }
+        }
       );
 
       this.cache.intensityModifiers = this.readJsonSafe<any>(
@@ -335,7 +372,14 @@ class DataLoaderService {
 
       this.cache.profanityLexicons = this.readJsonSafe<any>(
         'profanity_lexicons.json',
-        { version: '0', words: [] }
+        {
+          version: '0',
+          categories: [
+            { id: 'mild',     severity: 'mild',     triggerWords: [] },
+            { id: 'moderate', severity: 'moderate', triggerWords: [] },
+            { id: 'strong',   severity: 'strong',   triggerWords: [] }
+          ]
+        }
       );
 
       this.cache.weightModifiers = this.readJsonSafe<any>(
@@ -415,20 +459,17 @@ class DataLoaderService {
             low:  { alert: -0.10, caution: +0.08, clear: +0.02 },
             med:  { alert:  0.00, caution:  0.00, clear:  0.00 },
             high: { alert: +0.12, caution: -0.08, clear: -0.04 }
+          },
+          // new-style mirror for mapBucketsFromJson() that expects toneBuckets[tone].base
+          toneBuckets: {
+            neutral:    { base: { clear: 0.70, caution: 0.25, alert: 0.05 } },
+            positive:   { base: { clear: 0.80, caution: 0.18, alert: 0.02 } },
+            supportive: { base: { clear: 0.85, caution: 0.13, alert: 0.02 } },
+            angry:      { base: { clear: 0.05, caution: 0.30, alert: 0.65 } },
+            frustrated: { base: { clear: 0.10, caution: 0.55, alert: 0.35 } },
+            anxious:    { base: { clear: 0.15, caution: 0.60, alert: 0.25 } },
+            sad:        { base: { clear: 0.25, caution: 0.60, alert: 0.15 } }
           }
-        }
-      );
-
-      // Feature Spotter configuration (new)
-      this.cache.featureSpotter = this.readJsonSafe<any>(
-        'feature_spotter.json',
-        {
-          version: '1.0.0',
-          globals: { flags: 'i', maxInputChars: 2000, timeoutMs: 500, dedupeWindowMs: 5000, matchLimitPerFeature: 3 },
-          features: [],
-          noticingsMap: {},
-          aggregation: { decayDays: 7, capPerDay: 5.0, noiseFloor: 0.001, cooldownMsPerBucket: {} },
-          runtime: { safeOrder: [], conflictResolution: { mergeSameBucket: true, preferPositiveWhenTied: true, maxNoticingsPerMessage: 2 } }
         }
       );
 
@@ -536,23 +577,27 @@ class DataLoaderService {
   }
 
   public getToneBucketMapping(): any {
-    return this.cache.toneBucketMapping || {
-      version: '1.0',
-      default: {
-        neutral: { clear: 0.70, caution: 0.25, alert: 0.05 }
+    const m = this.cache.toneBucketMapping;
+    if (!m) {
+      return {
+        version: '1.0',
+        default: { neutral: { clear: 0.70, caution: 0.25, alert: 0.05 } },
+        toneBuckets: { neutral: { base: { clear: 0.70, caution: 0.25, alert: 0.05 } } }
+      };
+    }
+    // If toneBuckets missing but default present, synthesize toneBuckets
+    if (!(m as any).toneBuckets && (m as any).default) {
+      const toneBuckets: Record<string, { base: any }> = {};
+      for (const [tone, base] of Object.entries((m as any).default)) {
+        toneBuckets[tone] = { base };
       }
-    };
+      return { ...m, toneBuckets };
+    }
+    return m;
   }
 
-  public getFeatureSpotter(): any {
-    return this.cache.featureSpotter || {
-      version: '1.0.0',
-      globals: { flags: 'i', maxInputChars: 2000, timeoutMs: 500, dedupeWindowMs: 5000, matchLimitPerFeature: 3 },
-      features: [],
-      noticingsMap: {},
-      aggregation: { decayDays: 7, capPerDay: 5.0, noiseFloor: 0.001, cooldownMsPerBucket: {} },
-      runtime: { safeOrder: [], conflictResolution: { mergeSameBucket: true, preferPositiveWhenTied: true, maxNoticingsPerMessage: 2 } }
-    };
+  public getAttachmentToneWeights(): any {
+    return this.cache.attachmentToneWeights || { version: '0', overrides: {} };
   }
 
   // Utility methods for common access patterns
@@ -619,10 +664,6 @@ class DataLoaderService {
     const db = this.get('therapyAdvice');
     return normalizeAdvice(db);
   }
-
-  public getAttachmentToneWeights(): any {
-    return this.cache.attachmentToneWeights || { version: '0', overrides: {} };
-  }
 }
 
 // ============================
@@ -631,7 +672,7 @@ class DataLoaderService {
 const AdviceItem = z.object({
   id: z.string(),
   advice: z.string().min(1),
-  triggerTone: z.enum(['clear','caution','alert']),
+  triggerTone: z.enum(['clear','caution','alert']).default('clear'),
   contexts: z.array(z.string()).default([]),
   attachmentStyles: z.array(z.enum(['secure','anxious','avoidant','disorganized'])).default([]),
   severityThreshold: z.record(z.enum(['clear','caution','alert']), z.number().min(0).max(1)).optional(),
@@ -641,8 +682,10 @@ const AdviceItem = z.object({
   styleTuning: z.record(z.string(), z.number()).optional(),
   // Optional processing fields
   __tokens: z.array(z.string()).optional(),
-  __vector: z.array(z.number()).optional()
-});
+  __vector: z.array(z.number()).optional(),
+  // allow your merged "keywords"
+  keywords: z.array(z.string()).optional()
+}).passthrough();
 
 export type AdviceItem = z.infer<typeof AdviceItem>;
 
@@ -667,6 +710,9 @@ export function normalizeAdvice(db: any): AdviceItem[] {
       return AdviceItem.parse({
         id: raw.id || 'unknown',
         advice: raw.advice || 'No advice available',
+        triggerTone: 'clear',
+        contexts: [],
+        attachmentStyles: [],
         keywords: []
       });
     }

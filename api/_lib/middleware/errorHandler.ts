@@ -54,108 +54,106 @@ export class AppTooManyRequestsError extends AppError {
   }
 }
 
-// Zod error formatter
-function formatZodError(error: ZodError): { message: string; details: any[] } {
-  const details = error.errors.map(err => ({
-    field: err.path.join('.'),
-    message: err.message,
-    code: err.code,
-    received: err.code === 'invalid_type' ? (err as any).received : undefined
-  }));
-
-  return {
-    message: 'Validation failed',
-    details
-  };
+// Zod error formatter with duck-typing support
+function isZodErrorLike(err: any): err is ZodError {
+  return !!err && typeof err === 'object' && Array.isArray((err as any).issues || (err as any).errors) &&
+         (err.name === 'ZodError' || typeof (err as any).flatten === 'function');
 }
 
-// Main error handler
-export function handleError(err: any, req: VercelRequest, res: VercelResponse): void {
-  // Generate request ID if not present
-  const reqId = (req as any).id || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+function formatZodError(error: ZodError): { message: string; details: any[] } {
+  const details = (error.errors || (error as any).issues || []).map((err: any) => ({
+    field: Array.isArray(err.path) ? err.path.join('.') : '',
+    message: err.message,
+    code: err.code,
+    received: err.code === 'invalid_type' ? (err as any).received : undefined,
+  }));
+  return { message: 'Validation failed', details };
+}
 
-  // Base error response
-  const baseResponse = {
-    success: false,
-    reqId,
-    timestamp: new Date().toISOString()
-  };
+// Main error handler with enhanced safety features
+export function handleError(err: any, req: VercelRequest, res: VercelResponse): void {
+  // If response already started, just log and end safely
+  if (res.headersSent) {
+    logger.error('Error after headers sent', { url: req.url, method: req.method, err: serializeError(err) });
+    try { res.end(); } catch {}
+    return;
+  }
+
+  // Request id
+  const reqId =
+    (req as any).id ||
+    (req.headers['x-request-id'] as string) ||
+    `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+  res.setHeader('X-Request-Id', reqId);
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+
+  const baseResponse = { success: false, reqId, timestamp: new Date().toISOString() };
 
   let statusCode = 500;
-  let responsePayload: any = {
-    ...baseResponse,
-    error: 'Internal Server Error',
-    code: 'ERR_INTERNAL'
-  };
+  let responsePayload: any = { ...baseResponse, error: 'Internal Server Error', code: 'ERR_INTERNAL' };
+
+  // Normalize non-Error throws
+  if (!(err instanceof Error)) {
+    err = new Error(typeof err === 'string' ? err : 'Non-Error thrown');
+  }
 
   // Handle different error types
   if (err instanceof AppError) {
     // Custom application errors
     statusCode = err.statusCode;
-    responsePayload = {
-      ...baseResponse,
-      error: err.message,
-      code: err.code
-    };
-
-    if (err instanceof AppValidationError && err.details) {
-      responsePayload.details = err.details;
+    responsePayload = { ...baseResponse, error: err.message, code: err.code };
+    if (err instanceof AppValidationError && (err as AppValidationError).details) {
+      responsePayload.details = (err as AppValidationError).details;
     }
 
-  } else if (err instanceof ZodError) {
-    // Zod validation errors
+  // Zod (support instanceof OR duck-type)
+  } else if (err instanceof ZodError || isZodErrorLike(err)) {
     statusCode = 400;
-    const formatted = formatZodError(err);
-    responsePayload = {
-      ...baseResponse,
-      error: formatted.message,
-      code: 'ERR_VALIDATION',
-      details: formatted.details
-    };
+    const formatted = formatZodError(err as ZodError);
+    responsePayload = { ...baseResponse, error: formatted.message, code: 'ERR_VALIDATION', details: formatted.details };
 
-  } else if (err.name === 'ValidationError') {
-    // Generic validation errors
+  // Generic validation
+  } else if ((err as any).name === 'ValidationError') {
     statusCode = 400;
-    responsePayload = {
-      ...baseResponse,
-      error: err.message || 'Validation failed',
-      code: 'ERR_VALIDATION'
-    };
+    responsePayload = { ...baseResponse, error: err.message || 'Validation failed', code: 'ERR_VALIDATION' };
 
-  } else if (err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED') {
-    // Network errors
+  // Auth/JWT
+  } else if ((err as any).name === 'JsonWebTokenError') {
+    statusCode = 401;
+    responsePayload = { ...baseResponse, error: 'Invalid authentication token', code: 'ERR_INVALID_TOKEN' };
+  } else if ((err as any).name === 'TokenExpiredError') {
+    statusCode = 401;
+    responsePayload = { ...baseResponse, error: 'Authentication token expired', code: 'ERR_TOKEN_EXPIRED' };
+
+  // Network/infra / timeouts
+  } else if (['ENOTFOUND','ECONNREFUSED','ETIMEDOUT','EAI_AGAIN'].includes((err as any).code)) {
     statusCode = 503;
-    responsePayload = {
-      ...baseResponse,
-      error: 'Service temporarily unavailable',
-      code: 'ERR_SERVICE_UNAVAILABLE'
-    };
-
-  } else if (err.name === 'JsonWebTokenError') {
-    // JWT errors
-    statusCode = 401;
-    responsePayload = {
-      ...baseResponse,
-      error: 'Invalid authentication token',
-      code: 'ERR_INVALID_TOKEN'
-    };
-
-  } else if (err.name === 'TokenExpiredError') {
-    // Expired JWT
-    statusCode = 401;
-    responsePayload = {
-      ...baseResponse,
-      error: 'Authentication token expired',
-      code: 'ERR_TOKEN_EXPIRED'
-    };
+    responsePayload = { ...baseResponse, error: 'Service temporarily unavailable', code: 'ERR_SERVICE_UNAVAILABLE' };
+  } else if ((err as any).name === 'AbortError' /* node-fetch */) {
+    statusCode = 503;
+    responsePayload = { ...baseResponse, error: 'Upstream request aborted', code: 'ERR_SERVICE_UNAVAILABLE' };
   }
 
-  // Include stack trace in development
+  // Forward Retry-After if upstream provided (rate limits)
+  const retryAfter = (err as any)?.retryAfter || (err as any)?.headers?.['retry-after'];
+  if (retryAfter && String(retryAfter)) {
+    res.setHeader('Retry-After', String(retryAfter));
+  }
+
+  // Include stack only in dev
   if (env.NODE_ENV !== 'production' && err.stack) {
-    responsePayload.stack = err.stack.split('\n');
+    responsePayload.stack = err.stack.split('\n').slice(0, 20); // cap length
+    if ((err as any).cause instanceof Error) {
+      responsePayload.cause = {
+        name: (err as any).cause.name,
+        message: (err as any).cause.message,
+        stack: ((err as any).cause.stack || '').split('\n').slice(0, 10),
+      };
+    }
   }
 
-  // Log error with context
+  // Log
   const logContext = {
     reqId,
     method: req.method,
@@ -164,24 +162,27 @@ export function handleError(err: any, req: VercelRequest, res: VercelResponse): 
     code: responsePayload.code,
     userAgent: req.headers['user-agent'],
     ip: req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown',
-    error: {
-      name: err.name,
-      message: err.message,
-      stack: err.stack
-    }
+    error: serializeError(err),
   };
 
-  if (statusCode >= 500) {
-    logger.error('Server error occurred', logContext);
-  } else if (statusCode >= 400) {
-    logger.warn('Client error occurred', logContext);
-  }
+  if (statusCode >= 500) logger.error('Server error occurred', logContext);
+  else if (statusCode >= 400) logger.warn('Client error occurred', logContext);
+  else logger.info('Handled error', logContext);
 
-  // Send error response
   res.status(statusCode).json(responsePayload);
 }
 
-// Error wrapper for async functions
+function serializeError(e: any) {
+  if (!e) return { name: 'UnknownError', message: 'Unknown' };
+  return {
+    name: e.name || 'Error',
+    message: e.message || String(e),
+    code: (e as any).code,
+    stack: e.stack ? e.stack.split('\n').slice(0, 5) : undefined,
+  };
+}
+
+// Error wrapper for async functions (rethrows - callers must handle)
 export function withErrorHandling<T extends any[], R>(
   fn: (...args: T) => Promise<R>
 ): (...args: T) => Promise<R | void> {
@@ -189,15 +190,17 @@ export function withErrorHandling<T extends any[], R>(
     try {
       return await fn(...args);
     } catch (error) {
-      // This would need the req/res context, so we'll rethrow
+      // Deliberately rethrow; callers using this variant must handle (e.g., withErrorMiddleware)
       throw error;
     }
   };
 }
 
 // Middleware wrapper that includes error handling
-export function withErrorMiddleware(handler: (req: VercelRequest, res: VercelResponse) => Promise<void>): (req: VercelRequest, res: VercelResponse) => Promise<void> {
-  return async (req: VercelRequest, res: VercelResponse): Promise<void> => {
+export function withErrorMiddleware(
+  handler: (req: VercelRequest, res: VercelResponse) => Promise<void>
+) {
+  return async (req: VercelRequest, res: VercelResponse) => {
     try {
       await handler(req, res);
     } catch (error) {

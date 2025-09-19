@@ -5,14 +5,17 @@ class PersonalityQuestionOption {
   final String? type; // For goal profiling questions
   final int? anxietyScore; // 1-5 scale for anxiety dimension
   final int? avoidanceScore; // 1-5 scale for avoidance dimension
+  final int? value;
 
   const PersonalityQuestionOption({
     required this.text,
     this.type,
     this.anxietyScore,
     this.avoidanceScore,
+    this.value,
   });
 }
+
 
 class PersonalityQuestion {
   final String question;

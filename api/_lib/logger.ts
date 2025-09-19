@@ -1,6 +1,89 @@
 // api/_lib/logger.ts
 import { env } from './env';
 
+type Level = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
+
+const LEVELS: Record<Level, number> = {
+  trace: 10,
+  debug: 20,
+  info: 30,
+  warn: 40,
+  error: 50,
+  fatal: 60,
+};
+
+function normalizeLevel(input?: string): Level {
+  const v = (input || '').toLowerCase() as Level;
+  return (v in LEVELS ? v : 'info');
+}
+
+function pickConsole(level: Level) {
+  switch (level) {
+    case 'trace': return console.debug ?? console.log;
+    case 'debug': return console.debug ?? console.log;
+    case 'info':  return console.info  ?? console.log;
+    case 'warn':  return console.warn  ?? console.log;
+    case 'error': return console.error ?? console.log;
+    case 'fatal': return console.error ?? console.log;
+    default:      return console.log;
+  }
+}
+
+function isErrorLike(x: any): x is Error {
+  return !!x && (x instanceof Error || (typeof x === 'object' && ('message' in x || 'stack' in x)));
+}
+
+const DEFAULT_REDACTIONS = ['authorization', 'password', 'pass', 'token', 'api_key', 'apikey', 'secret', 'set-cookie'];
+
+function redact(obj: any, extraKeys: string[] = []): any {
+  const keys = new Set([...DEFAULT_REDACTIONS, ...extraKeys].map(k => k.toLowerCase()));
+  const seen = new WeakSet<object>();
+
+  function _walk(value: any): any {
+    if (value == null) return value;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+    if (typeof value === 'function') return undefined;
+    if (isErrorLike(value)) {
+      return {
+        name: value.name,
+        message: value.message,
+        stack: value.stack,
+      };
+    }
+    if (typeof value !== 'object') return value;
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
+
+    if (Array.isArray(value)) return value.map(_walk);
+
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (keys.has(k.toLowerCase())) {
+        out[k] = '[REDACTED]';
+      } else {
+        out[k] = _walk(v);
+      }
+    }
+    return out;
+  }
+
+  return _walk(obj);
+}
+
+function safeStringify(obj: any, limit = 8 * 1024): string {
+  try {
+    const s = JSON.stringify(obj);
+    if (s.length <= limit) return s;
+    return s.slice(0, limit) + '…';
+  } catch {
+    try {
+      return JSON.stringify(String(obj));
+    } catch {
+      return '"[Unserializable]"';
+    }
+  }
+}
+
 export interface Logger {
   trace(message: string, data?: any): void;
   debug(message: string, data?: any): void;
@@ -9,14 +92,18 @@ export interface Logger {
   error(message: string, data?: any): void;
   fatal(message: string, data?: any): void;
   child(bindings: Record<string, any>): Logger;
+  setLevel(level: Level): void;
+  getLevel(): Level;
 }
 
 interface LoggerConfig {
-  level: string;
+  level: Level;
   service: string;
   env: string;
   version: string;
   pretty: boolean;
+  silent: boolean;
+  redactKeys?: string[];
 }
 
 class ConsoleLogger implements Logger {
@@ -25,90 +112,92 @@ class ConsoleLogger implements Logger {
 
   constructor(config?: Partial<LoggerConfig>, bindings: Record<string, any> = {}) {
     this.config = {
-      level: process.env.LOG_LEVEL || 'info',
-      service: 'unsaid-api',
+      level: normalizeLevel(process.env.LOG_LEVEL),
+      service: process.env.SERVICE_NAME || 'unsaid-api',
       env: env.NODE_ENV,
       version: process.env.SERVICE_VERSION || '0.0.0',
       pretty: env.NODE_ENV !== 'production' || process.env.PRETTY_LOGS === '1',
-      ...config
+      silent: process.env.LOG_SILENT === '1',
+      redactKeys: [],
+      ...config,
     };
     this.bindings = bindings;
   }
 
-  private shouldLog(level: string): boolean {
-    const levels = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
-    const currentLevelIndex = levels.indexOf(this.config.level);
-    const messageLevelIndex = levels.indexOf(level);
-    return messageLevelIndex >= currentLevelIndex;
+  setLevel(level: Level) {
+    this.config.level = normalizeLevel(level);
+  }
+  getLevel(): Level {
+    return this.config.level;
   }
 
-  private log(level: string, message: string, data?: any): void {
-    if (!this.shouldLog(level)) return;
-    
-    const timestamp = new Date().toISOString();
-    const logEntry = {
-      timestamp,
+  private shouldLog(level: Level): boolean {
+    if (this.config.silent) return false;
+    return LEVELS[level] >= LEVELS[this.config.level];
+  }
+
+  private baseEntry(level: Level, message: string, data?: any) {
+    const ts = new Date().toISOString();
+    const mergedData = (data && typeof data === 'object')
+      ? data
+      : (data === undefined ? undefined : { data });
+
+    const errPart = isErrorLike(data)
+      ? { error: { name: data.name, message: data.message, stack: data.stack } }
+      : {};
+
+    return {
+      timestamp: ts,
       level: level.toUpperCase(),
       service: this.config.service,
       env: this.config.env,
       version: this.config.version,
       message,
       ...this.bindings,
-      ...(data && typeof data === 'object' ? data : { data })
+      ...errPart,
+      ...(mergedData && !isErrorLike(data) ? redact(mergedData, this.config.redactKeys) : undefined),
     };
+  }
+
+  private log(level: Level, message: string, data?: any): void {
+    if (!this.shouldLog(level)) return;
+
+    const entry = this.baseEntry(level, message, data);
+    const writer = pickConsole(level);
 
     if (this.config.pretty) {
-      // Pretty format for development
-      const contextStr = Object.keys(this.bindings).length > 0 
-        ? ` [${Object.entries(this.bindings).map(([k, v]) => `${k}=${v}`).join(', ')}]` 
+      const ctx = Object.keys(this.bindings).length
+        ? ` [${Object.entries(this.bindings).map(([k, v]) => `${k}=${v}`).join(', ')}]`
         : '';
-      const dataStr = data ? ` ${JSON.stringify(data, null, 2)}` : '';
-      console.log(`[${timestamp}] ${level.toUpperCase()}${contextStr}: ${message}${dataStr}`);
+      const tail = data !== undefined ? ' ' + safeStringify(redact(data, this.config.redactKeys)) : '';
+      writer(`[${entry.timestamp}] ${level.toUpperCase()}${ctx}: ${message}${tail}`);
     } else {
-      // Structured JSON for production
-      console.log(JSON.stringify(logEntry));
+      writer(safeStringify(entry));
     }
   }
 
-  trace(message: string, data?: any): void {
-    this.log('trace', message, data);
-  }
+  trace(msg: string, data?: any) { this.log('trace', msg, data); }
+  debug(msg: string, data?: any) { this.log('debug', msg, data); }
+  info (msg: string, data?: any) { this.log('info',  msg, data); }
+  warn (msg: string, data?: any) { this.log('warn',  msg, data); }
+  error(msg: string, data?: any) { this.log('error', msg, data); }
+  fatal(msg: string, data?: any) { this.log('fatal', msg, data); }
 
-  debug(message: string, data?: any): void {
-    this.log('debug', message, data);
-  }
-
-  info(message: string, data?: any): void {
-    this.log('info', message, data);
-  }
-
-  warn(message: string, data?: any): void {
-    this.log('warn', message, data);
-  }
-
-  error(message: string, data?: any): void {
-    this.log('error', message, data);
-  }
-
-  fatal(message: string, data?: any): void {
-    this.log('fatal', message, data);
-  }
-
-  // Create child logger with additional context (matching JavaScript version)
   child(bindings: Record<string, any>): Logger {
+    // Inherit config & level, merge bindings
     return new ConsoleLogger(this.config, { ...this.bindings, ...bindings });
   }
 }
 
-// Create base logger instance
+// Base logger instance
 export const logger: Logger = new ConsoleLogger();
 
-// Helper function to create module-specific loggers (matching JavaScript version)
+// Module-scoped child helper
 export function withModule(moduleName: string, extra: Record<string, any> = {}): Logger {
   return logger.child({ module: moduleName, ...extra });
 }
 
-// Generate stable ID (matching JavaScript version)
+// Stable ID helper (kept for compatibility)
 export function genId(prefix: string = 'id'): string {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2)}`;
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
 }

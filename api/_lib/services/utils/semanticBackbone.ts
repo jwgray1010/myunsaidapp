@@ -1,10 +1,27 @@
 // api/_lib/services/utils/semanticBackbone.ts
 // Semantic backbone matching and analysis using semantic_thesaurus.json
 
+import { dataLoader } from '../dataLoader';
+
 export interface SemanticMatch {
   cluster: string;
   strength: number;
   matchedTerms: string[];
+}
+
+export interface SemanticClusterData {
+  patterns?: string[];
+  keywords?: string[];
+  phrases?: string[];
+  confidence_calibration?: number;
+  context_bias?: Record<string, number>;
+  tone_bias?: Record<string, number>;
+}
+
+export interface SemanticThesaurus {
+  clusters?: Record<string, SemanticClusterData>;
+  routing_matrix?: Record<string, Record<string, number>>;
+  attachment_overrides?: Record<string, Record<string, string>>;
 }
 
 export interface SemanticBackboneResult {
@@ -15,6 +32,15 @@ export interface SemanticBackboneResult {
   attachmentOverride: string | null;
 }
 
+// Helper functions for serverless-safe processing
+function clamp01(x: number): number {
+  return Math.max(0, Math.min(1, x));
+}
+
+function sat(n: number, k = 3): number {
+  return Math.min(n, k) + Math.max(0, Math.log(1 + Math.max(0, n - k)) * 0.5);
+}
+
 /**
  * Matches input text against semantic clusters from semantic_thesaurus.json
  * Returns the strongest cluster match and any routing biases
@@ -22,9 +48,12 @@ export interface SemanticBackboneResult {
 export function matchSemanticBackbone(
   text: string, 
   attachmentStyle: string,
-  semanticThesaurus: any
+  semanticThesaurus?: SemanticThesaurus
 ): SemanticBackboneResult {
-  if (!semanticThesaurus || !text?.trim()) {
+  // Use dataLoader if no semanticThesaurus provided
+  const thesaurus = semanticThesaurus || dataLoader.getSemanticThesaurus();
+  
+  if (!thesaurus || !text?.trim()) {
     return {
       primaryCluster: null,
       allMatches: [],
@@ -35,55 +64,66 @@ export function matchSemanticBackbone(
   }
 
   const normalizedText = text.toLowerCase();
-  const clusters = semanticThesaurus.clusters || {};
-  const routingMatrix = semanticThesaurus.routing_matrix || {};
-  const attachmentOverrides = semanticThesaurus.attachment_overrides || {};
+  const clusters = thesaurus.clusters || {};
+  const routingMatrix = thesaurus.routing_matrix || {};
+  const attachmentOverrides = thesaurus.attachment_overrides || {};
   
   const matches: SemanticMatch[] = [];
 
   // Match against each semantic cluster
-  Object.entries(clusters).forEach(([clusterName, clusterData]: [string, any]) => {
-    const patterns = clusterData.patterns || [];
-    const keywords = clusterData.keywords || [];
-    const phrases = clusterData.phrases || [];
+  Object.entries(clusters).forEach(([clusterName, clusterData]) => {
+    const typedClusterData = clusterData as SemanticClusterData;
+    const patterns = typedClusterData.patterns || [];
+    const keywords = typedClusterData.keywords || [];
+    const phrases = typedClusterData.phrases || [];
     
     let strength = 0;
     const matchedTerms: string[] = [];
 
-    // Check pattern matches (regex patterns)
+    // Check pattern matches (regex patterns) - apply saturation
+    let patternMatchCount = 0;
     patterns.forEach((pattern: string) => {
       try {
         const regex = new RegExp(pattern, 'gi');
         const patternMatches = normalizedText.match(regex);
         if (patternMatches) {
-          strength += patternMatches.length * 0.8; // High weight for pattern matches
+          patternMatchCount += patternMatches.length;
           matchedTerms.push(...patternMatches);
         }
       } catch (e) {
         // Skip invalid regex patterns
       }
     });
+    const patternEff = sat(patternMatchCount, 3);
+    strength += patternEff * 0.8; // High weight for pattern matches
 
-    // Check keyword matches
+    // Check keyword matches - apply saturation and word boundaries
+    let keywordMatchCount = 0;
     keywords.forEach((keyword: string) => {
-      const keywordRegex = new RegExp(`\\b${keyword.toLowerCase()}\\b`, 'gi');
+      const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const keywordRegex = new RegExp(`\\b${escapedKeyword.toLowerCase()}\\b`, 'gi');
       const keywordMatches = normalizedText.match(keywordRegex);
       if (keywordMatches) {
-        strength += keywordMatches.length * 0.6; // Medium weight for keywords
+        keywordMatchCount += keywordMatches.length;
         matchedTerms.push(...keywordMatches);
       }
     });
+    const keywordEff = sat(keywordMatchCount, 3);
+    strength += keywordEff * 0.6; // Medium weight for keywords
 
-    // Check phrase matches
+    // Check phrase matches - apply saturation
+    let phraseMatchCount = 0;
     phrases.forEach((phrase: string) => {
       if (normalizedText.includes(phrase.toLowerCase())) {
-        strength += 1.0; // High weight for exact phrase matches
+        phraseMatchCount += 1;
         matchedTerms.push(phrase);
       }
     });
+    const phraseEff = sat(phraseMatchCount, 2);
+    strength += phraseEff * 1.0; // High weight for exact phrase matches
 
     // Apply confidence calibration if available
-    const confidenceMultiplier = clusterData.confidence_calibration || 1.0;
+    const confidenceMultiplier = typedClusterData.confidence_calibration || 1.0;
     strength *= confidenceMultiplier;
 
     if (strength > 0) {
@@ -124,10 +164,12 @@ export function matchSemanticBackbone(
   // Calculate context shifts based on semantic matches
   const contextShift: Record<string, number> = {};
   matches.forEach(match => {
-    const clusterData = clusters[match.cluster];
+    const clusterData = clusters[match.cluster] as SemanticClusterData;
     const contextBias = clusterData.context_bias || {};
-    Object.entries(contextBias).forEach(([context, weight]: [string, any]) => {
-      contextShift[context] = (contextShift[context] || 0) + (weight * match.strength * 0.1);
+    Object.entries(contextBias).forEach(([context, weight]) => {
+      const currentShift = contextShift[context] || 0;
+      const newShift = currentShift + (weight * match.strength * 0.1);
+      contextShift[context] = clamp01(newShift);
     });
   });
 
@@ -147,7 +189,7 @@ export function matchSemanticBackbone(
 export function applySemanticBias(
   toneDistribution: Record<string, number>,
   semanticResult: SemanticBackboneResult,
-  semanticThesaurus: any
+  semanticThesaurus: SemanticThesaurus
 ): Record<string, number> {
   if (!semanticResult.primaryCluster || !semanticThesaurus?.clusters) {
     return toneDistribution;
@@ -158,11 +200,11 @@ export function applySemanticBias(
   
   // Apply tone bias from semantic cluster
   const adjustedDistribution = { ...toneDistribution };
-  Object.entries(toneBias).forEach(([tone, bias]: [string, any]) => {
+  Object.entries(toneBias).forEach(([tone, bias]) => {
     if (typeof bias === 'number' && adjustedDistribution[tone] !== undefined) {
-      adjustedDistribution[tone] = Math.max(0, Math.min(1, 
-        adjustedDistribution[tone] + (bias * semanticResult.allMatches[0]?.strength * 0.1)
-      ));
+      const currentValue = adjustedDistribution[tone];
+      const biasedValue = currentValue + (bias * semanticResult.allMatches[0]?.strength * 0.1);
+      adjustedDistribution[tone] = clamp01(biasedValue);
     }
   });
 

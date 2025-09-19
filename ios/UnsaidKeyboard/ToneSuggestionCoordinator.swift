@@ -67,7 +67,6 @@ protocol ToneSuggestionDelegate: AnyObject {
     func didUpdateToneStatus(_ tone: String)  // "clear" | "caution" | "alert" | "neutral"
     func didUpdateSecureFixButtonState()
     func didReceiveAPIError(_ error: APIError)
-    func didReceiveFeatureNoticings(_ noticings: [String]) // New: Feature noticings from FeatureSpotter
     #if canImport(UIKit)
     func getTextDocumentProxy() -> UITextDocumentProxy?
     #endif

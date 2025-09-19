@@ -145,10 +145,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       processingTimeMs: processingTime,
       tone: result.primary_tone,
       confidence: result.confidence,
-      ui_tone,
-      // Feature spotting now handled on device - no server-side tracking
-      featureSpotterMatches: 0,
-      featureSpotterNoticings: 0
+      ui_tone
     });
     
     const response = {

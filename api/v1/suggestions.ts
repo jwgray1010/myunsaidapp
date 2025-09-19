@@ -202,9 +202,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       });
       throw suggestionError;
     }
-
         // Session-based processing - no server-side storage for mass users
-    // FeatureSpotter patterns would be handled by device storage in production
     
     // Make the noticings & matches visible for UX / analytics (simulated for session)
     suggestionAnalysis.analysis.flags.phraseEdgeHits = [

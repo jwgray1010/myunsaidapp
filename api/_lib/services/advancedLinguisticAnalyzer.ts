@@ -8,6 +8,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../logger';
+import { dataLoader } from './dataLoader';
 
 // -------------------- Type Definitions --------------------
 export interface AttachmentScores {
@@ -120,8 +121,8 @@ export class AdvancedLinguisticAnalyzer {
   private discourseAnalyzer: DiscourseMarkerAnalyzer;
   private microPatternDetector: MicroExpressionPatternDetector;
 
-  constructor(configPath?: string) {
-    this.config = this.loadConfig(configPath);
+  constructor(configPath?: string, injectedConfig?: AnalysisConfig) {
+    this.config = injectedConfig ?? this.loadConfig(configPath);
     this.punctuationScorer = new PunctuationEmotionalScorer();
     this.hesitationDetector = new HesitationPatternDetector();
     this.complexityAnalyzer = new SentenceComplexityAnalyzer();
@@ -130,13 +131,23 @@ export class AdvancedLinguisticAnalyzer {
   }
 
   private loadConfig(configPath?: string): AnalysisConfig {
-    const defaultPath = join(__dirname, '..', '..', '..', 'data', 'attachment_learning_enhanced.json');
-    const filePath = configPath || defaultPath;
-    
+    // 1) Try dataLoader first
+    const dl = dataLoader.getAttachmentLearningEnhanced();
+    if (dl) {
+      try {
+        return dl as unknown as AnalysisConfig;
+      } catch (e) {
+        logger.warn('attachment_learning_enhanced via dataLoader not matching schema, falling back');
+      }
+    }
+
+    // 2) Optional filesystem fallback (best-effort)
     try {
+      const defaultPath = join(__dirname, '..', '..', '..', 'data', 'attachment_learning_enhanced.json');
+      const filePath = configPath || defaultPath;
       return JSON.parse(readFileSync(filePath, 'utf8'));
     } catch (error) {
-      logger.warn(`Could not load enhanced config from ${filePath}, using basic config`);
+      logger.warn('Could not load enhanced config, using basic config');
       return this.getBasicConfig();
     }
   }
@@ -150,6 +161,18 @@ export class AdvancedLinguisticAnalyzer {
         discourseMarkerAnalysis: { weight: 0.08 }
       }
     };
+  }
+
+  private clamp01(x: number): number { 
+    return Math.max(0, Math.min(1, x)); 
+  }
+
+  private sat(n: number, k = 3): number {
+    return Math.min(n, k) + Math.max(0, Math.log(1 + Math.max(0, n - k)) * 0.5);
+  }
+
+  private w(key: keyof AnalysisConfig['advancedLinguisticFeatures']): number {
+    return this.config?.advancedLinguisticFeatures?.[key]?.weight ?? 0.1;
   }
 
   /**
@@ -195,6 +218,13 @@ export class AdvancedLinguisticAnalyzer {
       // 7. Apply contextual modifiers
       this.applyContextualModifiers(analysis, context);
 
+      // 8. Normalize attachment scores after all features
+      const total = Object.values(analysis.attachmentScores).reduce((s, v) => s + v, 0);
+      if (total > 0) {
+        (Object.keys(analysis.attachmentScores) as (keyof AttachmentScores)[])
+          .forEach(k => { analysis.attachmentScores[k] = analysis.attachmentScores[k] / total; });
+      }
+
       return analysis;
 
     } catch (error) {
@@ -210,11 +240,12 @@ export class AdvancedLinguisticAnalyzer {
   ): void {
     if (!featureResult?.attachmentImplications) return;
 
-    const weight = this.config.advancedLinguisticFeatures[featureType]?.weight || 0.1;
+    const w = this.w(featureType);
     
     Object.entries(featureResult.attachmentImplications).forEach(([style, score]) => {
-      if (analysis.attachmentScores[style as keyof AttachmentScores] !== undefined) {
-        analysis.attachmentScores[style as keyof AttachmentScores] += score * weight;
+      const k = style as keyof AttachmentScores;
+      if (analysis.attachmentScores[k] !== undefined) {
+        analysis.attachmentScores[k] = this.clamp01(analysis.attachmentScores[k] + score * w);
       }
     });
   }
@@ -224,7 +255,8 @@ export class AdvancedLinguisticAnalyzer {
 
     microPatterns.detectedPatterns.forEach(pattern => {
       Object.entries(pattern.weights).forEach(([style, weight]) => {
-        if (analysis.attachmentScores[style as keyof AttachmentScores] !== undefined) {
+        const k = style as keyof AttachmentScores;
+        if (analysis.attachmentScores[k] !== undefined) {
           let adjustedWeight = weight;
           
           // Apply contextual amplifiers
@@ -236,13 +268,7 @@ export class AdvancedLinguisticAnalyzer {
             });
           }
           
-          analysis.attachmentScores[style as keyof AttachmentScores] += adjustedWeight;
-          analysis.microPatterns.push({
-            type: pattern.type,
-            pattern: pattern.pattern,
-            weight: adjustedWeight,
-            confidence: pattern.confidence || 0.8
-          });
+          analysis.attachmentScores[k] = this.clamp01(analysis.attachmentScores[k] + adjustedWeight);
         }
       });
     });
@@ -269,9 +295,10 @@ export class AdvancedLinguisticAnalyzer {
     confidenceFactors.push(textLengthFactor);
 
     // Calculate weighted average confidence
-    return confidenceFactors.length > 0 
-      ? confidenceFactors.reduce((sum, c) => sum + c, 0) / confidenceFactors.length
-      : 0.5;
+    const len = analysis.text.trim().length;
+    const shortPenalty = len < 40 ? 0.85 : 1;
+    const base = confidenceFactors.reduce((s,c)=>s+c,0) / (confidenceFactors.length || 1);
+    return this.clamp01(base * shortPenalty);
   }
 
   private applyContextualModifiers(analysis: LinguisticAnalysisResult, context: Record<string, any>): void {
@@ -319,6 +346,10 @@ export class AdvancedLinguisticAnalyzer {
 
 // -------------------- Specialized Analyzer Classes --------------------
 export class PunctuationEmotionalScorer {
+  static sat(n: number, k = 3): number {
+    return Math.min(n, k) + Math.max(0, Math.log(1 + Math.max(0, n - k)) * 0.5);
+  }
+
   analyze(text: string): PunctuationAnalysis {
     const result: PunctuationAnalysis = {
       attachmentImplications: { anxious: 0, avoidant: 0, secure: 0, disorganized: 0 },
@@ -331,44 +362,51 @@ export class PunctuationEmotionalScorer {
       }
     };
 
-    // Exclamation patterns
+    // Exclamation patterns - apply diminishing returns
     const exclamationMatches = text.match(/!+/g) || [];
-    exclamationMatches.forEach(match => {
-      if (match.length === 1) {
-        result.attachmentImplications.anxious += 0.02;
-      } else if (match.length === 2) {
-        result.attachmentImplications.anxious += 0.04;
-        result.attachmentImplications.disorganized += 0.03;
-      } else {
-        result.attachmentImplications.anxious += 0.07;
-        result.attachmentImplications.disorganized += 0.06;
+    const exclamationEff = PunctuationEmotionalScorer.sat(exclamationMatches.length, 3);
+    exclamationMatches.forEach((match, index) => {
+      if (index < 3 || exclamationEff > 3) { // Apply to first 3 or if effective count is higher
+        const effectiveFactor = index < 3 ? 1 : (exclamationEff - 3) / exclamationMatches.length;
+        if (match.length === 1) {
+          result.attachmentImplications.anxious += 0.02 * effectiveFactor;
+        } else if (match.length === 2) {
+          result.attachmentImplications.anxious += 0.04 * effectiveFactor;
+          result.attachmentImplications.disorganized += 0.03 * effectiveFactor;
+        } else {
+          result.attachmentImplications.anxious += 0.07 * effectiveFactor;
+          result.attachmentImplications.disorganized += 0.06 * effectiveFactor;
+        }
       }
     });
 
-    // Ellipsis patterns
-    const ellipsisMatches = text.match(/\.{2,}/g) || [];
-    if (ellipsisMatches.length > 0) {
-      result.attachmentImplications.anxious += 0.05 * ellipsisMatches.length;
-      result.attachmentImplications.avoidant += 0.02 * ellipsisMatches.length;
+    // Ellipsis patterns - apply diminishing returns
+    const ellipsisCount = (text.match(/\.{2,}/g) || []).length;
+    const ellipsisEff = PunctuationEmotionalScorer.sat(ellipsisCount, 3);
+    if (ellipsisEff > 0) {
+      result.attachmentImplications.anxious += 0.05 * ellipsisEff;
+      result.attachmentImplications.avoidant += 0.02 * ellipsisEff;
     }
 
-    // Multiple question marks
-    const questionMatches = text.match(/\?{2,}/g) || [];
-    if (questionMatches.length > 0) {
-      result.attachmentImplications.anxious += 0.08 * questionMatches.length;
+    // Multiple question marks - apply diminishing returns
+    const questionCount = (text.match(/\?{2,}/g) || []).length;
+    const questionEff = PunctuationEmotionalScorer.sat(questionCount, 3);
+    if (questionEff > 0) {
+      result.attachmentImplications.anxious += 0.08 * questionEff;
     }
 
-    // ALL CAPS detection
+    // ALL CAPS detection - only treat as dysregulation when negativity is present
+    const hasNeg = /\b(hate|angry|mad|stupid|worst|awful|terrible|ridiculous)\b/i.test(text);
     const capsWords = text.match(/\b[A-Z]{2,}\b/g) || [];
-    if (capsWords.length > 0) {
+    if (capsWords.length > 0 && hasNeg) {
       result.attachmentImplications.disorganized += 0.08;
       result.attachmentImplications.anxious += 0.06;
     }
 
     result.patterns = {
       exclamations: exclamationMatches.length,
-      ellipses: ellipsisMatches.length,
-      multipleQuestions: questionMatches.length,
+      ellipses: ellipsisCount,
+      multipleQuestions: questionCount,
       capsWords: capsWords.length
     };
 
@@ -377,6 +415,10 @@ export class PunctuationEmotionalScorer {
 }
 
 export class HesitationPatternDetector {
+  static sat(n: number, k = 3): number {
+    return Math.min(n, k) + Math.max(0, Math.log(1 + Math.max(0, n - k)) * 0.5);
+  }
+
   analyze(text: string): HesitationAnalysis {
     const result: HesitationAnalysis = {
       attachmentImplications: { anxious: 0, avoidant: 0, secure: 0, disorganized: 0 },
@@ -402,8 +444,9 @@ export class HesitationPatternDetector {
     });
 
     if (fillerCount > 0) {
-      result.attachmentImplications.anxious += 0.04 * Math.min(fillerCount, 3);
-      result.attachmentImplications.disorganized += 0.05 * Math.min(fillerCount, 3);
+      const fillerEff = HesitationPatternDetector.sat(fillerCount, 3);
+      result.attachmentImplications.anxious += 0.04 * fillerEff;
+      result.attachmentImplications.disorganized += 0.05 * fillerEff;
       result.attachmentImplications.secure -= 0.01 * fillerCount;
     }
 
@@ -423,9 +466,10 @@ export class HesitationPatternDetector {
     });
 
     if (correctionCount > 0) {
-      result.attachmentImplications.anxious += 0.03 * correctionCount;
-      result.attachmentImplications.secure += 0.02 * correctionCount;
-      result.attachmentImplications.disorganized += 0.04 * correctionCount;
+      const correctionEff = HesitationPatternDetector.sat(correctionCount, 3);
+      result.attachmentImplications.anxious += 0.03 * correctionEff;
+      result.attachmentImplications.secure += 0.02 * correctionEff;
+      result.attachmentImplications.disorganized += 0.04 * correctionEff;
     }
 
     // Uncertainty qualifiers
@@ -445,8 +489,9 @@ export class HesitationPatternDetector {
     });
 
     if (uncertaintyCount > 0) {
-      result.attachmentImplications.anxious += 0.05 * uncertaintyCount;
-      result.attachmentImplications.disorganized += 0.03 * uncertaintyCount;
+      const uncertaintyEff = HesitationPatternDetector.sat(uncertaintyCount, 3);
+      result.attachmentImplications.anxious += 0.05 * uncertaintyEff;
+      result.attachmentImplications.disorganized += 0.03 * uncertaintyEff;
     }
 
     result.patterns = {
@@ -460,8 +505,25 @@ export class HesitationPatternDetector {
 }
 
 export class SentenceComplexityAnalyzer {
+  private safeSentenceSplit(text: string): string[] {
+    const raw = text.split(/(?<=[.!?])\s+/).filter(s => s.trim());
+    const sentences = [];
+    
+    for (let i = 0; i < raw.length; i++) {
+      const s = raw[i];
+      // Join if previous ended with abbreviation
+      if (sentences.length && /\b(?:e\.g|i\.e|Mr|Mrs|Dr)\.$/i.test(sentences[sentences.length - 1])) {
+        sentences[sentences.length - 1] += ' ' + s;
+      } else {
+        sentences.push(s);
+      }
+    }
+    
+    return sentences.filter(s => s.trim().length > 0);
+  }
+
   analyze(text: string): ComplexityAnalysis {
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    const sentences = this.safeSentenceSplit(text);
     const result: ComplexityAnalysis = {
       attachmentImplications: { anxious: 0, avoidant: 0, secure: 0, disorganized: 0 },
       confidence: 0.6,
@@ -594,22 +656,22 @@ export class MicroExpressionPatternDetector {
 
     const microPatterns = {
       anxious_checking: {
-        patterns: [/just wondering/gi, /quick question/gi, /hope this is okay/gi, /we're good right/gi],
+        patterns: [/\bjust wondering\b/gi, /\bquick question\b/gi, /\bhope this is okay\b/gi, /\bwe're good right\b/gi],
         weights: { anxious: 0.09, avoidant: -0.01, secure: 0.01, disorganized: 0.02 },
         type: 'anxious_hypervigilance_micro'
       },
       avoidant_deflection: {
-        patterns: [/anyway/gi, /moving on/gi, /not a big deal/gi, /doesn't really matter/gi],
+        patterns: [/\banyway\b/gi, /\bmoving on\b/gi, /\bnot a big deal\b/gi, /\bdoesn'?t really matter\b/gi],
         weights: { anxious: -0.02, avoidant: 0.10, secure: -0.02, disorganized: 0.01 },
         type: 'avoidant_deactivation_micro'
       },
       secure_validation: {
-        patterns: [/i can see why/gi, /that makes sense/gi, /let's figure this out/gi],
+        patterns: [/\bi can see why\b/gi, /\bthat makes sense\b/gi, /\blet's figure this out\b/gi],
         weights: { anxious: 0.02, avoidant: 0.02, secure: 0.11, disorganized: 0.03 },
         type: 'secure_integration_micro'
       },
       disorganized_fragmentation: {
-        patterns: [/wait what was i/gi, /lost my train of/gi, /nevermind that/gi, /forget what i said/gi],
+        patterns: [/\bwait what was i\b/gi, /\blost my train of\b/gi, /\bnevermind that\b/gi, /\bforget what i said\b/gi],
         weights: { anxious: 0.03, avoidant: 0.01, secure: -0.03, disorganized: 0.13 },
         type: 'disorganized_fragmentation_micro'
       }
