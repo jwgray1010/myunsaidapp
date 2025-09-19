@@ -45,6 +45,10 @@ export const toneRequestSchema = z.object({
   includeEmotions: z.boolean().optional().default(true).describe('Whether to include emotion analysis'),
   includeAttachmentInsights: z.boolean().optional().default(false).describe('Whether to include attachment-specific insights'),
   deepAnalysis: z.boolean().optional().default(false).describe('Whether to perform deep linguistic analysis'),
+  // Debug and testing parameters
+  reset_memory: z.boolean().optional().default(false).describe('Reset conversation memory for testing isolation'),
+  bypass_overrides: z.boolean().optional().default(false).describe('Skip override processing for pure base distribution testing'),
+  field_id: z.string().optional().describe('Field identifier for conversation memory tracking'),
 });
 
 export type ToneRequest = z.infer<typeof toneRequestSchema>;
