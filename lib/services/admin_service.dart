@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'auth_service.dart';
+import 'keyboard_extension.dart';
 
 /// Admin service for managing admin privileges and bypassing restrictions
 class AdminService {
@@ -22,6 +23,8 @@ class AdminService {
     final user = AuthService.instance.user;
     if (user == null) {
       _isAdmin = false;
+      // Sync admin status to keyboard extension
+      await UnsaidKeyboardExtension.setAdminStatus(false);
       return;
     }
 
@@ -32,6 +35,11 @@ class AdminService {
       final claimAdmin = (claims['admin'] as bool?) ?? false;
       if (claimAdmin) {
         _isAdmin = true;
+        // Sync admin status to keyboard extension
+        await UnsaidKeyboardExtension.setAdminStatus(true);
+        if (kDebugMode) {
+          print('🔧 Admin status granted via Firebase claims, synced to keyboard extension');
+        }
         return;
       }
     } catch (_) {
@@ -46,11 +54,18 @@ class AdminService {
           user.email != null &&
           _devAdminEmails.contains(user.email!.toLowerCase().trim());
       _isAdmin = byUid || byEmail;
+      // Sync admin status to keyboard extension
+      await UnsaidKeyboardExtension.setAdminStatus(_isAdmin);
+      if (_isAdmin) {
+        print('🔧 Admin status granted via debug allowlist (${user.email}), synced to keyboard extension');
+      }
       return;
     }
 
     // 3) Release default: non-admin
     _isAdmin = false;
+    // Sync admin status to keyboard extension
+    await UnsaidKeyboardExtension.setAdminStatus(false);
   }
 
   /// Check if current user can bypass restrictions

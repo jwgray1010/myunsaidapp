@@ -481,6 +481,46 @@ class UnsaidKeyboardExtension {
       return false;
     }
   }
+
+  /// Sets the user ID for keyboard extension access control and admin privileges
+  static Future<bool> setUserId(String userId) async {
+    try {
+      final bool? result = await _channel.invokeMethod('setUserId', {
+        'userId': userId,
+      });
+      print('UnsaidKeyboardExtension: Set user ID for keyboard extension: $userId');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      print('Error setting user ID for keyboard extension: ${e.message}');
+      return false;
+    }
+  }
+
+  /// Clears the user ID (for sign out)
+  static Future<bool> clearUserId() async {
+    try {
+      final bool? result = await _channel.invokeMethod('clearUserId');
+      print('UnsaidKeyboardExtension: Cleared user ID from keyboard extension');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      print('Error clearing user ID from keyboard extension: ${e.message}');
+      return false;
+    }
+  }
+
+  /// Sets the admin status for keyboard extension access control
+  static Future<bool> setAdminStatus(bool isAdmin) async {
+    try {
+      final bool? result = await _channel.invokeMethod('setAdminStatus', {
+        'isAdmin': isAdmin,
+      });
+      print('UnsaidKeyboardExtension: Set admin status for keyboard extension: $isAdmin');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      print('Error setting admin status for keyboard extension: ${e.message}');
+      return false;
+    }
+  }
 }
 
 /// Accessibility/UX Note:

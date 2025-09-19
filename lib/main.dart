@@ -14,6 +14,7 @@ import 'services/partner_data_service.dart';
 import 'services/trial_service.dart';
 import 'services/subscription_service.dart';
 import 'services/onboarding_service.dart';
+import 'services/keyboard_extension.dart';
 import 'widgets/keyboard_data_sync_widget.dart';
 import 'firebase_options.dart';
 
@@ -255,6 +256,12 @@ class UnsaidApp extends StatelessWidget {
                                 final result = await authService
                                     .signInWithApple();
                                 if (result != null && context.mounted) {
+                                  // Store user ID for keyboard extension access
+                                  final userId = result.user?.uid;
+                                  if (userId != null) {
+                                    await UnsaidKeyboardExtension.setUserId(userId);
+                                    print('Stored user ID for keyboard extension: $userId');
+                                  }
                                   Navigator.pushReplacementNamed(
                                     context,
                                     '/personality_test_disclaimer',
@@ -283,6 +290,12 @@ class UnsaidApp extends StatelessWidget {
                                   .signInWithProvider(GoogleAuthProvider());
                               if (cred.user == null) {
                                 throw Exception('google-sign-in-null');
+                              }
+                              // Store user ID for keyboard extension access
+                              final userId = cred.user?.uid;
+                              if (userId != null) {
+                                await UnsaidKeyboardExtension.setUserId(userId);
+                                print('Stored user ID for keyboard extension: $userId');
                               }
                               if (context.mounted) {
                                 Navigator.pushReplacementNamed(

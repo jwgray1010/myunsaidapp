@@ -1250,7 +1250,7 @@ extension ToneSuggestionCoordinator {
                     coordLog.info("🎯 Emotional content with low confidence, using threshold logic: \(newTone.rawValue)")
                     #endif
                 }
-            } else if let apiTone = toneOut.apiTone, apiTone != .clear {
+            } else if let apiTone = toneOut.apiTone, apiTone != Bucket.clear {
                 // Trust API when it's not "clear" and content isn't emotional
                 newTone = apiTone
                 #if DEBUG
@@ -1284,35 +1284,51 @@ extension ToneSuggestionCoordinator {
             // 🎯 STORE COMPLETE ANALYSIS - Store the full analysis for optimal therapy advice
             lastAnalyzedText = trimmed
             // Store complete analysis payload that suggestions API needs for best therapy advice
+            
+            // Build core tone analysis data
+            let coreData: [String: Any] = [
+                "tone": toneOut.primary_tone ?? "neutral",
+                "classification": toneOut.primary_tone ?? "neutral",
+                "confidence": toneOut.confidence ?? 0.5
+            ]
+            
+            // Build UI data
+            let uiData: [String: Any] = [
+                "ui_tone": toneOut.ui_tone ?? "clear",
+                "ui_distribution": toneOut.buckets
+            ]
+            
+            // Build emotional data
+            let emotionalData: [String: Any] = [
+                "emotions": toneOut.emotions ?? [:],
+                "intensity": toneOut.intensity ?? 0.5
+            ]
+            
+            // Build advanced analysis data
+            let advancedData: [String: Any] = [
+                "sentiment_score": toneOut.analysis?.sentiment_score ?? 0.5,
+                "linguistic_features": (toneOut.analysis?.linguistic_features as? AnyCodable)?.value ?? [:],
+                "context_analysis": (toneOut.analysis?.context_analysis as? AnyCodable)?.value ?? [:],
+                "attachment_insights": (toneOut.analysis?.attachment_insights as? AnyCodable)?.value ?? []
+            ]
+            
+            // Build metadata
+            let metadataData: [String: Any] = [
+                "analysis_depth": toneOut.intensity ?? 0.5,
+                "model_version": "v1.0.0-advanced",
+                "feature_noticings": toneOut.metadata?.feature_noticings?.map { ["pattern": $0.pattern, "message": $0.message] } ?? []
+            ]
+            
+            // Combine all data into tone analysis
+            var toneAnalysisData = coreData
+            toneAnalysisData.merge(uiData) { _, new in new }
+            toneAnalysisData.merge(emotionalData) { _, new in new }
+            toneAnalysisData.merge(advancedData) { _, new in new }
+            toneAnalysisData["metadata"] = metadataData
+            
             lastToneAnalysis = [
                 "text": trimmed,
-                "toneAnalysis": [
-                    // Core tone data
-                    "tone": toneOut.primary_tone ?? "neutral",
-                    "classification": toneOut.primary_tone ?? "neutral",
-                    "confidence": toneOut.confidence ?? 0.5,
-                    
-                    // UI data for consistency
-                    "ui_tone": toneOut.ui_tone ?? "clear",
-                    "ui_distribution": toneOut.buckets,
-                    
-                    // Rich emotional and linguistic data for therapy advice
-                    "emotions": toneOut.emotions ?? [:],
-                    "intensity": toneOut.intensity ?? 0.5,
-                    
-                    // Advanced analysis data from ToneAnalysis struct
-                    "sentiment_score": toneOut.analysis?.sentiment_score ?? 0.5,
-                    "linguistic_features": (toneOut.analysis?.linguistic_features as? AnyCodable)?.value ?? [:],
-                    "context_analysis": (toneOut.analysis?.context_analysis as? AnyCodable)?.value ?? [:],
-                    "attachment_insights": (toneOut.analysis?.attachment_insights as? AnyCodable)?.value ?? [],
-                    
-                    // Metadata for comprehensive analysis
-                    "metadata": [
-                        "analysis_depth": toneOut.intensity ?? 0.5,
-                        "model_version": "v1.0.0-advanced",
-                        "feature_noticings": toneOut.metadata?.feature_noticings?.map { ["pattern": $0.pattern, "message": $0.message] } ?? []
-                    ]
-                ]
+                "toneAnalysis": toneAnalysisData
             ]
             
             #if DEBUG
@@ -1468,7 +1484,6 @@ extension ToneSuggestionCoordinator {
             }
         }
     }
-    }
     
     private struct ToneMetadata: Decodable {
         let feature_noticings: [FeatureNoticing]?
@@ -1531,6 +1546,7 @@ extension ToneSuggestionCoordinator {
             confidence: ui.confidence
         )
     }
+}
 
 // MARK: - Helpers
 private extension String { var nilIfEmpty: String? { isEmpty ? nil : self } }

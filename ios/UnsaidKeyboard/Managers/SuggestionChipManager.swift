@@ -111,20 +111,35 @@ final class SuggestionChipManager {
 
         containerView.addSubview(chip) // layout first
         
-        // Position chip - prefer under suggestion bar, fallback to bottom
+        // Remove any old position constraints if you decide to store them.
+        // Position chip - prefer *above* suggestion bar, fallback to above keyboard
         if let bar = suggestionBar {
             NSLayoutConstraint.activate([
-                chip.topAnchor.constraint(equalTo: bar.bottomAnchor, constant: 6),
+                chip.bottomAnchor.constraint(equalTo: bar.topAnchor, constant: -6), // ⬅️ was top = bar.bottom
                 chip.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
                 chip.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8)
             ])
         } else {
-            NSLayoutConstraint.activate([
-                chip.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
-                chip.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
-                chip.bottomAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.bottomAnchor, constant: -16)
-            ])
+            if #available(iOS 15.0, *) {
+                // Pin just above the keyboard instead of safe area
+                NSLayoutConstraint.activate([
+                    chip.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
+                    chip.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
+                    chip.bottomAnchor.constraint(equalTo: containerView.keyboardLayoutGuide.topAnchor, constant: -12)
+                ])
+            } else {
+                // Fallback for iOS < 15: listen to keyboard notifications or keep safeArea
+                NSLayoutConstraint.activate([
+                    chip.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
+                    chip.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
+                    chip.bottomAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.bottomAnchor, constant: -16)
+                ])
+            }
         }
+        
+        // Ensure it's tappable above siblings
+        containerView.bringSubviewToFront(chip)
+        chip.layer.zPosition = 999
         
         activeChip = chip
         KBDLog("✅ ChipManager: Set new active chip", .debug, "ChipManager")
@@ -210,8 +225,23 @@ final class SuggestionChipManager {
     
     /// Recover if the suggestion bar is attached later (e.g., after layout)
     func attachSuggestionBarIfNeeded(_ bar: UIView?) {
-        if let bar { 
-            configure(suggestionBar: bar) 
+        if let bar {
+            configure(suggestionBar: bar)
+            if let chip = activeChip {
+                // Re-anchor above the bar
+                chip.translatesAutoresizingMaskIntoConstraints = false
+                // Remove previous vertical constraints if you're storing them; otherwise rely on Auto Layout conflict resolution:
+                NSLayoutConstraint.deactivate(chip.constraints.filter {
+                    // crude filter for bottom/vertical constraints you added
+                    ($0.firstItem as? UIView) === chip || ($0.secondItem as? UIView) === chip
+                })
+                NSLayoutConstraint.activate([
+                    chip.bottomAnchor.constraint(equalTo: bar.topAnchor, constant: -6),
+                    chip.leadingAnchor.constraint(equalTo: containerView!.leadingAnchor, constant: 8),
+                    chip.trailingAnchor.constraint(equalTo: containerView!.trailingAnchor, constant: -8)
+                ])
+                containerView?.layoutIfNeeded()
+            }
         }
         // If a chip is active and had been anchored to bottom, you could re-layout here if desired
     }

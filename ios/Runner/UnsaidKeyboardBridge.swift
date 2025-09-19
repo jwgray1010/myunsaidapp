@@ -85,6 +85,39 @@ import Flutter
       sharedDefaults?.set(Date().timeIntervalSince1970, forKey: "monitoring_command_timestamp")
       result(true)
 
+    case "setUserId":
+      // Store user ID in shared UserDefaults for keyboard extension access
+      if let args = call.arguments as? [String: Any],
+         let userId = args["userId"] as? String {
+        let sharedDefaults = UserDefaults(suiteName: AppGroups.id)
+        sharedDefaults?.set(userId, forKey: "unsaid_user_id")
+        print("UnsaidKeyboardBridge: Stored user ID '\(userId)' for keyboard extension")
+        result(true)
+      } else {
+        print("UnsaidKeyboardBridge: Failed to store user ID - invalid arguments")
+        result(false)
+      }
+
+    case "clearUserId":
+      // Clear user ID from shared UserDefaults (for sign out)
+      let sharedDefaults = UserDefaults(suiteName: AppGroups.id)
+      sharedDefaults?.removeObject(forKey: "unsaid_user_id")
+      print("UnsaidKeyboardBridge: Cleared user ID from keyboard extension")
+      result(true)
+
+    case "setAdminStatus":
+      // Store admin status in shared UserDefaults for keyboard extension access control
+      if let args = call.arguments as? [String: Any],
+         let isAdmin = args["isAdmin"] as? Bool {
+        let sharedDefaults = UserDefaults(suiteName: AppGroups.id)
+        sharedDefaults?.set(isAdmin, forKey: "admin_mode_active")
+        print("UnsaidKeyboardBridge: Set admin status '\(isAdmin)' for keyboard extension")
+        result(true)
+      } else {
+        print("UnsaidKeyboardBridge: Failed to set admin status - invalid arguments")
+        result(false)
+      }
+
     default:
       result(FlutterMethodNotImplemented)
     }

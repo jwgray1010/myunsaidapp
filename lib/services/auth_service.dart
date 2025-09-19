@@ -2,6 +2,8 @@
 import 'package:flutter/foundation.dart'; // kIsWeb
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'keyboard_extension.dart';
+import 'admin_service.dart';
 
 /// Auth service for:
 /// - Google Sign-In (v7+ API) on iOS/Android/Web
@@ -35,22 +37,43 @@ class AuthService extends ChangeNotifier {
     }
 
     // Keep this service in sync with Firebase Auth state.
-    _authInstance.authStateChanges().listen((u) {
+    _authInstance.authStateChanges().listen((u) async {
       _user = u;
       notifyListeners();
-      if (kDebugMode) {
-        if (u == null) {
-          // ignore: avoid_print
-          print('🔐 Firebase auth → signed out');
-        } else {
-          // ignore: avoid_print
-          print('🔐 Firebase auth → ${u.uid} (anon: ${u.isAnonymous})');
+      
+      // Update keyboard extension user ID based on auth state
+      if (u != null && !u.isAnonymous) {
+        // User signed in - store user ID for keyboard extension
+        await UnsaidKeyboardExtension.setUserId(u.uid);
+        // Refresh admin status to sync admin privileges to keyboard extension
+        await AdminService.instance.refreshAdminStatus();
+        if (kDebugMode) {
+          print('🔐 Firebase auth → ${u.uid} (stored for keyboard extension, admin status refreshed)');
+        }
+      } else {
+        // User signed out or anonymous - clear user ID and admin status
+        await UnsaidKeyboardExtension.clearUserId();
+        await UnsaidKeyboardExtension.setAdminStatus(false);
+        if (kDebugMode) {
+          if (u == null) {
+            print('🔐 Firebase auth → signed out (cleared keyboard extension)');
+          } else {
+            print('🔐 Firebase auth → ${u.uid} (anonymous - cleared keyboard extension)');
+          }
         }
       }
     });
 
     // Seed current user (if already signed in).
     _user = _authInstance.currentUser;
+    
+    // Store user ID for keyboard extension if user is already signed in
+    if (_user != null && !_user!.isAnonymous) {
+      await UnsaidKeyboardExtension.setUserId(_user!.uid);
+      // Refresh admin status to sync admin privileges to keyboard extension
+      await AdminService.instance.refreshAdminStatus();
+    }
+    
     _isInitialized = true;
 
     if (kDebugMode) {
@@ -313,9 +336,11 @@ class AuthService extends ChangeNotifier {
     try {
       await _authInstance.signOut();
       _user = null;
+      // Clear user ID from keyboard extension
+      await UnsaidKeyboardExtension.clearUserId();
       if (kDebugMode) {
         // ignore: avoid_print
-        print('🔓 Signed out');
+        print('🔓 Signed out and cleared keyboard extension user ID');
       }
     } catch (e) {
       if (kDebugMode) {
