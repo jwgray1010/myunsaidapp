@@ -104,9 +104,10 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     const intensity = result.intensity || 0.5;
     const attachmentStyle = req.body.attachment_style || "secure";
     const inputText = req.body.text || "";
+    const bypassOverrides = req.body.bypass_overrides === true; // Debug parameter
     
     // Get sophisticated bucket mapping using modern approach
-    const advancedResult = await getGeneralToneAnalysis(inputText, attachmentStyle, primaryContext);
+    const advancedResult = await getGeneralToneAnalysis(inputText, attachmentStyle, primaryContext, bypassOverrides);
     
     // Use the advanced analysis buckets which include all guardrails and context-awareness
     let uiBuckets = advancedResult.buckets;
