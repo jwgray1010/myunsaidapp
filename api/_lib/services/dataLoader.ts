@@ -227,48 +227,10 @@ class DataLoaderService {
         { blockedPatterns: [] }
       );
 
-      // Complex tone bucket mapping (from original suggestions.js toneBucketMap fallback)
+      // Tone bucket mapping - load with no fallback
       this.cache.toneBucketMapping = this.readJsonSafe<any>(
         'tone_bucket_mapping.json',
-        {
-          version: '1.0',
-          default: {
-            neutral:   { clear: 0.70, caution: 0.25, alert: 0.05 },
-            positive:  { clear: 0.80, caution: 0.18, alert: 0.02 },
-            supportive:{ clear: 0.85, caution: 0.13, alert: 0.02 },
-            angry:     { clear: 0.05, caution: 0.30, alert: 0.65 },
-            frustrated:{ clear: 0.10, caution: 0.55, alert: 0.35 },
-            anxious:   { clear: 0.15, caution: 0.60, alert: 0.25 },
-            sad:       { clear: 0.25, caution: 0.60, alert: 0.15 }
-          },
-          contextOverrides: {
-            conflict: {
-              angry:      { clear: 0.02, caution: 0.18, alert: 0.80 },
-              frustrated: { clear: 0.05, caution: 0.50, alert: 0.45 },
-              anxious:    { clear: 0.10, caution: 0.55, alert: 0.35 }
-            },
-            repair: {
-              angry:      { clear: 0.10, caution: 0.50, alert: 0.40 },
-              frustrated: { clear: 0.15, caution: 0.60, alert: 0.25 }
-            }
-          },
-          intensityShifts: {
-            thresholds: { low: 0.15, med: 0.35, high: 0.60 },
-            low:  { alert: -0.10, caution: +0.08, clear: +0.02 },
-            med:  { alert:  0.00, caution:  0.00, clear:  0.00 },
-            high: { alert: +0.12, caution: -0.08, clear: -0.04 }
-          },
-          // new-style mirror for mapBucketsFromJson() that expects toneBuckets[tone].base
-          toneBuckets: {
-            neutral:    { base: { clear: 0.70, caution: 0.25, alert: 0.05 } },
-            positive:   { base: { clear: 0.80, caution: 0.18, alert: 0.02 } },
-            supportive: { base: { clear: 0.85, caution: 0.13, alert: 0.02 } },
-            angry:      { base: { clear: 0.05, caution: 0.30, alert: 0.65 } },
-            frustrated: { base: { clear: 0.10, caution: 0.55, alert: 0.35 } },
-            anxious:    { base: { clear: 0.15, caution: 0.60, alert: 0.25 } },
-            sad:        { base: { clear: 0.25, caution: 0.60, alert: 0.15 } }
-          }
-        }
+        null // Keep null if missing - no fallback
       );
 
       // Add attachment tone weights for style-specific tone adjustments
@@ -279,6 +241,7 @@ class DataLoaderService {
 
       this.initialized = true;
       logger.info('Data cache initialized successfully (sync)');
+      logger.info(`[tone-buckets] loaded=${!!this.getToneBucketMapping()}`);
     } catch (error) {
       logger.error('Failed to initialize data cache synchronously:', error);
       // Don't throw error in sync initialization - just log and continue with empty cache
@@ -429,48 +392,10 @@ class DataLoaderService {
         { blockedPatterns: [] }
       );
 
-      // Complex tone bucket mapping (from original suggestions.js toneBucketMap fallback)
+      // Tone bucket mapping - load with no fallback
       this.cache.toneBucketMapping = this.readJsonSafe<any>(
         'tone_bucket_mapping.json',
-        {
-          version: '1.0',
-          default: {
-            neutral:   { clear: 0.70, caution: 0.25, alert: 0.05 },
-            positive:  { clear: 0.80, caution: 0.18, alert: 0.02 },
-            supportive:{ clear: 0.85, caution: 0.13, alert: 0.02 },
-            angry:     { clear: 0.05, caution: 0.30, alert: 0.65 },
-            frustrated:{ clear: 0.10, caution: 0.55, alert: 0.35 },
-            anxious:   { clear: 0.15, caution: 0.60, alert: 0.25 },
-            sad:       { clear: 0.25, caution: 0.60, alert: 0.15 }
-          },
-          contextOverrides: {
-            conflict: {
-              angry:      { clear: 0.02, caution: 0.18, alert: 0.80 },
-              frustrated: { clear: 0.05, caution: 0.50, alert: 0.45 },
-              anxious:    { clear: 0.10, caution: 0.55, alert: 0.35 }
-            },
-            repair: {
-              angry:      { clear: 0.10, caution: 0.50, alert: 0.40 },
-              frustrated: { clear: 0.15, caution: 0.60, alert: 0.25 }
-            }
-          },
-          intensityShifts: {
-            thresholds: { low: 0.15, med: 0.35, high: 0.60 },
-            low:  { alert: -0.10, caution: +0.08, clear: +0.02 },
-            med:  { alert:  0.00, caution:  0.00, clear:  0.00 },
-            high: { alert: +0.12, caution: -0.08, clear: -0.04 }
-          },
-          // new-style mirror for mapBucketsFromJson() that expects toneBuckets[tone].base
-          toneBuckets: {
-            neutral:    { base: { clear: 0.70, caution: 0.25, alert: 0.05 } },
-            positive:   { base: { clear: 0.80, caution: 0.18, alert: 0.02 } },
-            supportive: { base: { clear: 0.85, caution: 0.13, alert: 0.02 } },
-            angry:      { base: { clear: 0.05, caution: 0.30, alert: 0.65 } },
-            frustrated: { base: { clear: 0.10, caution: 0.55, alert: 0.35 } },
-            anxious:    { base: { clear: 0.15, caution: 0.60, alert: 0.25 } },
-            sad:        { base: { clear: 0.25, caution: 0.60, alert: 0.15 } }
-          }
-        }
+        null // Keep null if missing - no fallback
       );
 
       // Add attachment tone weights for style-specific tone adjustments
@@ -481,6 +406,7 @@ class DataLoaderService {
 
       this.initialized = true;
       logger.info('Data cache initialized successfully');
+      logger.info(`[tone-buckets] loaded=${!!this.getToneBucketMapping()}`);
     } catch (error) {
       logger.error('Failed to initialize data cache:', error);
       throw new Error(`DataLoader initialization failed: ${error}`);
@@ -577,23 +503,8 @@ class DataLoaderService {
   }
 
   public getToneBucketMapping(): any {
-    const m = this.cache.toneBucketMapping;
-    if (!m) {
-      return {
-        version: '1.0',
-        default: { neutral: { clear: 0.70, caution: 0.25, alert: 0.05 } },
-        toneBuckets: { neutral: { base: { clear: 0.70, caution: 0.25, alert: 0.05 } } }
-      };
-    }
-    // If toneBuckets missing but default present, synthesize toneBuckets
-    if (!(m as any).toneBuckets && (m as any).default) {
-      const toneBuckets: Record<string, { base: any }> = {};
-      for (const [tone, base] of Object.entries((m as any).default)) {
-        toneBuckets[tone] = { base };
-      }
-      return { ...m, toneBuckets };
-    }
-    return m;
+    // Return exactly what's loaded. If the file is missing, this is null.
+    return this.cache.toneBucketMapping ?? null;
   }
 
   public getAttachmentToneWeights(): any {
@@ -604,7 +515,7 @@ class DataLoaderService {
   public get(key: string): any {
     // Handle aliases for backward compatibility
     if (key === 'toneBucketMap') {
-      return this.cache.toneBucketMapping || null;
+      return this.cache.toneBucketMapping ?? null;
     }
     
     return this.cache[key as keyof DataCache] || null;
