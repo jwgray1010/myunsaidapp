@@ -96,10 +96,5 @@
       "expectPrimary": "safety_concern",
       "minConfidence": 0.70
     }
-  ],
-
-  "bucketHints": {
-    "angry":          { "alert": 0.06, "caution": 0.04 },
-    "safety_concern": { "alert": 0.10, "caution": 0.05 }
-  }
+  ]
 }
