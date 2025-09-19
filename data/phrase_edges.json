@@ -4,12 +4,11 @@
   "globals": {
     "regexFlags": "iu",
     "maxInputChars": 2400,
-    "timeoutMs": 16,
     "dedupeWindowMs": 600,
     "matchLimitPerMessage": 8,
     "apostropheClass": "['’`´]",
     "normalize": ["NFC","trim","squashSpaces"],
-    "tokenBoundary": "(?:(?<=\\W)|^)(?=\\P{M}*\\p{L}|\\d)|(?<=\\p{L}|\\d)(?=\\W|$)",
+    "tokenBoundary": "\\b",
     "ignoreZones": ["url","email","code_block","blockquote>direct","inline_citation","quoted_title"],
     "language": { "default": "en", "fallbacks": ["en-US","en-GB"] }
   },
@@ -97,17 +96,17 @@
   "edges": [
     {
       "id": "RUPTURE_IM_DONE",
-      "pattern": "(?<=^|\\W)${IM}${SPACE}done(?:${SPACE}with${SPACE}(?:this|${YOU}))?${END_PUNCT}(?=$|\\W)",
+      "pattern": "(?:^|\\W)${IM}${SPACE}done(?:${SPACE}with${SPACE}(?:this|${YOU}))?${END_PUNCT}(?=$|\\W)",
       "boost": 0.34,
       "category": "rupture",
       "toneBias": { "alert": 0.10 },
       "contextHint": ["conflict","boundary"],
-      "exceptPattern": "(?i)done${SPACE}for${SPACE}today",
+      "exceptPattern": "done${SPACE}for${SPACE}today",
       "perEdgeCooldownMs": 12000
     },
     {
       "id": "RUPTURE_FORGET_IT",
-      "pattern": "(?<=^|\\W)forget${SPACE}it(?!${SPACE}(?:for${SPACE}now|please))",
+      "pattern": "(?:^|\\W)forget${SPACE}it(?!${SPACE}(?:for${SPACE}now|please))",
       "boost": 0.30,
       "category": "rupture",
       "toneBias": { "alert": 0.08 },
@@ -115,7 +114,7 @@
     },
     {
       "id": "RUPTURE_STOP_TEXTING",
-      "pattern": "(?<=^|\\W)(?:stop|quit)${SPACE}texting${SPACE}me\\b",
+      "pattern": "(?:^|\\W)(?:stop|quit)${SPACE}texting${SPACE}me\\b",
       "boost": 0.30,
       "category": "rupture",
       "toneBias": { "alert": 0.09 },
@@ -123,15 +122,15 @@
     },
     {
       "id": "SHUTDOWN_WHATEVER",
-      "pattern": "(?<=^|\\W)whatever\\b(?!${SPACE}you${SPACE}need)",
+      "pattern": "(?:^|\\W)whatever\\b(?!${SPACE}you${SPACE}need)",
       "boost": 0.25,
       "category": "shutdown",
-      "toneBias": { "alert": 0.06 },
+      "toneBias": { "caution": 0.05 },
       "contextHint": ["conflict","withdrawal"]
     },
     {
       "id": "SHUTDOWN_DONT_CARE",
-      "pattern": "(?<=^|\\W)i${SPACE}${DONT}${SPACE}care\\b",
+      "pattern": "(?:^|\\W)i${SPACE}${DONT}${SPACE}care\\b",
       "boost": 0.27,
       "category": "shutdown",
       "toneBias": { "alert": 0.06 },
@@ -139,15 +138,15 @@
     },
     {
       "id": "ABS_ALWAYS_NEVER_YOU",
-      "pattern": "(?<=^|\\W)(?:you|we)${SPACE}(?:${ALWAYS}|${NEVER})${SPACE}(?:do|say|forget)\\b",
+      "pattern": "(?:^|\\W)(?:you|we)${SPACE}(?:${ALWAYS}|${NEVER})${SPACE}(?:do|say|forget)\\b",
       "boost": 0.24,
       "category": "absolutizing",
-      "toneBias": { "alert": 0.06 },
+      "toneBias": { "caution": 0.05 },
       "contextHint": ["conflict"]
     },
     {
       "id": "BOUNDARY_NOT_OKAY",
-      "pattern": "(?<=^|\\W)that${APO}?s${SPACE}not${SPACE}ok(?:ay)?\\b",
+      "pattern": "(?:^|\\W)that${APO}?s${SPACE}not${SPACE}ok(?:ay)?\\b",
       "boost": 0.26,
       "category": "boundary",
       "toneBias": { "clear": 0.06 },
@@ -155,7 +154,7 @@
     },
     {
       "id": "ESCALATION_YOU_NEVER_LISTEN",
-      "pattern": "(?<=^|\\W)you${SPACE}never${SPACE}listen\\b",
+      "pattern": "(?:^|\\W)you${SPACE}never${SPACE}listen\\b",
       "boost": 0.31,
       "category": "escalation",
       "toneBias": { "alert": 0.10 },
@@ -163,7 +162,7 @@
     },
     {
       "id": "REPAIR_IM_SORRY",
-      "pattern": "(?<=^|\\W)i${SPACE}${APO}?m${SPACE}sorry\\b",
+      "pattern": "(?:^|\\W)${IM}${SPACE}sorry\\b",
       "boost": 0.26,
       "category": "repair_initiator",
       "toneBias": { "caution": 0.05 },
@@ -172,7 +171,7 @@
     },
     {
       "id": "RECON_CAN_WE_TALK",
-      "pattern": "(?<=^|\\W)can${SPACE}we${SPACE}talk\\b",
+      "pattern": "(?:^|\\W)can${SPACE}we${SPACE}talk\\b",
       "boost": 0.20,
       "category": "reconnection",
       "toneBias": { "caution": 0.04 },
@@ -180,7 +179,7 @@
     },
     {
       "id": "LOGI_PICK_A_TIME",
-      "pattern": "(?<=^|\\W)can${SPACE}we${SPACE}(?:pick|set)${SPACE}a${SPACE}time\\b",
+      "pattern": "(?:^|\\W)can${SPACE}we${SPACE}(?:pick|set)${SPACE}a${SPACE}time\\b",
       "boost": 0.17,
       "category": "logistics_pivot",
       "toneBias": { "clear": 0.04 },
@@ -188,7 +187,7 @@
     },
     {
       "id": "TENT_I_GUESS",
-      "pattern": "(?<=^|\\W)i${SPACE}guess\\b(?!${SPACE}we${SPACE}can${SPACE}meet)",
+      "pattern": "(?:^|\\W)i${SPACE}guess\\b(?!${SPACE}we${SPACE}can${SPACE}meet)",
       "boost": 0.17,
       "category": "tentative_disclosure",
       "toneBias": { "caution": 0.03 },

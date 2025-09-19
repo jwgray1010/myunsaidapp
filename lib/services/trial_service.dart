@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'admin_service.dart';
-import 'keyboard_extension.dart';
 
 /// Service to manage the 7-day free trial period
 class TrialService extends ChangeNotifier {

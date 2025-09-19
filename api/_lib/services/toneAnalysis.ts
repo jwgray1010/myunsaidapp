@@ -1579,9 +1579,11 @@ function mapBucketsFromJson(
 
   let dist: Record<Bucket, number> = { ...base };
 
-  // BYPASS MODE: Skip all overrides and return pure base distribution
-  if (bypassOverrides) {
-    logger.info(`🚫 BYPASS MODE: Using pure base distribution for tone: ${toneLabel}`, { base });
+  // DEFAULT TO BYPASS MODE: Skip all overrides unless explicitly disabled
+  // This prevents attachment adjustments, meta-classifier blending, and other corruption
+  const shouldBypass = bypassOverrides !== false; // Default true, only false if explicitly set
+  if (shouldBypass) {
+    logger.info(`🚫 DEFAULT BYPASS: Using pure base distribution for tone: ${toneLabel}`, { base });
     const primary = (Object.entries(dist).sort((a,b)=>b[1]-a[1])[0][0]) as Bucket;
     return { primary, dist, meta: { intensity, key: 'bypass', mathDomain: 'pure_base' } };
   }
