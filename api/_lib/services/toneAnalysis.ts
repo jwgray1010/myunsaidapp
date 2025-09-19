@@ -1000,8 +1000,9 @@ class ToneDetectors {
     logger.info(`Extended profanity index: ${profanityWords.length} base → ${this.profanity.length} total (+${this.profanity.length - profanityWords.length} variants)`);
 
     // Load tone patterns (optional, won't break boot if missing)
-    const tonePatterns = dataLoader.get('tonePatterns') || dataLoader.get('tone_patterns'); // array
-    if (Array.isArray(tonePatterns)) {
+    const tpRaw = dataLoader.get('tonePatterns') || dataLoader.get('tone_patterns');
+    const tonePatterns = Array.isArray(tpRaw) ? tpRaw : (tpRaw?.patterns || []);
+    if (Array.isArray(tonePatterns) && tonePatterns.length > 0) {
       logger.info(`Loading ${tonePatterns.length} tone patterns`);
       for (const p of tonePatterns) {
         const bucket = (['clear','caution','alert'] as Bucket[]).includes(p.tone) ? p.tone : 'caution';
@@ -1797,7 +1798,10 @@ class AdvancedFeatureExtractor {
       anger: ['angry','mad','furious','frustrated','annoyed','irritated','pissed','livid','outraged'],
       sadness: ['sad','hurt','disappointed','upset','down','devastated','heartbroken'],
       anxiety: ['worried','anxious','nervous','scared','concerned','stressed','fearful','panicked'],
-      joy: ['happy','excited','thrilled','delighted','joyful','glad','cheerful','ecstatic'],
+      joy: [
+        'happy','excited','thrilled','delighted','joyful','glad','cheerful','ecstatic',
+        'great','awesome','amazing','excellent','fantastic','nice','good','well done','proud'
+      ],
       affection: ['love','adore','cherish','treasure','appreciate','care','affection','devoted']
     };
     this.attachmentHints = {
@@ -1975,23 +1979,53 @@ export class ToneAnalysisService {
 // ========= High-Impact Alert/Caution Detection Functions =========
 
   // 1) Targeted imperative detection: "you" + imperative verb within 4 tokens → alert
-  private targetedImperative(doc: any): boolean {
-    if (!doc?.tokens) return false;
-    
-    const youIdx = new Set(
-      doc.tokens
-        .filter((t: any) => /\b(you|ur|youre|you're|u|ya)\b/i.test(t.text || ''))
-        .map((t: any) => t.i || 0)
-    );
-    
-    for (const t of doc.tokens) {
-      if (t.pos === 'VERB' || t.pos === 'VB') {
-        // Check window of 4 tokens around verb
-        for (let j = Math.max(0, t.i - 4); j <= Math.min(doc.tokens.length - 1, t.i + 4); j++) {
-          if (youIdx.has(j)) return true;
-        }
-      }
+  private targetedImperative(doc: any, text: string = ''): boolean {
+    if (!doc?.tokens?.length) return false;
+    const lower = text.toLowerCase();
+
+    // Hard positivity veto (common praise phrases)
+    const POS_VETO = /\b(great|awesome|amazing|excellent|nice|good|well done|proud|thank you|appreciate)\b/;
+    if (POS_VETO.test(lower)) return false;
+
+    // Imperative verb list (base-form commands)
+    const IMPERATIVES = new Set([
+      'stop','shut','leave','go','listen','get','move','give','keep','quit','drop','cut','watch','look','wait'
+    ]);
+
+    // Exclude copulas/aux/weak verbs
+    const FORBIDDEN_LEMMAS = new Set(['be','am','is','are','was','were','have','has','had','do','does','did']);
+
+    // Helper: second-person nearby
+    const isYou = (s: string) => /\b(you|ur|youre|you're|u|ya)\b/i.test(s);
+
+    // 1) Classic imperative at sentence start without explicit "you"
+    const first = doc.tokens[0];
+    if (first && (first.pos === 'VERB' || first.tag === 'VB')) {
+      const lem = (first.lemma || first.text || '').toLowerCase();
+      if (IMPERATIVES.has(lem) && !/\byou(r|)\b/i.test(lower)) return true;
     }
+
+    // 2) "you" + imperative within window, but only for real commands & with harshness
+    for (let i = 0; i < doc.tokens.length; i++) {
+      const t = doc.tokens[i];
+      const lemma = (t.lemma || t.text || '').toLowerCase();
+
+      if (t.pos !== 'VERB' && t.tag !== 'VB') continue;
+      if (FORBIDDEN_LEMMAS.has(lemma)) continue;            // ignore be/have/do etc.
+      if (!IMPERATIVES.has(lemma)) continue;                // must be a command verb
+
+      const lo = Math.max(0, i - 4), hi = Math.min(doc.tokens.length - 1, i + 4);
+      let hasYou = false;
+      for (let j = lo; j <= hi; j++) {
+        if (isYou((doc.tokens[j].text || '').toLowerCase())) { hasYou = true; break; }
+      }
+      if (!hasYou) continue;
+
+      // require some "heat" when explicit "you" is present (to avoid benign "you are …")
+      const HAS_HEAT = /!|(?:\bnow\b|\bright now\b|\bat once\b)/.test(lower);
+      if (HAS_HEAT) return true;
+    }
+
     return false;
   }
 
@@ -2263,7 +2297,7 @@ export class ToneAnalysisService {
       profanityAnalysis.severity === 'strong' ? 1 : 0,                    // [0] strong profanity
       profanityAnalysis.severity === 'moderate' ? 1 : 0,                  // [1] moderate profanity
       profanityAnalysis.hasTargetedSecondPerson ? 1 : 0,                  // [2] targeted profanity
-      doc ? (this.targetedImperative(doc) ? 1 : 0) : 0,                   // [3] targeted imperative
+      doc ? (this.targetedImperative(doc, text) ? 1 : 0) : 0,                   // [3] targeted imperative
       this.detectThreatIntent(text) ? 1 : 0,                              // [4] threat patterns
       clamp01((f.lng_absolutes || 0) / 3),                                // [5] absolutes (normalized)
       clamp01((f.int_exc || 0) / 3) + clamp01((f.int_q || 0) / 3) + clamp01(f.int_caps_ratio || 0), // [6] punctuation heat
@@ -2281,11 +2315,25 @@ export class ToneAnalysisService {
 
   private _scoreTones(fr: any, text: string, attachmentStyle: string, contextHint: string, doc?: any) {
     const f = fr.features || {};
+    
+    // Early compliment guard: short-circuit negative boosts
+    const COMPLIMENT = /\b(you\s+(are|did|do|sound|look)\s+(so\s+)?(great|awesome|amazing|excellent|good|fantastic)|great\s+(work|job)|nice\s+(work|job)|well\s+done)\b/i;
+    const THANKING   = /\b(thank you|thanks(?: a lot)?|appreciate(?: it)?|grateful)\b/i;
+    const isCompliment = COMPLIMENT.test(text) || THANKING.test(text);
+    
     const W = this._weights(contextHint);
     const out: any = { 
       neutral: 0.1, positive: 0.1, supportive: 0.1, 
       anxious: 0, angry: 0, frustrated: 0, sad: 0, assertive: 0 
     };
+
+    if (isCompliment) {
+      // Pre-boost supportive/positive; zero-out any pending hostility bumps
+      // (lets truly hostile signals re-accumulate if present later)
+      // Minimal, safe nudge:
+      out.supportive += 0.6;
+      out.positive   += 0.4;
+    }
 
     // Enhanced profanity analysis (single call, structured result) - Fix #5: Cache profanity analysis
     const profanityAnalysis = detectors.analyzeProfanity(text);
@@ -2294,21 +2342,21 @@ export class ToneAnalysisService {
     // ========= Apply High-Impact Alert/Caution Detection Upgrades =========
     
     // 1) Targeted imperative detection
-    const hasTargetedImperative = doc ? this.targetedImperative(doc) : false;
-    if (hasTargetedImperative) {
+    const hasTargetedImperative = doc ? this.targetedImperative(doc, text) : false;
+    if (!isCompliment && hasTargetedImperative) {
       out.angry += 1.0;
       logger.info('🎯 Targeted imperative detected → alert boost');
     }
 
     // 2) Threat intent detection
-    if (this.detectThreatIntent(text)) {
+    if (!isCompliment && this.detectThreatIntent(text)) {
       out.angry += 1.2;
       logger.info('⚠️ Threat intent detected → alert boost');
     }
 
     // 3) Dismissive markers
     const dismissiveScore = this.detectDismissiveMarkers(text);
-    if (dismissiveScore > 0) {
+    if (!isCompliment && dismissiveScore > 0) {
       out.frustrated += dismissiveScore * 0.8;
       out.angry += dismissiveScore * 0.4;
       logger.info(`😤 Dismissive markers detected (${dismissiveScore.toFixed(2)}) → caution boost`);
@@ -2316,7 +2364,7 @@ export class ToneAnalysisService {
 
     // 4) Rhetorical question heat
     const questionHeat = this.detectRhetoricalQuestionHeat(text);
-    if (questionHeat > 0) {
+    if (!isCompliment && questionHeat > 0) {
       out.frustrated += questionHeat;
       out.angry += questionHeat * 0.6;
       logger.info(`❓ Rhetorical question heat (${questionHeat.toFixed(2)}) → caution boost`);
@@ -2324,11 +2372,11 @@ export class ToneAnalysisService {
 
     // 5) Emoji escalation detection
     const emojiDetection = this.detectEmojiEscalation(text);
-    if (emojiDetection.angerBoost > 0) {
+    if (!isCompliment && emojiDetection.angerBoost > 0) {
       out.angry += emojiDetection.angerBoost;
       logger.info(`😡 Anger emoji boost (${emojiDetection.angerBoost.toFixed(2)})`);
     }
-    if (emojiDetection.sarcasmBoost > 0) {
+    if (!isCompliment && emojiDetection.sarcasmBoost > 0) {
       out.angry += emojiDetection.sarcasmBoost;
       out.frustrated += emojiDetection.sarcasmBoost * 0.7;
       logger.info(`🙂 Fake softener sarcasm boost (${emojiDetection.sarcasmBoost.toFixed(2)})`);
@@ -2387,8 +2435,21 @@ export class ToneAnalysisService {
     const metaFeatures = this.buildMetaFeatures(text, f, profanityAnalysis, doc, contextDetection);
     
     // Compute meta-classifier probabilities
-    const pAlert = this.metaAlertProb(metaFeatures, this.W_ALERT);
-    const pCaution = this.metaCautionProb(metaFeatures, this.W_CAUTION);
+    let pAlert = this.metaAlertProb(metaFeatures, this.W_ALERT);
+    let pCaution = this.metaCautionProb(metaFeatures, this.W_CAUTION);
+    
+    // Positivity guard for meta layer
+    const HAS_POSITIVE = /\b(great|awesome|amazing|excellent|nice|good|well done|proud|thank you|appreciate)\b/i.test(text);
+    const NO_NEG_MARKERS =
+      !profanityAnalysis.hasProfanity &&
+      !this.detectThreatIntent(text) &&
+      !this.detectRhetoricalQuestionHeat(text) &&
+      !this.detectDismissiveMarkers(text);
+
+    if (HAS_POSITIVE && NO_NEG_MARKERS) {
+      pAlert   = Math.min(pAlert, 0.15);
+      pCaution = Math.min(pCaution, 0.25);
+    }
     
     // REMOVED: Double counting meta-classifier into scores - only apply at bucket level
     // out.angry += pAlert * 0.3;
