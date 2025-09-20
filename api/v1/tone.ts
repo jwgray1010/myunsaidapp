@@ -98,7 +98,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       throw new Error(`Text hash mismatch - expected ${actualHash.slice(0, 8)}, got ${providedHash.slice(0, 8)}`);
     }
     
-    logger.info('Full-text document analysis', { userId, docSeq, textLength: data.text.length, hash: actualHash.slice(0, 8) });
+    logger.info('Full-text document analysis mode activated', { userId, docSeq, textLength: data.text.length, hash: actualHash.slice(0, 8) });
   }
 
   // === SERVER-SIDE FIXES: Idempotency & Short-Text Gating ===
