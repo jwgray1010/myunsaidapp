@@ -3246,7 +3246,7 @@ export class ToneAnalysisService {
       'secure', // default attachment style for full-text mode
       context,
       null, // let function load data
-      { text, conservative: true } // backend-first mode - respect tone analysis
+      { text } // pass text so enforceBucketGuardsV2 can run
     );
     
     // Apply document-level safety gates
@@ -3269,7 +3269,7 @@ export class ToneAnalysisService {
           'secure',
           context,
           null,
-          { text, conservative: true } // backend-first mode for safety gates too
+          { text } // pass text so enforceBucketGuardsV2 can run
         );
         
         // Return with document-level metadata and safety gate applied
