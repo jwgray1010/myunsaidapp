@@ -74,14 +74,18 @@ final class KeyPreviewManager {
         // Keep above everything
         preview.layer.zPosition = 999
 
-        // Constraints: centerX to key; bottom to key top (-8); keep on-screen
+        // Constraints: centerX to key (flexible); bottom to key top (-8); keep on-screen
+        let centerXConstraint = preview.centerXAnchor.constraint(equalTo: button.centerXAnchor)
+        centerXConstraint.priority = .defaultHigh  // 750 - allows sliding when near edge
+        
         let constraints = [
-            preview.centerXAnchor.constraint(equalTo: button.centerXAnchor),
+            centerXConstraint,
             preview.bottomAnchor.constraint(equalTo: button.topAnchor, constant: -8),
             preview.topAnchor.constraint(greaterThanOrEqualTo: containerView.topAnchor, constant: 2),
             preview.leadingAnchor.constraint(greaterThanOrEqualTo: containerView.leadingAnchor, constant: 4),
             preview.trailingAnchor.constraint(lessThanOrEqualTo: containerView.trailingAnchor, constant: -4),
-            // Add width cap to prevent long labels from forcing off-screen friction
+            // Add width constraints to prevent crashes
+            preview.widthAnchor.constraint(greaterThanOrEqualToConstant: 52),
             preview.widthAnchor.constraint(lessThanOrEqualTo: containerView.widthAnchor, multiplier: 0.5)
         ]
         

@@ -413,10 +413,14 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
                           ),
                           child: GestureDetector(
                             onTap: () => _selectAnswer(option.value, idx),
-                            child: Container(
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeInOut,
                               padding: const EdgeInsets.all(AppTheme.spaceLG),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: isSelected
+                                    ? questionTypeColor.withValues(alpha: 0.1)
+                                    : Colors.white,
                                 borderRadius: BorderRadius.circular(
                                   AppTheme.radiusLG,
                                 ),
@@ -424,45 +428,64 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
                                   color: isSelected
                                       ? questionTypeColor
                                       : Colors.grey.withValues(alpha: 0.3),
-                                  width: isSelected ? 2 : 1,
+                                  width: isSelected ? 3 : 1,
                                 ),
                                 boxShadow: isSelected
                                     ? [
                                         BoxShadow(
                                           color: questionTypeColor.withValues(
-                                            alpha: 0.2,
+                                            alpha: 0.3,
                                           ),
-                                          blurRadius: 20,
-                                          spreadRadius: 2,
+                                          blurRadius: 15,
+                                          spreadRadius: 1,
+                                          offset: const Offset(0, 4),
                                         ),
                                       ]
-                                    : null,
+                                    : [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.05,
+                                          ),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
                               ),
                               child: Row(
                                 children: [
                                   // Selection indicator
                                   Container(
-                                    width: 24,
-                                    height: 24,
+                                    width: 28,
+                                    height: 28,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: isSelected
                                           ? questionTypeColor
-                                          : Colors.transparent,
+                                          : Colors.white,
                                       border: Border.all(
                                         color: isSelected
                                             ? questionTypeColor
                                             : Colors.grey.withValues(
-                                                alpha: 0.5,
+                                                alpha: 0.4,
                                               ),
                                         width: 2,
                                       ),
+                                      boxShadow: isSelected
+                                          ? [
+                                              BoxShadow(
+                                                color: questionTypeColor
+                                                    .withValues(alpha: 0.3),
+                                                blurRadius: 8,
+                                                spreadRadius: 1,
+                                              ),
+                                            ]
+                                          : null,
                                     ),
                                     child: isSelected
                                         ? const Icon(
                                             Icons.check,
                                             color: Colors.white,
-                                            size: 16,
+                                            size: 18,
                                             semanticLabel: 'Selected',
                                           )
                                         : null,
@@ -589,9 +612,10 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
                                             _allQuestions.length - 1
                                         ? 'Next'
                                         : 'Complete Assessment',
-                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                    style: theme.textTheme.bodyMedium?.copyWith(
                                       color: theme.colorScheme.primary,
                                       fontWeight: FontWeight.w600,
+                                      fontSize: 16,
                                     ),
                                   ),
                                   const SizedBox(width: AppTheme.spaceSM),

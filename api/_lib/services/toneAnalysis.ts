@@ -293,6 +293,7 @@ export interface ToneAnalysisOptions {
   includeAttachmentInsights?: boolean;
   deepAnalysis?: boolean;
   isNewUser?: boolean;
+  fullDocumentMode?: boolean;  // Skip short-text overrides for full-document analysis
 }
 
 // -----------------------------
@@ -1417,6 +1418,7 @@ class ToneDetectors {
   // Enhanced profanity detection with structured results
   analyzeProfanity(text: string): { 
     hasProfanity: boolean; 
+    hasProfanityPrefix: boolean;
     count: number; 
     matches: string[]; 
     hasTargetedSecondPerson: boolean;
@@ -1424,7 +1426,19 @@ class ToneDetectors {
   } {
     const normalizedText = normalizeForProfanity(text);
     const hits: ProfHit[] = [];
+    const prefixHits: ProfHit[] = [];
     let maxSeverity: ProfSeverity | 'none' = 'none';
+    
+    // Enhanced prefix detection for partial/risky words  
+    const RISKY_PREFIXES = [
+      { prefix: 'fu', severity: 'moderate' as ProfSeverity, fullWords: ['fuck', 'fucking'] },
+      { prefix: 'fuc', severity: 'strong' as ProfSeverity, fullWords: ['fuck', 'fucking'] },
+      { prefix: 'sh', severity: 'mild' as ProfSeverity, fullWords: ['shit', 'shitty'] },
+      { prefix: 'bi', severity: 'mild' as ProfSeverity, fullWords: ['bitch', 'bitchy'] },
+      { prefix: 'idi', severity: 'moderate' as ProfSeverity, fullWords: ['idiot', 'idiotic'] },
+      { prefix: 'stu', severity: 'mild' as ProfSeverity, fullWords: ['stupid'] },
+      { prefix: 'da', severity: 'mild' as ProfSeverity, fullWords: ['damn', 'dammit'] }
+    ];
     
     // Get profanity data with severity levels from JSON
     const prof = dataLoader.get('profanityLexicons');
@@ -1456,15 +1470,38 @@ class ToneDetectors {
         }
       }
     }
+    
+    // Check for risky prefixes at word boundaries
+    const words = normalizedText.split(/\s+/);
+    for (const word of words) {
+      for (const { prefix, severity, fullWords } of RISKY_PREFIXES) {
+        if (word.startsWith(prefix) && word.length >= prefix.length && word.length < Math.min(...fullWords.map(w => w.length))) {
+          prefixHits.push({
+            term: `${prefix}*`,
+            severity,
+            start: 0,
+            end: word.length,
+            partialMatch: true
+          });
+          
+          // Update max severity for prefix matches
+          if (severity === 'strong' || (severity === 'moderate' && maxSeverity !== 'strong') || 
+              (severity === 'mild' && maxSeverity === 'none')) {
+            maxSeverity = severity;
+          }
+        }
+      }
+    }
 
     // Check for second-person targeting
     const hasSecondPerson = /\byou(r|'re|re|)\b/.test(normalizedText);
-    const hasTargetedSecondPerson = hits.length > 0 && hasSecondPerson;
+    const hasTargetedSecondPerson = (hits.length > 0 || prefixHits.length > 0) && hasSecondPerson;
 
     return {
       hasProfanity: hits.length > 0,
-      count: hits.length,
-      matches: hits.map(h => h.term),
+      hasProfanityPrefix: prefixHits.length > 0,
+      count: hits.length + prefixHits.length,
+      matches: [...hits.map(h => h.term), ...prefixHits.map(h => h.term)],
       hasTargetedSecondPerson,
       severity: maxSeverity
     };
@@ -3167,6 +3204,172 @@ export class ToneAnalysisService {
         }
       };
     }
+  }
+
+  // ========= FULL-TEXT DOCUMENT ANALYSIS =========
+  
+  /**
+   * Document-level analysis for full-text mode
+   * Applies one-way safety gates and prevents snap-backs
+   */
+  async analyzeFull(text: string, options: {
+    context?: string;
+    docSeq?: number;
+    preventSnapBacks?: boolean;
+  } = {}): Promise<any> {
+    const { context = 'general', docSeq, preventSnapBacks = true } = options;
+    
+    logger.info('Full-text document analysis started', { 
+      textLength: text.length, 
+      docSeq, 
+      context,
+      preventSnapBacks 
+    });
+
+    // Use existing analyzeAdvancedTone method but with document-level interpretation
+    // Mark as full-document analysis to skip short-text overrides
+    const result = await this.analyzeAdvancedTone(text, { 
+      context,
+      fullDocumentMode: true  // Skip PURE BASE and short-text priors
+    });
+    
+    // Apply bucket mapping to get ui_distribution
+    // Use external mapping function with result as toneResult
+    const bucketsResult = mapToneToBuckets(
+      result, // pass full result object
+      'secure', // default attachment style for full-text mode
+      context,
+      null, // let function load data
+      {} // default config
+    );
+    
+    // Apply document-level safety gates
+    if (preventSnapBacks) {
+      // One-way safety: if document shows concerning patterns, maintain caution/alert
+      // even if individual sentences might seem clear
+      const documentTone = this.assessDocumentTone(text, result);
+      
+      if (documentTone.safetyGateTriggered) {
+        logger.info('Document-level safety gate triggered', {
+          originalTone: result.primary_tone,
+          adjustedTone: documentTone.adjustedTone,
+          reason: documentTone.reason
+        });
+        
+        // Override the tone and recalculate buckets
+        const adjustedResult = { ...result, primary_tone: documentTone.adjustedTone };
+        const adjustedBuckets = mapToneToBuckets(
+          adjustedResult,
+          'secure',
+          context,
+          null,
+          {}
+        );
+        
+        // Return with document-level metadata and safety gate applied
+        return {
+          ...adjustedResult,
+          buckets: adjustedBuckets.buckets,  // Add ui_distribution
+          document_analysis: {
+            original_tone: result.primary_tone,
+            safety_gate_applied: true,
+            safety_reason: documentTone.reason,
+            doc_seq: docSeq
+          }
+        };
+      }
+    }
+    
+    // Return with document-level metadata and buckets
+    return {
+      ...result,
+      buckets: bucketsResult.buckets,  // Add ui_distribution
+      document_analysis: {
+        safety_gate_applied: false,
+        doc_seq: docSeq,
+        analysis_type: 'full_document'
+      }
+    };
+  }
+
+  /**
+   * Assess document-level tone patterns and apply safety gates
+   */
+  private assessDocumentTone(text: string, analysis: any): {
+    safetyGateTriggered: boolean;
+    adjustedTone?: string;
+    reason?: string;
+  } {
+    const textLower = text.toLowerCase();
+    
+    // Check for concerning document-level patterns
+    
+    // 1. Multiple escalatory phrases across the document
+    const escalatoryCount = this.countEscalatoryPatterns(textLower);
+    if (escalatoryCount >= 3) {
+      return {
+        safetyGateTriggered: true,
+        adjustedTone: 'caution',
+        reason: 'multiple_escalatory_patterns'
+      };
+    }
+    
+    // 2. Sustained negative sentiment throughout
+    const negativeIntensity = this.assessNegativeIntensity(textLower);
+    if (negativeIntensity > 0.7) {
+      return {
+        safetyGateTriggered: true,
+        adjustedTone: 'alert',
+        reason: 'sustained_negative_intensity'
+      };
+    }
+    
+    // 3. Mixed aggressive and conciliatory language (potential manipulation)
+    if (this.detectMixedAggressiveConciliatory(textLower)) {
+      return {
+        safetyGateTriggered: true,
+        adjustedTone: 'caution',
+        reason: 'mixed_aggressive_conciliatory'
+      };
+    }
+    
+    return { safetyGateTriggered: false };
+  }
+  
+  private countEscalatoryPatterns(text: string): number {
+    const patterns = [
+      /\b(always|never)\b.*\b(you|your)\b/g,
+      /\b(you|your)\b.*\b(always|never)\b/g,
+      /\b(should|must|need to)\b.*\b(understand|realize|know)\b/g,
+      /\b(obviously|clearly|really)\b/g,
+      /\b(ridiculous|stupid|nonsense|absurd)\b/g
+    ];
+    
+    return patterns.reduce((count, pattern) => {
+      const matches = text.match(pattern);
+      return count + (matches ? matches.length : 0);
+    }, 0);
+  }
+  
+  private assessNegativeIntensity(text: string): number {
+    const negativeWords = [
+      'hate', 'angry', 'furious', 'disgusted', 'frustrated', 'annoyed',
+      'disappointed', 'upset', 'irritated', 'mad', 'livid', 'outraged'
+    ];
+    
+    const words = text.split(/\s+/);
+    const negativeCount = words.filter(word => 
+      negativeWords.some(neg => word.includes(neg))
+    ).length;
+    
+    return negativeCount / Math.max(words.length, 1);
+  }
+  
+  private detectMixedAggressiveConciliatory(text: string): boolean {
+    const aggressive = /\b(you|your)\b.*(wrong|fault|problem|issue|always|never)/g;
+    const conciliatory = /\b(love|care|understand|together|sorry|appreciate)/g;
+    
+    return aggressive.test(text) && conciliatory.test(text);
   }
 }
 

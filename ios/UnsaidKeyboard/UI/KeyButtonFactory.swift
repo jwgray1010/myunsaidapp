@@ -177,15 +177,15 @@ final class KeyButtonFactory {
         return b
     }
     
-    /// Compact mode button (123/ABC) with 40% smaller font and size
+    /// Compact mode button (123/ABC) with font size matching other control buttons
     static func makeModeButton(title: String) -> UIButton {
         let b = ExtendedTouchButton(type: .system)
         commonKeySetup(b, hPad: 4, vPad: 3) // Reduced padding by ~40%
         b.setTitle(title, for: .normal)
         b.accessibilityLabel = title
 
-        // 40% smaller font: 16 * 0.6 = 9.6 ≈ 10
-        b.titleLabel?.font = .systemFont(ofSize: 10, weight: .medium)
+        // Updated to match return button font size (14pt)
+        b.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
         b.titleLabel?.adjustsFontForContentSizeCategory = false
         b.titleLabel?.adjustsFontSizeToFitWidth = true
         b.titleLabel?.minimumScaleFactor = 0.90

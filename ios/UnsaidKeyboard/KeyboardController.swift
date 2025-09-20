@@ -110,7 +110,7 @@ enum ShiftState {
 
 // MARK: - Main Keyboard Controller (Simplified Coordinator)
 @MainActor
-final class KeyboardController: UIInputView,
+final class KeyboardController: UIView,
                                 ToneSuggestionDelegate,
                                 UIInputViewAudioFeedback,
                                 UIGestureRecognizerDelegate,
@@ -122,6 +122,7 @@ final class KeyboardController: UIInputView,
 
     // MARK: - Services and Managers
     private var coordinator: ToneSuggestionCoordinator?
+    private var isNetworkReachable = true // Track network state for UI updates
     
     // MARK: - Configuration and Logging
     private var didConfigure = false
@@ -182,6 +183,39 @@ final class KeyboardController: UIInputView,
     // MARK: - Debounce & Coalesce
     private var analyzeTask: Task<Void, Never>?
     
+    // MARK: - Text Analysis Gating
+    
+    /// Determines if text is substantial enough to warrant tone analysis
+    private func shouldAnalyze(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Too short overall
+        if trimmed.count < 4 { 
+            print("📏 Analysis skipped: text too short (\(trimmed.count) chars)")
+            return false 
+        }
+        
+        // Single word that's too short
+        let words = trimmed.split(separator: " ")
+        if words.count == 1 && trimmed.count < 5 {
+            print("📏 Analysis skipped: single short word '\(trimmed)'")
+            return false
+        }
+        
+        return true
+    }
+    
+    // MARK: - Security Utilities
+    
+    /// Redacts API keys/tokens for safe logging
+    private func redact(_ token: String) -> String {
+        guard !token.isEmpty else { return "EMPTY" }
+        guard token.count > 10 else { return "TOO_SHORT" }
+        let prefix = token.prefix(6)
+        let suffix = token.suffix(4)
+        return "\(prefix)…\(suffix)"
+    }
+    
     // MARK: - Router Pattern for Sentence-Aware Analysis
     
     /// Captures the full text snapshot from the document proxy
@@ -194,36 +228,68 @@ final class KeyboardController: UIInputView,
     
     /// Router method that calls the new sentence-aware coordinator API
     private func scheduleAnalysisRouter(lastInserted: String? = nil, isDeletion: Bool = false, urgent: Bool = false) {
-        guard let coordinator = coordinator else { return }
+        print("🔄 DEBUG: scheduleAnalysisRouter called - lastInserted: \(lastInserted ?? "nil"), isDeletion: \(isDeletion), urgent: \(urgent)")
         
-        analyzeTask?.cancel()
-        analyzeTask = Task { [weak self] in
-            if !urgent {
-                try? await Task.sleep(nanoseconds: 220_000_000) // 220ms idle pause
-            }
-            guard let self = self else { return }
-            
-            await MainActor.run {
-                let fullText = self.snapshotFullText()
-                #if DEBUG
-                let preview = String(fullText.prefix(60))
-                if self.logGate.allow("router", preview) {
-                    KBDLog("🔄 Router analysis: '\(preview)…' inserted='\(lastInserted ?? "none")' deletion=\(isDeletion)", .debug, "KeyboardController")
-                }
-                #endif
-                
-                // Prevent overlapping tone requests
-                if !self.toneRequestInFlight {
-                    self.toneRequestInFlight = true
-                    coordinator.onTextChanged(fullText: fullText, lastInserted: lastInserted?.first, isDeletion: isDeletion)
-                    
-                    // Reset flag after a reasonable timeout (coordinator should reset it sooner)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
-                        self?.toneRequestInFlight = false
-                    }
-                }
-            }
+        // Check network connectivity first
+        guard isNetworkReachable else {
+            print("📶 DEBUG: Network unreachable, skipping analysis")
+            return
         }
+        
+        guard let toneScheduler = toneScheduler else { 
+            print("❌ DEBUG: toneScheduler is nil in scheduleAnalysisRouter")
+            return 
+        }
+        
+        print("✅ DEBUG: toneScheduler exists and network is reachable, proceeding with full-text analysis")
+        
+        // Cancel any existing analysis task (debouncing handled by ToneScheduler)
+        analyzeTask?.cancel()
+        
+        // Get full text for document-level analysis
+        let fullText = snapshotFullText()
+        print("📝 DEBUG: Full text snapshot: '\(String(fullText.prefix(100)))...' (length: \(fullText.count))")
+        
+        // Gate analysis for micro-tokens (same as before)
+        guard shouldAnalyze(fullText) else {
+            print("🚫 Analysis skipped: text doesn't meet minimum requirements")
+            return
+        }
+        
+        #if DEBUG
+        let preview = String(fullText.prefix(60))
+        if logGate.allow("router", preview) {
+            KBDLog("� Full-text analysis: '\(preview)…' inserted='\(lastInserted ?? "none")' deletion=\(isDeletion) urgent=\(urgent)", .debug, "KeyboardController")
+        }
+        #endif
+        
+        // Determine trigger reason based on context
+        let triggerReason: String
+        if urgent {
+            triggerReason = isDeletion ? "urgent_deletion" : "urgent_input"
+        } else if isDeletion {
+            triggerReason = "deletion"
+        } else if let inserted = lastInserted {
+            // Check for punctuation that should trigger immediate analysis
+            if toneScheduler.shouldTriggerImmediate(for: inserted) {
+                triggerReason = "punctuation"
+            } else {
+                triggerReason = "input"
+            }
+        } else {
+            triggerReason = "idle"
+        }
+        
+        // Use ToneScheduler for document-level analysis
+        if urgent || (lastInserted != nil && toneScheduler.shouldTriggerImmediate(for: lastInserted!)) {
+            // Immediate analysis for urgent cases or punctuation
+            toneScheduler.scheduleImmediate(fullText: fullText, triggerReason: triggerReason)
+        } else {
+            // Regular debounced analysis
+            toneScheduler.schedule(fullText: fullText, triggerReason: triggerReason)
+        }
+        
+        print("🚀 DEBUG: Full-text analysis scheduled with ToneScheduler - reason: \(triggerReason)")
     }
     
     // Unified haptic feedback method with instant micro-haptics
@@ -360,6 +426,40 @@ final class KeyboardController: UIInputView,
     // MARK: - Convenience
     private var textDocumentProxy: UITextDocumentProxy? { parentInputVC?.textDocumentProxy }
 
+    // MARK: - Network Management
+    private func startNetworkMonitoring() {
+        NetworkGate.shared.start { [weak self] reachable in
+            DispatchQueue.main.async {
+                self?.handleNetworkStateChange(reachable: reachable)
+            }
+        }
+    }
+    
+    private func handleNetworkStateChange(reachable: Bool) {
+        print("🌐 DEBUG: Network state changed to \(reachable ? "ONLINE" : "OFFLINE")")
+        isNetworkReachable = reachable
+        
+        // Update tone button state based on connectivity
+        if let toneButton = toneButton {
+            toneButton.isEnabled = reachable
+            if !reachable {
+                // Set to neutral/disabled state when offline
+                setToneStatus(.neutral, animated: false)
+            }
+        }
+        
+        // Dismiss suggestion chips when going offline
+        if !reachable {
+            suggestionChipManager.dismissCurrentChip()
+        } else {
+            // When coming back online, re-attempt analysis if there's text
+            let fullText = snapshotFullText()
+            if !fullText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                scheduleAnalysisRouter(lastInserted: nil, isDeletion: false, urgent: true)
+            }
+        }
+    }
+
     // MARK: - Lifecycle
     override var intrinsicContentSize: CGSize {
         // Width: let the system take full screen width
@@ -367,8 +467,8 @@ final class KeyboardController: UIInputView,
         return CGSize(width: UIView.noIntrinsicMetric, height: UIView.noIntrinsicMetric)
     }
 
-    override init(frame: CGRect, inputViewStyle: UIInputView.Style) {
-        super.init(frame: frame, inputViewStyle: inputViewStyle)
+    override init(frame: CGRect) {
+        super.init(frame: frame)
         commonInit()
     }
     
@@ -394,6 +494,17 @@ final class KeyboardController: UIInputView,
         #endif
         KBDLog("🔧 Coordinator initialized id=\(coordId)", .info, "KeyboardController")
         coordinator?.delegate = self
+        
+        KBDLog("📄 ToneCoordinator ready for full-text analysis", .info, "KeyboardController")
+        
+        // Start network monitoring
+        startNetworkMonitoring()
+        
+        // Test API connectivity
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.coordinator?.pingAPI()
+        }
+        
         refreshContext()
         syncHostTraits()
         
@@ -422,7 +533,7 @@ final class KeyboardController: UIInputView,
         let baseURL = extBundle.object(forInfoDictionaryKey: "UNSAID_API_BASE_URL") as? String ?? "NOT FOUND"
         let apiKey = extBundle.object(forInfoDictionaryKey: "UNSAID_API_KEY") as? String ?? "NOT FOUND"
         KBDLog("🔧 API Config - Base URL: \(baseURL)", .debug, "KeyboardController")
-        KBDLog("🔧 API Config - API Key: \(apiKey.prefix(10))...", .debug, "KeyboardController")
+        KBDLog("🔧 API Config - API Key: \(redact(apiKey))", .debug, "KeyboardController")
         KBDLog("🔧 Coordinator initialized: \(self.coordinator != nil)", .debug, "KeyboardController")
         
         // Note: Removed immediate analysis ping to prevent any startup tone changes
@@ -433,6 +544,33 @@ final class KeyboardController: UIInputView,
         
         // Note: Removed DEBUG testToneAPIWithDebugText() call to prevent
         // automatic tone cycling when keyboard opens
+    }
+    
+    @MainActor
+    func hostDidAppear() {
+        // Host view is now on-screen, ensure UI components are visible and properly initialized
+        KBDLog("🎬 KeyboardController hostDidAppear called", .info, "KeyboardController")
+        
+        // Ensure suggestion bar is visible and ready
+        if let bar = suggestionBar {
+            bar.isHidden = false
+            bar.alpha = 1.0
+            KBDLog("✅ Suggestion bar made visible", .debug, "KeyboardController")
+        }
+        
+        // Ensure tone button is visible and responsive
+        if let button = toneButton {
+            button.isHidden = false
+            button.alpha = 1.0
+            ensureToneButtonVisible()
+            KBDLog("✅ Tone button made visible", .debug, "KeyboardController")
+        }
+        
+        // Subscribe to tone updates now that UI is ready
+        coordinator?.delegate = self
+        
+        // Perform any additional UI refresh that should happen after host appears
+        layoutIfNeeded()
     }
     
     deinit {
@@ -887,8 +1025,9 @@ final class KeyboardController: UIInputView,
         NSLayoutConstraint.activate([
             spellStrip.topAnchor.constraint(equalTo: pBar.topAnchor, constant: 8),
             spellStrip.bottomAnchor.constraint(equalTo: pBar.bottomAnchor, constant: -8),
-            spellStrip.leadingAnchor.constraint(equalTo: toneButtonBackground.trailingAnchor, constant: 8),
-            spellStrip.trailingAnchor.constraint(equalTo: undoButton.leadingAnchor, constant: -8)
+            spellStrip.leadingAnchor.constraint(equalTo: toneButtonBackground.trailingAnchor, constant: 24), // Increased from 16 to 24
+            spellStrip.trailingAnchor.constraint(equalTo: undoButton.leadingAnchor, constant: -24), // Increased from -16 to -24
+            spellStrip.centerYAnchor.constraint(equalTo: pBar.centerYAnchor) // Center vertically
         ])
         
         // Set up spell correction handler
@@ -1862,6 +2001,19 @@ final class KeyboardController: UIInputView,
         case .unknown:
             // Show generic unknown error
             showErrorMessage("An unexpected error occurred. Please try again.")
+        }
+    }
+    
+    func didReceiveFeatureNoticings(_ noticings: [String]) {
+        logger.info("📣 Feature noticings received: \(noticings)")
+        // For now, just log the feature noticings
+        // Could be expanded to show them in UI or store for analytics
+        guard let firstNoticing = noticings.first, !firstNoticing.isEmpty else { return }
+        
+        DispatchQueue.main.async { [weak self] in
+            // Could show feature noticings in suggestion chip or other UI element
+            // For now, we'll just log them
+            self?.logger.info("📣 First feature noticing: \(firstNoticing)")
         }
     }
     

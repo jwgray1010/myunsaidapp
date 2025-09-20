@@ -86,16 +86,6 @@ final class SuggestionChipManager {
             guard let self, let chip else { return }
             self.delegate?.suggestionChipDidExpand(chip)
         }
-        chip.onDismiss = { [weak self, weak chip] in
-            guard let self, let chip else { return }
-            self.delegate?.suggestionChipDidDismiss(chip)
-            if self.activeChip === chip { 
-                #if DEBUG
-                KBDLog("🗑️ ChipManager: Clearing active chip reference (user dismissed)", .debug, "ChipManager")
-                #endif
-                self.activeChip = nil 
-            }
-        }
         chip.onTimeout = { [weak self, weak chip] in
             guard let self, let chip else { return }
             #if DEBUG
@@ -103,43 +93,55 @@ final class SuggestionChipManager {
             #endif
             if self.activeChip === chip { self.activeChip = nil }
         }
-        chip.onDismissed = { [weak self, weak chip] in
-            guard let self, let chip else { return }
-            KBDLog("🏁 ChipManager: Chip fully dismissed, clearing reference", .debug, "ChipManager")
-            if self.activeChip === chip { self.activeChip = nil }
-        }
 
         containerView.addSubview(chip) // layout first
         
         // Remove any old position constraints if you decide to store them.
-        // Position chip - prefer *above* suggestion bar, fallback to above keyboard
+        // Position chip - overlay spelling bar if available, fallback to bottom of keyboard
         if let bar = suggestionBar {
+            // Overlay the chip exactly on top of the spelling bar
             NSLayoutConstraint.activate([
-                chip.bottomAnchor.constraint(equalTo: bar.topAnchor, constant: -6), // ⬅️ was top = bar.bottom
-                chip.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
-                chip.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8)
+                chip.leadingAnchor.constraint(equalTo: bar.leadingAnchor),
+                chip.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
+                chip.topAnchor.constraint(equalTo: bar.topAnchor),
+                chip.bottomAnchor.constraint(equalTo: bar.bottomAnchor)
             ])
-        } else {
-            if #available(iOS 15.0, *) {
-                // Pin just above the keyboard instead of safe area
-                NSLayoutConstraint.activate([
-                    chip.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
-                    chip.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
-                    chip.bottomAnchor.constraint(equalTo: containerView.keyboardLayoutGuide.topAnchor, constant: -12)
-                ])
-            } else {
-                // Fallback for iOS < 15: listen to keyboard notifications or keep safeArea
-                NSLayoutConstraint.activate([
-                    chip.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
-                    chip.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
-                    chip.bottomAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.bottomAnchor, constant: -16)
-                ])
+
+            // Make sure it visually sits above the bar
+            chip.layer.zPosition = bar.layer.zPosition + 1
+            containerView.bringSubviewToFront(chip)
+
+            // While chip is visible, prevent taps from reaching the bar
+            let oldBarUserInteraction = bar.isUserInteractionEnabled
+            bar.isUserInteractionEnabled = false
+
+            // Re-enable bar interaction when chip goes away
+            chip.onDismissed = { [weak self, weak chip, weak bar] in
+                guard let self, let chip else { return }
+                bar?.isUserInteractionEnabled = oldBarUserInteraction
+                KBDLog("🏁 ChipManager: Chip fully dismissed, clearing reference", .debug, "ChipManager")
+                if self.activeChip === chip { self.activeChip = nil }
             }
+            chip.onDismiss = { [weak self, weak chip, weak bar] in
+                guard let self, let chip else { return }
+                bar?.isUserInteractionEnabled = oldBarUserInteraction
+                self.delegate?.suggestionChipDidDismiss(chip)
+                if self.activeChip === chip { 
+                    #if DEBUG
+                    KBDLog("🗑️ ChipManager: Clearing active chip reference (user dismissed)", .debug, "ChipManager")
+                    #endif
+                    self.activeChip = nil 
+                }
+            }
+        } else {
+            // Fallback for when there is no bar: pin to bottom of keyboard view
+            NSLayoutConstraint.activate([
+                chip.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
+                chip.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
+                chip.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -12)
+            ])
+            containerView.bringSubviewToFront(chip)
         }
-        
-        // Ensure it's tappable above siblings
-        containerView.bringSubviewToFront(chip)
-        chip.layer.zPosition = 999
         
         activeChip = chip
         KBDLog("✅ ChipManager: Set new active chip", .debug, "ChipManager")
