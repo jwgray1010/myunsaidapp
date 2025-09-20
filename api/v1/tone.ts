@@ -73,7 +73,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
                    : undefined;
 
   // === FULL-TEXT MODE HANDLING ===
-  const mode = data.mode || 'legacy'; // 'full' for document-level, 'legacy' for sentence-based
+  const mode = data.mode || 'full'; // 'full' for document-level, 'legacy' for sentence-based
   const isFullMode = mode === 'full';
   
   if (isFullMode) {
@@ -222,8 +222,8 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     const contextSeverity = (result as any).contextSeverity || { clear: 0, caution: 0, alert: 0 };
     const metaClassifier = (result as any).metaClassifier || { pAlert: 0, pCaution: 0 };
     const intensity = result.intensity || 0.5;
-    const attachmentStyle = req.body.attachment_style || "secure";
-    const inputText = req.body.text || "";
+    const attachmentStyle = data.attachmentStyle || "secure";
+    const inputText = data.text || "";
     
     // === FIX: ELIMINATE DUPLICATE ANALYSIS ===
     // Extract buckets from the analysis result if available, otherwise use simple mapping
@@ -257,8 +257,9 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     const profanityAnalysis = (result as any).profanityAnalysis || { hasProfanity: false, hasProfanityPrefix: false };
     const hasProfanityPrefix = profanityAnalysis.hasProfanityPrefix || false;
     const tokens = trimmed.split(/\s+/).length;
+    const applyPrefixGate = !isFullMode && hasProfanityPrefix && tokens < 2;
     
-    if (lowConf || metaHot || (hasProfanityPrefix && tokens < 2)) {
+    if (lowConf || metaHot || applyPrefixGate) {
       logger.info('Applying confidence/meta/profanity gating', { 
         confidence, 
         pAlert, 
@@ -266,12 +267,13 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
         lowConf, 
         metaHot,
         hasProfanityPrefix,
+        applyPrefixGate,
         tokens,
         originalBuckets: uiBuckets 
       });
       
       // Force caution blend - raise caution/alert floor, lower clear ceiling
-      if (hasProfanityPrefix && tokens < 2) {
+      if (applyPrefixGate) {
         // Stronger penalty for profanity prefixes in short text
         uiBuckets = {
           clear: Math.min(uiBuckets.clear, 0.2),      // cap clear at 20%

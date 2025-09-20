@@ -2,7 +2,14 @@
 import { z } from 'zod';
 
 /**
- * Enhanced ToneRequest schema matching the JSON schema structure
+ * Enhanced ToneRequest schema mat  }).optional().describe('Bucket probabilities used to derive ui_tone'),
+  client_seq: z.number().optional().describe('Echoed client sequence for last-writer-wins'),
+  // Full-text mode response fields
+  mode: z.enum(['full', 'legacy']).optional().describe('Analysis mode used'),
+  doc_seq: z.number().optional().describe('Echoed document sequence number'),
+  text_hash: z.string().optional().describe('Echoed text hash'),
+  doc_tone: z.enum(['clear','caution','alert']).optional().describe('Document-level tone for full-text mode'),
+  // Enhanced response fieldsng the JSON schema structure
  * Schema for tone analysis requests with optional metadata
  * Version: 1.0.0 - Last Updated: 2025-08-28
  */
@@ -49,6 +56,10 @@ export const toneRequestSchema = z.object({
   reset_memory: z.boolean().optional().default(false).describe('Reset conversation memory for testing isolation'),
   bypass_overrides: z.boolean().optional().default(false).describe('Skip override processing for pure base distribution testing'),
   field_id: z.string().optional().describe('Field identifier for conversation memory tracking'),
+  // Full-text mode parameters
+  mode: z.enum(['full', 'legacy']).optional().default('full').describe('Analysis mode: full for document-level, legacy for sentence-based'),
+  doc_seq: z.number().optional().describe('Document sequence number for full-text mode'),
+  text_hash: z.string().optional().describe('SHA256 hash of text for full-text mode validation'),
 });
 
 export type ToneRequest = z.infer<typeof toneRequestSchema>;
@@ -87,14 +98,19 @@ export const toneResponseSchema = z.object({
   context: z.string().optional().describe('Context used for analysis'),
   evidence: z.array(z.string()).optional().describe('Evidence supporting the tone classification'),
   rewritability: z.number().min(0).max(1).optional().describe('How much the message could benefit from rewriting'),
-  // ➕ UI fields used by the keyboard pill:
-  ui_tone: z.enum(['clear','caution','alert']).optional().describe('UI bucket for the pill color'),
+    // ➕ UI fields used by the keyboard pill:
+  ui_tone: z.enum(['clear','caution','alert','neutral']).optional().describe('UI bucket for the pill color'),
   ui_distribution: z.object({
     clear: z.number().min(0).max(1),
     caution: z.number().min(0).max(1),
     alert: z.number().min(0).max(1),
   }).partial().optional().describe('Bucket probabilities used to derive ui_tone'),
   client_seq: z.number().optional().describe('Echoed client sequence for last-writer-wins'),
+  // Full-text mode response fields
+  mode: z.enum(['full', 'legacy']).optional().describe('Analysis mode used'),
+  doc_seq: z.number().optional().describe('Echoed document sequence number'),
+  text_hash: z.string().optional().describe('Echoed text hash'),
+  doc_tone: z.enum(['clear','caution','alert','neutral']).optional().describe('Document-level tone for full-text mode'),
   // Enhanced response fields
   emotions: emotionAnalysisSchema.optional().describe('Emotion analysis results'),
   intensity: z.number().min(0).max(1).optional().describe('Emotional intensity score'),
@@ -130,6 +146,9 @@ export const toneResponseSchema = z.object({
     model_version: z.string(),
     analysis_depth: z.enum(['basic', 'standard', 'deep']).optional().default('standard'),
     features_used: z.array(z.string()).optional(),
+    // Full-text mode metadata
+    analysis_type: z.enum(['sentence_level', 'document_level']).optional(),
+    safety_gates_applied: z.boolean().optional(),
     // Legacy field for backward compatibility
     processing_time_ms: z.number().optional(),
   }).describe('Analysis metadata'),

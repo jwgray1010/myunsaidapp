@@ -18,16 +18,19 @@ async function testToneEndpoint(text, expectedUITone, testName) {
 
     const result = await response.json();
     
+    // Handle wrapped response format
+    const data = result.success ? result.data : result;
+    
     console.log(`\n=== ${testName} ===`);
     console.log(`Input: "${text}"`);
     console.log(`Expected: ${expectedUITone}`);
-    console.log(`Actual: ${result.ui_tone}`);
-    console.log(`Buckets: clear=${result.ui_distribution?.clear?.toFixed(2)}, caution=${result.ui_distribution?.caution?.toFixed(2)}, alert=${result.ui_distribution?.alert?.toFixed(2)}`);
-    console.log(`Confidence: ${result.confidence?.toFixed(3) || 'N/A'}`);
-    console.log(`Reason: ${result.reason || 'N/A'}`);
-    console.log(`Processing time: ${result.metadata?.processingTimeMs || 'N/A'}ms`);
+    console.log(`Actual: ${data.ui_tone}`);
+    console.log(`Buckets: clear=${data.ui_distribution?.clear?.toFixed(2)}, caution=${data.ui_distribution?.caution?.toFixed(2)}, alert=${data.ui_distribution?.alert?.toFixed(2)}`);
+    console.log(`Confidence: ${data.confidence?.toFixed(3) || 'N/A'}`);
+    console.log(`Reason: ${data.reason || 'N/A'}`);
+    console.log(`Processing time: ${data.metadata?.processingTimeMs || 'N/A'}ms`);
     
-    const passed = result.ui_tone === expectedUITone;
+    const passed = data.ui_tone === expectedUITone;
     console.log(`✅ ${passed ? 'PASS' : 'FAIL'}: ${testName}`);
     
     return passed;
@@ -63,8 +66,12 @@ async function testDuplicateRequests() {
   const result1 = await response1.json();
   const result2 = await response2.json();
   
-  const time1 = result1.metadata?.processingTimeMs || 0;
-  const time2 = result2.metadata?.processingTimeMs || 0;
+  // Handle wrapped response format
+  const data1 = result1.success ? result1.data : result1;
+  const data2 = result2.success ? result2.data : result2;
+  
+  const time1 = data1.metadata?.processingTimeMs || 0;
+  const time2 = data2.metadata?.processingTimeMs || 0;
   
   console.log(`Response 1 time: ${time1}ms`);
   console.log(`Response 2 time: ${time2}ms`);

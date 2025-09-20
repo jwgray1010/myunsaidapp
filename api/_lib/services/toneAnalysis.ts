@@ -3008,7 +3008,13 @@ export class ToneAnalysisService {
       logger.info('weights.context_resolved', resolved);
       
       const { scores, intensity: baseIntensity } = this._scoreTones(fr, text, style, contextForWeights, doc);
-      const intensity = clamp01(baseIntensity + advBump + excl + q + caps);
+      
+      // Fix #4: Acknowledge fullDocumentMode flag for intensity adjustment
+      const isFullDoc = options.fullDocumentMode === true;
+      // Slightly reduce punctuation/caps weight for full documents to avoid short-text bias
+      const intensityAdjust = isFullDoc ? 0.8 : 1.0;
+      
+      const intensity = clamp01(intensityAdjust * (baseIntensity + advBump + excl + q + caps));
       
       // === Therapeutic Communication Analysis ===
       // Second-person token indices
@@ -3240,7 +3246,7 @@ export class ToneAnalysisService {
       'secure', // default attachment style for full-text mode
       context,
       null, // let function load data
-      {} // default config
+      { text } // pass text so enforceBucketGuardsV2 can run
     );
     
     // Apply document-level safety gates
@@ -3263,7 +3269,7 @@ export class ToneAnalysisService {
           'secure',
           context,
           null,
-          {}
+          { text } // pass text so enforceBucketGuardsV2 can run
         );
         
         // Return with document-level metadata and safety gate applied

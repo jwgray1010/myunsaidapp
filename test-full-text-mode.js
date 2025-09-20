@@ -47,38 +47,41 @@ I love you and I care about our relationship, but this pattern is becoming a pro
       return;
     }
 
+    // Handle wrapped response format
+    const data = result.success ? result.data : result;
+
     console.log('✅ Full-text analysis successful!');
     console.log('');
     console.log('📊 Results:');
-    console.log(`Mode: ${result.mode || 'legacy'}`);
-    console.log(`Doc Tone: ${result.doc_tone || result.ui_tone}`);
-    console.log(`Primary Tone: ${result.tone}`);
-    console.log(`Confidence: ${result.confidence}`);
-    console.log(`Doc Seq: ${result.doc_seq}`);
-    console.log(`Text Hash: ${result.text_hash?.slice(0, 16)}...`);
+    console.log(`Mode: ${data.mode || 'legacy'}`);
+    console.log(`Doc Tone: ${data.doc_tone || data.ui_tone}`);
+    console.log(`Primary Tone: ${data.tone}`);
+    console.log(`Confidence: ${data.confidence}`);
+    console.log(`Doc Seq: ${data.doc_seq}`);
+    console.log(`Text Hash: ${data.text_hash?.slice(0, 16)}...`);
     console.log('');
     
     console.log('🔍 UI Distribution:');
-    if (result.ui_distribution) {
-      console.log(`  Clear: ${(result.ui_distribution.clear * 100).toFixed(1)}%`);
-      console.log(`  Caution: ${(result.ui_distribution.caution * 100).toFixed(1)}%`);
-      console.log(`  Alert: ${(result.ui_distribution.alert * 100).toFixed(1)}%`);
+    if (data.ui_distribution) {
+      console.log(`  Clear: ${(data.ui_distribution.clear * 100).toFixed(1)}%`);
+      console.log(`  Caution: ${(data.ui_distribution.caution * 100).toFixed(1)}%`);
+      console.log(`  Alert: ${(data.ui_distribution.alert * 100).toFixed(1)}%`);
     }
     console.log('');
 
-    if (result.document_analysis) {
+    if (data.document_analysis) {
       console.log('🛡️ Document Analysis:');
-      console.log(`  Safety Gate Applied: ${result.document_analysis.safety_gate_applied}`);
-      console.log(`  Analysis Type: ${result.document_analysis.analysis_type}`);
-      if (result.document_analysis.safety_reason) {
-        console.log(`  Safety Reason: ${result.document_analysis.safety_reason}`);
-        console.log(`  Original Tone: ${result.document_analysis.original_tone}`);
+      console.log(`  Safety Gate Applied: ${data.document_analysis.safety_gate_applied}`);
+      console.log(`  Analysis Type: ${data.document_analysis.analysis_type}`);
+      if (data.document_analysis.safety_reason) {
+        console.log(`  Safety Reason: ${data.document_analysis.safety_reason}`);
+        console.log(`  Original Tone: ${data.document_analysis.original_tone}`);
       }
       console.log('');
     }
 
-    console.log(`⏱️ Processing Time: ${result.metadata?.processingTimeMs}ms`);
-    console.log(`🤖 Model Version: ${result.metadata?.model_version}`);
+    console.log(`⏱️ Processing Time: ${data.metadata?.processingTimeMs}ms`);
+    console.log(`🤖 Model Version: ${data.metadata?.model_version}`);
 
     // Test hash mismatch validation
     console.log('\n🧪 Testing hash mismatch validation...');
@@ -117,7 +120,10 @@ I love you and I care about our relationship, but this pattern is becoming a pro
     const idempotentResult = await idempotentResponse.json();
     const responseTime = Date.now() - startTime;
 
-    if (idempotentResult.doc_seq === docSeq && responseTime < 50) {
+    // Handle wrapped response format
+    const idempotentData = idempotentResult.success ? idempotentResult.data : idempotentResult;
+
+    if (idempotentData.doc_seq === docSeq && responseTime < 50) {
       console.log('✅ Idempotency working - fast cached response');
       console.log(`⚡ Cache response time: ${responseTime}ms`);
     } else {
@@ -152,11 +158,14 @@ async function testLegacyMode() {
 
     const result = await response.json();
 
+    // Handle wrapped response format
+    const data = result.success ? result.data : result;
+
     if (response.ok) {
       console.log('✅ Legacy mode still working');
-      console.log(`Mode: ${result.mode || 'legacy (implicit)'}`);
-      console.log(`UI Tone: ${result.ui_tone}`);
-      console.log(`Client Seq: ${result.client_seq}`);
+      console.log(`Mode: ${data.mode || 'legacy (implicit)'}`);
+      console.log(`UI Tone: ${data.ui_tone}`);
+      console.log(`Client Seq: ${data.client_seq}`);
     } else {
       console.log('❌ Legacy mode failed:', result);
     }
