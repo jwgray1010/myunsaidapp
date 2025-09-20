@@ -996,7 +996,7 @@ class _PremiumScreenProfessionalState extends State<PremiumScreenProfessional>
         'icon': Icons.security_outlined,
         'title': '10 Daily Secure Quick Fixes',
         'description':
-            'Get 10 secure communication fixes per day during your trial',
+            'Get 5 secure communication fixes per day during your trial',
         'semantic': 'Daily Secure Quick Fixes',
       },
       {

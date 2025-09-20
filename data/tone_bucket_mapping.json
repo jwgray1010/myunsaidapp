@@ -63,8 +63,8 @@
     "clear": {
       "requirePhraseLevel": false,
       "excludeTokens": [],
-      "overshadow": { "by": "alert", "min": 0.99, "ratio": 2.25 },
-      "preferCautionIfBoth": 0.99
+      "overshadow": { "by": "alert", "min": 0.75, "ratio": 4.0 },
+      "preferCautionIfBoth": 0.60
     }
   },
 
@@ -103,18 +103,18 @@
 
   "contextOverrides": {
     "conflict": {
-      "angry": { "alert": 0.03, "caution": -0.02 }
+      "angry": { "alert": 0.01, "caution": -0.01 }
     },
     "repair": {
-      "sad": { "clear": 0.02, "caution": 0.01 }
+      "sad": { "clear": 0.01, "caution": 0.00 }
     }
   },
 
   "intensityShifts": {
     "thresholds": { "low": 0.15, "med": 0.35, "high": 0.60 },
     "low":  { "clear": 0.01, "caution": 0.00, "alert": -0.01 },
-    "med":  { "clear": -0.01, "caution": 0.02, "alert": -0.01 },
-    "high": { "clear": -0.03, "caution": 0.00, "alert": 0.03 }
+    "med":  { "clear": 0.00, "caution": 0.00, "alert":  0.00 },
+    "high": { "clear": -0.015, "caution": 0.00, "alert": 0.015 }
   },
 
   "bucketPolicies": {

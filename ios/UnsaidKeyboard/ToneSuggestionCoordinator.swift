@@ -95,11 +95,15 @@ final class ToneSuggestionCoordinator {
     private let instanceId = UUID().uuidString
     
     // MARK: - Full-Text Analysis State (replacing ToneScheduler)
-    private let debounceInterval: TimeInterval = 0.4 // 400ms
+    private let debounceInterval: TimeInterval = 1.0 // Increased from 400ms to 1s for scale
     private var currentDocSeq: Int = 0
     private var lastTextHash: String = ""
     private var debounceTask: Task<Void, Never>?
     private var isAnalysisInFlight = false
+    
+    // MARK: - Response Caching for Scale
+    private var analysisCache: [String: (tone: String, timestamp: Date)] = [:]
+    private let cacheExpiryInterval: TimeInterval = 30.0 // Cache results for 30s
     
     // MARK: - Circuit Breaker (used for suggestions/observe)
     private struct CircuitKey: Hashable { let host: String; let path: String }
@@ -2020,11 +2024,15 @@ extension ToneSuggestionCoordinator {
     // MARK: - Private Full-Text Analysis Implementation
     
     private func shouldAnalyzeFullText(_ text: String) -> Bool {
-        // Match server-side gating: <4 chars or <2 words
-        guard text.count >= 4 else { return false }
+        // Aggressive gating for scale: require minimum meaningful content
+        guard text.count >= 8 else { return false }  // Increased from 4 to 8 chars
         
         let words = text.split(separator: " ").filter { !$0.isEmpty }
-        guard words.count >= 2 else { return false }
+        guard words.count >= 3 else { return false }  // Increased from 2 to 3 words
+        
+        // Additional: Skip very short words (likely typos/fragments)
+        let meaningfulWords = words.filter { $0.count >= 2 }
+        guard meaningfulWords.count >= 2 else { return false }
         
         return true
     }
@@ -2032,6 +2040,16 @@ extension ToneSuggestionCoordinator {
     private func performFullTextAnalysis(fullText: String, textHash: String) async {
         guard !isAnalysisInFlight else {
             print("📄 ToneCoordinator: Analysis already in flight, skipping")
+            return
+        }
+        
+        // Check cache first to avoid redundant API calls
+        if let cached = analysisCache[textHash],
+           Date().timeIntervalSince(cached.timestamp) < cacheExpiryInterval {
+            print("📄 ToneCoordinator: Using cached result for hash: \(textHash.prefix(8))")
+            await MainActor.run {
+                self.delegate?.didUpdateToneStatus(cached.tone)
+            }
             return
         }
         
@@ -2071,6 +2089,15 @@ extension ToneSuggestionCoordinator {
         
         print("📄 ToneCoordinator: Analysis complete - docSeq: \(expectedDocSeq), ui_tone: \(uiTone), duration: \(Int(duration * 1000))ms")
         print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", uiDistribution["clear"] ?? 0)), caution: \(String(format: "%.2f", uiDistribution["caution"] ?? 0)), alert: \(String(format: "%.2f", uiDistribution["alert"] ?? 0))")
+        
+        // Cache the result for future requests
+        analysisCache[expectedHash] = (tone: uiTone, timestamp: Date())
+        
+        // Clean up old cache entries (keep memory usage bounded)
+        let now = Date()
+        analysisCache = analysisCache.filter { _, cached in
+            now.timeIntervalSince(cached.timestamp) < cacheExpiryInterval
+        }
         
         // Apply document tone to UI directly
         applyDocumentTone(uiTone: uiTone, uiDistribution: uiDistribution, confidence: confidence)

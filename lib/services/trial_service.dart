@@ -20,7 +20,8 @@ class TrialService extends ChangeNotifier {
   static const String _lastResetDateKey = 'last_daily_reset_date';
   static const String _expiringBannerDismissedKey = 'expiring_banner_dismissed';
   static const int _trialDurationDays = 7;
-  static const int _dailySecureFixesLimit = 10;
+  static const int _dailySecureFixesLimit =
+      5; // Reduced from 10 to 5 for cost control
 
   DateTime? _trialStartDate;
   bool _isTrialActive = false;

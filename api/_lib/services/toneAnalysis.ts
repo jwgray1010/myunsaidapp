@@ -3246,7 +3246,7 @@ export class ToneAnalysisService {
       'secure', // default attachment style for full-text mode
       context,
       null, // let function load data
-      { text } // pass text so enforceBucketGuardsV2 can run
+      { text, conservative: true } // backend-first mode - respect tone analysis
     );
     
     // Apply document-level safety gates
@@ -3269,7 +3269,7 @@ export class ToneAnalysisService {
           'secure',
           context,
           null,
-          { text } // pass text so enforceBucketGuardsV2 can run
+          { text, conservative: true } // backend-first mode for safety gates too
         );
         
         // Return with document-level metadata and safety gate applied
@@ -3416,11 +3416,21 @@ export function mapToneToBuckets(
   
   const bucketMap = data.toneBucketMapping || data.toneBucketMap || {};
   const defaultBuckets = bucketMap.toneBuckets || bucketMap.default || {};
-  const contextOverrides = bucketMap.contextOverrides || {};
-  const intensityShifts = bucketMap.intensityShifts || {};
   
   const tone = toneResult.classification || toneResult.tone?.classification || toneResult.primary_tone || 'neutral';
   const confidence = toneResult.confidence || toneResult.tone?.confidence || 0.5;
+  
+  // ⬇️ NEW: conservative switch — base-only, no nudges
+  if (config?.conservative === true) {
+    const base = defaultBuckets[tone]?.base || defaultBuckets[bucketMap.defaultBucket || 'general_support']?.base || { clear:0.5, caution:0.3, alert:0.2 };
+    const total = base.clear + base.caution + base.alert || 1;
+    const buckets = { clear: base.clear/total, caution: base.caution/total, alert: base.alert/total };
+    logger.info('Using conservative mode - pure base distribution', { tone, buckets, mode: 'conservative' });
+    return { buckets, metadata: { tone, confidence, attachmentStyle, contextKey, mode: 'conservative' } };
+  }
+  
+  const contextOverrides = bucketMap.contextOverrides || {};
+  const intensityShifts = bucketMap.intensityShifts || {};
   
   
   logger.info('mapToneToBuckets debug', { 

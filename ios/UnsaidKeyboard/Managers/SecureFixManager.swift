@@ -31,7 +31,7 @@ final class SecureFixManager {
     private let logger = Logger(subsystem: "com.example.unsaid.UnsaidKeyboard", category: "SecureFixManager")
 
     // MARK: - Config
-    private let maxDailySecureFixUses = 10
+    private let maxDailySecureFixUses = 5  // Reduced from 10 to 5 for cost control
     private let secureFixUsageKey = "SecureFixDailyUsage"
     private let secureFixDayKey = "SecureFixUsageDay" // yyyyMMdd as Int
     private let sharedDefaults = AppGroups.shared
