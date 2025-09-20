@@ -236,14 +236,14 @@ final class KeyboardController: UIView,
             return
         }
         
-        guard let toneScheduler = toneScheduler else { 
-            print("❌ DEBUG: toneScheduler is nil in scheduleAnalysisRouter")
+        guard let coordinator = coordinator else { 
+            print("❌ DEBUG: coordinator is nil in scheduleAnalysisRouter")
             return 
         }
         
-        print("✅ DEBUG: toneScheduler exists and network is reachable, proceeding with full-text analysis")
+        print("✅ DEBUG: coordinator exists and network is reachable, proceeding with full-text analysis")
         
-        // Cancel any existing analysis task (debouncing handled by ToneScheduler)
+        // Cancel any existing analysis task (debouncing handled by ToneSuggestionCoordinator)
         analyzeTask?.cancel()
         
         // Get full text for document-level analysis
@@ -271,7 +271,7 @@ final class KeyboardController: UIView,
             triggerReason = "deletion"
         } else if let inserted = lastInserted {
             // Check for punctuation that should trigger immediate analysis
-            if toneScheduler.shouldTriggerImmediate(for: inserted) {
+            if coordinator.shouldTriggerImmediate(for: inserted) {
                 triggerReason = "punctuation"
             } else {
                 triggerReason = "input"
@@ -280,16 +280,16 @@ final class KeyboardController: UIView,
             triggerReason = "idle"
         }
         
-        // Use ToneScheduler for document-level analysis
-        if urgent || (lastInserted != nil && toneScheduler.shouldTriggerImmediate(for: lastInserted!)) {
+        // Use ToneSuggestionCoordinator for document-level analysis
+        if urgent || (lastInserted != nil && coordinator.shouldTriggerImmediate(for: lastInserted!)) {
             // Immediate analysis for urgent cases or punctuation
-            toneScheduler.scheduleImmediate(fullText: fullText, triggerReason: triggerReason)
+            coordinator.scheduleImmediateFullTextAnalysis(fullText: fullText, triggerReason: triggerReason)
         } else {
             // Regular debounced analysis
-            toneScheduler.schedule(fullText: fullText, triggerReason: triggerReason)
+            coordinator.scheduleFullTextAnalysis(fullText: fullText, triggerReason: triggerReason)
         }
         
-        print("🚀 DEBUG: Full-text analysis scheduled with ToneScheduler - reason: \(triggerReason)")
+        print("🚀 DEBUG: Full-text analysis scheduled with ToneSuggestionCoordinator - reason: \(triggerReason)")
     }
     
     // Unified haptic feedback method with instant micro-haptics
