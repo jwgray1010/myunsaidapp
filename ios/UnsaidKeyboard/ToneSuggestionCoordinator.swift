@@ -95,7 +95,7 @@ final class ToneSuggestionCoordinator {
     private let instanceId = UUID().uuidString
     
     // MARK: - Full-Text Analysis State (replacing ToneScheduler)
-    private let debounceInterval: TimeInterval = 1.0 // Increased from 400ms to 1s for scale
+    private let debounceInterval: TimeInterval = 2.0 // 2s debounce for better rate limiting
     private var currentDocSeq: Int = 0
     private var lastTextHash: String = ""
     private var debounceTask: Task<Void, Never>?
@@ -103,7 +103,7 @@ final class ToneSuggestionCoordinator {
     
     // MARK: - Response Caching for Scale
     private var analysisCache: [String: (tone: String, timestamp: Date)] = [:]
-    private let cacheExpiryInterval: TimeInterval = 30.0 // Cache results for 30s
+    private let cacheExpiryInterval: TimeInterval = 60.0 // Cache results for 60s (increased from 30s)
     
     // MARK: - Circuit Breaker (used for suggestions/observe)
     private struct CircuitKey: Hashable { let host: String; let path: String }
@@ -379,10 +379,10 @@ final class ToneSuggestionCoordinator {
     
     // MARK: - Client-Side Rate Limiting
     
-    /// Simple token bucket rate limiter (max 12 calls per 10 seconds)
+    /// Simple token bucket rate limiter (max 8 calls per 12 seconds)
     private class TokenBucket {
-        private let maxTokens: Int = 12
-        private let refillInterval: TimeInterval = 10.0
+        private let maxTokens: Int = 8
+        private let refillInterval: TimeInterval = 12.0
         private var tokens: Int
         private var lastRefill: Date
         
@@ -647,18 +647,22 @@ final class ToneSuggestionCoordinator {
     private var pendingRequests: [String: URLSessionDataTask] = [:]
     
     func requestSuggestions() {
+        print("🎯 DEBUG: requestSuggestions() called with currentText length: \(currentText.count)")
+        
         pendingWorkItem?.cancel()
         let snapshot = currentText
         suggestionSnapshot = snapshot
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             guard !snapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                print("🎯 DEBUG: Snapshot is empty, clearing suggestions")
                 DispatchQueue.main.async {
                     self.delegate?.didUpdateSuggestions([])
                     self.delegate?.didUpdateSecureFixButtonState()
                 }
                 return
             }
+            print("🎯 DEBUG: Calling generatePerfectSuggestion with snapshot: '\(String(snapshot.prefix(50)))...'")
             self.generatePerfectSuggestion(from: snapshot)
         }
         pendingWorkItem = work
@@ -669,6 +673,14 @@ final class ToneSuggestionCoordinator {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             completion(nil); return
         }
+        
+        // Check client-side rate limiting
+        guard rateLimiter.allowRequest() else {
+            print("🚫 Suggestions: Rate limit exceeded, skipping")
+            completion(nil)
+            return
+        }
+        
         let now = Date()
         if suggestionsInFlight || now.timeIntervalSince(lastSuggestionsAt) < suggestionTapCooldown {
             completion(nil); return
@@ -686,6 +698,7 @@ final class ToneSuggestionCoordinator {
             "userId": getUserId(),
             "userEmail": getUserEmail() ?? NSNull(),
             "features": ["advice", "evidence"],
+            "maxSuggestions": 3, // Limit to prevent API spam
             "meta": [
                 "source": "keyboard_tone_button",
                 "request_type": "suggestion",
@@ -737,8 +750,12 @@ final class ToneSuggestionCoordinator {
         onQ {
             self.currentText = ""
             self.suggestions = []
+            self.lastTextHash = ""
+            self.sentenceToneCache.removeAll()
             DispatchQueue.main.async {
+                self.lastUiTone = .neutral
                 self.delegate?.didUpdateSuggestions([])
+                self.delegate?.didUpdateToneStatus("neutral")
                 self.delegate?.didUpdateSecureFixButtonState()
             }
         }
@@ -746,14 +763,19 @@ final class ToneSuggestionCoordinator {
     
     // MARK: - Suggestion Generation
     private func generatePerfectSuggestion(from snapshot: String = "") {
+        print("🎯 DEBUG: generatePerfectSuggestion called with snapshot length: \(snapshot.count)")
+        
         var textToAnalyze = snapshot.isEmpty ? currentText : snapshot
         if textToAnalyze.count > 1000 { textToAnalyze = String(textToAnalyze.suffix(1000)) }
+        
+        print("🎯 DEBUG: About to analyze text: '\(String(textToAnalyze.prefix(50)))...' (length: \(textToAnalyze.count))")
         
         var context: [String: Any] = [
             "text": textToAnalyze,
             "userId": getUserId(),
             "userEmail": getUserEmail() ?? NSNull(),
             "features": ["advice", "evidence"],
+            "maxSuggestions": 3, // Limit to prevent API spam
             "meta": [
                 "source": "keyboard_manual",
                 "request_type": "suggestion",
@@ -1277,6 +1299,12 @@ final class ToneSuggestionCoordinator {
     func debugTestToneAPI(with text: String = "You never listen to me and it's really frustrating") {
         KBDLog("🧪 Testing tone API with text: '\(text)'", .info)
         
+        // Check client-side rate limiting first
+        guard rateLimiter.allowRequest() else {
+            KBDLog("🧪 Rate limit exceeded - cannot test API", .error)
+            return
+        }
+        
         // 🧪 Quick sanity test - Test aggressive phrase locally
         let testPhrase = "I fucking hate you!"
         print("🧪 SANITY TEST: Testing aggressive phrase '\(testPhrase)'")
@@ -1425,6 +1453,19 @@ extension ToneSuggestionCoordinator {
         print("📧 DEBUG: ToneSuggestionCoordinator.onTextChanged called")
         print("📧 DEBUG: fullText length: \(fullText.count), lastInserted: \(lastInserted?.description ?? "nil"), isDeletion: \(isDeletion)")
         print("📧 DEBUG: fullText preview: '\(String(fullText.prefix(100)))...'")
+        
+        // Reset to neutral immediately if text is empty or becomes too short
+        let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            print("📧 DEBUG: Text is empty - immediately resetting to neutral")
+            lastUiTone = .neutral
+            delegate?.didUpdateToneStatus("neutral")
+            // Clear cached analysis data
+            sentenceToneCache.removeAll()
+            lastTextHash = ""
+            updateCurrentText(fullText)
+            return
+        }
         
         // Keep currentText in sync for suggestions
         updateCurrentText(fullText)
@@ -1974,15 +2015,31 @@ extension ToneSuggestionCoordinator {
         let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
         let textHash = sha256(trimmed)
         
-        // Skip if text is empty or unchanged
-        guard !trimmed.isEmpty, textHash != lastTextHash else {
-            print("📄 ToneCoordinator: Skipping analysis - empty or unchanged text")
+        // Reset to neutral if text is empty
+        if trimmed.isEmpty {
+            print("📄 ToneCoordinator: Text is empty - resetting to neutral")
+            Task { @MainActor in
+                self.lastUiTone = .neutral
+                self.delegate?.didUpdateToneStatus("neutral")
+            }
+            lastTextHash = ""
             return
         }
         
-        // Skip if text is too short (client-side gate matching server)
+        // Skip if unchanged
+        guard textHash != lastTextHash else {
+            print("📄 ToneCoordinator: Skipping analysis - unchanged text")
+            return
+        }
+        
+        // Reset to neutral if text is too short (but not empty)
         guard shouldAnalyzeFullText(trimmed) else {
-            print("📄 ToneCoordinator: Skipping analysis - text too short (\(trimmed.count) chars)")
+            print("📄 ToneCoordinator: Text too short (\(trimmed.count) chars) - resetting to neutral")
+            Task { @MainActor in
+                self.lastUiTone = .neutral
+                self.delegate?.didUpdateToneStatus("neutral")
+            }
+            lastTextHash = textHash
             return
         }
         
@@ -2005,8 +2062,30 @@ extension ToneSuggestionCoordinator {
         let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
         let textHash = sha256(trimmed)
         
-        guard !trimmed.isEmpty, textHash != lastTextHash else { return }
-        guard shouldAnalyzeFullText(trimmed) else { return }
+        // Reset to neutral if text is empty
+        if trimmed.isEmpty {
+            print("📄 ToneCoordinator: [Immediate] Text is empty - resetting to neutral")
+            Task { @MainActor in
+                self.lastUiTone = .neutral
+                self.delegate?.didUpdateToneStatus("neutral")
+            }
+            lastTextHash = ""
+            return
+        }
+        
+        // Skip if unchanged
+        guard textHash != lastTextHash else { return }
+        
+        // Reset to neutral if text is too short (but not empty)
+        guard shouldAnalyzeFullText(trimmed) else {
+            print("📄 ToneCoordinator: [Immediate] Text too short (\(trimmed.count) chars) - resetting to neutral")
+            Task { @MainActor in
+                self.lastUiTone = .neutral
+                self.delegate?.didUpdateToneStatus("neutral")
+            }
+            lastTextHash = textHash
+            return
+        }
         
         print("📄 ToneCoordinator: Immediate full-text analysis for \(trimmed.count) chars, trigger: \(triggerReason)")
         
@@ -2040,6 +2119,12 @@ extension ToneSuggestionCoordinator {
     private func performFullTextAnalysis(fullText: String, textHash: String) async {
         guard !isAnalysisInFlight else {
             print("📄 ToneCoordinator: Analysis already in flight, skipping")
+            return
+        }
+        
+        // Check client-side rate limiting
+        guard rateLimiter.allowRequest() else {
+            print("📄 ToneCoordinator: Rate limit exceeded, skipping full-text analysis")
             return
         }
         

@@ -19,6 +19,50 @@ function getUserId(req: VercelRequest): string {
   return req.headers['x-user-id'] as string || 'anonymous';
 }
 
+// Helper: ABSOLUTE EMERGENCY fallbacks - only for complete system failures
+function ensureAtLeastOneSuggestion(items: any[], originalWasEmpty: boolean = false): any[] {
+  // STRICT: Only provide fallback if the original suggestions service returned completely empty
+  // AND this is explicitly marked as an emergency situation
+  if (Array.isArray(items) && items.length > 0) return items;
+  if (!originalWasEmpty) return []; // NEVER override if main service had any content
+  
+  // Log this critical situation
+  console.error('CRITICAL FALLBACK: Main suggestions service completely failed to return content');
+  
+  // Absolute emergency fallbacks - minimal, non-therapeutic generic advice
+  const emergencyFallbacks = [
+    {
+      id: 'critical-emergency-1',
+      advice: 'System temporarily unavailable. Please try again in a moment.',
+      category: 'system',
+      triggerTone: 'neutral',
+      contexts: ['general'],
+      ltrScore: 0.05, // Extremely low score
+    },
+    {
+      id: 'critical-emergency-2', 
+      advice: 'Unable to provide suggestions right now. Please check your connection.',
+      category: 'system',
+      triggerTone: 'neutral',
+      contexts: ['general'],
+      ltrScore: 0.05,
+    }
+  ];
+  
+  // Return only ONE fallback to minimize interference
+  const randomIndex = Math.floor(Math.random() * emergencyFallbacks.length);
+  return [emergencyFallbacks[randomIndex]];
+}
+
+// Helper: Post-shift bucket normalization (no NaN/negatives)
+function normalizeBuckets(b: any) {
+  const clamp = (v: any) => Number.isFinite(v) ? Math.max(0, v) : 0;
+  const c = { clear: clamp(b?.clear), caution: clamp(b?.caution), alert: clamp(b?.alert) };
+  let sum = c.clear + c.caution + c.alert;
+  if (sum <= 0) { c.clear = 1; c.caution = 0; c.alert = 0; sum = 1; }
+  return { clear: c.clear/sum, caution: c.caution/sum, alert: c.alert/sum };
+}
+
 const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
   await bootPromise;
   const startTime = Date.now();
@@ -255,13 +299,18 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       dataLoader.getAttachmentToneWeights()
     );
 
-    const { primary: finalPrimary, distribution: uiBuckets } = applyThresholdShift(
+    const { primary: finalPrimary, distribution: rawBuckets } = applyThresholdShift(
       adjustedBuckets,
       attachmentStyle as any,
       dataLoader.getAttachmentToneWeights()
     );
 
-    const ui_tone = finalPrimary; // 'clear' | 'caution' | 'alert'
+    const uiBuckets = normalizeBuckets(rawBuckets);
+
+    const toneFromDist =
+      uiBuckets.clear >= uiBuckets.caution && uiBuckets.clear >= uiBuckets.alert ? 'clear' :
+      uiBuckets.alert >= uiBuckets.caution ? 'alert' : 'caution';
+    const ui_tone = finalPrimary || toneFromDist;
     
     // Session-only processing - no persistent dialogue state for mass users
     
@@ -274,6 +323,9 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       attachment: attachmentEstimate.primary,
       isNewUser
     });
+    
+    // Don't apply emergency fallback here - wait until after response mapping
+    let picked = suggestionAnalysis.suggestions || [];
     
     const response = {
       text: suggestionAnalysis.original_text,
@@ -308,23 +360,24 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       userId,
       attachmentEstimate,
       isNewUser,
-      suggestions: suggestionAnalysis.suggestions.map((s: any, index: number) => ({
-        id: index + 1,
-        text: s.text,
-        type: s.type,
-        confidence: s.confidence,
-        reason: s.reason,
-        category: s.category,
-        priority: s.priority,
-        context_specific: s.context_specific,
-        attachment_informed: s.attachment_informed
+      suggestions: picked.map((s: any, index: number) => ({
+        id: s.id ?? `${index + 1}`,                              // stable ID if engine provided one
+        text: s.text ?? s.advice,                                 // engine uses .advice internally
+        type: s.type ?? 'advice',
+        confidence: Math.max(0, Math.min(1, s.confidence ?? 0.55)),
+        reason: s.reason ?? 'Therapeutic advice based on tone + context',
+        category: s.category ?? (Array.isArray(s.categories) ? s.categories[0] : 'emotional'),
+        categories: s.categories ?? (s.category ? [s.category] : ['emotional']),
+        priority: s.priority ?? 1,
+        context_specific: s.context_specific ?? true,
+        attachment_informed: s.attachment_informed ?? true
       })),
       analysis_meta: suggestionAnalysis.analysis_meta,
       metadata: {
         processingTimeMs: processingTime,
         model_version: 'v1.0.0-advanced',
         attachment_informed: true,
-        suggestion_count: suggestionAnalysis.suggestions.length,
+        suggestion_count: picked.length,
         status: 'active', // Always active - learning happens in background
         feature_noticings: [], // Session-only processing for mass users
         
@@ -336,6 +389,78 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
         attachment_insights_count: fullToneAnalysis?.attachmentInsights?.length || 0
       }
     };
+    
+    // Apply emergency fallback ONLY for true system failures
+    const wasMainServiceEmpty = !suggestionAnalysis.suggestions || suggestionAnalysis.suggestions.length === 0;
+    const wasMainServiceSuccessful = suggestionAnalysis.success !== false; // Check if service reported success
+    const hadValidPickedData = picked && picked.length > 0;
+    
+    // Triple check: only fallback if ALL conditions indicate true emergency
+    const isTrueEmergency = wasMainServiceEmpty && 
+                           (!Array.isArray(response.suggestions) || response.suggestions.length === 0) &&
+                           wasMainServiceSuccessful; // Don't fallback if service explicitly failed
+                           
+    if (isTrueEmergency) {
+      // Absolute emergency: main service found no content AND response mapping produced nothing
+      logger.error('CRITICAL: Emergency fallback triggered - complete system failure to generate suggestions', { 
+        userId, 
+        text: data.text,
+        context: data.context,
+        wasMainServiceEmpty,
+        hadValidPickedData,
+        originalSuggestionsLength: suggestionAnalysis.suggestions?.length || 0,
+        serviceSuccess: suggestionAnalysis.success,
+        timestamp: new Date().toISOString()
+      });
+      
+      const emergencyFallbacks = ensureAtLeastOneSuggestion([], true);
+      response.suggestions = emergencyFallbacks.map((s: any, index: number) => ({
+        id: s.id ?? `critical-emergency-${index + 1}`,
+        text: s.advice ?? s.text,
+        type: 'system_message', // Clearly mark as non-therapeutic
+        confidence: 0.05, // Extremely low confidence
+        reason: 'Critical system fallback - main suggestions service failed',
+        category: 'system',
+        categories: ['system'],
+        priority: 999, // Lowest priority
+        context_specific: false,
+        attachment_informed: false
+      }));
+      response.metadata.suggestion_count = response.suggestions.length;
+      response.metadata.status = 'emergency_fallback'; // Flag for monitoring via existing field
+    }
+    
+    // Final response boundary check - should not be needed due to emergency fallback above
+    if (!Array.isArray(response.suggestions) || response.suggestions.length === 0) {
+      logger.error('Critical: No suggestions at response boundary despite emergency fallback', {
+        userId,
+        originalText: data.text,
+        context: data.context,
+        suggestionsServiceLength: suggestionAnalysis?.suggestions?.length || 0,
+        timestamp: new Date().toISOString()
+      });
+      
+      // This should never happen if emergency fallback worked correctly
+      response.suggestions = [{
+        id: 'critical-fallback-1',
+        text: 'System temporarily unavailable. Please try again.',
+        type: 'advice',
+        confidence: 0.1,
+        reason: 'Critical system fallback',
+        category: 'emotional',
+        categories: ['emotional'],
+        priority: 1,
+        context_specific: false,
+        attachment_informed: false
+      }];
+      response.metadata.suggestion_count = 1;
+    }
+
+    const b = response.ui_distribution;
+    if (!b || [b.clear, b.caution, b.alert].some(v => !Number.isFinite(v))) {
+      logger.warn('Invalid ui_distribution at boundary; normalizing');
+      response.ui_distribution = normalizeBuckets(b || { clear: 1, caution: 0, alert: 0 });
+    }
     
     return response;
   } catch (error) {

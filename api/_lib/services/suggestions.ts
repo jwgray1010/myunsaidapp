@@ -434,7 +434,7 @@ function mmr(pool: any[], qVec: Float32Array | null, vecOf: (it:any)=>Float32Arr
   return out;
 }
 
-async function hybridRetrieve(text: string, contextLabel: string, toneKey: string, k=200) {
+async function hybridRetrieve(text: string, contextLabel: string, toneKey: string, k=120) { // 120 is plenty with MMR
   const corpus = getAdviceCorpus();
   logger.info('hybridRetrieve started', { 
     corpusSize: corpus.length, 
@@ -752,7 +752,8 @@ class AdviceEngine {
       severityFit: 1.2,
       phraseEdgeBoost: 0.4,
       premiumBoost: 0.2,
-      secondPersonBoost: 0.8
+      secondPersonBoost: 0.8,
+      actionabilityBoost: 0.1
     };
 
     const wm = getWeightMods();
@@ -971,6 +972,29 @@ class AdviceEngine {
       // Apply the category boost as a multiplier after all additive scoring
       s *= categoryBoost;
 
+      // Actionability and brevity rewards
+      const advice = String(it.advice || '');
+      const adviceWords = advice.split(/\s+/).filter(w => w.length > 0);
+      
+      // Actionability: reward imperative phrases and concrete actions
+      const actionabilityKeywords = ['try', 'consider', 'ask', 'say', 'tell', 'share', 'express', 'communicate', 'listen', 'focus', 'avoid', 'remember', 'start', 'stop', 'use', 'practice'];
+      const hasActionable = actionabilityKeywords.some(keyword => 
+        advice.toLowerCase().includes(keyword)
+      );
+      if (hasActionable) s += W.actionabilityBoost || 0.1;
+      
+      // Brevity: reward concise suggestions (optimal 10-25 words)
+      const wordCount = adviceWords.length;
+      let brevityBoost = 0;
+      if (wordCount >= 10 && wordCount <= 25) {
+        brevityBoost = 0.15; // Sweet spot
+      } else if (wordCount >= 8 && wordCount <= 30) {
+        brevityBoost = 0.08; // Good range
+      } else if (wordCount > 40) {
+        brevityBoost = -0.1; // Penalty for verbosity
+      }
+      s += brevityBoost;
+
       // Tier
       if (signals.tier === 'premium') s += W.premiumBoost;
 
@@ -994,6 +1018,41 @@ class AdviceEngine {
     scored.forEach((item, idx) => {
       item.ltrScore = Number(calibratedScores[idx].toFixed(4));
     });
+
+    // Apply duplicate penalty based on Jaccard similarity
+    const jaccardSimilarity = (text1: string, text2: string): number => {
+      const words1 = new Set(text1.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+      const words2 = new Set(text2.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+      
+      const intersection = new Set([...words1].filter(w => words2.has(w)));
+      const union = new Set([...words1, ...words2]);
+      
+      return union.size === 0 ? 0 : intersection.size / union.size;
+    };
+
+    // Apply duplicate penalties (compare each item against higher-scored items)
+    for (let i = 0; i < scored.length; i++) {
+      const currentItem = scored[i];
+      const currentAdvice = String(currentItem.advice || '');
+      
+      let maxSimilarity = 0;
+      for (let j = 0; j < i; j++) {
+        const otherItem = scored[j];
+        const otherAdvice = String(otherItem.advice || '');
+        
+        // Only compare if other item has higher or equal score
+        if ((otherItem.ltrScore ?? 0) >= (currentItem.ltrScore ?? 0)) {
+          const similarity = jaccardSimilarity(currentAdvice, otherAdvice);
+          maxSimilarity = Math.max(maxSimilarity, similarity);
+        }
+      }
+      
+      // Apply penalty based on highest similarity found
+      if (maxSimilarity > 0.3) { // 30% similarity threshold
+        const penalty = maxSimilarity * 0.5; // Scale penalty by similarity
+        currentItem.ltrScore = (currentItem.ltrScore ?? 0) - penalty;
+      }
+    }
 
     return scored.sort((a,b)=> {
       // Primary sort: ltrScore descending
@@ -1111,51 +1170,79 @@ class SuggestionsService {
       throw new Error('Critical dependency missing: profanity_lexicons.json not loaded');
     }
 
+    // Initialize guardrail counters for better visibility
+    const guardrailCounters = {
+      profanity: 0,
+      blockedPattern: 0,
+      contextInappropriate: 0,
+      alertContextUnsafe: 0,
+      softenerRequirements: 0,
+      intensityGuardrails: 0,
+      total: suggestions.length
+    };
+
     const filteredSuggestions = suggestions.filter(suggestion => {
       // 1. Profanity filtering (with targeting awareness)
       const is2P = analysis?.secondPerson?.hasSecondPerson || 
                    (Array.isArray(analysis?.entities) && analysis.entities.some((e:any)=>e.label==='PRON_2P'));
       if (this.containsProfanity(suggestion.advice, profanityLexicons, is2P)) {
         logger.warn(`Suggestion filtered for profanity: ${suggestion.id}`);
+        guardrailCounters.profanity++;
         return false;
       }
 
       // 2. Blocked pattern checking
       if (this.matchesBlockedPattern(suggestion.advice, guardrailConfig.blockedPatterns || [])) {
         logger.warn(`Suggestion filtered for blocked pattern: ${suggestion.id}`);
+        guardrailCounters.blockedPattern++;
         return false;
       }
 
       // 3. Context appropriateness
       if (!this.isContextAppropriate(suggestion, analysis)) {
         logger.warn(`Suggestion filtered for context inappropriateness: ${suggestion.id}`);
+        guardrailCounters.contextInappropriate++;
         return false;
       }
 
       // 4. Safety threshold checking
       if (analysis.toneBuckets?.primary === 'alert' && !this.isSafeForAlertContext(suggestion)) {
         logger.warn(`Suggestion filtered for alert context safety: ${suggestion.id}`);
+        guardrailCounters.alertContextUnsafe++;
         return false;
       }
 
       // 5. Enhanced guardrails: Softener requirement checks
       if (!this.passesSoftenerRequirements(suggestion, analysis, guardrailConfig)) {
         logger.warn(`Suggestion filtered for softener requirements: ${suggestion.id}`);
+        guardrailCounters.softenerRequirements++;
         return false;
       }
 
       // 6. Enhanced guardrails: Intensity-based safety checks
       if (!this.passesIntensityGuardrails(suggestion, analysis, guardrailConfig)) {
         logger.warn(`Suggestion filtered for intensity guardrails: ${suggestion.id}`);
+        guardrailCounters.intensityGuardrails++;
         return false;
       }
 
       return true;
     });
 
+    // Log detailed guardrail counters for better visibility
+    const filteredCount = guardrailCounters.total - filteredSuggestions.length;
     logger.info(`Guardrails applied`, { 
       poolSize: suggestions.length, 
-      rankedSize: filteredSuggestions.length 
+      rankedSize: filteredSuggestions.length,
+      filteredCount,
+      reasons: {
+        profanity: guardrailCounters.profanity,
+        blockedPattern: guardrailCounters.blockedPattern,
+        contextInappropriate: guardrailCounters.contextInappropriate,
+        alertContextUnsafe: guardrailCounters.alertContextUnsafe,
+        softenerRequirements: guardrailCounters.softenerRequirements,
+        intensityGuardrails: guardrailCounters.intensityGuardrails
+      }
     });
     return filteredSuggestions;
   }
@@ -1453,7 +1540,8 @@ class SuggestionsService {
     const intensityScore = analysis.flags.intensityScore;
 
     // 2) Retrieve (hybrid)
-    const pool = await hybridRetrieve(text, contextLabel, toneKeyNorm, 200);
+    const desired = Math.max(10, (options.maxSuggestions ?? 6) * 20);
+    const pool = await hybridRetrieve(text, contextLabel, toneKeyNorm, desired);
     logger.info('Hybrid retrieval completed', { 
       userId: options.userId || 'anonymous',
       poolSize: pool.length, 
@@ -1513,8 +1601,18 @@ class SuggestionsService {
     });
     logger.info('Ranking completed', { rankedSize: ranked.length, personalizedSize: personalized.length });
 
+    // Category guard to avoid near-duplicates
+    const seenCats = new Set<string>();
+    const rankedDedup = ranked.filter(it => {
+      const cat = (it.category || it.categories?.[0] || 'general').toLowerCase();
+      if (seenCats.has(cat)) return false;
+      seenCats.add(cat);
+      return true;
+    });
+
     // 7) Diversity pick
-    let picked = diversify(ranked, Math.max(3, Math.min(10, maxSuggestions)));
+    const diversifyK = Math.max(1, Math.min(20, options.maxSuggestions ?? 6));
+    let picked = diversify(rankedDedup, diversifyK, 0.87);
     logger.info('Diversity pick completed', { pickedSize: picked.length, targetMax: Math.max(3, Math.min(10, maxSuggestions)) });
 
     // Adjust for new users: provide fewer, more general suggestions
@@ -1534,7 +1632,29 @@ class SuggestionsService {
     });
 
     // 8) Calibrate confidence per context
-    const calibrated = picked.map(it => ({ ...it, __calib: calibrate(it.ltrScore || 0.5, contextLabel) }));
+    const calibrated = picked.map(it => ({
+      ...it,
+      __calib: calibrate(it.ltrScore || 0.5, contextLabel)
+    }));
+
+    // Enforce per-context confidence floors (load from evaluation_tones.json if present)
+    const evalTones = dataLoader.get('evaluationTones') || {};
+    const minConfByCtx = (evalTones.min_confidence && evalTones.min_confidence[contextLabel])
+      || evalTones.min_confidence_default
+      || 0.55; // reasonable default if json missing
+
+    // Keep only strong items first; if none pass, keep the top 1
+    let strong = calibrated
+      .filter(it => (it.__calib ?? 0) >= minConfByCtx)
+      // deterministic by calibrated conf then ltrScore
+      .sort((a,b) => (b.__calib - a.__calib) || (b.ltrScore - a.ltrScore));
+    if (strong.length === 0 && calibrated.length > 0) {
+      strong = [ [...calibrated].sort((a,b) => (b.__calib - a.__calib) || (b.ltrScore - a.ltrScore) )[0] ];
+    }
+
+    // Decide the final K (never exceed 10, default 3)
+    const topK = Math.max(1, Math.min(10, options.maxSuggestions ?? 3));
+    const finalPicked = strong.slice(0, topK);
 
     // 9) Build tone bucket dist for response header (from toneKeyNorm)
     const { primary, dist } = this.adviceEngine.resolveToneBucket(
@@ -1545,7 +1665,7 @@ class SuggestionsService {
     );
 
     // 10) Assemble response (no fallbacks)
-    const finalSuggestions = calibrated.map(({ advice, categories, ltrScore, id, __calib }) => ({
+    const finalSuggestions = finalPicked.map(({ advice, categories, ltrScore, id, __calib }) => ({
       id,
       text: advice, // Direct therapy advice text from therapy_advice.json
       categories,
@@ -1560,7 +1680,7 @@ class SuggestionsService {
     }));
 
     // Cache the final suggestions for future use
-    performanceCache.setCachedSuggestions(analysisKey, finalSuggestions, maxSuggestions, tier);
+    performanceCache.setCachedSuggestions(analysisKey, finalSuggestions, topK, tier);
     logger.info('Suggestions cached', { count: finalSuggestions.length, tier, maxSuggestions });
 
     return {

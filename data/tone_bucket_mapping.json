@@ -1,211 +1,61 @@
 {
-  "version": "2.1.1",
-  "notes": "Production-hardened and backward compatible. Includes clear-eligibility guards so generic tokens cannot flip tense messages to clear.",
+  "version": "2.1.1-accurate",
+  "notes": "Full-text tuned. Conservative, non-invasive mapping from backend tone -> {clear,caution,alert}. Minimal context/intensity nudges. Safe even if eligibility is applied.",
   "defaultBucket": "general_support",
 
   "engine": {
-    "applyOrder": [
-      "base_distribution",
-      "bucket_thresholds",
-      "context_boosts",
-      "attachment_overrides",
-      "premium_filter",
-      "normalize",
-      "diversity_penalty",
-      "topk_sampling"
-    ],
-    "combination": {
-      "contextMode": "additive",
-      "attachmentMode": "additive",
-      "normalizeMode": "l1",
-      "mathDomain": "logit"
-    },
-    "thresholds": {
-      "mode": "soft"
-    },
-    "premium": {
-      "nonPremiumFallbacks": {
-        "affirmation": "validation_prompt",
-        "expansion": "clarity_request",
-        "secure_fix": "repair_language"
-      }
-    },
-    "sampling": {
-      "topK": 3,
-      "temperature": 0.25,
-      "minWeight": 0.02
-    },
-    "diversity": {
-      "cooldownMs": 30000,
-      "historyWindow": 5,
-      "repeatPenalty": 0.15,
-      "dedupeByAdviceTag": true
-    },
-    "telemetry": {
-      "enabled": true,
-      "emitDebugTrace": false,
-      "events": {
-        "selected": "tone.suggestion.selected",
-        "blocked_premium": "tone.suggestion.premium_blocked",
-        "threshold_block": "tone.bucket.threshold_block",
-        "normalized": "tone.weights.normalized"
-      }
-    },
-    "validation": {
-      "enforceSumOne": true,
-      "weightRange": [0.0, 1.0],
-      "thresholdRange": [0.0, 1.0],
-      "requireIdsToExist": true
-    }
+    "applyOrder": ["base_distribution", "context_boosts", "normalize"],
+    "combination": { "contextMode": "additive", "normalizeMode": "l1", "mathDomain": "logit" },
+    "validation": { "enforceSumOne": true, "weightRange": [0.0, 1.0], "thresholdRange": [0.0, 1.0], "requireIdsToExist": false }
   },
 
   "eligibility": {
     "clear": {
       "requirePhraseLevel": false,
       "excludeTokens": [],
-      "overshadow": { "by": "alert", "min": 0.85, "ratio": 5.0 },
-      "preferCautionIfBoth": 0.75
+      "overshadow": { "by": "alert", "min": 0.80, "ratio": 2.5 },
+      "preferCautionIfBoth": 0.50
     }
   },
 
   "toneBuckets": {
-    "general_support": { "base": { "clear": 0.70, "caution": 0.25, "alert": 0.05 } },
-    "angry":           { 
-      "base": { "clear": 0.15, "caution": 0.50, "alert": 0.35 },
-      "meta_classifier": true,
-      "fallback": { "clear": 0.10, "caution": 0.30, "alert": 0.60 },
-      "description": "Uses meta-classifier pAlert/pCaution to determine final distribution"
-    },
-    "frustrated":      { 
-      "base": { "clear": 0.25, "caution": 0.55, "alert": 0.20 },
-      "meta_classifier": true,
-      "fallback": { "clear": 0.15, "caution": 0.45, "alert": 0.40 }
-    },
-    "anxious":         { "base": { "clear": 0.20, "caution": 0.60, "alert": 0.20 } },
-    "sad":             { "base": { "clear": 0.25, "caution": 0.60, "alert": 0.15 } },
-    "assertive":       { 
-      "base": { "clear": 0.50, "caution": 0.35, "alert": 0.15 },
-      "meta_classifier": true,
-      "fallback": { "clear": 0.40, "caution": 0.40, "alert": 0.20 }
-    },
-    "positive":        { "base": { "clear": 0.80, "caution": 0.15, "alert": 0.05 } },
-    "supportive":      { "base": { "clear": 0.85, "caution": 0.12, "alert": 0.03 } },
-    "neutral":         { "base": { "clear": 0.50, "caution": 0.30, "alert": 0.20 } },
-    "tentative":       { "base": { "clear": 0.30, "caution": 0.60, "alert": 0.10 } },
-    "confident":       { "base": { "clear": 0.60, "caution": 0.25, "alert": 0.15 } },
-    "negative":        { 
-      "base": { "clear": 0.30, "caution": 0.50, "alert": 0.20 },
-      "meta_classifier": true,
-      "fallback": { "clear": 0.20, "caution": 0.50, "alert": 0.30 }
-    },
-    "safety_concern":  { "base": { "clear": 0.05, "caution": 0.25, "alert": 0.70 } }
+    "general_support": { "base": { "clear": 0.78, "caution": 0.18, "alert": 0.04 } },
+
+    "positive":        { "base": { "clear": 0.88, "caution": 0.10, "alert": 0.02 } },
+    "supportive":      { "base": { "clear": 0.90, "caution": 0.09, "alert": 0.01 } },
+    "confident":       { "base": { "clear": 0.80, "caution": 0.16, "alert": 0.04 } },
+    "assertive":       { "base": { "clear": 0.72, "caution": 0.22, "alert": 0.06 } },
+
+    "neutral":         { "base": { "clear": 0.62, "caution": 0.28, "alert": 0.10 } },
+    "tentative":       { "base": { "clear": 0.38, "caution": 0.56, "alert": 0.06 } },
+
+    "anxious":         { "base": { "clear": 0.26, "caution": 0.64, "alert": 0.10 } },
+    "sad":             { "base": { "clear": 0.30, "caution": 0.62, "alert": 0.08 } },
+    "frustrated":      { "base": { "clear": 0.24, "caution": 0.58, "alert": 0.18 } },
+    "negative":        { "base": { "clear": 0.28, "caution": 0.54, "alert": 0.18 } },
+    "angry":           { "base": { "clear": 0.12, "caution": 0.38, "alert": 0.50 } },
+
+    "safety_concern":  { "base": { "clear": 0.06, "caution": 0.22, "alert": 0.72 } }
   },
 
   "contextOverrides": {
     "conflict": {
-      "angry": { "alert": 0.01, "caution": -0.01 }
+      "angry":      { "alert": 0.02, "caution": -0.01 },
+      "frustrated": { "alert": 0.01, "caution":  0.00 }
     },
     "repair": {
-      "sad": { "clear": 0.01, "caution": 0.00 }
+      "sad":        { "clear": 0.02, "caution": -0.01 },
+      "supportive": { "clear": 0.01 }
+    },
+    "boundary": {
+      "assertive":  { "clear": 0.02, "caution": -0.01 }
     }
   },
 
   "intensityShifts": {
-    "thresholds": { "low": 0.15, "med": 0.35, "high": 0.60 },
-    "low":  { "clear": 0.01, "caution": 0.00, "alert": -0.01 },
-    "med":  { "clear": 0.00, "caution": 0.00, "alert":  0.00 },
-    "high": { "clear": -0.015, "caution": 0.00, "alert": 0.015 }
-  },
-
-  "bucketPolicies": {
-    "alert": {
-      "confidenceThreshold": 0.25,
-      "thresholdMode": "inherit",
-      "intensityFactor": 1.20,
-      "categories": ["conflict", "rupture", "anger", "shutdown"],
-      "suggestionBuckets": [
-        { "id": "deescalation",      "weight": 0.40 },
-        { "id": "repair_language",   "weight": 0.35 },
-        { "id": "pause_before_reply","weight": 0.25 }
-      ],
-      "attachmentOverrides": {
-        "anxious":      [ { "id": "self_soothing",    "weight": 0.30 }, { "id": "clarity_request",  "weight": 0.20 } ],
-        "avoidant":     [ { "id": "validation_prompt","weight": 0.25 }, { "id": "gentle_reconnect","weight": 0.25 } ],
-        "disorganized": [ { "id": "grounding",        "weight": 0.30 }, { "id": "repair_language",  "weight": 0.30 } ],
-        "secure":       [ { "id": "direct_repair",    "weight": 0.35 }, { "id": "clarity_request",  "weight": 0.15 } ]
-      },
-      "contextBoosts": {
-        "conflict": { "deescalation": 0.15, "repair_language": 0.10 },
-        "boundary": { "pause_before_reply": 0.10 }
-      },
-      "premiumOnly": false
-    },
-
-    "caution": {
-      "confidenceThreshold": 0.20,
-      "thresholdMode": "inherit",
-      "intensityFactor": 1.10,
-      "categories": ["worry", "uncertainty", "jealousy", "comparison"],
-      "suggestionBuckets": [
-        { "id": "validation_prompt", "weight": 0.35 },
-        { "id": "gentle_reconnect",  "weight": 0.25 },
-        { "id": "clarity_request",   "weight": 0.20 }
-      ],
-      "attachmentOverrides": {
-        "anxious":      [ { "id": "reassurance",       "weight": 0.40 } ],
-        "avoidant":     [ { "id": "autonomy_respect",  "weight": 0.25 } ],
-        "disorganized": [ { "id": "containment",       "weight": 0.30 } ],
-        "secure":       [ { "id": "reframe_positive",  "weight": 0.25 } ]
-      },
-      "contextBoosts": {
-        "insecurity": { "reassurance": 0.20 },
-        "comparison": { "validation_prompt": 0.10 }
-      },
-      "premiumOnly": false
-    },
-
-    "clear": {
-      "confidenceThreshold": 0.15,
-      "thresholdMode": "inherit",
-      "intensityFactor": 1.00,
-      "categories": ["neutral", "warmth", "praise", "playful"],
-      "suggestionBuckets": [
-        { "id": "affirmation", "weight": 0.40 },
-        { "id": "expansion",   "weight": 0.35 },
-        { "id": "secure_fix",  "weight": 0.25 }
-      ],
-      "attachmentOverrides": {
-        "anxious":      [ { "id": "gratitude",          "weight": 0.30 } ],
-        "avoidant":     [ { "id": "praise",             "weight": 0.25 } ],
-        "disorganized": [ { "id": "validation_prompt",  "weight": 0.25 } ],
-        "secure":       [ { "id": "expansion",          "weight": 0.30 } ]
-      },
-      "contextBoosts": {
-        "repair": { "affirmation": 0.15 },
-        "praise": { "gratitude":   0.10 }
-      },
-      "premiumOnly": true
-    }
-  },
-
-  "bucketDefinitions": {
-    "deescalation":        { "description": "Helps slow conflict and reduce intensity", "adviceTags": ["pause","slow_down","take_space"], "rewriteStyles": ["neutralize_intensity","gentle_tone"] },
-    "repair_language":     { "description": "Encourages micro-apologies, repair attempts, or reconnection bids", "adviceTags": ["repair","reconnect","acknowledge"], "rewriteStyles": ["soften_blame","add_accountability"] },
-    "pause_before_reply":  { "description": "Suggests waiting before responding to prevent escalation", "adviceTags": ["delay","mindful_pause"], "rewriteStyles": ["remove_urgency"] },
-    "validation_prompt":   { "description": "Encourages validating the other’s perspective", "adviceTags": ["validation","empathy"], "rewriteStyles": ["acknowledge_feeling"] },
-    "gentle_reconnect":    { "description": "Promotes soft outreach after tension", "adviceTags": ["soft_startup","invite_reconnect"], "rewriteStyles": ["tentative_opener"] },
-    "self_soothing":       { "description": "Prompts anxious users to regulate before messaging", "adviceTags": ["self_regulation","containment"], "rewriteStyles": ["delay_message","reframe_anxiety"] },
-    "clarity_request":     { "description": "Encourages asking directly instead of spiraling", "adviceTags": ["clarity","direct_request"], "rewriteStyles": ["turn_question_clear"] },
-    "affirmation":         { "description": "Promotes praise, reassurance, or secure affirmations", "adviceTags": ["praise","affirmation"], "rewriteStyles": ["add_affection","highlight_strength"] },
-    "expansion":           { "description": "Promotes curiosity and expanding the dialogue", "adviceTags": ["curiosity","openness"], "rewriteStyles": ["add_question","invite_deeper"] },
-    "secure_fix":          { "description": "Default secure attachment rewrite bucket", "adviceTags": ["secure","balanced"], "rewriteStyles": ["direct_secure_fix"] },
-    "reassurance":         { "description": "Addresses insecurity directly with stable reassurance", "adviceTags": ["reassure"], "rewriteStyles": ["direct_reassure"] },
-    "autonomy_respect":    { "description": "Signals respect for space/independence", "adviceTags": ["autonomy","respect"], "rewriteStyles": ["acknowledge_space"] },
-    "containment":         { "description": "Contain emotional flooding with concise structure", "adviceTags": ["contain","structure"], "rewriteStyles": ["tighten_message"] },
-    "reframe_positive":    { "description": "Gently reframe to a constructive lens", "adviceTags": ["reframe"], "rewriteStyles": ["soft_positive_reframe"] },
-    "grounding":           { "description": "Nervous-system downshift before repair", "adviceTags": ["ground","self_regulate"], "rewriteStyles": ["breath_then_text"] },
-    "direct_repair":       { "description": "Secure, direct repair attempt", "adviceTags": ["repair","secure"], "rewriteStyles": ["direct_apology"] },
-    "gratitude":           { "description": "Name specific appreciations", "adviceTags": ["gratitude"], "rewriteStyles": ["add_specific_thanks"] },
-    "praise":              { "description": "Noticing strengths & efforts", "adviceTags": ["praise"], "rewriteStyles": ["call_out_strength"] }
+    "thresholds": { "low": 0.20, "med": 0.50, "high": 0.75 },
+    "low":  { "clear":  0.00,  "caution": 0.00,  "alert":  0.00 },
+    "med":  { "clear": -0.005, "caution": 0.010, "alert": -0.005 },
+    "high": { "clear": -0.015, "caution": 0.000, "alert":  0.015 }
   }
 }
