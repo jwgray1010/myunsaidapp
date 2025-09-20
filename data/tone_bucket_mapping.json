@@ -63,8 +63,8 @@
     "clear": {
       "requirePhraseLevel": false,
       "excludeTokens": [],
-      "overshadow": { "by": "alert", "min": 0.75, "ratio": 4.0 },
-      "preferCautionIfBoth": 0.60
+      "overshadow": { "by": "alert", "min": 0.85, "ratio": 5.0 },
+      "preferCautionIfBoth": 0.75
     }
   },
 

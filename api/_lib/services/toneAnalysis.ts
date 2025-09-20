@@ -3486,7 +3486,7 @@ export function mapToneToBuckets(
 
   // Optional guard application if caller provides raw text
   try {
-    if (config?.text && false) { // temporarily disabled to test raw mapping
+    if (config?.text) {
       buckets = enforceBucketGuardsV2(buckets, String(config.text || ''), attachmentStyle);
     }
   } catch {}
