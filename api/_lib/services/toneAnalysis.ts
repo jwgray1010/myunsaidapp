@@ -3312,17 +3312,17 @@ export class ToneAnalysisService {
     
     // 1. Multiple escalatory phrases across the document
     const escalatoryCount = this.countEscalatoryPatterns(textLower);
-    if (escalatoryCount >= 3) {
+    if (escalatoryCount >= 5) {  // Increased threshold from 3 to 5 - be less conservative
       return {
         safetyGateTriggered: true,
-        adjustedTone: 'caution',
+        adjustedTone: 'alert',  // Changed from 'caution' to 'alert' for truly escalatory content
         reason: 'multiple_escalatory_patterns'
       };
     }
     
     // 2. Sustained negative sentiment throughout
     const negativeIntensity = this.assessNegativeIntensity(textLower);
-    if (negativeIntensity > 0.7) {
+    if (negativeIntensity > 0.8) {  // Increased threshold from 0.7 to 0.8
       return {
         safetyGateTriggered: true,
         adjustedTone: 'alert',
