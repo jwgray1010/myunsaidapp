@@ -88,4 +88,18 @@ final class KeyboardViewController: UIInputViewController {
             self.view.layoutIfNeeded()
         })
     }
+    
+    // MARK: - Text Change Notifications
+    
+    override func textDidChange(_ textInput: UITextInput?) {
+        super.textDidChange(textInput)
+        // Forward text change notifications to our keyboard controller
+        keyboardView?.textDidChange()
+    }
+    
+    override func selectionDidChange(_ textInput: UITextInput?) {
+        super.selectionDidChange(textInput)
+        // Forward selection change notifications (can also indicate text changes)
+        keyboardView?.textDidChange()
+    }
 }

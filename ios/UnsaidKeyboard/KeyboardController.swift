@@ -250,6 +250,17 @@ final class KeyboardController: UIView,
         let fullText = snapshotFullText()
         print("📝 DEBUG: Full text snapshot: '\(String(fullText.prefix(100)))...' (length: \(fullText.count))")
         
+        // Special case: If text is completely empty, reset to neutral
+        // This only happens when the entire message has been deleted
+        let trimmedText = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedText.isEmpty {
+            print("🔄 DEBUG: Text is completely empty, resetting tone to neutral")
+            DispatchQueue.main.async { [weak self] in
+                self?.didUpdateToneStatus("neutral")
+            }
+            return
+        }
+        
         // Gate analysis for micro-tokens (same as before)
         guard shouldAnalyze(fullText) else {
             print("🚫 Analysis skipped: text doesn't meet minimum requirements")
@@ -1766,6 +1777,12 @@ final class KeyboardController: UIView,
 
     // MARK: - Text change handling
     func textDidChange() {
+        print("🔄 DEBUG: textDidChange() called")
+        
+        // Get current text for debugging
+        let currentFullText = snapshotFullText()
+        print("📝 DEBUG: Current text in textDidChange: '\(currentFullText)' (length: \(currentFullText.count))")
+        
         // Ensure tone button is visible when text changes (analysis may update it)
         ensureToneButtonVisible()
         

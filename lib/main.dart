@@ -22,7 +22,6 @@ import 'ui/unsaid_theme.dart';
 import 'screens/splash_screen_professional.dart';
 import 'screens/onboarding_account_screen_professional.dart';
 import 'screens/personality_test_disclaimer_screen_professional.dart';
-import 'screens/personality_test_screen_professional_fixed_v2.dart';
 import 'screens/personality_test_screen.dart';
 import 'screens/personality_results_screen.dart';
 import 'screens/premium_screen_professional.dart';
@@ -30,7 +29,6 @@ import 'screens/keyboard_intro_screen_professional.dart';
 import 'screens/emotional_state_screen.dart';
 import 'screens/tone_indicator_tutorial_screen.dart';
 // Removed main_shell, relationship insights, and legacy home screen in favor of consolidated insights dashboard
-import 'data/randomized_personality_questions.dart';
 import 'data/attachment_assessment.dart';
 import 'data/assessment_integration.dart';
 import 'screens/insights_dashboard_enhanced.dart';
@@ -434,32 +432,15 @@ class UnsaidApp extends StatelessWidget {
                               );
                             }
 
-                            // Test not completed, show test
-                            final randomizedQuestions =
-                                RandomizedPersonalityTest.getRandomizedQuestions();
-                            return PersonalityTestScreenProfessional(
+                            // Test not completed, show modern assessment test
+                            return PersonalityTestScreen(
                               currentIndex: 0,
-                              answers: List<String?>.filled(
-                                randomizedQuestions.length,
-                                null,
-                              ),
-                              questions: randomizedQuestions
-                                  .map(
-                                    (q) => {
-                                      'question': q.question,
-                                      'options': q.options,
-                                    },
-                                  )
-                                  .toList(),
-                              onComplete: (answers) async {
-                                // Mark test as completed
-                                await PersonalityTestService.markTestCompleted(
-                                  answers,
-                                );
-                                // Navigate to tone tutorial first (new flow)
+                              responses: const {},
+                              onComplete: (config, scores, routing) async {
+                                // Navigate to premium (modern flow)
                                 Navigator.pushReplacementNamed(
                                   context,
-                                  '/tone_tutorial',
+                                  '/premium',
                                 );
                               },
                             );

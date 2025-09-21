@@ -97,8 +97,22 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
     );
   }
 
+  // Helper method for RadioListTile that keeps debug + state in one place
+  void _selectByIndex(int idx) {
+    final question = currentQuestion;
+    if (idx >= 0 && idx < question.options.length) {
+      final option = question.options[idx];
+      _selectAnswer(option.value, idx); // reuses existing method
+    }
+  }
+
   Future<void> _goNext() async {
+    print('DEBUG: _goNext() called');
+    print('DEBUG: currentIndex=${widget.currentIndex}, totalQuestions=${_allQuestions.length}');
+    print('DEBUG: _selectedValue=$_selectedValue');
+    
     if (_selectedValue == null) {
+      print('DEBUG: No answer selected, showing selection required');
       _showSelectionRequired();
       return;
     }
@@ -106,6 +120,7 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
     HapticFeedback.mediumImpact();
 
     if (widget.currentIndex < _allQuestions.length - 1) {
+      print('DEBUG: Not last question, navigating to next question');
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -120,6 +135,7 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
         );
       }
     } else {
+      print('DEBUG: Last question reached, calling _completeTest()');
       await _completeTest();
     }
   }
@@ -145,33 +161,50 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
   }
 
   Future<void> _completeTest() async {
+    print('DEBUG: _completeTest() called');
+    
     if (widget.markTestTaken != null) {
+      print('DEBUG: Calling markTestTaken...');
       await widget.markTestTaken!();
+      print('DEBUG: markTestTaken completed');
     }
 
     try {
+      print('DEBUG: Starting assessment processing...');
+      
       // Run local assessment (pure on-device) and build local embedded config
       final assessmentResult = AttachmentAssessment.run(widget.responses);
+      print('DEBUG: Assessment result: ${assessmentResult.scores}');
+      
       final mergedConfig = AssessmentIntegration.buildLocalEmbeddedConfig(
         assessmentResult.scores,
         assessmentResult.routing,
       );
+      print('DEBUG: Merged config created');
 
       if (widget.onComplete != null) {
+        print('DEBUG: Calling onComplete callback...');
         widget.onComplete!(
           mergedConfig,
           assessmentResult.scores,
           assessmentResult.routing,
         );
+        print('DEBUG: onComplete callback completed');
       } else {
         // Skip results screen - navigate directly to tone tutorial
         // Personality results are still calculated and stored internally
+        print('DEBUG: No onComplete callback, navigating to tone tutorial...');
         if (mounted) {
+          print('DEBUG: Widget is mounted, calling Navigator.pushReplacementNamed...');
           Navigator.pushReplacementNamed(context, '/tone_tutorial');
+          print('DEBUG: Navigation call completed');
+        } else {
+          print('DEBUG: Widget not mounted, skipping navigation');
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('Error completing assessment: $e');
+      print('Stack trace: $stackTrace');
       // Fallback to legacy system or show error
       if (mounted) {
         _showError('Assessment processing failed. Please try again.');
@@ -396,124 +429,65 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
 
                       const SizedBox(height: AppTheme.spaceLG),
 
-                      // Answer options
-                      ...question.options.asMap().entries.map((entry) {
-                        final option = entry.value;
-                        final idx = entry.key;
-                        final isSelected = _selectedIndex == idx;
+                      // Answer options — RadioListTile version (single-select)
+                      Column(
+                        children: question.options.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final option = entry.value;
+                          final isSelected = _selectedIndex == idx;
 
-                        // Debug logging for selection state
-                        print(
-                          'DEBUG: Option $idx (value: ${option.value}) - isSelected: $isSelected, _selectedIndex: $_selectedIndex',
-                        );
-
-                        return Container(
-                          margin: const EdgeInsets.only(
-                            bottom: AppTheme.spaceMD,
-                          ),
-                          child: GestureDetector(
-                            onTap: () => _selectAnswer(option.value, idx),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeInOut,
-                              padding: const EdgeInsets.all(AppTheme.spaceLG),
-                              decoration: BoxDecoration(
+                          return Card(
+                            margin: const EdgeInsets.only(
+                              bottom: AppTheme.spaceMD,
+                            ),
+                            elevation: isSelected ? 1.5 : 0,
+                            color: isSelected ? null : null, // Allow RadioListTile tileColor to show
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusLG,
+                              ),
+                              side: BorderSide(
                                 color: isSelected
-                                    ? questionTypeColor.withValues(alpha: 0.1)
-                                    : Colors.white,
+                                    ? questionTypeColor
+                                    : Colors.grey.withValues(alpha: 0.30),
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: RadioListTile<int>(
+                              value: idx, // bind by index
+                              groupValue: _selectedIndex, // current selection
+                              onChanged: (i) => _selectByIndex(i!),
+                              title: Text(
+                                option.text,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: isSelected
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                      color: isSelected
+                                          ? questionTypeColor
+                                          : Colors.black87,
+                                      height: 1.15,
+                                    ),
+                              ),
+                              activeColor: questionTypeColor,
+                              selected: isSelected,
+                              tileColor: isSelected
+                                  ? questionTypeColor.withValues(alpha: 0.08)
+                                  : Colors.white, // Explicit white background for unselected
+                              shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(
                                   AppTheme.radiusLG,
                                 ),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? questionTypeColor
-                                      : Colors.grey.withValues(alpha: 0.3),
-                                  width: isSelected ? 3 : 1,
-                                ),
-                                boxShadow: isSelected
-                                    ? [
-                                        BoxShadow(
-                                          color: questionTypeColor.withValues(
-                                            alpha: 0.3,
-                                          ),
-                                          blurRadius: 15,
-                                          spreadRadius: 1,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ]
-                                    : [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(
-                                            alpha: 0.05,
-                                          ),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
                               ),
-                              child: Row(
-                                children: [
-                                  // Selection indicator
-                                  Container(
-                                    width: 28,
-                                    height: 28,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: isSelected
-                                          ? questionTypeColor
-                                          : Colors.white,
-                                      border: Border.all(
-                                        color: isSelected
-                                            ? questionTypeColor
-                                            : Colors.grey.withValues(
-                                                alpha: 0.4,
-                                              ),
-                                        width: 2,
-                                      ),
-                                      boxShadow: isSelected
-                                          ? [
-                                              BoxShadow(
-                                                color: questionTypeColor
-                                                    .withValues(alpha: 0.3),
-                                                blurRadius: 8,
-                                                spreadRadius: 1,
-                                              ),
-                                            ]
-                                          : null,
-                                    ),
-                                    child: isSelected
-                                        ? const Icon(
-                                            Icons.check,
-                                            color: Colors.white,
-                                            size: 18,
-                                            semanticLabel: 'Selected',
-                                          )
-                                        : null,
-                                  ),
-                                  const SizedBox(width: AppTheme.spaceMD),
-                                  Expanded(
-                                    child: Text(
-                                      option.text,
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            color: isSelected
-                                                ? questionTypeColor
-                                                : Colors.black87,
-                                            fontWeight: isSelected
-                                                ? FontWeight.bold
-                                                : FontWeight.w500,
-                                            height: 1.1,
-                                          ),
-                                    ),
-                                  ),
-
-                                  // Route tag badge intentionally removed to prevent bias / overflow
-                                ],
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: AppTheme.spaceLG,
+                                vertical: AppTheme.spaceMD,
                               ),
                             ),
-                          ),
-                        );
-                      }),
+                          );
+                        }).toList(),
+                      ),
 
                       // Reduce excessive bottom spacing to prevent overflow on smaller devices
                       const SizedBox(height: AppTheme.spaceLG),
@@ -607,15 +581,23 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text(
-                                    widget.currentIndex <
-                                            _allQuestions.length - 1
-                                        ? 'Next'
-                                        : 'Complete Assessment',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: theme.colorScheme.primary,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 16,
+                                  Flexible(
+                                    child: Text(
+                                      widget.currentIndex <
+                                              _allQuestions.length - 1
+                                          ? 'Next'
+                                          : 'Complete Assessment',
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        color: theme.colorScheme.primary,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize:
+                                            widget.currentIndex <
+                                                _allQuestions.length - 1
+                                            ? 16
+                                            : 14, // Smaller font for longer text
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
                                     ),
                                   ),
                                   const SizedBox(width: AppTheme.spaceSM),

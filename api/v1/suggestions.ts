@@ -390,25 +390,29 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       }
     };
     
-    // Apply emergency fallback ONLY for true system failures
-    const wasMainServiceEmpty = !suggestionAnalysis.suggestions || suggestionAnalysis.suggestions.length === 0;
-    const wasMainServiceSuccessful = suggestionAnalysis.success !== false; // Check if service reported success
-    const hadValidPickedData = picked && picked.length > 0;
+    // Apply emergency fallback ONLY for true system failures (not guardrail filtering)
+    // Check if the service found suggestions initially before any filtering
+    const serviceFoundSuggestions = suggestionAnalysis.suggestions && suggestionAnalysis.suggestions.length > 0;
+    const wasMainServiceEmpty = !serviceFoundSuggestions;
+    const wasMainServiceSuccessful = suggestionAnalysis.success !== false;
+    const responseHasSuggestions = Array.isArray(response.suggestions) && response.suggestions.length > 0;
     
-    // Triple check: only fallback if ALL conditions indicate true emergency
+    // Only trigger emergency fallback if:
+    // 1. Main service found NO suggestions at all (not just filtered them all)
+    // 2. Service reported success (not an error)
+    // 3. Response has no suggestions after mapping
     const isTrueEmergency = wasMainServiceEmpty && 
-                           (!Array.isArray(response.suggestions) || response.suggestions.length === 0) &&
-                           wasMainServiceSuccessful; // Don't fallback if service explicitly failed
+                           !responseHasSuggestions &&
+                           wasMainServiceSuccessful;
                            
     if (isTrueEmergency) {
-      // Absolute emergency: main service found no content AND response mapping produced nothing
-      logger.error('CRITICAL: Emergency fallback triggered - complete system failure to generate suggestions', { 
+      // True emergency: main service found no content at all (not filtering issue)
+      logger.error('CRITICAL: Emergency fallback triggered - main service found no suggestions', { 
         userId, 
         text: data.text,
         context: data.context,
-        wasMainServiceEmpty,
-        hadValidPickedData,
-        originalSuggestionsLength: suggestionAnalysis.suggestions?.length || 0,
+        serviceFoundSuggestions,
+        responseHasSuggestions,
         serviceSuccess: suggestionAnalysis.success,
         timestamp: new Date().toISOString()
       });
@@ -428,6 +432,18 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       }));
       response.metadata.suggestion_count = response.suggestions.length;
       response.metadata.status = 'emergency_fallback'; // Flag for monitoring via existing field
+    }
+    
+    // Log when all suggestions were filtered out (for debugging guardrails)
+    else if (serviceFoundSuggestions && !responseHasSuggestions) {
+      logger.warn('All suggestions filtered by guardrails', {
+        userId,
+        text: data.text,
+        context: data.context,
+        originalSuggestionsCount: suggestionAnalysis.suggestions?.length || 0,
+        finalSuggestionsCount: response.suggestions?.length || 0,
+        filteringReason: 'guardrails_filtered_all'
+      });
     }
     
     // Final response boundary check - should not be needed due to emergency fallback above

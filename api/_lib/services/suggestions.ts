@@ -36,6 +36,7 @@ import type {
 import type { ToneResponse } from '../schemas/toneRequest';
 import { adjustToneByAttachment } from './utils/attachmentToneAdjust';
 import { matchSemanticBackbone, applySemanticBias, type SemanticBackboneResult } from './utils/semanticBackbone';
+import { isContextAppropriate, logContextFilter, getContextLinkBonus, type ContextScores } from './contextAnalysis';
 
 // ---- weight-mod fallback resolver (exact → alias → family → general → code_default)
 const DISABLE_WEIGHT_FALLBACKS = process.env.DISABLE_WEIGHT_FALLBACKS === '1';
@@ -896,6 +897,7 @@ class AdviceEngine {
     userPref: any;
     tier: 'general'|'premium';
     secondPerson?: { hasSecondPerson: boolean; confidence: number; targeting: string };
+    contextScores?: Record<string, number>;
   }): any[] {
     const W = this.currentWeights(signals.contextLabel);
 
@@ -912,6 +914,14 @@ class AdviceEngine {
       // Context
       const ctxMatch = !it.contexts || it.contexts.length === 0 || it.contexts.includes(signals.contextLabel) ? 1 : 0;
       s += W.contextMatch * ctxMatch;
+      
+      // Context link bonus (use top 3 contexts from analysis)
+      const topContexts = Object.entries(signals.contextScores || {})
+        .sort((a, b) => (b[1] as number) - (a[1] as number))
+        .slice(0, 3)
+        .map(([ctx]) => ctx);
+      const contextLinkBonus = getContextLinkBonus(it, topContexts);
+      s += contextLinkBonus;
 
       // Attachment
       const attachMatch = !it.attachmentStyles || it.attachmentStyles.length === 0 || it.attachmentStyles.includes(signals.attachmentStyle) ? 1 : 0;
@@ -1361,9 +1371,14 @@ class SuggestionsService {
 
   private isContextAppropriate(suggestion: any, analysis: any): boolean {
     const analysisContext = analysis?.context?.label || 'general';
-    if (!suggestion.contexts || suggestion.contexts.length === 0) return true;
-    if (suggestion.contexts.includes('general') || suggestion.contexts.includes(analysisContext)) return true;
-    return false;
+    const contextScores: ContextScores = analysis?.context?.scores || {};
+    
+    const appropriate = isContextAppropriate(suggestion, analysisContext, contextScores);
+    
+    // Log for debugging
+    logContextFilter(suggestion, analysisContext, contextScores, appropriate, logger);
+    
+    return appropriate;
   }
 
   private isSafeForAlertContext(suggestion: any): boolean {
@@ -1597,7 +1612,8 @@ class SuggestionsService {
       phraseEdgeHits: Array.isArray(analysis.flags.phraseEdgeHits) ? analysis.flags.phraseEdgeHits : [],
       userPref: dataLoader.get('userPreference'),
       tier,
-      secondPerson: analysis.secondPerson
+      secondPerson: analysis.secondPerson,
+      contextScores: analysis.context?.scores || {}
     });
     logger.info('Ranking completed', { rankedSize: ranked.length, personalizedSize: personalized.length });
 
