@@ -251,7 +251,6 @@ type Bucket = 'clear'|'caution'|'alert';
 export interface AdvancedToneResult {
   primary_tone: string;
   confidence: number;
-  categories?: string[]; // Categories detected from tone patterns
   emotions: {
     joy: number;
     anger: number;
@@ -284,6 +283,7 @@ export interface AdvancedToneResult {
     pAlert: number;
     pCaution: number;
   };
+  categories?: string[];
 }
 
 export interface ToneAnalysisOptions {
@@ -373,15 +373,23 @@ function tokenizePlainV2(text: string): string[] {
 /** Collect raw phrase evidence per bucket from the whole text using existing detectors */
 function collectBucketEvidenceV2(text: string) {
   const tokens = tokenizePlainV2(text);
-  const hits = detectors.scanSurface(tokens); // { bucket, weight, term, start, end }[]
+  const hits = detectors.scanSurface(tokens); // { bucket, weight, term, start, end, category? }[]
   const byBucket: Record<Bucket, number> = { clear:0, caution:0, alert:0 };
   const termsByBucket: Record<Bucket, Set<string>> = { clear:new Set(), caution:new Set(), alert:new Set() };
+  const categories: string[] = [];
+  
   for (const h of hits) {
     byBucket[h.bucket] += Math.max(0, h.weight || 0);
     const len = String(h.term || '').trim().split(/\s+/).filter(Boolean).length;
     termsByBucket[h.bucket].add(`${(h.term||'').toLowerCase().trim()}__LEN${len}`);
+    
+    // Collect categories from pattern matches
+    if (h.category) {
+      categories.push(h.category);
+    }
   }
-  return { byBucket, termsByBucket, tokens };
+  
+  return { byBucket, termsByBucket, tokens, categories: [...new Set(categories)] };
 }
 
 /** Enforce JSON "eligibility.clear" gates (phrase-level, excludeTokens, overshadow, prefer-caution) */
@@ -1051,7 +1059,7 @@ class ToneDetectors {
             this.ahoCorasick.addPattern(this.normalizeText(v), bucket, Math.max(0.5, w * 0.95), category));
         }
 
-        // Compile regex patterns
+        // Compile regex patterns with category
         if (p.type === 'regex' && p.pattern) {
           try { 
             this.tonePatternRegexes.push({ re: new RegExp(p.pattern, 'i'), bucket, weight: w, category }); 
@@ -1108,18 +1116,18 @@ class ToneDetectors {
       .filter(token => token.length > 0);
   }
 
-  scanSurface(tokens: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number }[] { 
+  scanSurface(tokens: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number; category?: string }[] { 
     // Normalize tokens for consistent matching
     const normalizedTokens = tokens.map(t => this.normalizeText(t));
     return this.scan(normalizedTokens); 
   }
-  scanLemmas(lemmas: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number }[] { 
+  scanLemmas(lemmas: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number; category?: string }[] { 
     // Normalize lemmas for consistent matching
     const normalizedLemmas = lemmas.map(l => this.normalizeText(l));
     return this.scan(normalizedLemmas); 
   }
 
-  regexToneHits(terms: string[]) {
+  private regexToneHits(terms: string[]) {
     const hits: { bucket: Bucket; weight: number; term: string; start: number; end: number; category?: string }[] = [];
     if (this.tonePatternRegexes.length === 0) return hits;
 
@@ -1154,11 +1162,11 @@ class ToneDetectors {
     return hits;
   }
 
-  private scanHybrid(terms: string[]) {
+  private scanHybrid(terms: string[]): { bucket: Bucket; weight: number; term: string; start: number; end: number; category?: string }[] {
     this.initSyncIfNeeded();
 
     const t0 = Date.now();
-    const hits: { bucket: Bucket; weight: number; term: string; start: number; end: number }[] = [];
+    const hits: { bucket: Bucket; weight: number; term: string; start: number; end: number; category?: string }[] = [];
 
     // Aho pass (all phrases / ≥2-gram patterns fed during init)
     const ahoHits = this.ahoCorasick.search(terms);
@@ -1178,7 +1186,7 @@ class ToneDetectors {
       }
     }
 
-    // Regex patterns (existing)
+    // Regex patterns (existing) - now includes category information
     const regexHits = this.regexToneHits(terms);
     for (const h of regexHits) hits.push(h);
 
@@ -1990,24 +1998,6 @@ class AdvancedFeatureExtractor {
       features.edge_list = [];
     }
 
-    // tone pattern categories
-    logger.info('Extracting tone pattern categories');
-    try {
-      const terms = text.toLowerCase().split(/\s+/);
-      const toneHits = detectors.regexToneHits(terms);
-      const categories = [...new Set(toneHits.filter(h => h.category).map(h => h.category))];
-      features.tone_categories = categories;
-      features.tone_hits = toneHits.length;
-      logger.info('Tone categories extracted', { categories, hitCount: toneHits.length });
-    } catch (error) {
-      logger.error('Error extracting tone categories', {
-        error: error,
-        message: error instanceof Error ? error.message : String(error)
-      });
-      features.tone_categories = [];
-      features.tone_hits = 0;
-    }
-
     logger.info('Feature extraction completed', { featureCount: Object.keys(features).length });
     return { features };
   }
@@ -2692,11 +2682,19 @@ export class ToneAnalysisService {
     const tokens = text.toLowerCase().split(/\s+/).filter(Boolean);
     const contextDetection = detectors.detectContexts(tokens, attachmentStyle);
     
+    // ✅ Collect categories from tone pattern matches for therapy advice boost
+    const toneHits = detectors.scanSurface(tokens);
+    const categories = [...new Set(toneHits.filter(hit => hit.category).map(hit => hit.category))];
+    
     logger.info('Enhanced context detection', { 
       primaryContext: contextDetection.primaryContext,
       allContexts: contextDetection.allContexts.length,
       deescalated: contextDetection.deescalated
     });
+    
+    if (categories.length > 0) {
+      logger.info('Categories detected from tone patterns', { categories });
+    }
 
     // Get context multipliers and attachment bias from enhanced tone_triggerwords.json
     const triggerWordsData = dataLoader.get('toneTriggerWords') || dataLoader.get('toneTriggerwords');
@@ -2918,7 +2916,8 @@ export class ToneAnalysisService {
       confidence: evidentialResult.confidence,
       explanation: evidentialResult.explanation,
       metaClassifier: { pAlert, pCaution },
-      signals: detectedSignals
+      signals: detectedSignals,
+      categories
     };
   }
 
@@ -3027,7 +3026,7 @@ export class ToneAnalysisService {
       const resolved = resolveContextKey(contextForWeights);
       logger.info('weights.context_resolved', resolved);
       
-      const { scores, intensity: baseIntensity } = this._scoreTones(fr, text, style, contextForWeights, doc);
+      const { scores, intensity: baseIntensity, categories } = this._scoreTones(fr, text, style, contextForWeights, doc);
       
       // Fix #4: Acknowledge fullDocumentMode flag for intensity adjustment
       const isFullDoc = options.fullDocumentMode === true;
@@ -3159,7 +3158,6 @@ export class ToneAnalysisService {
       const result: AdvancedToneResult = {
         primary_tone: classification,
         confidence,
-        categories: fr.features?.tone_categories || [], // Add detected categories
         emotions,
         intensity,
         sentiment_score,
@@ -3191,6 +3189,9 @@ export class ToneAnalysisService {
       if (ENABLE_SB && nudgedResult.debug) {
         (result as any).semanticBackbone = nudgedResult.debug;
       }
+
+      // ✅ Add categories from tone pattern matches for suggestions service
+      (result as any).categories = categories || [];
 
       if (options.includeAttachmentInsights) {
         result.attachment_insights = {

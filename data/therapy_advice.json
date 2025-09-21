@@ -1,7 +1,7 @@
 [
   {
     "id": "TA001",
-    "advice": "Pause before replying and acknowledge the tension directly: 'I can feel we’re both heated right now.'",
+    "advice": "Pause before replying; name the heat: “We’re both heated right now.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -34,7 +34,7 @@
   },
   {
     "id": "TA002",
-    "advice": "Name your frustration in one sentence without blame: 'I’m frustrated because I felt ignored.'",
+    "advice": "Name frustration in one sentence without blame: “I’m frustrated because I felt ignored.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -61,7 +61,7 @@
   },
   {
     "id": "TA003",
-    "advice": "Instead of repeating your point louder, slow down and ask: 'Can we take a step back?'",
+    "advice": "Don’t repeat louder—slow down: “Can we take a step back?”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -91,7 +91,7 @@
   },
   {
     "id": "TA004",
-    "advice": "Shift from 'you' statements to 'I' statements to lower the emotional charge.",
+    "advice": "Switch from “you” to “I” statements to lower charge.",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -120,7 +120,7 @@
   },
   {
     "id": "TA005",
-    "advice": "Call out escalation directly: 'We’re starting to talk past each other.'",
+    "advice": "Call out escalation: “We’re starting to talk past each other.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -147,7 +147,7 @@
   },
   {
     "id": "TA006",
-    "advice": "Ground yourself by taking three breaths before responding.",
+    "advice": "Take three breaths before responding to criticism.",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -175,7 +175,7 @@
   },
   {
     "id": "TA007",
-    "advice": "Replace sarcasm with clarity: state what you actually mean without extra edge.",
+    "advice": "Drop sarcasm; say plainly what you mean.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -202,7 +202,7 @@
   },
   {
     "id": "TA008",
-    "advice": "Ask for clarification instead of assuming intent: 'Can you explain what you meant?'",
+    "advice": "Ask for clarity, not intent guesses: “Can you explain what you meant?”",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -231,7 +231,7 @@
   },
   {
     "id": "TA009",
-    "advice": "If volume rises, suggest slowing down the text: 'Let’s bring the tone down a notch.'",
+    "advice": "If volume rises: “Let’s bring the tone down a notch.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -258,7 +258,7 @@
   },
   {
     "id": "TA010",
-    "advice": "State your need in behavioral terms: 'I need us to pause this for five minutes.'",
+    "advice": "State a behavioral need: “I need us to pause this for five minutes.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -288,7 +288,7 @@
   },
   {
     "id": "TA011",
-    "advice": "Validate before countering: 'I see why you’d be upset about that…' then add your view.",
+    "advice": "Validate before countering: “I see why you’d be upset…” + your view.",
     "triggerTone": "caution",
     "contexts": [
       "conflict"
@@ -315,7 +315,7 @@
   },
   {
     "id": "TA012",
-    "advice": "Avoid globalizing language and keep to the moment.",
+    "advice": "Avoid “always/never”; keep to this moment.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -342,10 +342,11 @@
   },
   {
     "id": "TA013",
-    "advice": "When feeling cornered, buy time: 'I need a short break to collect my thoughts.'",
+    "advice": "Buy time when cornered: “I need a short break to collect my thoughts.”",
     "triggerTone": "alert",
     "contexts": [
-      "conflict"
+      "conflict",
+      "general"
     ],
     "attachmentStyles": [
       "avoidant",
@@ -369,7 +370,7 @@
   },
   {
     "id": "TA014",
-    "advice": "Avoid bringing in old conflicts unless you first resolve the current one.",
+    "advice": "Don’t bring old conflicts in; finish the current one first.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -396,7 +397,7 @@
   },
   {
     "id": "TA015",
-    "advice": "Mirror back the last sentence your partner said to confirm accuracy before responding.",
+    "advice": "Mirror the last sentence to confirm, then respond.",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -424,7 +425,7 @@
   },
   {
     "id": "TA016",
-    "advice": "If blame spikes, pause and switch to describing your own feelings instead.",
+    "advice": "When blame spikes, pause and name your own feelings instead.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -452,7 +453,7 @@
   },
   {
     "id": "TA017",
-    "advice": "Keep arguments in the present tense; don’t project fears of the future.",
+    "advice": "Keep arguments present-tense; don’t project the future.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -480,7 +481,7 @@
   },
   {
     "id": "TA018",
-    "advice": "When overwhelmed with the text, take 5 minutes and breathe",
+    "advice": "Soften body language—uncross arms, loosen jaw.",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -508,7 +509,7 @@
   },
   {
     "id": "TA019",
-    "advice": "State the shared goal explicitly: 'We both want to solve this, even if it’s hard.'",
+    "advice": "State the shared goal: “We both want to solve this.”",
     "triggerTone": "caution",
     "contexts": [
       "conflict"
@@ -535,7 +536,7 @@
   },
   {
     "id": "TA020",
-    "advice": "Interrupt cycles of defensiveness with: 'I’m not against you, I’m with you in this.'",
+    "advice": "Interrupt defensiveness: “I’m not against you; I’m with you in this.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -565,7 +566,7 @@
   },
   {
     "id": "TA021",
-    "advice": "Focus on one issue at a time, not multiple grievances stacked together.",
+    "advice": "Focus on one issue at a time.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -592,7 +593,7 @@
   },
   {
     "id": "TA022",
-    "advice": "Replace accusations with questions: 'Help me understand why that happened.'",
+    "advice": "Replace accusations with questions: “Help me understand why that happened.”",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -620,7 +621,7 @@
   },
   {
     "id": "TA023",
-    "advice": "If emotions spill over, anchor with a grounding statement: 'We’ll figure this out together.'",
+    "advice": "Anchor with reassurance: “We’ll figure this out together.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -648,7 +649,7 @@
   },
   {
     "id": "TA024",
-    "advice": "Use timeouts strategically: agree on when you’ll resume, so it’s not abandonment.",
+    "advice": "Use timeouts with a resume plan so it isn’t abandonment.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -676,7 +677,7 @@
   },
   {
     "id": "TA025",
-    "advice": "De-escalate with a repair attempt: a small gesture of humor or softening phrase.",
+    "advice": "De-escalate with a gentle repair (humor/softener), not a jab.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -704,10 +705,11 @@
   },
   {
     "id": "TA026",
-    "advice": "When texts become too much, pause and text: 'I want to hear you fully—can you explain so I can get your side of the story?'",
+    "advice": "When overlapping: “I want to hear you—can you finish first?”",
     "triggerTone": "caution",
     "contexts": [
-      "conflict"
+      "conflict",
+      "general"
     ],
     "attachmentStyles": [
       "secure",
@@ -731,7 +733,7 @@
   },
   {
     "id": "TA027",
-    "advice": "Point out the pattern, not the person: 'We’re stuck in repeating ourselves.'",
+    "advice": "Name the pattern, not the person: “We’re repeating ourselves.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -758,7 +760,7 @@
   },
   {
     "id": "TA028",
-    "advice": "Say one constructive thing before making your point to soften impact.",
+    "advice": "Lead with one constructive note before your point.",
     "triggerTone": "caution",
     "contexts": [
       "conflict"
@@ -785,7 +787,7 @@
   },
   {
     "id": "TA029",
-    "advice": "Replace swearing with plain language—clarity lowers defensiveness.",
+    "advice": "Swap swearing for plain language to lower defense.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -813,7 +815,7 @@
   },
   {
     "id": "TA030",
-    "advice": "Anchor to a neutral fact both agree on before continuing.",
+    "advice": "Start from a neutral fact you both accept.",
     "triggerTone": "caution",
     "contexts": [
       "conflict"
@@ -840,7 +842,7 @@
   },
   {
     "id": "TA031",
-    "advice": "In escalation, slow your texting cadence. Avoidant: brief, steady line instead of going dark. Secure: model the pace you want.",
+    "advice": "If escalation rises, slow your speaking pace.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -867,7 +869,7 @@
   },
   {
     "id": "TA032",
-    "advice": "Describe behavior, not identity. Anxious: keep it kind but specific. Secure: one example only.",
+    "advice": "Label behavior, not the person (no “selfish/lazy”).",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -896,7 +898,7 @@
   },
   {
     "id": "TA033",
-    "advice": "If you feel cut off, ask to finish one thought first. Anxious: one clear line, no flooding. Secure: neutral tone.",
+    "advice": "When interrupted: “I’d like to finish my thought first.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -925,7 +927,7 @@
   },
   {
     "id": "TA034",
-    "advice": "Name the deeper theme briefly. Disorganized: one sentence that links feeling to need. Secure: don’t over-explain.",
+    "advice": "Name the deeper layer: “Feels more about respect than chores.”",
     "triggerTone": "caution",
     "contexts": [
       "conflict"
@@ -953,7 +955,7 @@
   },
   {
     "id": "TA035",
-    "advice": "Check if they want listening or solutions. Anxious: confirm and stop there. Secure: mirror once, then proceed.",
+    "advice": "Ask: “Do you want me to listen or help solve?”",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -981,7 +983,7 @@
   },
   {
     "id": "TA036",
-    "advice": "Clarify intent before reacting. Avoidant: ask one ‘what did you mean?’ then wait. Secure: reflect, then reply.",
+    "advice": "Don’t assume intent—clarify before reacting.",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1009,7 +1011,7 @@
   },
   {
     "id": "TA037",
-    "advice": "Answer attack with curiosity. Anxious: one calm question. Disorganized: type it, then pause before more.",
+    "advice": "Feeling attacked? Get curious: “What part feels most upsetting?”",
     "triggerTone": "caution",
     "contexts": [
       "conflict"
@@ -1037,7 +1039,7 @@
   },
   {
     "id": "TA038",
-    "advice": "Skip escalation or shutdown—boost clarity. Avoidant: one clean sentence. Secure: keep focus narrow.",
+    "advice": "Don’t escalate volume—escalate clarity.",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1066,7 +1068,7 @@
   },
   {
     "id": "TA039",
-    "advice": "Point to the cycle you both do. Disorganized: label + one tiny adjustment. Anxious: soften tone.",
+    "advice": "Point out the cycle: “We’re both shutting down.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1093,7 +1095,7 @@
   },
   {
     "id": "TA040",
-    "advice": "Insert a regulating anchor. Anxious: pair care with one request. Secure: steady, warm line.",
+    "advice": "Regulate the frame: “I want us to be okay after this.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1120,7 +1122,7 @@
   },
   {
     "id": "TA041",
-    "advice": "Use open curiosity, not cross-exam. Anxious: swap ‘why’ for ‘what/how’. Secure: keep pace slow.",
+    "advice": "Drop cross-exam tone; use open curiosity.",
     "triggerTone": "caution",
     "contexts": [
       "conflict"
@@ -1147,7 +1149,7 @@
   },
   {
     "id": "TA042",
-    "advice": "If it drags, set a time box. Avoidant: agree on end-time so it feels safe. Secure: keep tone practical.",
+    "advice": "If it drags: “Let’s timer this—15 minutes and see what we solve.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1175,7 +1177,7 @@
   },
   {
     "id": "TA043",
-    "advice": "Stick to what you observed. Avoidant: one example only. Secure: leave out motives.",
+    "advice": "Describe observable behavior, not your interpretation.",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1203,7 +1205,7 @@
   },
   {
     "id": "TA044",
-    "advice": "Signal repair intent mid-thread. Anxious: one soothing line, then pause. Disorganized: avoid mixed signals.",
+    "advice": "Signal repair: “I don’t want to fight; I want us to understand each other.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1232,7 +1234,7 @@
   },
   {
     "id": "TA045",
-    "advice": "Name your body cue first, then speak. Disorganized: body, feeling, one need. Secure: concise sequence.",
+    "advice": "Name your body cue before talking: “My chest is tightening.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1261,7 +1263,7 @@
   },
   {
     "id": "TA046",
-    "advice": "Suggest a scene change to reset. Avoidant: propose briefly, set return. Secure: keep it collaborative.",
+    "advice": "If spiraling, change setting (walk/other room).",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1288,7 +1290,7 @@
   },
   {
     "id": "TA047",
-    "advice": "Ask: values or details? Secure: label it. Anxious: slow pace once it’s named.",
+    "advice": "Clarify: Are we debating details or values?",
     "triggerTone": "caution",
     "contexts": [
       "conflict"
@@ -1315,7 +1317,7 @@
   },
   {
     "id": "TA048",
-    "advice": "Name intensity without blame. Disorganized: label + micro-pause. Secure: steady language.",
+    "advice": "Name the heat: “This feels intense right now.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1344,7 +1346,7 @@
   },
   {
     "id": "TA049",
-    "advice": "Summarize their point neutrally first. Anxious: stop after one mirror. Secure: then add yours.",
+    "advice": "Summarize their point neutrally before replying.",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -1372,7 +1374,7 @@
   },
   {
     "id": "TA050",
-    "advice": "Recenter: the fight is smaller than the bond. Anxious: add one care line. Secure: keep it brief.",
+    "advice": "Recenter: “This fight isn’t bigger than us.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1399,7 +1401,7 @@
   },
   {
     "id": "TA051",
-    "advice": "Repeat a keyword to show tracking. Anxious: mirror; don’t rush to fix. Secure: confirm and move on.",
+    "advice": "Echo a key word they used to show you’re tracking.",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -1427,7 +1429,7 @@
   },
   {
     "id": "TA052",
-    "advice": "When anger spikes, use a neutral ‘same team’ line. Disorganized: add one next step. Secure: slow typing pace.",
+    "advice": "When anger spikes: “We’re on the same side of the problem.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1455,7 +1457,7 @@
   },
   {
     "id": "TA053",
-    "advice": "If misread, ask to restate simply. Anxious: keep it short; no over-apology. Secure: clear, calm wording.",
+    "advice": "Feeling misrepresented? Ask to restate more clearly.",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1484,7 +1486,7 @@
   },
   {
     "id": "TA054",
-    "advice": "Call out topic drift gently. Avoidant: redirect with one sentence. Secure: park extras for later.",
+    "advice": "Call it when off-topic: “We’re mixing other issues now.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1511,7 +1513,7 @@
   },
   {
     "id": "TA055",
-    "advice": "Offer one point of agreement to lower heat. Secure: then share your view. Anxious: don’t over-praise.",
+    "advice": "Lower heat with a small agreement: “I get that part.”",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -1539,7 +1541,7 @@
   },
   {
     "id": "TA056",
-    "advice": "Name a shared value to re-ally. Anxious: value + short request. Secure: keep tone hopeful.",
+    "advice": "Stop the spiral with a shared value: “We both want this strong.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1567,7 +1569,7 @@
   },
   {
     "id": "TA057",
-    "advice": "Swap sarcasm for directness. Disorganized: single plain line, send. Anxious: kind but clear.",
+    "advice": "Catch sarcasm; replace with direct honesty.",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1595,7 +1597,7 @@
   },
   {
     "id": "TA058",
-    "advice": "If texting gets hot, name it and slow cadence. Avoidant: brief neutral cue; don’t vanish. Secure: model calm.",
+    "advice": "If voices climb: “Our voices are climbing—let’s slow down.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1623,7 +1625,7 @@
   },
   {
     "id": "TA059",
-    "advice": "Remind you’re not opponents. Disorganized: add one ‘with you’ phrase. Anxious: pair with care line.",
+    "advice": "Say: “I’m not your enemy here.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1652,7 +1654,7 @@
   },
   {
     "id": "TA060",
-    "advice": "Reflect the tension without blaming. Secure: one mirror. Anxious: keep it gentle.",
+    "advice": "Name the room energy: “This feels tense between us.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1679,7 +1681,7 @@
   },
   {
     "id": "TA061",
-    "advice": "Break loops by summarizing once. Anxious: check accuracy; stop there. Secure: then proceed.",
+    "advice": "Break repetition by summarizing: “So far I’ve heard…”",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -1708,7 +1710,7 @@
   },
   {
     "id": "TA062",
-    "advice": "Offer reassurance during disagreement. Anxious: ‘I care’ + one boundary/need. Secure: steady tone.",
+    "advice": "Offer care mid-disagreement: “Even if we disagree, I still care.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1735,7 +1737,7 @@
   },
   {
     "id": "TA063",
-    "advice": "Soften your posture to soften your text. Avoidant: relax, then send one concise line. Secure: pace yourself.",
+    "advice": "When tension spikes, soften posture intentionally.",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -1763,7 +1765,7 @@
   },
   {
     "id": "TA064",
-    "advice": "Pause with a clear return time. Avoidant: name the clock time. Anxious: screenshot/save the plan.",
+    "advice": "Pause + specify resume time: “Let’s pause and come back at __.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1793,7 +1795,7 @@
   },
   {
     "id": "TA065",
-    "advice": "Use ‘what/how’ over ‘why’. Anxious: one question, no stack. Secure: open, non-loaded wording.",
+    "advice": "Avoid “why” (interrogation); use “what/how.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1821,7 +1823,7 @@
   },
   {
     "id": "TA066",
-    "advice": "Insert one positive/steady line to cool heat. Disorganized: keep it simple; no mixed signals.",
+    "advice": "If safe, use a regulating touch instead of more words.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -1848,10 +1850,11 @@
   },
   {
     "id": "TA067",
-    "advice": "Treat disagreements as puzzles together. Anxious: invite co-solve. Secure: name the shared aim.",
+    "advice": "Frame disagreement as a puzzle to solve together.",
     "triggerTone": "caution",
     "contexts": [
-      "conflict"
+      "conflict",
+      "general"
     ],
     "attachmentStyles": [
       "secure",
@@ -1875,7 +1878,7 @@
   },
   {
     "id": "TA068",
-    "advice": "Replace ultimatums with boundaries. Avoidant: short, consistent wording. Secure: add what you can do.",
+    "advice": "Swap ultimatums for boundaries: “I can do X; I can’t do Y.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1904,7 +1907,7 @@
   },
   {
     "id": "TA069",
-    "advice": "If overwhelmed, deliberately slow the pace. Disorganized: timer + one-line check-in. Secure: acknowledge, then continue.",
+    "advice": "If overwhelmed, deliberately slow the pace.",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1932,7 +1935,7 @@
   },
   {
     "id": "TA070",
-    "advice": "Swap absolutes for accurate terms. Secure: ‘often/sometimes’. Avoidant: keep tone neutral.",
+    "advice": "Reframe absolutes to “sometimes/often.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -1960,7 +1963,7 @@
   },
   {
     "id": "TA071",
-    "advice": "Highlight one agreement first. Anxious: then one point of difference. Secure: keep balance.",
+    "advice": "Lead with agreement, then the difference.",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -1988,7 +1991,7 @@
   },
   {
     "id": "TA072",
-    "advice": "When stress spikes, shorten sentences for clarity. Avoidant: fewer words, calmer pace. Secure: slow it down.",
+    "advice": "Stress up? Shorten sentences for clarity.",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -2017,7 +2020,7 @@
   },
   {
     "id": "TA073",
-    "advice": "Offer a mid-argument repair line. Anxious: one soft phrase, then pause. Disorganized: keep it consistent.",
+    "advice": "Soft repair mid-argument: “I don’t want to hurt you.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2046,7 +2049,7 @@
   },
   {
     "id": "TA074",
-    "advice": "When escalation is visible, name it and pause. Disorganized: label + tiny reset step.",
+    "advice": "Name the spiral: “We’re spiraling right now.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2073,7 +2076,7 @@
   },
   {
     "id": "TA075",
-    "advice": "Close with a care anchor. Anxious: reassure bond + one next step. Secure: keep it brief.",
+    "advice": "Close with reassurance: “We’ll find a way through together.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2100,7 +2103,7 @@
   },
   {
     "id": "TA076",
-    "advice": "If circular, suggest writing thoughts first. Avoidant: brief invite + clear return time. Secure: collaborative tone.",
+    "advice": "If circular, write thoughts first, then resume.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2128,7 +2131,7 @@
   },
   {
     "id": "TA077",
-    "advice": "Name the shared value under the fight. Anxious: then one practical next step. Secure: keep it simple.",
+    "advice": "Name the shared value under the fight (e.g., fairness).",
     "triggerTone": "caution",
     "contexts": [
       "conflict"
@@ -2155,7 +2158,7 @@
   },
   {
     "id": "TA078",
-    "advice": "Say ‘let’s slow down so I can really hear you.’ Anxious: send then wait. Secure: model calmer pace.",
+    "advice": "Lower pressure: “Let’s slow down so I can really hear you.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2183,7 +2186,7 @@
   },
   {
     "id": "TA079",
-    "advice": "Use gentle humor to break tension—never sarcasm. Disorganized: keep it light and short. Secure: read the moment.",
+    "advice": "Use gentle humor (never sarcasm) to release tension.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2211,7 +2214,7 @@
   },
   {
     "id": "TA080",
-    "advice": "Switch from criticism to curiosity: ‘What led you to see it that way?’ Anxious: one question; no stack.",
+    "advice": "Switch criticism to curiosity: “What led you to see it that way?”",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -2239,7 +2242,7 @@
   },
   {
     "id": "TA081",
-    "advice": "Interrupt escalation with intent: ‘I want to work this out, not win.’ Anxious/Disorganized: send once, then pause.",
+    "advice": "State intent: “I want to work this out, not win.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2268,7 +2271,7 @@
   },
   {
     "id": "TA082",
-    "advice": "Spot the shift: ‘We were problem-solving; now it feels personal.’ Avoidant: name it once, then slow replies.",
+    "advice": "Mark the shift: “We were problem-solving; now it feels personal.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2295,7 +2298,7 @@
   },
   {
     "id": "TA083",
-    "advice": "Mirror emotion before content: ‘You sound disappointed.’ Secure: then your point. Anxious: keep mirrors brief.",
+    "advice": "Mirror emotion before content: “You sound disappointed.”",
     "triggerTone": "caution",
     "contexts": [
       "conflict",
@@ -2324,7 +2327,7 @@
   },
   {
     "id": "TA084",
-    "advice": "State a personal limit without attack: ‘I can’t keep communicating this way.’ Avoidant: one calm line, then pause.",
+    "advice": "State a limit without attack: “I can’t keep talking in this tone.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -2353,7 +2356,7 @@
   },
   {
     "id": "TA085",
-    "advice": "Suggest a reset ritual (water/walk/breath) before resuming. Disorganized: define a return time.",
+    "advice": "If tempers flare, suggest water/walk/reset ritual, then resume.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2381,7 +2384,7 @@
   },
   {
     "id": "TA086",
-    "advice": "Reduce loaded language to lower defenses. Secure: pick the plainest wording. Anxious: one edit is enough.",
+    "advice": "Trim loaded language to reduce defensiveness.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2408,7 +2411,7 @@
   },
   {
     "id": "TA087",
-    "advice": "When criticized, find one small truth to agree with first. Anxious: agree once; no self-attack.",
+    "advice": "When criticized, find one small truth to agree with first.",
     "triggerTone": "caution",
     "contexts": [
       "conflict"
@@ -2435,7 +2438,7 @@
   },
   {
     "id": "TA088",
-    "advice": "Interrupt spirals: ‘I need a breather and will return.’ Avoidant: give a time. Anxious: trust the plan.",
+    "advice": "Interrupt spiral: “I need a breather, and I will come back.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -2464,7 +2467,7 @@
   },
   {
     "id": "TA089",
-    "advice": "Disrupt the momentum: change position while texting (stand/sit) to reset your tone.",
+    "advice": "Shift position (stand/sit) to disrupt momentum.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2491,7 +2494,7 @@
   },
   {
     "id": "TA090",
-    "advice": "Slow your text on purpose—shorter, softer lines de-escalate. Avoidant: don’t disappear; just slow.",
+    "advice": "Lower your volume on purpose; softer tone calms.",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -2519,7 +2522,7 @@
   },
   {
     "id": "TA091",
-    "advice": "Offer reassurance mid-disagreement: ‘I care about you more than this argument.’ Then make one clear ask.",
+    "advice": "Reassure mid-debate: “I care about you more than this argument.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2547,7 +2550,7 @@
   },
   {
     "id": "TA092",
-    "advice": "Avoid adversarial phrasing: ‘I want to work with you,’ not ‘against you.’ Keep it short and plain.",
+    "advice": "Avoid adversarial phrasing; say “with you,” not “against you.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2575,7 +2578,7 @@
   },
   {
     "id": "TA093",
-    "advice": "When your body says ‘overwhelmed,’ relax shoulders first, then send one calmer line.",
+    "advice": "Notice overwhelm cues; unclench and relax before speaking.",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -2603,7 +2606,7 @@
   },
   {
     "id": "TA094",
-    "advice": "Affirm partnership at peak heat: ‘We’re a team, even when it’s rough.’ Keep the line steady, not saccharine.",
+    "advice": "Affirm partnership in the heat: “We’re a team, even when it’s rough.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2630,7 +2633,7 @@
   },
   {
     "id": "TA095",
-    "advice": "Frame a pause as care: ‘I need a break to avoid saying something I’ll regret.’ Add a return time.",
+    "advice": "Frame breaks as care: “I need a pause so I don’t say something I’ll regret.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict",
@@ -2659,7 +2662,7 @@
   },
   {
     "id": "TA096",
-    "advice": "Name the fear under the flood: ‘I’m texting a lot because I’m scared of losing us.’ Keep it to one line.",
+    "advice": "Name fear under anger: “I’m raising my voice because I’m scared of losing you.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2687,7 +2690,7 @@
   },
   {
     "id": "TA097",
-    "advice": "End tough threads with care: ‘I still want to be close after this.’ Add one small next step.",
+    "advice": "End tough talks with care: “I still want to be close after this.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2716,7 +2719,7 @@
   },
   {
     "id": "TA098",
-    "advice": "When escalation is obvious, call a clean pause. Avoidant: say when you’ll be back. Secure: hold the boundary kindly.",
+    "advice": "Use a clear pause signal (e.g., gentle hand raise) to lower intensity.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2744,7 +2747,7 @@
   },
   {
     "id": "TA099",
-    "advice": "If arguments feel endless, suggest: 'Let’s agree to check back tomorrow with fresh minds.'",
+    "advice": "If endless, agree to check back tomorrow with fresh minds.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2771,7 +2774,7 @@
   },
   {
     "id": "TA100",
-    "advice": "Close heated threads by affirming you’re staying in the relationship while you cool down. (Secure = steady, values-based; Anxious = add one line of reassurance, not a paragraph.)",
+    "advice": "End with commitment: “Even in fights, I want to stay connected to you.”",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
@@ -2798,7 +2801,7 @@
   },
   {
     "id": "TA126",
-    "advice": "Send a clear no in one line and end the message there. (Secure = direct; Avoidant = minimal words to prevent debate.)",
+    "advice": "Say no without qualifiers: “No, that doesn’t work for me.”",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -2826,7 +2829,7 @@
   },
   {
     "id": "TA127",
-    "advice": "State the boundary once and stop replying to pressure. (Secure = confident pause; Avoidant = short and final.)",
+    "advice": "State the boundary once, then rest in silence.",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -2855,7 +2858,7 @@
   },
   {
     "id": "TA128",
-    "advice": "Use plain, neutral wording for limits and avoid apologies. (Secure = concise; Anxious = resist over-explaining.)",
+    "advice": "Use plain limits: “I can’t do that today.”",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -2883,7 +2886,7 @@
   },
   {
     "id": "TA129",
-    "advice": "Swap apologies for appreciation language to reduce guilt and keep the boundary intact. (Anxious = emphasize gratitude; Secure = keep it brief.)",
+    "advice": "Swap apology for appreciation: “Thanks for understanding.”",
     "triggerTone": "caution",
     "contexts": [
       "boundary",
@@ -2911,7 +2914,7 @@
   },
   {
     "id": "TA130",
-    "advice": "Repeat your no with identical wording and a calm tone if pressed. (Secure = steady; Avoidant = very brief; Disorganized = keep structure simple.)",
+    "advice": "Repeat your no with a calm, steady tone.",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -2940,7 +2943,7 @@
   },
   {
     "id": "TA131",
-    "advice": "Anchor the boundary in your capacity rather than their behavior to lower defensiveness. (Secure = own your limits; Anxious = skip justifications.)",
+    "advice": "Frame limits as your capacity, not their flaws.",
     "triggerTone": "caution",
     "contexts": [
       "boundary",
@@ -2968,7 +2971,7 @@
   },
   {
     "id": "TA132",
-    "advice": "When pressured, copy-paste your original boundary to avoid debate hooks. (Avoidant = one-liner; Secure = consistent tone.)",
+    "advice": "Under pressure, repeat the exact same boundary.",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -2996,7 +2999,7 @@
   },
   {
     "id": "TA133",
-    "advice": "Separate the person from the request: decline the ask while keeping warmth for the relationship. (Secure = balanced; Anxious = include brief care.)",
+    "advice": "Decline the request, not the person: “That doesn’t work; I still value you.”",
     "triggerTone": "caution",
     "contexts": [
       "boundary",
@@ -3024,7 +3027,7 @@
   },
   {
     "id": "TA134",
-    "advice": "Keep boundaries to one sentence to avoid openings for negotiation. (Secure/Avoidant = concise and neutral.)",
+    "advice": "One sentence is enough for a boundary.",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -3052,7 +3055,7 @@
   },
   {
     "id": "TA135",
-    "advice": "If your limit is dismissed, stop engaging and protect your energy. (Avoidant = detach quickly; Secure = calm exit.)",
+    "advice": "If dismissed, disengage calmly—no extra words.",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -3081,7 +3084,7 @@
   },
   {
     "id": "TA136",
-    "advice": "Use boundaries for clarity, not punishment; describe what you can and can’t do without threats. (Secure = values-based; Anxious = kind tone, firm line.)",
+    "advice": "Use boundaries as clarity, not punishment: “Here’s what works for me.”",
     "triggerTone": "caution",
     "contexts": [
       "boundary",
@@ -3109,7 +3112,7 @@
   },
   {
     "id": "TA137",
-    "advice": "Shorten replies when pressure repeats to signal the boundary is final. (Avoidant = minimal text; Secure = consistent wording.)",
+    "advice": "If pressure repeats, shorten: “No, I’m not able to.”",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -3137,7 +3140,7 @@
   },
   {
     "id": "TA138",
-    "advice": "Pair a no with courteous tone to protect connection while holding the line. (Secure = brief appreciation; Anxious = keep it short.)",
+    "advice": "Kind boundary: “Thanks for asking, but I’ll pass.”",
     "triggerTone": "caution",
     "contexts": [
       "boundary",
@@ -3165,7 +3168,7 @@
   },
   {
     "id": "TA139",
-    "advice": "Set the limit early in the thread to prevent resentment and mixed messages. (Secure = proactive; Anxious = send before anxiety builds.)",
+    "advice": "Set boundaries early—before resentment builds.",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -3193,7 +3196,7 @@
   },
   {
     "id": "TA140",
-    "advice": "If a boundary is crossed, end the exchange calmly and step back rather than arguing. (Avoidant = quick disengage; Disorganized = name a short pause for safety.)",
+    "advice": "If violated, withdraw calmly instead of escalating.",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -3222,7 +3225,7 @@
   },
   {
     "id": "TA141",
-    "advice": "Keep the boundary message consistent across replies to avoid mixed signals. (Secure = same words; Avoidant = one-liners.)",
+    "advice": "Keep your no consistent—no mixed signals.",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -3250,7 +3253,7 @@
   },
   {
     "id": "TA142",
-    "advice": "Own your limit with I-language and skip justifying the rule. (Secure = concise; Avoidant/Anxious = keep tone neutral, not defensive.)",
+    "advice": "Own your limits: “I can do X; I can’t do Y.”",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -3280,7 +3283,7 @@
   },
   {
     "id": "TA143",
-    "advice": "When guilt shows up, remind yourself and, if needed, the other person that clear limits protect both of you. (Secure = values; Anxious = brief self-reassurance before replying.)",
+    "advice": "Remind yourself: boundaries protect both people.",
     "triggerTone": "caution",
     "contexts": [
       "boundary"
@@ -3308,7 +3311,7 @@
   },
   {
     "id": "TA144",
-    "advice": "Make the first no firm; repeating softer versions invites pushback. (Avoidant = crisp; Secure = confident and calm.)",
+    "advice": "Say no firmly the first time; don’t keep repeating.",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -3336,7 +3339,7 @@
   },
   {
     "id": "TA145",
-    "advice": "Replace hedging with one plain sentence and send it as a single message. (Anxious = remove qualifiers; Secure = keep tone even.)",
+    "advice": "Replace nervous laughter with a pause and a plain statement.",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -3364,7 +3367,7 @@
   },
   {
     "id": "TA146",
-    "advice": "If pressure continues, end the conversation and state you won’t revisit it today. (Avoidant = short exit; Secure/Disorganized = include when you’ll re-engage.)",
+    "advice": "End pressured talks: “I’ve stated my boundary; I won’t discuss further.”",
     "triggerTone": "alert",
     "contexts": [
       "boundary"
@@ -3392,7 +3395,7 @@
   },
   {
     "id": "TA147",
-    "advice": "Cut extra words and keep tone even; brevity strengthens the boundary. (Secure = steady; Avoidant = minimal.)",
+    "advice": "Fewer words + steady tone = stronger no.",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -3421,7 +3424,7 @@
   },
   {
     "id": "TA148",
-    "advice": "Remind yourself that firm limits are acts of respect, not meanness; send the boundary without apology. (Anxious = self-soothe, then text.)",
+    "advice": "Boundaries aren’t cruel; they protect respect.",
     "triggerTone": "caution",
     "contexts": [
       "boundary"
@@ -3448,7 +3451,7 @@
   },
   {
     "id": "TA149",
-    "advice": "When tested, repeat the same boundary once, then disengage to stop the loop. (Avoidant = quick exit; Secure = calm closeout.)",
+    "advice": "When tested, repeat calmly—then disengage.",
     "triggerTone": "alert",
     "contexts": [
       "boundary"
@@ -3475,7 +3478,7 @@
   },
   {
     "id": "TA150",
-    "advice": "Text a firm, kind no and keep it brief. (Secure = steady tone; Anxious = add appreciation without over-explaining.)",
+    "advice": "Kind but firm: “I can’t, and I appreciate your understanding.”",
     "triggerTone": "alert",
     "contexts": [
       "boundary",
@@ -3504,7 +3507,7 @@
   },
   {
     "id": "TA151",
-    "advice": "Name the escalation in a short text and propose a slower pace. (Secure = direct; Disorganized = pair with a safety cue and simple next step.)",
+    "advice": "Name rapid escalation: “This is getting heated fast.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -3532,7 +3535,7 @@
   },
   {
     "id": "TA152",
-    "advice": "Interrupt the spiral by texting a pause and a time to revisit. (Secure = collaborative; Avoidant = low-pressure options; Anxious = brief reassurance.)",
+    "advice": "Interrupt spiral: “Let’s pause before this gets worse.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation",
@@ -3561,7 +3564,7 @@
   },
   {
     "id": "TA153",
-    "advice": "Suggest a reset and name the intention to continue calmly. (Secure = succinct; Anxious = include care for the bond.)",
+    "advice": "Request a reset: “Can we try again more calmly?”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -3588,7 +3591,7 @@
   },
   {
     "id": "TA154",
-    "advice": "Call out mutual defensiveness and invite one slow point at a time. (Disorganized = safety and clarity; Secure = candid, non-blaming.)",
+    "advice": "Call out defense mode: “We’re both defending right now.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -3616,7 +3619,7 @@
   },
   {
     "id": "TA155",
-    "advice": "Text to pause, then take one regulating breath before replying. (Secure = matter-of-fact; Anxious/Disorganized = add a brief self-soothe cue.)",
+    "advice": "Body reset together: unclench, drop shoulders, one breath.",
     "triggerTone": "alert",
     "contexts": [
       "escalation",
@@ -3645,7 +3648,7 @@
   },
   {
     "id": "TA156",
-    "advice": "Request a lower tone and reaffirm willingness to continue when respectful. (Avoidant = concise boundary; Secure = steady.)",
+    "advice": "Ask explicitly: “Let’s talk without yelling.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -3672,7 +3675,7 @@
   },
   {
     "id": "TA157",
-    "advice": "Stop labels; ask to stick to impacts and requests. (Secure = direct; Anxious/Disorganized = normalize and redirect.)",
+    "advice": "Stop name-calling: “Let’s skip labels—they make it worse.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -3701,7 +3704,7 @@
   },
   {
     "id": "TA158",
-    "advice": "Slow the tempo: lengthen reply time and keep messages short. (Secure = name the slowdown; Avoidant = offer to pick up later.)",
+    "advice": "Words speeding up? Slow your speech on purpose.",
     "triggerTone": "alert",
     "contexts": [
       "escalation",
@@ -3729,7 +3732,7 @@
   },
   {
     "id": "TA159",
-    "advice": "Name the spiral and suggest one topic at a time. (Disorganized = explicit structure; Secure = collaborative tone.)",
+    "advice": "Point to the spiral: “We’re escalating right now.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation",
@@ -3758,7 +3761,7 @@
   },
   {
     "id": "TA160",
-    "advice": "Propose a fixed pause and a return time to reduce anxiety and chase cycles. (Secure/Avoidant/Anxious = clear timing reduces threat.)",
+    "advice": "Offer a timed pause: “20 minutes, then come back.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation",
@@ -3787,7 +3790,7 @@
   },
   {
     "id": "TA161",
-    "advice": "State the convo doesn’t feel respectful and pause until safety is back. (Secure = boundary with care; Disorganized = name safety explicitly.)",
+    "advice": "Name lack of safety: “This doesn’t feel respectful anymore.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -3815,7 +3818,7 @@
   },
   {
     "id": "TA162",
-    "advice": "Stop rapid-fire: wait a few breaths before replying to reduce reactivity. (Secure = disciplined; Anxious = soothe first, then send.)",
+    "advice": "No rapid-fire—wait three seconds before replying.",
     "triggerTone": "alert",
     "contexts": [
       "escalation",
@@ -3843,7 +3846,7 @@
   },
   {
     "id": "TA163",
-    "advice": "When accusations pile up, ask for the one key message to hear. (Secure = focus; Anxious = reflect back once you get it.)",
+    "advice": "Ask for the headline: “What’s the main point you want me to hear?”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -3870,7 +3873,7 @@
   },
   {
     "id": "TA164",
-    "advice": "Set a respect boundary and pause if insults continue. (Avoidant = concise, non-emotional text; Secure = steady limit + willingness to resume.)",
+    "advice": "Redirect insults: “I’ll listen if we speak respectfully.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -3898,7 +3901,7 @@
   },
   {
     "id": "TA165",
-    "advice": "Tell them you’re slowing down to re-regulate, then reply once calmer. (Secure = pragmatic; Disorganized = pair with grounding cue.)",
+    "advice": "Slow your body—relax shoulders, long exhale.",
     "triggerTone": "alert",
     "contexts": [
       "escalation",
@@ -3926,7 +3929,7 @@
   },
   {
     "id": "TA166",
-    "advice": "Own the escalation on both sides and request a slower rhythm. (Secure = team language; Anxious/Disorganized = explicit reassurance.)",
+    "advice": "Acknowledge escalation: “We’re making this worse—let’s slow down.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -3955,7 +3958,7 @@
   },
   {
     "id": "TA167",
-    "advice": "Send a quick note that you’re grounding for a minute, then return calmer. (Secure = straightforward; Disorganized = name the safety step.)",
+    "advice": "Use a calm gesture (open palm/hand over heart) to de-escalate.",
     "triggerTone": "alert",
     "contexts": [
       "escalation",
@@ -3983,7 +3986,7 @@
   },
   {
     "id": "TA168",
-    "advice": "Stop heated texts with a firm pause and propose a time to resume. (Avoidant = minimal wording; Secure = clear boundary + goodwill.)",
+    "advice": "Firm stop: “I need us to pause this right now.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4011,7 +4014,7 @@
   },
   {
     "id": "TA169",
-    "advice": "If it flips into silence, name the shutdown and suggest a gentle re-entry. (Disorganized = safety; Secure = neutral tone.)",
+    "advice": "Name the shutdown: “We’ve both gone quiet now.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4039,7 +4042,7 @@
   },
   {
     "id": "TA170",
-    "advice": "Offer one grounding step and then continue. (Secure = concise; Anxious = pair with reassurance about the bond.)",
+    "advice": "Grounding cue: “Let’s both take one deep breath.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation",
@@ -4067,7 +4070,7 @@
   },
   {
     "id": "TA171",
-    "advice": "Suggest switching context (walk, different room) and resume texting after a short reset. (Avoidant = autonomy-friendly; Secure = practical.)",
+    "advice": "Break the loop by moving—walk/change rooms.",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4094,7 +4097,7 @@
   },
   {
     "id": "TA172",
-    "advice": "Interrupt the spiral by naming care for the bond and asking to slow. (Secure = values; Anxious/Disorganized = explicit reassurance.)",
+    "advice": "Interrupt with care: “I don’t want to lose us in this.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4123,7 +4126,7 @@
   },
   {
     "id": "TA173",
-    "advice": "Use a time marker to reflect escalation and propose a reset point. (Secure = clear; Avoidant = option to resume later.)",
+    "advice": "Use time markers: “We’re 20 minutes in and escalating—let’s reset.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4150,7 +4153,7 @@
   },
   {
     "id": "TA174",
-    "advice": "Reassure the relationship’s importance while asking to de-escalate. (Secure = grounding; Anxious = explicit commitment.)",
+    "advice": "Reassure: “This argument doesn’t define us.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4178,7 +4181,7 @@
   },
   {
     "id": "TA175",
-    "advice": "At peak anger, pivot to repair and set a short pause before continuing. (Secure = steady; Disorganized = clear safety frame.)",
+    "advice": "Offer repair at peak anger: “I don’t want to keep hurting each other.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4206,7 +4209,7 @@
   },
   {
     "id": "TA176",
-    "advice": "Name that the texting style is unhelpful and move to a calmer channel or time. (Secure = specific plan; Avoidant = short, non-emotional.)",
+    "advice": "Notice shouting: “Let’s not raise our voices further.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4234,7 +4237,7 @@
   },
   {
     "id": "TA177",
-    "advice": "State intention to de-escalate and protect the bond; request slower, shorter messages. (Secure = values; Anxious = reassurance.)",
+    "advice": "Anchor to us: “I care more about us than this fight.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4262,7 +4265,7 @@
   },
   {
     "id": "TA178",
-    "advice": "When speed rises, send one word—pause—then step away briefly before replying. (Secure = disciplined; Disorganized = pair with grounding.)",
+    "advice": "Spiral fast? Hand up + “Pause.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation",
@@ -4290,7 +4293,7 @@
   },
   {
     "id": "TA179",
-    "advice": "Name the risk of saying things you’ll regret and slow the exchange. (Secure = neutral; Anxious = reassure continuity.)",
+    "advice": "Name the risk: “We’re close to saying things we’ll regret.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4318,7 +4321,7 @@
   },
   {
     "id": "TA180",
-    "advice": "Anchor to the relationship and suggest a brief reset before continuing. (Secure = values; Disorganized/Anxious = explicit safety.)",
+    "advice": "Re-anchor: “I don’t want us to get lost in this.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4346,7 +4349,7 @@
   },
   {
     "id": "TA181",
-    "advice": "Ask if a step-away is needed and set when to return. (Secure = collaborative; Avoidant = option-based, low pressure.)",
+    "advice": "Ask plainly: “Do we need to step away and reset?”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4373,7 +4376,7 @@
   },
   {
     "id": "TA182",
-    "advice": "State that the convo is too heated to be useful and propose a calmer revisit. (Secure = pragmatic; Anxious = remind of continued care.)",
+    "advice": "Break momentum: “This feels too heated to be useful.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4401,7 +4404,7 @@
   },
   {
     "id": "TA183",
-    "advice": "Refuse name-calling and pause until respect returns. (Secure = calm boundary; Avoidant = brief, firm stop.)",
+    "advice": "Set a term: “I won’t continue if we use hurtful names.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4429,7 +4432,7 @@
   },
   {
     "id": "TA184",
-    "advice": "Offer reassurance you’re staying in the relationship while pausing intensity. (Secure = steady; Anxious/Disorganized = explicit commitment.)",
+    "advice": "Reassure mid-heat: “I’m upset, but I’m not leaving us.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4458,7 +4461,7 @@
   },
   {
     "id": "TA185",
-    "advice": "Text that you’re taking a quick sensory reset and will reply shortly. (Avoidant = brief notice; Secure = concrete plan to return.)",
+    "advice": "Sensory reset: step outside, sip water, fresh air.",
     "triggerTone": "alert",
     "contexts": [
       "escalation",
@@ -4486,7 +4489,7 @@
   },
   {
     "id": "TA186",
-    "advice": "Shift to perspective-taking by asking for the key need or message. (Secure = reflective; Anxious = mirror back once heard.)",
+    "advice": "Perspective-take: “What do you most need me to hear?”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4513,7 +4516,7 @@
   },
   {
     "id": "TA187",
-    "advice": "State intent to de-escalate and choose one small step that cools things down. (Secure = action-oriented; Anxious/Disorganized = reassurance.)",
+    "advice": "State intent: “I want to de-escalate, not add fire.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4542,7 +4545,7 @@
   },
   {
     "id": "TA188",
-    "advice": "Point out rising speed and ask to slow to one message every few minutes. (Secure = neutral; Avoidant = autonomy-friendly.)",
+    "advice": "Point out tempo: “We’re speeding up—let’s slow down.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4570,7 +4573,7 @@
   },
   {
     "id": "TA189",
-    "advice": "If stuck, propose a reset and a specific time to resume tomorrow. (Secure = planful; Avoidant = low-pressure choice.)",
+    "advice": "If stuck, reset and return tomorrow.",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4597,7 +4600,7 @@
   },
   {
     "id": "TA190",
-    "advice": "Re-anchor to wanting the relationship okay after this and pause intensity. (Secure = values; Anxious/Disorganized = explicit staying message.)",
+    "advice": "Peak anchor: “No matter what, I want us okay after this.”",
     "triggerTone": "alert",
     "contexts": [
       "escalation"
@@ -4626,7 +4629,7 @@
   },
   {
     "id": "TA191",
-    "advice": "Name that something just broke between you and ask to slow before repairing. (Secure = candid; Disorganized = emphasize safety.)",
+    "advice": "Name the rupture: “Something just broke between us.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -4654,7 +4657,7 @@
   },
   {
     "id": "TA192",
-    "advice": "Notice the sudden distance and invite a gentler pace. (Secure = clear; Anxious = request brief reassurance.)",
+    "advice": "Notice sudden distance: “I feel a gap opening up.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -4682,7 +4685,7 @@
   },
   {
     "id": "TA193",
-    "advice": "Call out the sharp pull-away and ask what shifted, without blame. (Secure = curious; Avoidant/Disorganized = offer easy re-entry.)",
+    "advice": "Call out withdrawal: “You pulled away—what happened?”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -4710,7 +4713,7 @@
   },
   {
     "id": "TA194",
-    "advice": "Name the trust shake and ask for a small stabilizing step. (Secure = steady; Anxious = ask for reassurance about staying.)",
+    "advice": "Name shaken trust: “That really shook my trust in us.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -4737,7 +4740,7 @@
   },
   {
     "id": "TA195",
-    "advice": "Notice you feel shut out and request a slower, clearer exchange. (Secure = calm; Disorganized = emphasize safety.)",
+    "advice": "Spot it early: “I feel shut out after that comment.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -4765,7 +4768,7 @@
   },
   {
     "id": "TA196",
-    "advice": "Flag the disconnect and ask to acknowledge it before moving on. (Secure = collaborative; Anxious = brief reassurance welcome.)",
+    "advice": "Label the moment: “That felt like a rupture—can we pause and name it?”",
     "triggerTone": "caution",
     "contexts": [
       "rupture"
@@ -4792,7 +4795,7 @@
   },
   {
     "id": "TA197",
-    "advice": "State the impact landed harshly and invite a softer approach. (Anxious = avoid over-apology; Secure = concise.)",
+    "advice": "Name impact: “That landed harshly for me.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -4819,7 +4822,7 @@
   },
   {
     "id": "TA198",
-    "advice": "Treat the sudden silence as disconnect and check what’s needed to resume. (Secure = curious; Avoidant/Disorganized = give easy options.)",
+    "advice": "Name silent rupture: “We stopped talking suddenly—what happened?”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -4847,7 +4850,7 @@
   },
   {
     "id": "TA199",
-    "advice": "Name that it hurt and orient to repair rather than blame. (Secure = steady; Anxious = ask for a small reassurance or next step.)",
+    "advice": "Say the hurt aloud: “That moment hurt—I need to say it.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -4874,7 +4877,7 @@
   },
   {
     "id": "TA200",
-    "advice": "Gently label the trust fracture in a short text and keep it about your experience. (Secure = steady, non-accusatory; Disorganized = soft tone, safety cues.)",
+    "advice": "Gently label fractured trust: “Something cracked in me when that happened.”",
     "triggerTone": "caution",
     "contexts": [
       "rupture"
@@ -4901,7 +4904,7 @@
   },
   {
     "id": "TA201",
-    "advice": "Interrupt the drift in real time with a brief check-in and a small next step. (Secure = direct; Anxious = reassurance now; Disorganized = consent to slow.)",
+    "advice": "Call rupture in real time: “I feel us drifting right now.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -4930,7 +4933,7 @@
   },
   {
     "id": "TA202",
-    "advice": "Name that the blame felt heavy and keep it first-person, short, and calm. (Secure = grounded impact; Anxious = minimize self-critique, ask for clarity.)",
+    "advice": "Name heavy blame: “That accusation felt heavy for me.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -4957,7 +4960,7 @@
   },
   {
     "id": "TA203",
-    "advice": "If they shut down, text later about how the silence landed for you and invite a gentle re-entry. (Avoidant = low pressure, choice; Secure = clear impact.)",
+    "advice": "After walkout: “Walking out left me feeling cut off.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -4985,7 +4988,7 @@
   },
   {
     "id": "TA204",
-    "advice": "Name that the moment created distance and signal care for the bond before problem-solving. (Secure = direct + warm; Anxious/Disorganized = safety first.)",
+    "advice": "Name distance: “That moment created distance—I need to name it.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5014,7 +5017,7 @@
   },
   {
     "id": "TA205",
-    "advice": "Call out the silence as a disconnect cue and anchor in feelings, not blame. (Anxious = brief reassurance; Disorganized = grounding + consent.)",
+    "advice": "Silent rupture: “When you went quiet, I felt abandoned.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5042,7 +5045,7 @@
   },
   {
     "id": "TA206",
-    "advice": "If a break is forming mid-thread, describe it and propose pausing pace or tone. (Secure = candid + kind; Disorganized = slow and safety-focused.)",
+    "advice": "Live break: “I feel the break happening as we talk.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5070,7 +5073,7 @@
   },
   {
     "id": "TA207",
-    "advice": "State that the comment landed like rejection while staying non-accusatory. (Anxious = request reassurance; Secure = steady tone.)",
+    "advice": "Rejection impact: “That comment landed like rejection.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5097,7 +5100,7 @@
   },
   {
     "id": "TA208",
-    "advice": "Note the sudden chill in the interaction and ask to slow or clarify. (Secure = direct; Disorganized = gentle pace + safety check.)",
+    "advice": "Energy shift: “The room just went cold between us.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5125,7 +5128,7 @@
   },
   {
     "id": "TA209",
-    "advice": "Acknowledge that it stung more than expected and orient toward care over blame. (Secure = self-aware; Anxious = soothe, then invite clarity.)",
+    "advice": "Share the sting: “That stung more than I expected.”",
     "triggerTone": "caution",
     "contexts": [
       "rupture"
@@ -5152,7 +5155,7 @@
   },
   {
     "id": "TA210",
-    "advice": "Flag that the exchange hit a wall and suggest a calmer pace or brief pause. (Secure/Anxious = collaborative; Avoidant = low-pressure options.)",
+    "advice": "Flag the wall: “I think we just hit a wall in this conversation.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5180,7 +5183,7 @@
   },
   {
     "id": "TA211",
-    "advice": "Describe your body cue (e.g., drop in stomach) and ask to slow the thread. (Disorganized = anchor in somatics; Secure = clear link to pace.)",
+    "advice": "Body cue: “My stomach dropped just now.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture",
@@ -5208,7 +5211,7 @@
   },
   {
     "id": "TA212",
-    "advice": "Note that the phrase felt like a shutdown and request gentler wording. (Secure = direct and kind; Anxious = reassurance welcome.)",
+    "advice": "Shutdown phrase: “That phrase hit me like a shutdown.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5235,7 +5238,7 @@
   },
   {
     "id": "TA213",
-    "advice": "Notice withdrawal quickly and share its impact in one line; invite re-entry. (Avoidant = offer timing choice; Secure = clear, non-blaming.)",
+    "advice": "Quick withdrawal: “You pulled back and I felt it.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5263,7 +5266,7 @@
   },
   {
     "id": "TA214",
-    "advice": "State that the ghosting-like moment felt like a cut, then orient to repair. (Secure = impact + plan; Disorganized = safety and pacing.)",
+    "advice": "Sharp rupture: “That felt like a cut between us.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5291,7 +5294,7 @@
   },
   {
     "id": "TA215",
-    "advice": "Gently name a small break inside you and keep tone soft and self-referenced. (Secure = steady; Anxious = add reassurance ask.)",
+    "advice": "Gentle fracture: “That moment broke something small in me.”",
     "triggerTone": "caution",
     "contexts": [
       "rupture"
@@ -5318,7 +5321,7 @@
   },
   {
     "id": "TA216",
-    "advice": "Name the sudden disconnect and suggest slowing or resetting the exchange. (Secure = direct; Disorganized = gentle consent.)",
+    "advice": "Sudden disconnect: “That sudden shift left me disconnected.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5346,7 +5349,7 @@
   },
   {
     "id": "TA217",
-    "advice": "Share that the words landed too sharply and ask for a softer pace. (Anxious = reassurance request; Secure = concise impact.)",
+    "advice": "Words cut deep: “That landed sharper than I can hold alone.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5373,7 +5376,7 @@
   },
   {
     "id": "TA218",
-    "advice": "Call out the silence as rupture-like for you and offer low-pressure re-engagement. (Secure = impact + invitation; Avoidant = autonomy-respecting.)",
+    "advice": "Silence as rupture: “That silence feels like a rupture for me.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5400,7 +5403,7 @@
   },
   {
     "id": "TA219",
-    "advice": "Name that the choice shook you and ask to regroup before assumptions grow. (Secure = clear; Anxious = request brief reassurance.)",
+    "advice": "Name impact: “That choice really shook me.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5427,7 +5430,7 @@
   },
   {
     "id": "TA220",
-    "advice": "Flag that the bond felt cracked and keep it simple and kind; propose a small reset. (Secure = direct; Disorganized = safety-first.)",
+    "advice": "Gentle flag: “Feels like the bond cracked.”",
     "triggerTone": "caution",
     "contexts": [
       "rupture"
@@ -5454,7 +5457,7 @@
   },
   {
     "id": "TA221",
-    "advice": "Notice a sudden wall and invite a slower pace or brief pause. (Secure/Anxious = collaborative; Avoidant = opt-in choices, no pressure.)",
+    "advice": "Sudden wall: “I noticed a wall between us just now.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5483,7 +5486,7 @@
   },
   {
     "id": "TA222",
-    "advice": "Name that it felt like rejection while staying with your feelings and needs. (Anxious = ask for reassurance; Secure = concise impact.)",
+    "advice": "Plainly: “That felt like rejection.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5510,7 +5513,7 @@
   },
   {
     "id": "TA223",
-    "advice": "If the pull-away is subtle, note the shift and your hurt, then invite an easy re-join. (Secure = direct; Anxious = gentle reassurance.)",
+    "advice": "Subtle shift + hurt: “Something shifted and I feel hurt.”",
     "triggerTone": "caution",
     "contexts": [
       "rupture"
@@ -5537,7 +5540,7 @@
   },
   {
     "id": "TA224",
-    "advice": "Name a body signal (e.g., tightness) as a cue to slow down rather than escalate. (Disorganized = somatic grounding; Secure = clear request.)",
+    "advice": "Body cue: “My chest tightened after what you said.”",
     "triggerTone": "alert",
     "contexts": [
       "rupture",
@@ -5565,7 +5568,7 @@
   },
   {
     "id": "TA225",
-    "advice": "Describe the moment as emotional withdrawal without blaming motive; share impact and invite reconnection. (Secure = clear; Avoidant = autonomy-respecting.)",
+    "advice": "Name emotional withdrawal + impact (no blame).",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5593,7 +5596,7 @@
   },
   {
     "id": "TA226",
-    "advice": "Flag the word choice as hurtful and explain why it matters, while assuming good intent. (Secure = direct; Anxious = brief, no over-explaining.)",
+    "advice": "Flag hurtful wording; say it matters without accusing intent.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5620,7 +5623,7 @@
   },
   {
     "id": "TA227",
-    "advice": "When conflict peaks, label the risk of a break and slow the thread with a pause or reset. (Disorganized = safety structure; Secure = steady boundary.)",
+    "advice": "Label a potential breaking point to slow things down.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5648,7 +5651,7 @@
   },
   {
     "id": "TA228",
-    "advice": "Share that you felt cut off after the action and keep focus on your inner response; invite repair. (Secure = concise impact; Anxious = ask for brief reassurance.)",
+    "advice": "Describe feeling cut off; keep it about your experience.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5675,7 +5678,7 @@
   },
   {
     "id": "TA229",
-    "advice": "Call out shutdown energy and that the connection flow broke; suggest a low-key re-entry. (Secure = direct; Avoidant/Disorganized = options + safety.)",
+    "advice": "Call rupture energy—our connection flow just broke.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5703,7 +5706,7 @@
   },
   {
     "id": "TA230",
-    "advice": "Name the drop in trust and its impact on your sense of ‘us’; ask for a small stabilizing step. (Secure = values; Anxious = reassurance helps.)",
+    "advice": "Name the trust drop and its impact on ‘us’.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5731,7 +5734,7 @@
   },
   {
     "id": "TA231",
-    "advice": "Identify a specific phrase as a disconnect moment and center how it landed; invite clarity. (Anxious = brief validation request; Secure = calm tone.)",
+    "advice": "Mark the phrase as a rupture; center your reaction.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5758,7 +5761,7 @@
   },
   {
     "id": "TA232",
-    "advice": "Share that you closed off inside and need a moment to recalibrate before continuing. (Disorganized = explicit safety; Secure = respectful pause.)",
+    "advice": "Share you closed off; ask for a moment to recalibrate.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5786,7 +5789,7 @@
   },
   {
     "id": "TA233",
-    "advice": "Name feeling small or unseen and keep it impact-based, not accusatory; invite attunement. (Anxious = avoid over-apologizing; Secure = concise.)",
+    "advice": "Say you feel small/unseen—impact over blame.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5813,7 +5816,7 @@
   },
   {
     "id": "TA234",
-    "advice": "Note you were caught off guard and felt hurt; keep tone soft and forward-looking. (Secure = balanced; Anxious = brief reassurance ask.)",
+    "advice": "Caught off guard and hurt—use a soft tone.",
     "triggerTone": "caution",
     "contexts": [
       "rupture"
@@ -5840,7 +5843,7 @@
   },
   {
     "id": "TA235",
-    "advice": "Describe the exchange as a shutdown and how it narrowed your openness; ask for a reset. (Secure = candid; Avoidant = low-pressure entry points.)",
+    "advice": "Describe a shutdown and how it hit your openness.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5868,7 +5871,7 @@
   },
   {
     "id": "TA236",
-    "advice": "Name the inner pull-away and anchor in body cues to reduce blame. (Secure = clear impact; Disorganized = somatic grounding + consent.)",
+    "advice": "Name inner pull-away and your body cues.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5895,7 +5898,7 @@
   },
   {
     "id": "TA237",
-    "advice": "Share that the word landed as rejection and briefly why it stung; invite gentler wording. (Anxious = ask for reassurance; Secure = concise.)",
+    "advice": "Word landed as rejection—why it stung for you.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5922,7 +5925,7 @@
   },
   {
     "id": "TA238",
-    "advice": "Acknowledge the tone hit harder than expected and ask to slow the pace or soften language. (Secure/Anxious = collaborative; Avoidant = autonomy-aware.)",
+    "advice": "Tone hit harder than expected; ask for a gentler pace.",
     "triggerTone": "caution",
     "contexts": [
       "rupture"
@@ -5950,7 +5953,7 @@
   },
   {
     "id": "TA239",
-    "advice": "Name that this dented the connection and request a slower, gentler rhythm. (Secure = clear + kind; Disorganized = explicit safety.)",
+    "advice": "Note a dent in connection; ask to slow down.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -5978,7 +5981,7 @@
   },
   {
     "id": "TA240",
-    "advice": "State that closeness broke for a moment and that you want to address it with one small step. (Secure = values; Anxious/Disorganized = reassurance + pacing.)",
+    "advice": "Closeness broke; say you want to address it.",
     "triggerTone": "alert",
     "contexts": [
       "rupture"
@@ -6007,7 +6010,7 @@
   },
   {
     "id": "TA241",
-    "advice": "Affirm desire to repair and suggest stepping back together before re-engaging. (Secure = collaborative; Anxious = soothing tone.)",
+    "advice": "Affirm repair and propose stepping back together.",
     "triggerTone": "alert",
     "contexts": [
       "repair",
@@ -6036,7 +6039,7 @@
   },
   {
     "id": "TA242",
-    "advice": "Offer a soft redo and give two simple options for re-starting. (Secure = clear; Avoidant = choice + low pressure.)",
+    "advice": "Offer a soft redo; willing to try again.",
     "triggerTone": "caution",
     "contexts": [
       "repair",
@@ -6064,7 +6067,7 @@
   },
   {
     "id": "TA243",
-    "advice": "Reassure care and commitment in one or two lines and suggest a tiny next step. (Secure = steady; Disorganized = predictable structure.)",
+    "advice": "Reassure care and commitment after the moment.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -6091,7 +6094,7 @@
   },
   {
     "id": "TA244",
-    "advice": "Spot the break early and state an intention to mend before it grows; propose one immediate step. (Secure = proactive; Disorganized = safety + pacing.)",
+    "advice": "Spot the break; intend to mend before it grows.",
     "triggerTone": "alert",
     "contexts": [
       "repair"
@@ -6118,7 +6121,7 @@
   },
   {
     "id": "TA245",
-    "advice": "Acknowledge it didn’t feel good and suggest a reset with a clear, simple option. (Secure = direct; Avoidant = low-pressure path.)",
+    "advice": "Acknowledge it didn’t feel good; suggest a reset.",
     "triggerTone": "caution",
     "contexts": [
       "repair",
@@ -6146,7 +6149,7 @@
   },
   {
     "id": "TA246",
-    "advice": "Center the relationship’s value over the disagreement and pick one step that supports closeness. (Secure = values; Anxious/Avoidant = brief + clear.)",
+    "advice": "Center the relationship over the disagreement.",
     "triggerTone": "clear",
     "contexts": [
       "repair",
@@ -6175,7 +6178,7 @@
   },
   {
     "id": "TA247",
-    "advice": "State you’re not okay with how it went and that repair matters; propose a next micro-step. (Secure = boundary + care; Anxious = calm tone.)",
+    "advice": "Not okay with it; repair matters to me.",
     "triggerTone": "alert",
     "contexts": [
       "repair"
@@ -6203,7 +6206,7 @@
   },
   {
     "id": "TA248",
-    "advice": "Invite a fresh start and offer a simple path to begin again. (Secure = collaborative; Avoidant = autonomy-respecting choices; Disorganized = paced.)",
+    "advice": "Invite a fresh start; I’m willing to begin.",
     "triggerTone": "clear",
     "contexts": [
       "repair",
@@ -6232,7 +6235,7 @@
   },
   {
     "id": "TA249",
-    "advice": "Express wanting to reconnect instead of drifting and suggest one easy reconnection step. (Secure = steady; Anxious = reassurance-forward.)",
+    "advice": "Name desire to reconnect instead of drift.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -6259,7 +6262,7 @@
   },
   {
     "id": "TA250",
-    "advice": "Text that you miss closeness and want to rebuild now—keep it warm and specific. (Anxious = present reassurance; Secure = steady, values-based tone.)",
+    "advice": "I miss closeness; let’s rebuild now.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -6286,7 +6289,7 @@
   },
   {
     "id": "TA251",
-    "advice": "Acknowledge the sting in a short text and orient to moving forward. (Secure = grounded optimism; Disorganized = safety cues and option to pause.)",
+    "advice": "Acknowledge sting without letting it define us.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -6313,7 +6316,7 @@
   },
   {
     "id": "TA252",
-    "advice": "Say repair matters because they matter—one or two lines max. (Secure = values; Anxious = present-focused care; Avoidant = low-pressure, autonomy-respecting.)",
+    "advice": "Repair matters because you matter to me.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -6341,7 +6344,7 @@
   },
   {
     "id": "TA253",
-    "advice": "Label this as a brief disconnect and text a small, safe next step. (Secure = clear plan; Disorganized = consent and slow pacing.)",
+    "advice": "Label the rupture; set a clear repair intention.",
     "triggerTone": "alert",
     "contexts": [
       "repair"
@@ -6368,7 +6371,7 @@
   },
   {
     "id": "TA254",
-    "advice": "Discourage rumination by texting one practical repair path. (Secure = solution-forward; Anxious = immediate reassurance; Avoidant = simple, opt-in choice.)",
+    "advice": "Don’t get stuck—propose a repair path.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -6396,7 +6399,7 @@
   },
   {
     "id": "TA255",
-    "advice": "Text confidence in the relationship and propose one next step today. (Secure = steady faith; Anxious = now-focused calm.)",
+    "advice": "Affirm belief in us despite the rupture.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -6423,7 +6426,7 @@
   },
   {
     "id": "TA256",
-    "advice": "Validate the hurt in text and offer a small move forward together. (Secure = care + action; Disorganized = safety and pacing checks.)",
+    "advice": "Validate the hurt; show up to move forward.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -6450,7 +6453,7 @@
   },
   {
     "id": "TA257",
-    "advice": "Say it didn’t sit right and suggest a brief reset. (Secure = direct; Avoidant = concise, low-pressure option.)",
+    "advice": "It didn’t sit right; let’s reset together.",
     "triggerTone": "caution",
     "contexts": [
       "repair",
@@ -6478,7 +6481,7 @@
   },
   {
     "id": "TA258",
-    "advice": "Let your text prioritize love over winning—appreciation + one repair step. (Anxious = soothing now; Secure = values-based.)",
+    "advice": "Choose repair over winning—prioritize love.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -6505,7 +6508,7 @@
   },
   {
     "id": "TA259",
-    "advice": "State you don’t want distance to linger and invite one concrete repair action. (Secure = proactive; Disorganized = safety + consent.)",
+    "advice": "Don’t let it linger—invite repair.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -6532,7 +6535,7 @@
   },
   {
     "id": "TA260",
-    "advice": "Keep texts focused on repairing the bond, not proving a point. (Secure = steadying; Avoidant = brief, autonomy-respecting; Anxious = present reassurance.)",
+    "advice": "Relationship > being right.",
     "triggerTone": "clear",
     "contexts": [
       "repair",
@@ -6561,7 +6564,7 @@
   },
   {
     "id": "TA261",
-    "advice": "Name the harshness and send a quick micro-repair now. (Secure = swift repair; Anxious = calming tone + immediacy.)",
+    "advice": "Name harshness; initiate repair now.",
     "triggerTone": "alert",
     "contexts": [
       "repair"
@@ -6588,7 +6591,7 @@
   },
   {
     "id": "TA262",
-    "advice": "Invite shared responsibility in text and propose one small reset. (Secure = collaborative; Avoidant = choice and privacy respected.)",
+    "advice": "Invite mutual responsibility toward reconnection.",
     "triggerTone": "caution",
     "contexts": [
       "repair",
@@ -6616,7 +6619,7 @@
   },
   {
     "id": "TA263",
-    "advice": "Re-center on the ‘us’—one line on care + one on next step. (Anxious = now-focused reassurance; Secure = steady tone.)",
+    "advice": "Refocus on the core bond, not the fight.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -6643,7 +6646,7 @@
   },
   {
     "id": "TA264",
-    "advice": "Own your part in text and ask if this is a good time to repair. (Secure = direct; Anxious/Disorganized = gentle pacing and consent.)",
+    "advice": "Own your part; ready to repair.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -6671,7 +6674,7 @@
   },
   {
     "id": "TA265",
-    "advice": "Reassure you’re here and want to heal together; keep messages short and steady. (Secure = reliability; Disorganized = safety pacing; Avoidant = low-pressure.)",
+    "advice": "Reassure presence; heal together.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -6699,7 +6702,7 @@
   },
   {
     "id": "TA266",
-    "advice": "Acknowledge unintended impact and initiate repair immediately by text. (Secure = swift action; Anxious = soothing clarity now.)",
+    "advice": "Own unintended impact; ask to repair now.",
     "triggerTone": "alert",
     "contexts": [
       "repair"
@@ -6726,7 +6729,7 @@
   },
   {
     "id": "TA267",
-    "advice": "Let the thread focus on repairing, not winning—minimal text, clear care. (Secure = de-escalation; Avoidant = autonomy and privacy) ",
+    "advice": "Make repairing the priority, not winning.",
     "triggerTone": "clear",
     "contexts": [
       "repair",
@@ -6754,7 +6757,7 @@
   },
   {
     "id": "TA268",
-    "advice": "Own the hurt you caused and ask for a reset at their pace. (Secure = accountability; Disorganized = consent + slower tempo.)",
+    "advice": "Acknowledge hurt you caused; ask to start again.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -6781,7 +6784,7 @@
   },
   {
     "id": "TA269",
-    "advice": "Tie your wish to fix this to your care for them—one line care, one line step. (Anxious = present reassurance; Secure = values-forward.)",
+    "advice": "Tie repair to your care for them.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -6808,7 +6811,7 @@
   },
   {
     "id": "TA270",
-    "advice": "Don’t let silence grow—invite a small joint repair step via text. (Secure = proactive; Avoidant = low-key, opt-in.)",
+    "advice": "Prevent silence from growing; invite joint repair.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -6835,7 +6838,7 @@
   },
   {
     "id": "TA271",
-    "advice": "Set a gentle boundary against lingering distance and suggest a brief check-in. (Secure = clear limit; Disorganized = safety-first framing.)",
+    "advice": "Set a boundary: I won’t let this linger.",
     "triggerTone": "alert",
     "contexts": [
       "repair"
@@ -6862,7 +6865,7 @@
   },
   {
     "id": "TA272",
-    "advice": "Recentre the relationship: one text on care, one on next step. (Secure = steady; Anxious = present-focused calm; Avoidant = concise, no pressure.)",
+    "advice": "Re-center the relationship after the moment.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -6890,7 +6893,7 @@
   },
   {
     "id": "TA273",
-    "advice": "Request a redo of that exchange and propose one simple way to retry. (Secure = collaborative; Disorganized/Avoidant = safety + autonomy.)",
+    "advice": "Request a redo to improve the exchange.",
     "triggerTone": "caution",
     "contexts": [
       "repair",
@@ -6919,7 +6922,7 @@
   },
   {
     "id": "TA274",
-    "advice": "Signal you’re here for repair even when it’s messy; keep the thread brief. (Secure = reliability; Anxious = now reassurance.)",
+    "advice": "I’m here and willing to repair through mistakes.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -6946,7 +6949,7 @@
   },
   {
     "id": "TA275",
-    "advice": "Own your part and suggest a quick reset with options. (Secure = direct; Avoidant = autonomy via choice.)",
+    "advice": "Own your part; suggest a reset.",
     "triggerTone": "caution",
     "contexts": [
       "repair",
@@ -6974,7 +6977,7 @@
   },
   {
     "id": "TA276",
-    "advice": "Affirm the bond’s value and offer one predictable repair step. (Secure = values; Disorganized = structure and pacing.)",
+    "advice": "Affirm our value; repair proactively.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -7001,7 +7004,7 @@
   },
   {
     "id": "TA277",
-    "advice": "Name the risk of drifting apart and invite a quick check-in now. (Secure = clear priority; Anxious = immediate calming step.)",
+    "advice": "Name the risk of deepening rupture; repair now.",
     "triggerTone": "alert",
     "contexts": [
       "repair"
@@ -7028,7 +7031,7 @@
   },
   {
     "id": "TA278",
-    "advice": "Acknowledge hurt and choose a small reconnection step by text. (Secure = balanced; Anxious = present reassurance.)",
+    "advice": "Acknowledge hurt while choosing repair over distance.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -7055,7 +7058,7 @@
   },
   {
     "id": "TA279",
-    "advice": "Own your part succinctly to help restore closeness. (Secure = accountability; Avoidant = low-key, privacy-respecting.)",
+    "advice": "Own your part to restore closeness.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -7082,7 +7085,7 @@
   },
   {
     "id": "TA280",
-    "advice": "Regulate with a breath, then send a calm, short invite to reconnect now. (Secure = steady; Disorganized/Anxious = pacing + present reassurance.)",
+    "advice": "Regulate with a breath; invite reconnection now.",
     "triggerTone": "clear",
     "contexts": [
       "repair",
@@ -7111,7 +7114,7 @@
   },
   {
     "id": "TA281",
-    "advice": "Treat this as important: text a plan and ask if it feels safe to try it. (Secure = seriousness with care; Disorganized = consent + slow steps.)",
+    "advice": "Treat this as important; commit to repair.",
     "triggerTone": "alert",
     "contexts": [
       "repair"
@@ -7138,7 +7141,7 @@
   },
   {
     "id": "TA282",
-    "advice": "Offer an explicit repair instead of going quiet; keep it one or two lines. (Secure = direct; Avoidant/Disorganized = low-pressure, safety first.)",
+    "advice": "Offer explicit repair instead of leaving it unspoken.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -7166,7 +7169,7 @@
   },
   {
     "id": "TA283",
-    "advice": "Choose togetherness over grudge: appreciation + tiny step forward. (Secure = values; Anxious = soothing immediacy.)",
+    "advice": "Choose togetherness over a grudge.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -7193,7 +7196,7 @@
   },
   {
     "id": "TA284",
-    "advice": "Prioritize an early reconnection text to prevent drift. (Secure = proactive; Anxious/Disorganized = present safety and pacing.)",
+    "advice": "Prioritize early reconnection to prevent drift.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -7221,7 +7224,7 @@
   },
   {
     "id": "TA285",
-    "advice": "Text that the bond is bigger than this rupture—then pick one next step. (Secure = grounded; Anxious/Avoidant = brief reassurance + autonomy.)",
+    "advice": "Our bond is stronger than this rupture.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -7249,7 +7252,7 @@
   },
   {
     "id": "TA286",
-    "advice": "Say the fight shook you and you want to guard against distance with one small step. (Secure = honest + plan; Disorganized = safety pacing.)",
+    "advice": "The fight shook me—let’s guard against separation.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -7276,7 +7279,7 @@
   },
   {
     "id": "TA287",
-    "advice": "Express readiness to be close again and offer a next micro-step. (Secure = steady; Anxious = present soothing.)",
+    "advice": "Ready to be close again through repair.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -7303,7 +7306,7 @@
   },
   {
     "id": "TA288",
-    "advice": "State the rupture doesn’t define you—choose a small repair now. (Secure = identity in values; Disorganized = clear, paced step.)",
+    "advice": "The rupture doesn’t define us—love does.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -7330,7 +7333,7 @@
   },
   {
     "id": "TA289",
-    "advice": "Aim for a middle path via text—one option that meets both needs. (Secure = collaborative; Avoidant = choice, no pressure.)",
+    "advice": "Aim for a repaired middle ground.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -7357,7 +7360,7 @@
   },
   {
     "id": "TA290",
-    "advice": "Affirm confidence in healing and reference a step that’s worked before. (Secure = steady; Anxious/Disorganized = predictability calms.)",
+    "advice": "Confidence in healing together.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -7385,7 +7388,7 @@
   },
   {
     "id": "TA291",
-    "advice": "Act quickly by text to keep it from lingering—one apology, one step. (Secure = timely; Anxious = immediate calm.)",
+    "advice": "Act quickly—make it right before it lingers.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -7412,7 +7415,7 @@
   },
   {
     "id": "TA292",
-    "advice": "Bring the thread back to your shared ‘us’ and confirm one step that supports it. (Secure = values; Avoidant = concise, low-intrusion.)",
+    "advice": "Return attention to our shared ‘us.’",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -7439,7 +7442,7 @@
   },
   {
     "id": "TA293",
-    "advice": "Face the issue directly with a short, kind text and a concrete repair step. (Secure = clear; Disorganized = safety and pacing.)",
+    "advice": "Face it directly; choose repair over avoidance.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -7466,7 +7469,7 @@
   },
   {
     "id": "TA294",
-    "advice": "Text trust in your ability to restore closeness and propose a tiny step. (Secure = confidence; Anxious/Avoidant = brief + low pressure.)",
+    "advice": "Trust we can restore closeness.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -7494,7 +7497,7 @@
   },
   {
     "id": "TA295",
-    "advice": "Prefer moving toward repair: one message that reduces distance now. (Secure = proactive; Avoidant = concise, opt-in.)",
+    "advice": "Move toward repair, not distance.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -7521,7 +7524,7 @@
   },
   {
     "id": "TA296",
-    "advice": "Make repair the goal of the thread—brief accountability + next step. (Secure = steady; Disorganized = structure + consent.)",
+    "advice": "Make repair the main goal, not being right.",
     "triggerTone": "clear",
     "contexts": [
       "repair",
@@ -7549,7 +7552,7 @@
   },
   {
     "id": "TA297",
-    "advice": "Value closeness over the argument in a few lines; add one forward action. (Secure = values; Anxious = present soothing.)",
+    "advice": "Value closeness/repair over the fight.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -7576,7 +7579,7 @@
   },
   {
     "id": "TA298",
-    "advice": "Signal readiness to reconnect and offer timing options. (Secure = collaborative; Avoidant/Anxious = autonomy + fast clarity.)",
+    "advice": "Signal readiness to reconnect when you are.",
     "triggerTone": "clear",
     "contexts": [
       "repair"
@@ -7604,7 +7607,7 @@
   },
   {
     "id": "TA299",
-    "advice": "Acknowledge the hurt you caused in one line and commit to a small repair today. (Secure = accountable; Disorganized/Anxious = gentle pacing + present reassurance.)",
+    "advice": "Acknowledge the hurt you caused; commit to repair.",
     "triggerTone": "caution",
     "contexts": [
       "repair"
@@ -10286,6 +10289,31 @@
     "contexts": [
       "planning",
       "general"
+    ],
+    "attachmentStyles": [
+      "secure",
+      "avoidant"
+    ],
+    "severityThreshold": {
+      "clear": 0.45
+    },
+    "spacyLink": [
+      "P1080"
+    ],
+    "contextLink": [
+      "CTX_PLANNING"
+    ],
+    "boostSources": [
+      "context_classifier"
+    ],
+    "styleTuning": {}
+  },
+  {
+    "id": "TA399",
+    "advice": "Say, 'I’ll prepare a quick outline so we both see the flow.'",
+    "triggerTone": "clear",
+    "contexts": [
+      "planning"
     ],
     "attachmentStyles": [
       "secure",
@@ -13447,7 +13475,7 @@
       "general"
     ],
     "attachmentStyles": [
-      "avoidant"
+      "anxious"
     ],
     "severityThreshold": {
       "caution": 0.55
@@ -13472,7 +13500,7 @@
       "general"
     ],
     "attachmentStyles": [
-      "anxious"
+      "avoidant"
     ],
     "severityThreshold": {
       "caution": 0.5
@@ -13625,7 +13653,7 @@
       "general"
     ],
     "attachmentStyles": [
-      "avoidant",
+      "anxious",
       "secure"
     ],
     "severityThreshold": {
@@ -13831,7 +13859,7 @@
       "general"
     ],
     "attachmentStyles": [
-      "avoidant",
+      "anxious",
       "secure"
     ],
     "severityThreshold": {
@@ -13959,8 +13987,7 @@
       "general"
     ],
     "attachmentStyles": [
-      "anxious",
-      "avoidant"
+      "anxious"
     ],
     "severityThreshold": {
       "caution": 0.6
@@ -14007,7 +14034,8 @@
     "advice": "If you fear they’d be happier elsewhere, surface the fear and seek present-day evidence.",
     "triggerTone": "caution",
     "contexts": [
-      "insecurity"
+      "insecurity",
+      "general"
     ],
     "attachmentStyles": [
       "anxious"
@@ -14031,7 +14059,8 @@
     "advice": "Interrupt comparison by returning to shared values and current behaviors that support the bond.",
     "triggerTone": "caution",
     "contexts": [
-      "insecurity"
+      "insecurity",
+      "general"
     ],
     "attachmentStyles": [
       "anxious",
@@ -14056,7 +14085,8 @@
     "advice": "Challenge ‘unlovable’ beliefs by collecting recent counter-examples from lived interactions.",
     "triggerTone": "caution",
     "contexts": [
-      "insecurity"
+      "insecurity",
+      "general"
     ],
     "attachmentStyles": [
       "anxious",
@@ -14081,11 +14111,11 @@
     "advice": "If flaws feel disqualifying, explore repair habits and how you both return to good standing.",
     "triggerTone": "caution",
     "contexts": [
-      "insecurity"
+      "insecurity",
+      "general"
     ],
     "attachmentStyles": [
-      "avoidant",
-      "disorganized"
+      "anxious"
     ],
     "severityThreshold": {
       "caution": 0.6
@@ -14106,7 +14136,8 @@
     "advice": "When past-partner comparisons arise, ask for today’s preferences and what lands now.",
     "triggerTone": "caution",
     "contexts": [
-      "insecurity"
+      "insecurity",
+      "general"
     ],
     "attachmentStyles": [
       "anxious",
@@ -14131,7 +14162,8 @@
     "advice": "Notice deficit-scanning; deliberately track your contributions to rebalance attention.",
     "triggerTone": "caution",
     "contexts": [
-      "insecurity"
+      "insecurity",
+      "general"
     ],
     "attachmentStyles": [
       "anxious"
@@ -15429,7 +15461,7 @@
     ],
     "attachmentStyles": [
       "secure",
-      "avoidant"
+      "anxious"
     ],
     "severityThreshold": {
       "clear": 0.45

@@ -1671,7 +1671,8 @@ extension ToneSuggestionCoordinator {
                 "sentiment_score": toneOut.analysis?.sentiment_score ?? 0.5,
                 "linguistic_features": (toneOut.analysis?.linguistic_features as? AnyCodable)?.value ?? [:],
                 "context_analysis": (toneOut.analysis?.context_analysis as? AnyCodable)?.value ?? [:],
-                "attachment_insights": (toneOut.analysis?.attachment_insights as? AnyCodable)?.value ?? []
+                "attachment_insights": (toneOut.analysis?.attachment_insights as? AnyCodable)?.value ?? [],
+                "categories": toneOut.categories ?? []  // Categories from tone pattern matching for therapy advice boost
             ]
             
             // Build metadata
@@ -1792,6 +1793,7 @@ extension ToneSuggestionCoordinator {
         let buckets: [String: Double]
         let ui_tone: String?  // Trust the API's tone decision
         let metadata: ToneMetadata?
+        let categories: [String]?  // Categories from tone pattern matching
         
         // Store full analysis for suggestions reuse
         let analysis: ToneAnalysis?
@@ -1949,6 +1951,7 @@ extension ToneSuggestionCoordinator {
                 let buckets: [String: Double]?
                 let ui_tone: String?
                 let metadata: ToneMetadata?
+                let categories: [String]?  // Categories from tone pattern matching
                 // Include the essential tone analysis fields for fallback
                 let primary_tone: String?
                 let confidence: Double?
@@ -1966,6 +1969,7 @@ extension ToneSuggestionCoordinator {
                 buckets: finalDistribution, 
                 ui_tone: ui.ui_tone,
                 metadata: ui.metadata,
+                categories: ui.categories,  // Categories from tone pattern matching
                 analysis: nil, // Can't reconstruct the full analysis object
                 primary_tone: ui.primary_tone,
                 emotions: ui.emotions,

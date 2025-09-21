@@ -63,6 +63,7 @@ final class SafeKeyboardDataStorage {
         let confidence: Double
         let analysisTime: TimeInterval
         let source: String
+        let categories: [String]?  // tone pattern categories for therapy advice matching
     }
 
     private struct StoredSuggestion: Codable {
@@ -111,7 +112,7 @@ final class SafeKeyboardDataStorage {
         }
     }
 
-    func recordToneAnalysis(text: String, tone: ToneStatus, confidence: Double, analysisTime: TimeInterval) {
+    func recordToneAnalysis(text: String, tone: ToneStatus, confidence: Double, analysisTime: TimeInterval, categories: [String]? = nil) {
         workQueue.async { [weak self] in
             guard let self = self else { return }
             let item = StoredTone(
@@ -122,11 +123,12 @@ final class SafeKeyboardDataStorage {
                 tone: tone.rawValue,
                 confidence: confidence,
                 analysisTime: analysisTime,
-                source: "keyboard_extension"
+                source: "keyboard_extension",
+                categories: categories
             )
             self.toneQueue.append(item)
             self.scheduleCoalescedSync()
-            self.logger.debug("✅ queued tone: \(tone.rawValue)")
+            self.logger.debug("✅ queued tone: \(tone.rawValue) with categories: \(categories ?? [])")
         }
     }
 

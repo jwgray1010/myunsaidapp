@@ -98,6 +98,7 @@ export const toneResponseSchema = z.object({
   context: z.string().optional().describe('Context used for analysis'),
   evidence: z.array(z.string()).optional().describe('Evidence supporting the tone classification'),
   rewritability: z.number().min(0).max(1).optional().describe('How much the message could benefit from rewriting'),
+  categories: z.array(z.string()).optional().describe('Detected tone pattern categories (e.g., extreme-hostility, blame, repair)'),
     // ➕ UI fields used by the keyboard pill:
   ui_tone: z.enum(['clear','caution','alert','neutral']).optional().describe('UI bucket for the pill color'),
   ui_distribution: z.object({
@@ -139,7 +140,6 @@ export const toneResponseSchema = z.object({
     reason: z.string(),
     confidence: z.number().min(0).max(1),
   })).optional().describe('Improvement suggestions'),
-  categories: z.array(z.string()).optional().describe('Tone pattern categories detected'),
   attachmentInsights: z.array(z.string()).optional().describe('Attachment-specific insights'),
   communicationPatterns: z.array(z.string()).optional().describe('Detected communication patterns'),
   metadata: z.object({

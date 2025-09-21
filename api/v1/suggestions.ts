@@ -114,7 +114,6 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
         linguistic_features: data.toneAnalysis.linguistic_features || {},
         context_analysis: data.toneAnalysis.context_analysis || {},
         attachmentInsights: data.toneAnalysis.attachment_insights || [],
-        categories: data.toneAnalysis.categories || [],
         
         // Metadata for comprehensive analysis
         metadata: data.toneAnalysis.metadata || { analysis_depth: data.toneAnalysis.intensity || 0.5 },
@@ -181,9 +180,9 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
           confidence: result.confidence,
           ui_tone: 'clear', // Will be set below based on buckets
           emotions: result.emotions,
-          categories: result.categories || [],
           analysis: result,
-          metaClassifier: result.metaClassifier
+          metaClassifier: result.metaClassifier,
+          categories: (result as any).categories || []
         };
         
         logger.info('Advanced tone analysis completed', { 

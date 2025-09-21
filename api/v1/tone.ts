@@ -324,6 +324,9 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       ui_tone
     });
     
+    // Extract categories from tone analysis result
+    const categories = (result as any).categories || [];
+    
     const response = {
       ok: true,
       userId,
@@ -343,6 +346,8 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       intensity: result.intensity,   // helps clients smooth if they want
       // Echo client sequence for last-writer-wins on device (optional but helpful)
       client_seq: clientSeq,
+      // Categories from tone pattern matching for suggestions service
+      categories,
       // Full-mode specific fields
       ...(isFullMode && {
         mode: 'full',
@@ -352,7 +357,6 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       }),
       analysis: {
         primary_tone: result.primary_tone,     // Raw tone still available in analysis
-        categories: result.categories || [],   // Detected tone pattern categories
         emotions: result.emotions,
         intensity: result.intensity,
         sentiment_score: result.sentiment_score,
