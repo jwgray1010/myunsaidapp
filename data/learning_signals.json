@@ -1,18 +1,43 @@
 {
-  "version": "1.3.0",
-  "notes": "Feature-spotting for Unsaid web. Regex kept conservative for perf & XSS safety. Prefer precompiled, case-insensitive patterns. Designed to play nicely with intensity/negation/sarcasm layers.",
+  "version": "1.3.1",
+  "notes": "Aligned feature-spotting buckets to canonical categories with backward-compatible aliases. Adds safety_check, emergency_deescalation, emotional_regulation, breathing_techniques, active_listening, empathy_builders, perspective_taking, extreme_hostility, jealousy and other mappings. Perf/XSS safeguards preserved.",
   "globals": {
-    "flags": "i", 
+    "flags": "i",
     "maxInputChars": 2000,
     "timeoutMs": 12,
     "dedupeWindowMs": 500,
     "matchLimitPerFeature": 8
   },
+
   "scoringDefaults": {
     "baseWeight": 0.01,
     "positionBoost": { "start": 0.02, "end": 0.01, "caps": 0.03, "repeat": 0.03 },
     "cooccurrenceBoost": { "withNegation": -0.03, "withSarcasm": 0.02, "withEmoji": 0.01 }
   },
+
+  "bucketAliases": {
+    "escalation_language":            ["escalation_detection","escalation"],
+    "reassurance":                    ["safety_check"],
+    "secure_boundary":                ["boundary"],
+    "cognitive_distortions":          ["minimization","escalation_detection"],
+    "threats_ultimatums":             ["threat","ultimatum"],
+    "blame_language":                 ["contempt","escalation_detection"],
+    "invalidation":                   ["minimization"],
+    "sarcasm":                        ["contempt"],
+    "loaded_questions":               ["escalation_detection"],
+    "softening_language":             ["hedge"],
+    "withdrawal_language":            ["shutdown","rupture"],
+    "comparison_jealousy":            ["jealousy"],
+    "repair_language":                ["repair","solution"],
+    "validation_language":            ["empathy_builders"],
+    "gratitude_language":             ["gratitude"],
+    "clear_requests":                 ["plan","structure","confirmation"],
+    "secure_expression":              ["boundary","confirmation"],
+    "pressure_urgency":               ["command","escalation_detection"],
+    "people_pleasing":                ["codependency_patterns"],
+    "process_breakdown":              ["escalation_detection"]
+  },
+
   "features": [
     {
       "id": "FS_ABSOLUTES",
@@ -29,6 +54,34 @@
       "buckets": ["reassurance"],
       "weights": { "tone.caution": 0.035 },
       "attachmentHints": { "anxious": 0.05 }
+    },
+    {
+      "id": "FS_SAFETY_CHECK",
+      "description": "Direct safety checks",
+      "patterns": ["\\bare you safe\\b","\\bis this safe\\b","\\bam i safe\\b","\\bdo you feel safe\\b","\\bsafety first\\b"],
+      "buckets": ["safety_check"],
+      "weights": { "tone.clear": 0.05 }
+    },
+    {
+      "id": "FS_EMERGENCY_DEESC",
+      "description": "Emergency de-escalation/timeouts",
+      "patterns": ["\\btime[- ]?out\\b","\\bwe need to step back\\b","\\blet'?s (pause|cool off|take five)\\b","\\bwe'?ll come back later\\b"],
+      "buckets": ["emergency_deescalation"],
+      "weights": { "tone.clear": 0.05 }
+    },
+    {
+      "id": "FS_REGULATION",
+      "description": "Self-regulation moves",
+      "patterns": ["\\blet'?s pause\\b","\\bi need a minute\\b","\\bi need (a|some) space\\b","\\bi need to calm down\\b"],
+      "buckets": ["emotional_regulation"],
+      "weights": { "tone.clear": 0.04 }
+    },
+    {
+      "id": "FS_BREATHING",
+      "description": "Breathing techniques/cues",
+      "patterns": ["\\bdeep breath\\b","\\bbox breathing\\b","\\binhale for (four|4)\\b","\\bexhale (slow|slowly)\\b","\\bcount to (ten|10)\\b"],
+      "buckets": ["breathing_techniques"],
+      "weights": { "tone.clear": 0.045 }
     },
     {
       "id": "FS_BOUNDARY_ATTEMPT",
@@ -128,6 +181,13 @@
       "attachmentHints": { "secure": 0.04 }
     },
     {
+      "id": "FS_ACTIVE_LISTENING",
+      "description": "Active listening (reflect/paraphrase)",
+      "patterns": ["\\bwhat i hear you saying\\b","\\bso you're saying\\b","\\blet me make sure i (got|get) this\\b","\\bif i understand right\\b"],
+      "buckets": ["validation_language"],
+      "weights": { "tone.clear": 0.055 }
+    },
+    {
       "id": "FS_VALIDATION",
       "description": "Validation phrases (positive)",
       "patterns": ["\\bi see why you'd feel\\b","\\bit makes sense that\\b","\\bi can understand\\b"],
@@ -190,11 +250,20 @@
       "patterns": ["\\bthis conversation is\\b.*\\b(useless|going nowhere)\\b","\\byou're not listening\\b"],
       "buckets": ["process_breakdown"],
       "weights": { "tone.caution": 0.03, "tone.alert": 0.02 }
+    },
+    {
+      "id": "FS_EXTREME_HOSTILITY",
+      "description": "Direct hate/revulsion toward partner",
+      "patterns": ["\\bi hate you\\b","\\byou disgust me\\b","\\bi can't stand you\\b","\\bi wish you (were|was) gone\\b"],
+      "buckets": ["escalation_language"],
+      "weights": { "tone.alert": 0.09 }
     }
   ],
+
   "noticingsMap": {
     "escalation_language": "Noticing: absolute or intense language can heat things up. Try softeners like “sometimes/this time.”",
     "reassurance": "Noticing: frequent reassurance-seeking. A quick validation first often calms the loop.",
+    "safety_check": "Noticing: safety check—good. If the answer is no, pause content and route to safety guidance.",
     "secure_boundary": "Noticing: healthy boundary phrasing—clear ask + calm tone is effective.",
     "cognitive_distortions": "Noticing: mind-reading/overgeneralizing. Try describing *your* feeling and a concrete example.",
     "threats_ultimatums": "Noticing: ultimatum detected. Consider a clear request + consequence later, not as a threat.",
@@ -214,6 +283,7 @@
     "people_pleasing": "Noticing: self-minimizing. Your needs matter; try a direct, kind ask.",
     "process_breakdown": "Noticing: convo-process critique. Try naming one step that would help right now."
   },
+
   "aggregation": {
     "decayDays": 7,
     "capPerDay": 0.12,
@@ -226,9 +296,14 @@
       "reassurance": 10000,
       "validation_language": 6000,
       "gratitude_language": 6000,
-      "repair_language": 8000
+      "repair_language": 8000,
+      "safety_check": 8000,
+      "emergency_deescalation": 12000,
+      "emotional_regulation": 8000,
+      "breathing_techniques": 8000
     }
   },
+
   "runtime": {
     "safeOrder": [
       "tokenize",

@@ -1,6 +1,6 @@
 {
-  "version": "1.3.1",
-  "notes": "Production-hardened: aligned bands/clamps, explicit combination modes and band boundary policy, context-only allowance, bias precedence, NaN/missing-link handling, and clarified profile semantics. Backward compatible with v1.3.0.",
+  "version": "1.3.2",
+  "notes": "Adds conservative CTX hooks for regulation, crisis, relationship_stage, communication_style, and culture to stay consistent with 2.3.0-lite. No base behavior changes; minimal thresholds/deltas; fully backward compatible.",
   "links": {
     "contexts": "context_classifier.json",
     "triggers": "tone_triggerwords.json",
@@ -33,17 +33,17 @@
       "audit"
     ],
     "combination": {
-      "biasMode": "saturated_additive",              
+      "biasMode": "saturated_additive",
       "cooccurrenceMode": "saturated_additive",
       "negSarMode": "additive",
       "attachmentMode": "additive"
     },
     "bandPolicy": {
-      "bounds": "left_inclusive_right_exclusive", 
-      "ties": "prefer_lower_band"                 
+      "bounds": "left_inclusive_right_exclusive",
+      "ties": "prefer_lower_band"
     },
     "missingLinks": {
-      "onMissing": "fallback_zero",       
+      "onMissing": "fallback_zero",
       "logWarning": true
     },
     "nanHandling": "coerce_to_zero",
@@ -63,8 +63,15 @@
     "minThreshold": 0.30,
     "maxThreshold": 0.849,
     "requireContentTriggers": true,
-    "allowContextOnly": ["CTX_SAFETY","CTX_REPAIR","CTX_BOUNDARY","CTX_VALIDATION"],  
-    "blendWeights": {                             
+    "allowContextOnly": [
+      "CTX_SAFETY",
+      "CTX_REPAIR",
+      "CTX_BOUNDARY",
+      "CTX_VALIDATION",
+      "CTX_REGULATION",
+      "CTX_CRISIS"
+    ],
+    "blendWeights": {
       "triggerScore":        0.36,
       "contextScore":        0.20,
       "intensity":           0.12,
@@ -113,7 +120,8 @@
         "CTX_CONFLICT":   { "threshold": 0.60, "sources": ["escalation","contempt","threat"] },
         "CTX_JEALOUSY":   { "threshold": 0.65, "sources": ["jealousy","comparison"] },
         "CTX_RUPTURE":    { "threshold": 0.62 },
-        "CTX_ESCALATION": { "threshold": 0.63 }
+        "CTX_ESCALATION": { "threshold": 0.63 },
+        "CTX_CRISIS":     { "threshold": 0.62, "sources": ["crisis","safety_check","emergency_deescalation"] }
       },
       "attachmentAdjustments": { "anxious": 0.05, "avoidant": -0.02, "disorganized": 0.06, "secure": -0.03 },
       "preferenceAdjustments": { "boundary": -0.02, "de-escalation": -0.03, "validation": -0.01 },
@@ -135,9 +143,10 @@
     "caution": {
       "base": 0.40,
       "byContext": {
-        "CTX_PLANNING":   { "threshold": 0.42, "sources": ["uncertainty","hedge"] },
-        "CTX_SAFETY":     { "threshold": 0.45 },
-        "CTX_BOUNDARY":   { "threshold": 0.46 }
+        "CTX_PLANNING":          { "threshold": 0.42, "sources": ["uncertainty","hedge"] },
+        "CTX_SAFETY":            { "threshold": 0.45 },
+        "CTX_BOUNDARY":          { "threshold": 0.46 },
+        "CTX_RELATIONSHIP_STAGE":{ "threshold": 0.44 }
       },
       "attachmentAdjustments": { "anxious": 0.04, "avoidant": 0.02, "disorganized": 0.03, "secure": 0.00 },
       "preferenceAdjustments": { "structure": 0.01, "validation": 0.01 },
@@ -157,9 +166,12 @@
     "clear": {
       "base": 0.35,
       "byContext": {
-        "CTX_REPAIR":      { "threshold": 0.38, "sources": ["repair","apology","solution"] },
-        "CTX_VALIDATION":  { "threshold": 0.40 },
-        "CTX_PLANNING":    { "threshold": 0.36 }
+        "CTX_REPAIR":             { "threshold": 0.38, "sources": ["repair","apology","solution"] },
+        "CTX_VALIDATION":         { "threshold": 0.40 },
+        "CTX_PLANNING":           { "threshold": 0.36 },
+        "CTX_REGULATION":         { "threshold": 0.37, "sources": ["emotional_regulation","breathing_techniques","somatic_awareness"] },
+        "CTX_COMMUNICATION_STYLE":{ "threshold": 0.36, "sources": ["communication_style_markers"] },
+        "CTX_CULTURE":            { "threshold": 0.36, "sources": ["cultural_context_patterns"] }
       },
       "attachmentAdjustments": { "anxious": -0.02, "avoidant": 0.05, "disorganized": -0.01, "secure": 0.06 },
       "preferenceAdjustments": { "boundary": 0.02, "de-escalation": 0.03 },

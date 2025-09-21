@@ -411,12 +411,30 @@ function mmr(pool: any[], qVec: Float32Array | null, vecOf: (it:any)=>Float32Arr
       candidates.push({item: it, score});
     }
     
-    // Sort candidates for deterministic tie-breaking
+    // Sort candidates for deterministic tie-breaking with context prioritization
     candidates.sort((a, b) => {
       const scoreDiff = b.score - a.score;
       if (Math.abs(scoreDiff) > 0.0001) return scoreDiff;
       
-      // Tie-breaker: category then ID
+      // Context prioritization tie-breaker (prefer specific contexts over general)
+      const contextPriority: { [key: string]: number } = {
+        'conflict': 10, 'escalation': 9, 'rupture': 8, 'repair': 7,
+        'power_imbalance': 6, 'validation': 5, 'boundary': 4, 'intimacy': 3,
+        'parenting': 3, 'co-parenting': 3, 'planning': 2, 'disclosure': 2,
+        'general': 1
+      };
+      
+      const getContextPriority = (item: any) => {
+        if (!item.contexts || !Array.isArray(item.contexts)) return 0;
+        return Math.max(...item.contexts.map((ctx: string) => contextPriority[ctx] || 0));
+      };
+      
+      const contextPriorityA = getContextPriority(a.item);
+      const contextPriorityB = getContextPriority(b.item);
+      const contextDiff = contextPriorityB - contextPriorityA;
+      if (contextDiff !== 0) return contextDiff;
+      
+      // Fallback tie-breaker: category then ID
       const catA = a.item.category || a.item.categories?.[0] || 'zzz';
       const catB = b.item.category || b.item.categories?.[0] || 'zzz';
       const catDiff = catA.localeCompare(catB);
@@ -508,14 +526,35 @@ function applyContraindications(items: any[], flags: {hasNegation:boolean; hasSa
   });
 }
 
-function applyAttachmentOverrides(items:any[], style:string) {
+function applyAttachmentOverrides(items:any[], style:string, toneCategories: string[] = []) {
   const overrides = dataLoader.get('attachmentOverrides')?.[style];
   if (!overrides) return items;
   return items.map((it:any) => {
     const boosted = {...it};
-    if (overrides.categoryBoost && boosted.categories?.some((c:string)=>overrides.categoryBoost.includes(c))) {
-      (boosted as any).__boost = ((boosted as any).__boost ?? 0) + 0.2;
+    
+    // Boost based on categories from therapy advice items themselves
+    if (overrides.category_multipliers && boosted.categories?.some((c:string)=>overrides.category_multipliers[c])) {
+      const categoryMultiplier = Math.max(...boosted.categories
+        .filter((c:string) => overrides.category_multipliers[c])
+        .map((c:string) => overrides.category_multipliers[c] || 1.0));
+      (boosted as any).__boost = ((boosted as any).__boost ?? 0) + (categoryMultiplier - 1.0);
     }
+    
+    // 🎯 NEW: Boost based on categories detected from tone analysis
+    if (overrides.category_multipliers && toneCategories.length > 0) {
+      const matchingCategories = toneCategories.filter(c => overrides.category_multipliers[c]);
+      if (matchingCategories.length > 0) {
+        const maxToneCategoryMultiplier = Math.max(...matchingCategories.map(c => overrides.category_multipliers[c] || 1.0));
+        (boosted as any).__boost = ((boosted as any).__boost ?? 0) + (maxToneCategoryMultiplier - 1.0) * 0.5; // Half weight for tone categories
+        // Store debug info
+        (boosted as any).__tone_category_boost = {
+          categories: matchingCategories,
+          multiplier: maxToneCategoryMultiplier,
+          boost: (maxToneCategoryMultiplier - 1.0) * 0.5
+        };
+      }
+    }
+    
     // Removed rewriteCue override logic - not applicable to therapy advice
     return boosted;
   });
@@ -667,6 +706,7 @@ class AnalysisOrchestrator {
         emotions: fullToneAnalysis.emotions,
         intensity: fullToneAnalysis.metadata?.analysis_depth ? fullToneAnalysis.metadata.analysis_depth : intensityScore,
         sentiment_score: fullToneAnalysis.sentiment_score || fullToneAnalysis.confidence, // Use actual sentiment score if available
+        categories: fullToneAnalysis.categories || [], // Categories from tone pattern matching
         
         // 🎯 CRITICAL FIX: Use ACTUAL linguistic features from coordinator, not defaults!
         linguistic_features: fullToneAnalysis.linguistic_features || {
@@ -1566,25 +1606,75 @@ class SuggestionsService {
 
     // TEMPORARY: Add direct fallback when hybrid search fails
     if (pool.length === 0) {
-      logger.info('Hybrid retrieval returned 0 results, trying direct fallback');
+      logger.info('Hybrid retrieval returned 0 results, trying direct fallback with context prioritization');
       const corpus = getAdviceCorpus();
-      const directMatches = corpus.filter((item: any) => {
-        const matchesTone = item.triggerTone === toneKeyNorm;
-        const matchesContext = item.contexts && item.contexts.includes(contextLabel);
-        const matchesAttachment = item.attachmentStyles && item.attachmentStyles.includes(attachmentStyle);
-        return matchesTone || matchesContext || matchesAttachment;
-      }).slice(0, 10); // Take first 10 matches
       
-      logger.info('Direct fallback completed', { 
-        directMatchesFound: directMatches.length, 
+      // Define context priority (higher score = more specific/preferred)
+      const contextPriority: { [key: string]: number } = {
+        'conflict': 10,
+        'escalation': 9,
+        'rupture': 8,
+        'repair': 7,
+        'power_imbalance': 6,
+        'validation': 5,
+        'boundary': 4,
+        'intimacy': 3,
+        'parenting': 3,
+        'co-parenting': 3,
+        'planning': 2,
+        'disclosure': 2,
+        'general': 1  // lowest priority - fallback
+      };
+      
+      const scoredMatches = corpus.map((item: any) => {
+        let score = 0;
+        let matchReasons: string[] = [];
+        
+        // Tone matching (highest priority)
+        if (item.triggerTone === toneKeyNorm) {
+          score += 100;
+          matchReasons.push(`tone:${toneKeyNorm}`);
+        }
+        
+        // Context matching with prioritization
+        if (item.contexts && Array.isArray(item.contexts)) {
+          for (const ctx of item.contexts) {
+            if (ctx === contextLabel) {
+              const contextScore = contextPriority[ctx] || 1;
+              score += contextScore * 10; // Multiply by 10 to make context significant
+              matchReasons.push(`context:${ctx}(${contextScore})`);
+            }
+          }
+        }
+        
+        // Attachment style matching (secondary)
+        if (item.attachmentStyles && item.attachmentStyles.includes(attachmentStyle)) {
+          score += 5;
+          matchReasons.push(`attachment:${attachmentStyle}`);
+        }
+        
+        return { item, score, matchReasons };
+      })
+      .filter(({ score }) => score > 0) // Only include items with at least one match
+      .sort((a, b) => b.score - a.score) // Sort by score descending
+      .slice(0, 15); // Take top 15 matches
+      
+      logger.info('Direct fallback with prioritization completed', { 
+        scoredMatchesFound: scoredMatches.length, 
         corpusSize: corpus.length,
-        searchCriteria: { toneKeyNorm, contextLabel, attachmentStyle }
+        searchCriteria: { toneKeyNorm, contextLabel, attachmentStyle },
+        topScores: scoredMatches.slice(0, 5).map(m => ({ 
+          id: m.item.id, 
+          score: m.score, 
+          reasons: m.matchReasons,
+          contexts: m.item.contexts 
+        }))
       });
       
-      // Use direct matches if found
-      if (directMatches.length > 0) {
-        logger.info('Using direct matches as fallback');
-        pool.push(...directMatches);
+      // Use scored matches if found
+      if (scoredMatches.length > 0) {
+        logger.info('Using prioritized matches as fallback');
+        pool.push(...scoredMatches.map(m => m.item));
       }
     }
 
@@ -1597,8 +1687,13 @@ class SuggestionsService {
     logger.info('Advanced guardrails applied', { guardedPoolSize: guardedPool.length, safePoolSize: safePool.length });
 
     // 5) Attachment personalization
-    const personalized = applyAttachmentOverrides(guardedPool, attachmentStyle);
-    logger.info('Attachment overrides applied', { personalizedSize: personalized.length, guardedPoolSize: guardedPool.length });
+    const toneCategories = analysis.richToneData?.categories || [];
+    const personalized = applyAttachmentOverrides(guardedPool, attachmentStyle, toneCategories);
+    logger.info('Attachment overrides applied', { 
+      personalizedSize: personalized.length, 
+      guardedPoolSize: guardedPool.length,
+      toneCategories: toneCategories.length > 0 ? toneCategories : 'none'
+    });
 
     // 6) Rank (JSON-weighted)
     const ranked = this.adviceEngine.rank(personalized, {

@@ -1,6 +1,6 @@
 {
-  "version": "1.6",
-  "notes": "Phrase-edges++: macros, guards, per-edge cooldowns, locales, combo rules, safer Unicode word boundaries, and scoring.",
+  "version": "1.7.1",
+  "notes": "Phrase-edges++ with aligned canonical categories (pluralized where needed) to match tone_triggerwords/profanity.rules. Adds emotional_regulation, somatic_awareness, breathing_techniques, crisis, safety_check, emergency_deescalation, active_listening, empathy_builders, perspective_taking, attachment_triggers, codependency_patterns, independence_patterns, escalation_detection, repair_readiness, relationship_stage_indicators, communication_style_markers, cultural_context_patterns, and extreme_hostility. Backward-compatible with v1.6 shape.",
   "globals": {
     "regexFlags": "iu",
     "maxInputChars": 2400,
@@ -14,17 +14,49 @@
   },
 
   "priorityOrder": [
-    "rupture","escalation","boundary","shutdown","absolutizing",
-    "repair_initiator","reconnection","logistics_pivot","tentative_disclosure"
+    "crisis","emergency_deescalation","extreme_hostility",
+    "rupture","escalation","escalation_detection",
+    "boundary","shutdown","absolutizing",
+    "repair_initiator","repair_readiness",
+    "reconnection","logistics_pivot","tentative_disclosure",
+    "emotional_regulation","breathing_techniques","somatic_awareness",
+    "active_listening","empathy_builders","perspective_taking",
+    "attachment_triggers","codependency_patterns","independence_patterns",
+    "relationship_stage_indicators","communication_style_markers","cultural_context_patterns",
+    "safety_check"
   ],
 
   "cooldownsMsByCategory": {
-    "rupture": 15000, "escalation": 12000, "shutdown": 10000, "boundary": 8000,
-    "absolutizing": 8000, "repair_initiator": 6000, "reconnection": 6000,
-    "logistics_pivot": 4000, "tentative_disclosure": 4000
+    "crisis": 20000,
+    "emergency_deescalation": 16000,
+    "extreme_hostility": 15000,
+    "rupture": 15000,
+    "escalation": 12000,
+    "escalation_detection": 10000,
+    "shutdown": 10000,
+    "boundary": 8000,
+    "absolutizing": 8000,
+    "repair_initiator": 6000,
+    "repair_readiness": 6000,
+    "reconnection": 6000,
+    "logistics_pivot": 4000,
+    "tentative_disclosure": 4000,
+    "emotional_regulation": 5000,
+    "breathing_techniques": 5000,
+    "somatic_awareness": 5000,
+    "active_listening": 5000,
+    "empathy_builders": 5000,
+    "perspective_taking": 5000,
+    "attachment_triggers": 6000,
+    "codependency_patterns": 6000,
+    "independence_patterns": 6000,
+    "relationship_stage_indicators": 4000,
+    "communication_style_markers": 4000,
+    "cultural_context_patterns": 4000,
+    "safety_check": 8000
   },
 
-  "caps": { "maxAppliedPerMessage": 2, "categoryCap": { "escalation": 2, "rupture": 1 } },
+  "caps": { "maxAppliedPerMessage": 2, "categoryCap": { "escalation": 2, "rupture": 1, "extreme_hostility": 1, "crisis": 1 } },
 
   "interaction": {
     "negationPenalty": 0.03,
@@ -32,16 +64,42 @@
     "positionBoost": { "start": 0.03, "end": 0.015, "allCaps": 0.04, "repeat": 0.03 },
     "comboBoost": [
       { "whenAll": ["absolutizing","escalation"], "boost": 0.06 },
-      { "whenAll": ["boundary","reconnection"], "boost": -0.04 }
+      { "whenAll": ["boundary","reconnection"], "boost": -0.04 },
+      { "whenAll": ["extreme_hostility","rupture"], "boost": 0.08 },
+      { "whenAll": ["emotional_regulation","repair_readiness"], "boost": 0.05 }
     ]
   },
 
   "scoring": {
     "weights": { "edgeBoost": 0.6, "position": 0.15, "combos": 0.15, "context": 0.1 },
     "fireThresholdByCategory": {
-      "rupture": 0.28, "escalation": 0.25, "boundary": 0.22, "shutdown": 0.20,
-      "absolutizing": 0.20, "repair_initiator": 0.18, "reconnection": 0.18,
-      "logistics_pivot": 0.16, "tentative_disclosure": 0.16
+      "crisis": 0.30,
+      "emergency_deescalation": 0.26,
+      "extreme_hostility": 0.28,
+      "rupture": 0.28,
+      "escalation": 0.25,
+      "escalation_detection": 0.22,
+      "boundary": 0.22,
+      "shutdown": 0.20,
+      "absolutizing": 0.20,
+      "repair_initiator": 0.18,
+      "repair_readiness": 0.18,
+      "reconnection": 0.18,
+      "logistics_pivot": 0.16,
+      "tentative_disclosure": 0.16,
+      "emotional_regulation": 0.18,
+      "breathing_techniques": 0.18,
+      "somatic_awareness": 0.18,
+      "active_listening": 0.18,
+      "empathy_builders": 0.18,
+      "perspective_taking": 0.18,
+      "attachment_triggers": 0.20,
+      "codependency_patterns": 0.20,
+      "independence_patterns": 0.18,
+      "relationship_stage_indicators": 0.16,
+      "communication_style_markers": 0.16,
+      "cultural_context_patterns": 0.16,
+      "safety_check": 0.20
     }
   },
 
@@ -80,7 +138,9 @@
       "enabled": true,
       "edges": [
         { "pattern": "\\bno quiero hablar (contigo|de esto)\\b", "boost": 0.28, "category": "boundary", "toneBias": { "caution": 0.04 } },
-        { "pattern": "\\bsiempre (haces|arruinas)\\b", "boost": 0.28, "category": "escalation", "toneBias": { "alert": 0.08 } }
+        { "pattern": "\\bsiempre (haces|arruinas)\\b", "boost": 0.28, "category": "escalation", "toneBias": { "alert": 0.08 } },
+        { "pattern": "\\bte odio\\b", "boost": 0.30, "category": "extreme_hostility", "toneBias": { "alert": 0.10 } },
+        { "pattern": "\\bnecesito calmarme\\b", "boost": 0.22, "category": "emotional_regulation", "toneBias": { "clear": 0.06 } }
       ]
     }
   },
@@ -94,6 +154,56 @@
   },
 
   "edges": [
+    {
+      "id": "CRISIS_UNSAFE",
+      "pattern": "(?:^|\\W)i${SPACE}feel${SPACE}unsafe${END_PUNCT}(?=$|\\W)",
+      "boost": 0.32,
+      "category": "crisis",
+      "toneBias": { "alert": 0.12 },
+      "contextHint": ["safety","conflict"]
+    },
+    {
+      "id": "CRISIS_CALL_911",
+      "pattern": "(?:^|\\W)(?:call|dial)${SPACE}911\\b",
+      "boost": 0.34,
+      "category": "crisis",
+      "toneBias": { "alert": 0.12 },
+      "contextHint": ["safety"]
+    },
+    {
+      "id": "SAFETY_CHECK_ARE_YOU_SAFE",
+      "pattern": "(?:^|\\W)are${SPACE}you${SPACE}safe\\b",
+      "boost": 0.24,
+      "category": "safety_check",
+      "toneBias": { "clear": 0.06 },
+      "contextHint": ["safety","care"]
+    },
+    {
+      "id": "DEESCALATION_NEED_TIMEOUT",
+      "pattern": "(?:^|\\W)(?:we|i)${SPACE}need${SPACE}(?:a${SPACE})?time[- ]?out\\b",
+      "boost": 0.26,
+      "category": "emergency_deescalation",
+      "toneBias": { "clear": 0.08 },
+      "contextHint": ["conflict","repair"]
+    },
+
+    {
+      "id": "HOSTILITY_I_HATE_YOU",
+      "pattern": "(?:^|\\W)i${SPACE}hate${SPACE}you\\b",
+      "boost": 0.31,
+      "category": "extreme_hostility",
+      "toneBias": { "alert": 0.10 },
+      "contextHint": ["conflict","blame"]
+    },
+    {
+      "id": "HOSTILITY_YOU_DISGUST_ME",
+      "pattern": "(?:^|\\W)you${SPACE}disgust${SPACE}me\\b",
+      "boost": 0.30,
+      "category": "extreme_hostility",
+      "toneBias": { "alert": 0.10 },
+      "contextHint": ["conflict"]
+    },
+
     {
       "id": "RUPTURE_IM_DONE",
       "pattern": "(?:^|\\W)${IM}${SPACE}done(?:${SPACE}with${SPACE}(?:this|${YOU}))?${END_PUNCT}(?=$|\\W)",
@@ -120,6 +230,7 @@
       "toneBias": { "alert": 0.09 },
       "contextHint": ["boundary"]
     },
+
     {
       "id": "SHUTDOWN_WHATEVER",
       "pattern": "(?:^|\\W)whatever\\b(?!${SPACE}you${SPACE}need)",
@@ -136,6 +247,7 @@
       "toneBias": { "alert": 0.06 },
       "contextHint": ["withdrawal"]
     },
+
     {
       "id": "ABS_ALWAYS_NEVER_YOU",
       "pattern": "(?:^|\\W)(?:you|we)${SPACE}(?:${ALWAYS}|${NEVER})${SPACE}(?:do|say|forget)\\b",
@@ -144,6 +256,7 @@
       "toneBias": { "caution": 0.05 },
       "contextHint": ["conflict"]
     },
+
     {
       "id": "BOUNDARY_NOT_OKAY",
       "pattern": "(?:^|\\W)that${APO}?s${SPACE}not${SPACE}ok(?:ay)?\\b",
@@ -152,6 +265,7 @@
       "toneBias": { "clear": 0.06 },
       "contextHint": ["boundary","conflict"]
     },
+
     {
       "id": "ESCALATION_YOU_NEVER_LISTEN",
       "pattern": "(?:^|\\W)you${SPACE}never${SPACE}listen\\b",
@@ -160,6 +274,15 @@
       "toneBias": { "alert": 0.10 },
       "contextHint": ["conflict","blame"]
     },
+    {
+      "id": "ESCALATION_META_GETTING_WORSE",
+      "pattern": "(?:^|\\W)this${SPACE}is${SPACE}(?:getting${SPACE}worse|spiraling|out${SPACE}of${SPACE}control)\\b",
+      "boost": 0.24,
+      "category": "escalation_detection",
+      "toneBias": { "caution": 0.06 },
+      "contextHint": ["meta","conflict"]
+    },
+
     {
       "id": "REPAIR_IM_SORRY",
       "pattern": "(?:^|\\W)${IM}${SPACE}sorry\\b",
@@ -170,6 +293,15 @@
       "negationSensitive": true
     },
     {
+      "id": "REPAIR_READY_I_CAN_TALK_CALMLY",
+      "pattern": "(?:^|\\W)i${SPACE}can${SPACE}(?:talk|come${SPACE}back)${SPACE}(?:calmly|constructively)\\b",
+      "boost": 0.22,
+      "category": "repair_readiness",
+      "toneBias": { "clear": 0.08 },
+      "contextHint": ["repair"]
+    },
+
+    {
       "id": "RECON_CAN_WE_TALK",
       "pattern": "(?:^|\\W)can${SPACE}we${SPACE}talk\\b",
       "boost": 0.20,
@@ -177,6 +309,7 @@
       "toneBias": { "caution": 0.04 },
       "contextHint": ["reconnection","repair"]
     },
+
     {
       "id": "LOGI_PICK_A_TIME",
       "pattern": "(?:^|\\W)can${SPACE}we${SPACE}(?:pick|set)${SPACE}a${SPACE}time\\b",
@@ -185,6 +318,7 @@
       "toneBias": { "clear": 0.04 },
       "contextHint": ["planning"]
     },
+
     {
       "id": "TENT_I_GUESS",
       "pattern": "(?:^|\\W)i${SPACE}guess\\b(?!${SPACE}we${SPACE}can${SPACE}meet)",
@@ -192,6 +326,106 @@
       "category": "tentative_disclosure",
       "toneBias": { "caution": 0.03 },
       "contextHint": ["vulnerability"]
+    },
+
+    {
+      "id": "REGULATION_LETS_PAUSE",
+      "pattern": "(?:^|\\W)let${APO}?s${SPACE}pause\\b",
+      "boost": 0.22,
+      "category": "emotional_regulation",
+      "toneBias": { "clear": 0.08 },
+      "contextHint": ["repair","conflict"]
+    },
+    {
+      "id": "BREATHING_DEEP_BREATH",
+      "pattern": "(?:^|\\W)(?:deep${SPACE}breath|box${SPACE}breathing)\\b",
+      "boost": 0.22,
+      "category": "breathing_techniques",
+      "toneBias": { "clear": 0.08 },
+      "contextHint": ["regulation"]
+    },
+    {
+      "id": "SOMATIC_CLENCHED_JAW",
+      "pattern": "(?:^|\\W)my${SPACE}jaw${SPACE}is${SPACE}clenched\\b",
+      "boost": 0.20,
+      "category": "somatic_awareness",
+      "toneBias": { "caution": 0.04 },
+      "contextHint": ["regulation","awareness"]
+    },
+
+    {
+      "id": "LISTENING_WHAT_I_HEAR",
+      "pattern": "(?:^|\\W)what${SPACE}i${SPACE}hear${SPACE}you${SPACE}saying\\b",
+      "boost": 0.24,
+      "category": "active_listening",
+      "toneBias": { "clear": 0.10 },
+      "contextHint": ["communication","repair"]
+    },
+    {
+      "id": "EMPATHY_I_CAN_SEE_WHY",
+      "pattern": "(?:^|\\W)i${SPACE}can${SPACE}see${SPACE}why\\b",
+      "boost": 0.24,
+      "category": "empathy_builders",
+      "toneBias": { "clear": 0.10 },
+      "contextHint": ["communication","validation"]
+    },
+    {
+      "id": "PERSPECTIVE_IN_YOUR_SHOES",
+      "pattern": "(?:^|\\W)(?:in|into)${SPACE}your${SPACE}shoes\\b",
+      "boost": 0.22,
+      "category": "perspective_taking",
+      "toneBias": { "clear": 0.08 },
+      "contextHint": ["communication"]
+    },
+
+    {
+      "id": "ATTACH_TRIGGER_YOULL_LEAVE_ME",
+      "pattern": "(?:^|\\W)you${SPACE}(?:will|(?:'|’)ll)${SPACE}leave${SPACE}me\\b",
+      "boost": 0.24,
+      "category": "attachment_triggers",
+      "toneBias": { "caution": 0.06 },
+      "contextHint": ["vulnerability","fear"]
+    },
+    {
+      "id": "CODEP_NEED_YOU_TO_BE_OK",
+      "pattern": "(?:^|\\W)i${SPACE}need${SPACE}you${SPACE}to${SPACE}be${SPACE}ok${SPACE}so${SPACE}i${SPACE}can${SPACE}be${SPACE}ok\\b",
+      "boost": 0.24,
+      "category": "codependency_patterns",
+      "toneBias": { "caution": 0.06 },
+      "contextHint": ["dynamics"]
+    },
+    {
+      "id": "INDEP_ILL_HANDLE_MY_PART",
+      "pattern": "(?:^|\\W)i${SPACE}['’`´]?ll${SPACE}handle${SPACE}my${SPACE}part\\b",
+      "boost": 0.20,
+      "category": "independence_patterns",
+      "toneBias": { "clear": 0.06 },
+      "contextHint": ["dynamics","planning"]
+    },
+
+    {
+      "id": "REL_STAGE_AS_COPARENTS",
+      "pattern": "(?:^|\\W)as${SPACE}co[- ]?parents\\b",
+      "boost": 0.18,
+      "category": "relationship_stage_indicators",
+      "toneBias": { "caution": 0.03 },
+      "contextHint": ["context"]
+    },
+    {
+      "id": "COMM_STYLE_IM_BEING_DIRECT",
+      "pattern": "(?:^|\\W)i${SPACE}['’`´]?m${SPACE}being${SPACE}direct\\b",
+      "boost": 0.18,
+      "category": "communication_style_markers",
+      "toneBias": { "clear": 0.04 },
+      "contextHint": ["meta"]
+    },
+    {
+      "id": "CULTURE_IN_MY_CULTURE",
+      "pattern": "(?:^|\\W)in${SPACE}my${SPACE}culture\\b",
+      "boost": 0.18,
+      "category": "cultural_context_patterns",
+      "toneBias": { "caution": 0.03 },
+      "contextHint": ["context"]
     }
   ],
 
@@ -209,6 +443,20 @@
       "windowTokens": 30,
       "extraBoost": -0.05,
       "reclassifyTo": "repair_initiator"
+    },
+    {
+      "id": "COMBO_HOSTILITY_RUPTURE",
+      "when": ["HOSTILITY_I_HATE_YOU","RUPTURE_IM_DONE"],
+      "windowTokens": 25,
+      "extraBoost": 0.08,
+      "reclassifyTo": "extreme_hostility"
+    },
+    {
+      "id": "COMBO_REGULATION_REPAIR_READY",
+      "when": ["REGULATION_LETS_PAUSE","REPAIR_READY_I_CAN_TALK_CALMLY"],
+      "windowTokens": 30,
+      "extraBoost": 0.06,
+      "reclassifyTo": "repair_readiness"
     }
   ],
 
@@ -230,6 +478,12 @@
     { "text": "You never listen and you always make it about you!", "expect": { "fires": ["ESCALATION_YOU_NEVER_LISTEN","ABS_ALWAYS_NEVER_YOU"], "combo": "COMBO_ABS_ESCALATE" } },
     { "text": "That’s not okay. Can we talk at 7?", "expect": { "fires": ["BOUNDARY_NOT_OKAY","RECON_CAN_WE_TALK"], "categoryTop": "boundary" } },
     { "text": "Whatever…", "expect": { "fires": ["SHUTDOWN_WHATEVER"] } },
-    { "text": "Quoting: “We’re done.”", "expect": { "fires<=:": 0 } }
+    { "text": "Quoting: “We’re done.”", "expect": { "fires<=:": 0 } },
+    { "text": "I hate you. We need a time-out.", "expect": { "fires": ["HOSTILITY_I_HATE_YOU","DEESCALATION_NEED_TIMEOUT"], "combo?": "COMBO_HOSTILITY_RUPTURE" } },
+    { "text": "Let’s pause. I can come back calmly.", "expect": { "fires": ["REGULATION_LETS_PAUSE","REPAIR_READY_I_CAN_TALK_CALMLY"], "combo": "COMBO_REGULATION_REPAIR_READY" } },
+    { "text": "Are you safe?", "expect": { "fires": ["SAFETY_CHECK_ARE_YOU_SAFE"], "categoryTop": "safety_check" } },
+    { "text": "This is getting worse.", "expect": { "fires": ["ESCALATION_META_GETTING_WORSE"], "categoryTop": "escalation_detection" } },
+    { "text": "What I hear you saying…", "expect": { "fires": ["LISTENING_WHAT_I_HEAR"], "categoryTop": "active_listening" } },
+    { "text": "As co-parents, we should…", "expect": { "fires": ["REL_STAGE_AS_COPARENTS"], "categoryTop": "relationship_stage_indicators" } }
   ]
 }

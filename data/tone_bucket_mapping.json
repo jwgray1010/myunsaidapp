@@ -1,6 +1,6 @@
 {
-  "version": "2.1.1-accurate",
-  "notes": "Full-text tuned. Conservative, non-invasive mapping from backend tone -> {clear,caution,alert}. Minimal context/intensity nudges. Safe even if eligibility is applied.",
+  "version": "2.1.2-accurate",
+  "notes": "Adds conservative contextOverrides for regulation, crisis, relationship_stage, communication_style, culture, and escalation to align with 2.3.0-lite scopes. No new buckets or engine steps; retains conservative mapping.",
   "defaultBucket": "general_support",
 
   "engine": {
@@ -43,12 +43,44 @@
       "angry":      { "alert": 0.02, "caution": -0.01 },
       "frustrated": { "alert": 0.01, "caution":  0.00 }
     },
+    "escalation": {
+      "angry":      { "alert": 0.02 },
+      "frustrated": { "alert": 0.01, "caution":  0.00 },
+      "negative":   { "alert": 0.01 }
+    },
     "repair": {
       "sad":        { "clear": 0.02, "caution": -0.01 },
       "supportive": { "clear": 0.01 }
     },
     "boundary": {
       "assertive":  { "clear": 0.02, "caution": -0.01 }
+    },
+
+    "regulation": {
+      "anxious":     { "clear": 0.01, "caution": -0.01 },
+      "frustrated":  { "clear": 0.01, "alert":  -0.01 },
+      "supportive":  { "clear": 0.01 }
+    },
+
+    "crisis": {
+      "angry":          { "alert": 0.02 },
+      "negative":       { "alert": 0.02 },
+      "safety_concern": { "alert": 0.02, "caution": -0.01 }
+    },
+
+    "relationship_stage": {
+      "tentative":  { "caution": 0.01 },
+      "assertive":  { "clear": 0.01 }
+    },
+
+    "communication_style": {
+      "neutral":    { "clear": 0.01 },
+      "assertive":  { "clear": 0.01, "caution": -0.01 }
+    },
+
+    "culture": {
+      "neutral":    { "clear": 0.01 },
+      "supportive": { "clear": 0.01 }
     }
   },
 

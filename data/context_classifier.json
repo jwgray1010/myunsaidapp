@@ -1,7 +1,7 @@
 {
-  "version": "2.1.0",
+  "version": "2.1.1",
   "schemaVersion": "2.1.0",
-  "lastUpdated": "2025-09-17",
+  "lastUpdated": "2025-09-20",
   "description": "Hybrid, sentence-aware context classifier with bucket guards that prevent generic tokens from flipping tone to clear. Adds per-bucket evidence rules, conflict resolution, and gating hints—all JSON-driven.",
   "features": {
     "weightedPatterns": "Regex/token/ngram patterns with custom weights",
@@ -26,7 +26,7 @@
 
     "sentenceSegmentation": {
       "primary": "spacy",
-      "fallbackRegex": "(?<=[.!?])\\s+(?=[A-Z0-9\"“(])"
+      "fallbackRegex": "(?<=[.!?])\\s+(?=[A-Z0-9\\\"“(])"
     },
 
     "formatCues": {
@@ -112,7 +112,9 @@
       "scope": "message",
       "clearGate": { "mode": "dampen", "strength": 0.65 },
       "toneCues": [
-        "argue","fight","mad","blame","yell","accuse","shout","threaten","disrespect","disrespectful","raise your voice","talking over me","name-calling","gaslighting","stop twisting my words","that's unfair","that's unfair","not fair"
+        "argue","fight","mad","blame","yell","accuse","shout","threaten","disrespect","disrespectful",
+        "raise your voice","talking over me","name-calling","gaslighting","stop twisting my words",
+        "that's unfair","not fair"
       ],
       "toneCuesWeighted": [
         {"pattern": "\\b(yell|shout|scream|screaming)\\b", "weight": 0.25, "type": "regex"},
@@ -128,7 +130,7 @@
       "repeatDecay": 0.6,
       "cooldown_ms": 400,
       "maxBoostsPerMessage": 3,
-      "excludeIfContexts": ["humor","repair"],
+      "excludeIfContexts": ["CTX_HUMOR","CTX_REPAIR"],
       "requiresAny": ["you","we","us"],
       "confidenceBoosts": { "alert": 0.25, "caution": 0.05 },
       "severity": { "alert": 0.2, "caution": 0.1 },
@@ -147,7 +149,8 @@
       "description": "Logistics and scheduling",
       "clearGate": { "mode": "neutral", "strength": 1.0 },
       "toneCues": [
-        "schedule","plan","calendar","reschedule","availability","deadline","what time","which day","what date","meeting time","put it on the calendar","send an invite","RSVP","eta","book","confirm","time slot","availability window"
+        "schedule","plan","calendar","reschedule","availability","deadline","what time","which day","what date",
+        "meeting time","put it on the calendar","send an invite","rsvp","eta","book","confirm","time slot","availability window"
       ],
       "confidenceBoosts": { "clear": 0.20 },
       "attachmentAdjustments": {
@@ -168,12 +171,12 @@
       "scope": "message",
       "clearGate": { "mode": "promote", "strength": 1.0 },
       "toneCues": [
-        "sorry","apologize","my fault","own up","forgive","make up","my bad","I apologize","owning it","I was wrong","make things right","make amends"
+        "sorry","apologize","my fault","own up","forgive","make up","my bad","i apologize","owning it","i was wrong","make things right","make amends"
       ],
       "toneCuesWeighted": [
         {"pattern": "\\b(sorry|apologize|apologies)\\b", "weight": 0.25, "type": "regex"},
         {"pattern": "my\\s+(fault|bad|mistake)", "weight": 0.30, "type": "regex"},
-        {"pattern": "I\\s+(was\\s+wrong|messed\\s+up|screwed\\s+up)", "weight": 0.28, "type": "regex"},
+        {"pattern": "i\\s+(was\\s+wrong|messed\\s+up|screwed\\s+up)", "weight": 0.28, "type": "regex"},
         {"pattern": "make\\s+(it\\s+right|amends|up\\s+to\\s+you)", "weight": 0.22, "type": "regex"},
         {"pattern": "forgive\\s+me", "weight": 0.35, "type": "regex"}
       ],
@@ -182,7 +185,7 @@
       "repeatDecay": 0.8,
       "cooldown_ms": 200,
       "maxBoostsPerMessage": 4,
-      "requiresAny": ["sorry","apologize","my fault","my bad","forgive","make up","make amends","I was wrong","I apologize","owning it"],
+      "requiresAny": ["sorry","apologize","my fault","my bad","forgive","make up","make amends","i was wrong","i apologize","owning it"],
       "confidenceBoosts": { "clear": 0.25, "caution": 0.05 },
       "severity": { "clear": 0.20, "caution": -0.10 },
       "attachmentAdjustments": {
@@ -336,7 +339,7 @@
       "description": "Confusion or crossed signals in communication",
       "clearGate": { "mode": "neutral", "strength": 0.8 },
       "toneCues": [
-        "misunderstood","mixed up","wrong impression","didn't mean","didnt mean","didn’t mean","confuse","that's not what I meant","that’s not what I meant","you took it the wrong way","miscommunication","mixed signals"
+        "misunderstood","mixed up","wrong impression","didn't mean","didnt mean","didn’t mean","confuse","that's not what i meant","that’s not what i meant","you took it the wrong way","miscommunication","mixed signals"
       ],
       "confidenceBoosts": { "caution": 0.25 },
       "attachmentAdjustments": {
@@ -425,7 +428,8 @@
       "scope": "message",
       "clearGate": { "mode": "dampen", "strength": 0.75 },
       "toneCues": [
-        "always","never","done with this","fed up","sick of","can't stand","cant stand","every time","as usual","I'm done","im done","I'm done","over this","can't deal","cant deal","so sick of this","I can't stand this","I cant stand this"
+        "always","never","done with this","fed up","sick of","can't stand","cant stand","every time","as usual",
+        "i'm done","i’m done","im done","over this","can't deal","cant deal","so sick of this","i can't stand this","i cant stand this"
       ],
       "toneCuesWeighted": [
         {"pattern": "\\b(always|never)\\b", "weight": 0.20, "type": "regex"},
@@ -439,7 +443,7 @@
       "repeatDecay": 0.5,
       "cooldown_ms": 300,
       "maxBoostsPerMessage": 2,
-      "excludeIfContexts": ["humor","repair"],
+      "excludeIfContexts": ["CTX_HUMOR","CTX_REPAIR"],
       "confidenceBoosts": { "alert": 0.30 },
       "severity": { "alert": 0.25, "caution": 0.15 },
       "attachmentAdjustments": {
@@ -490,7 +494,7 @@
       "description": "Breakdown or distancing in the relationship",
       "clearGate": { "mode": "dampen", "strength": 0.8 },
       "toneCues": [
-        "over","ending","space","leave me alone","don’t care","don't care","done","I'm done","im done","we're over","were over","don't care anymore","I’m out","I'm out","done talking","whatever"
+        "over","ending","space","leave me alone","don’t care","don't care","done","i'm done","im done","we're over","were over","don't care anymore","i’m out","i'm out","done talking","whatever"
       ],
       "confidenceBoosts": { "alert": 0.25, "caution": 0.10 },
       "attachmentAdjustments": {
@@ -507,7 +511,7 @@
       "description": "Seeking or giving emotional confirmation",
       "clearGate": { "mode": "promote", "strength": 0.6 },
       "toneCues": [
-        "okay?","still love","with me","right?","promise","safe","still with me?","are we okay?","promise me","we’re good?","we're good?","need to know I’m safe with you","still love me?"
+        "okay?","still love","with me","right?","promise","safe","still with me?","are we okay?","promise me","we’re good?","we're good?","need to know i’m safe with you","still love me?"
       ],
       "confidenceBoosts": { "caution": 0.15, "clear": 0.10 },
       "attachmentAdjustments": {
@@ -541,7 +545,7 @@
       "description": "Pulling away emotionally or physically",
       "clearGate": { "mode": "dampen", "strength": 0.8 },
       "toneCues": [
-        "leave me","don’t talk","don't talk","alone","space","done talking","not now","need space right now","I need space right now","don’t talk to me","don't talk to me","leave me alone","idc","going offline"
+        "leave me","don’t talk","don't talk","alone","space","done talking","not now","need space right now","i need space right now","don’t talk to me","don't talk to me","leave me alone","idc","going offline"
       ],
       "confidenceBoosts": { "alert": 0.25, "caution": 0.10 },
       "attachmentAdjustments": {
@@ -609,7 +613,7 @@
       "description": "Friends, social life, or outside relationships",
       "clearGate": { "mode": "neutral", "strength": 0.8 },
       "toneCues": [
-        "party","friends","hang out","social","invite","group","night out","friends over","group chat","RSVP"
+        "party","friends","hang out","social","invite","group","night out","friends over","group chat","rsvp"
       ],
       "confidenceBoosts": { "clear": 0.15, "caution": 0.05 },
       "attachmentAdjustments": {
@@ -643,7 +647,7 @@
       "description": "Attention, distraction, or availability in the moment",
       "clearGate": { "mode": "neutral", "strength": 0.7 },
       "toneCues": [
-        "listening","pay attention","with me","focused","ignore","distracted","put the phone down","be present","listening to me","you’re not here with me","you're not here with me"
+        "listening","pay attention","with me","focused","ignore","distracted","put the phone down","be present","listening to me","you're not here with me","you’re not here with me"
       ],
       "confidenceBoosts": { "caution": 0.20 },
       "attachmentAdjustments": {
@@ -660,7 +664,7 @@
       "description": "Comparison, insecurity, or emotional threat",
       "clearGate": { "mode": "dampen", "strength": 0.7 },
       "toneCues": [
-        "jealous","other guy","other girl","better than me","attention","flirt with","competition","DMs","IG likes","Instagram likes","snap","ex","talking to her","talking to him","flirting","attention on them"
+        "jealous","other guy","other girl","better than me","attention","flirt with","competition","dms","ig likes","instagram likes","snap","ex","talking to her","talking to him","flirting","attention on them"
       ],
       "confidenceBoosts": { "alert": 0.25, "caution": 0.15 },
       "attachmentAdjustments": {
@@ -677,7 +681,7 @@
       "description": "Talking about the relationship itself",
       "clearGate": { "mode": "neutral", "strength": 0.9 },
       "toneCues": [
-        "our relationship","we need to talk","us","how we are","between us","where we stand","check in about us","define the relationship","DTR","how we’re doing","how we're doing"
+        "our relationship","we need to talk","us","how we are","between us","where we stand","check in about us","define the relationship","dtr","how we’re doing","how we're doing"
       ],
       "confidenceBoosts": { "caution": 0.20, "clear": 0.10 },
       "attachmentAdjustments": {
@@ -728,7 +732,7 @@
       "description": "Recognizing or validating another’s feelings",
       "clearGate": { "mode": "promote", "strength": 1.0 },
       "toneCues": [
-        "I understand","that must feel","sorry you feel","I get it","empathize","I hear you","I get how that feels","that must be hard","makes sense you’d feel","I see your point"
+        "i understand","that must feel","sorry you feel","i get it","empathize","i hear you","i get how that feels","that must be hard","makes sense you’d feel","i see your point"
       ],
       "confidenceBoosts": { "clear": 0.25 },
       "attachmentAdjustments": {

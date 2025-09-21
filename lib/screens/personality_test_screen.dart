@@ -108,9 +108,11 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
 
   Future<void> _goNext() async {
     print('DEBUG: _goNext() called');
-    print('DEBUG: currentIndex=${widget.currentIndex}, totalQuestions=${_allQuestions.length}');
+    print(
+      'DEBUG: currentIndex=${widget.currentIndex}, totalQuestions=${_allQuestions.length}',
+    );
     print('DEBUG: _selectedValue=$_selectedValue');
-    
+
     if (_selectedValue == null) {
       print('DEBUG: No answer selected, showing selection required');
       _showSelectionRequired();
@@ -162,7 +164,7 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
 
   Future<void> _completeTest() async {
     print('DEBUG: _completeTest() called');
-    
+
     if (widget.markTestTaken != null) {
       print('DEBUG: Calling markTestTaken...');
       await widget.markTestTaken!();
@@ -171,11 +173,11 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
 
     try {
       print('DEBUG: Starting assessment processing...');
-      
+
       // Run local assessment (pure on-device) and build local embedded config
       final assessmentResult = AttachmentAssessment.run(widget.responses);
       print('DEBUG: Assessment result: ${assessmentResult.scores}');
-      
+
       final mergedConfig = AssessmentIntegration.buildLocalEmbeddedConfig(
         assessmentResult.scores,
         assessmentResult.routing,
@@ -195,7 +197,9 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
         // Personality results are still calculated and stored internally
         print('DEBUG: No onComplete callback, navigating to tone tutorial...');
         if (mounted) {
-          print('DEBUG: Widget is mounted, calling Navigator.pushReplacementNamed...');
+          print(
+            'DEBUG: Widget is mounted, calling Navigator.pushReplacementNamed...',
+          );
           Navigator.pushReplacementNamed(context, '/tone_tutorial');
           print('DEBUG: Navigation call completed');
         } else {
@@ -441,7 +445,9 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
                               bottom: AppTheme.spaceMD,
                             ),
                             elevation: isSelected ? 1.5 : 0,
-                            color: isSelected ? null : null, // Allow RadioListTile tileColor to show
+                            color: isSelected
+                                ? null
+                                : null, // Allow RadioListTile tileColor to show
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(
                                 AppTheme.radiusLG,
@@ -474,7 +480,8 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
                               selected: isSelected,
                               tileColor: isSelected
                                   ? questionTypeColor.withValues(alpha: 0.08)
-                                  : Colors.white, // Explicit white background for unselected
+                                  : Colors
+                                        .white, // Explicit white background for unselected
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(
                                   AppTheme.radiusLG,

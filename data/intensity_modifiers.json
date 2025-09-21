@@ -1,4 +1,5 @@
-[
+
+    [
   {
     "id": "IM-A-001",
     "class": "amplifier",
@@ -56,7 +57,10 @@
     "style_weight": { "secure": 0.01, "anxious": 0.00, "avoidant": 0.00, "disorganized": 0.01 },
     "tone_weight":   { "alert": 0.01, "caution": 0.00, "clear": 0.00 },
     "position_boost": { "start": 0.01, "end": 0.00, "caps": 0.02, "repeat": 0.01 },
-    "cooccurrence_boost": [{ "with": "\\b(always|never)\\b", "add": 0.00 }],
+    "cooccurrence_boost": [
+      { "with": "\\b(always|never)\\b", "add": 0.00 },
+      { "with": "\\bnot\\b", "add": -0.02 }
+    ],
     "aliases": [],
     "gate": { "contextsAllow": ["all"], "contextsDeny": [] },
     "stacking": { "policy": "diminishing", "decayMs": 250, "maxStacks": 2 },
@@ -215,14 +219,15 @@
     "stacking": { "policy": "diminishing", "decayMs": 200, "maxStacks": 2 },
     "interactions": { "withNegation": "neutral", "withSarcasm": "neutral" },
     "negation_sensitive": false,
-    "sarcasm_sensitive": false,
+    "sarcasm_sensitive": true,
     "threshold": 0.02,
     "cooldown_ms": 200,
     "tests": [
       { "text": "utterly disappointed", "expectDelta": 0.06 },
       { "text": "utterly amazing", "expectDelta": 0.06 }
     ],
-    "examples": ["utterly disappointed", "utterly amazing"]
+    "examples": ["utterly disappointed", "utterly amazing"],
+    "notes": "Commonly used ironically; mark sarcasm-sensitive for safer scaling."
   },
 
   {
@@ -236,7 +241,7 @@
     "tone_weight":   { "alert": 0.02, "caution": 0.00, "clear": -0.01 },
     "position_boost": { "start": 0.01, "end": 0.00, "caps": 0.01, "repeat": 0.01 },
     "aliases": [],
-    "gate": { "contextsAllow": ["conflict","criticism","complaint"], "contextsDeny": ["validation"] },
+    "gate": { "contextsAllow": ["conflict","criticism","complaint","escalation"], "contextsDeny": ["validation"] },
     "stacking": { "policy": "singleton", "decayMs": 400, "maxStacks": 1 },
     "interactions": { "withNegation": "neutral", "withSarcasm": "dampen_0.9" },
     "negation_sensitive": false,
@@ -257,7 +262,7 @@
     "tone_weight":   { "alert": 0.02, "caution": 0.00, "clear": -0.01 },
     "position_boost": { "start": 0.01, "end": 0.00, "caps": 0.01, "repeat": 0.01 },
     "aliases": [],
-    "gate": { "contextsAllow": ["conflict","criticism","complaint"], "contextsDeny": ["validation"] },
+    "gate": { "contextsAllow": ["conflict","criticism","complaint","escalation"], "contextsDeny": ["validation"] },
     "stacking": { "policy": "singleton", "decayMs": 400, "maxStacks": 1 },
     "interactions": { "withSarcasm": "dampen_0.9" },
     "negation_sensitive": false,
@@ -278,7 +283,7 @@
     "tone_weight":   { "alert": 0.01, "caution": 0.00, "clear": -0.01 },
     "position_boost": { "start": 0.00, "end": 0.00, "caps": 0.01, "repeat": 0.01 },
     "aliases": [],
-    "gate": { "contextsAllow": ["conflict","criticism","complaint"], "contextsDeny": [] },
+    "gate": { "contextsAllow": ["conflict","criticism","complaint","escalation"], "contextsDeny": [] },
     "stacking": { "policy": "singleton", "decayMs": 400, "maxStacks": 1 },
     "interactions": { "withSarcasm": "neutral" },
     "negation_sensitive": false,
@@ -299,7 +304,7 @@
     "tone_weight":   { "alert": 0.01, "caution": 0.00, "clear": -0.01 },
     "position_boost": { "start": 0.00, "end": 0.00, "caps": 0.01, "repeat": 0.01 },
     "aliases": ["no one"],
-    "gate": { "contextsAllow": ["conflict","criticism"], "contextsDeny": [] },
+    "gate": { "contextsAllow": ["conflict","criticism","escalation"], "contextsDeny": [] },
     "stacking": { "policy": "singleton", "decayMs": 450, "maxStacks": 1 },
     "interactions": { "withSarcasm": "dampen_0.9" },
     "negation_sensitive": false,
@@ -320,7 +325,7 @@
     "tone_weight":   { "alert": 0.02, "caution": 0.00, "clear": -0.02 },
     "position_boost": { "start": 0.01, "end": 0.00, "caps": 0.01, "repeat": 0.01 },
     "aliases": ["worst ever"],
-    "gate": { "contextsAllow": ["conflict","criticism","complaint"], "contextsDeny": [] },
+    "gate": { "contextsAllow": ["conflict","criticism","complaint","escalation"], "contextsDeny": [] },
     "stacking": { "policy": "singleton", "decayMs": 500, "maxStacks": 1 },
     "interactions": { "withSarcasm": "dampen_0.9" },
     "negation_sensitive": false,
@@ -478,7 +483,7 @@
     "tests": [{ "text": "only a little", "expectDelta": -0.02 }],
     "examples": ["only once", "only a little"]
   },
-  {
+    {
     "id": "IM-D-023",
     "class": "diminisher",
     "label": "barely",
@@ -521,69 +526,70 @@
     "examples": ["hardly helpful", "hardly ever"]
   },
 
-{
-  "id": "FORM-CAPS-111",
-  "class": "format",
-  "label": "all_caps_word",
-  "pattern": "\\b(?!OK|FYI|ETA|IDK|IMO|DIY|FAQ|API|HTTP|HTTPS|CPU|GPU|RAM|SQL|JSON|USA|EU|UK|ASAP)[A-Z]{3,}\\b",
-  "scope": "token",
-  "multiplier": 1.00,
-  "style_weight": { "secure": 0.00, "anxious": 0.00, "avoidant": 0.00, "disorganized": 0.00 },
-  "tone_weight": { "alert": 0.00, "caution": 0.00, "clear": 0.005 },
-  "position_boost": { "start": 0.00, "end": 0.00, "caps": 0.00, "repeat": 0.01 },
-  "cooccurrence_boost": [
-    { "with": "\\b(thanks|thank\\s+you|congrats|congratulations|yay|awesome|love|so\\s+much)\\b", "add": 0.02 },
-    { "with": "[\\uD83C-\\uDBFF\\uDC00-\\uDFFF\\u2600-\\u27BF]", "add": 0.02 },                   
-    { "with": "\\b(not|no|never|don’t|doesn’t|didn’t|won’t|can’t)\\b", "add": -0.03 },
-    { "with": "\\!{2,}|\\?!|!\\?", "add": -0.02 },
-    { "with": "\\b(hate|worst|awful|stupid|useless|angry|mad)\\b", "add": -0.03 },
-    { "with": "\\b(sorry)\\b", "add": 0.01 }
-  ],
-  "gate": { "contextsAllow": ["all"], "contextsDeny": [] },
-  "stacking": { "policy": "diminishing", "decayMs": 250, "maxStacks": 2 },
-  "interactions": { "withSarcasm": "flip_if_neg_0.9", "withNegation": "dampen_0.9" },
-  "negation_sensitive": true,
-  "sarcasm_sensitive": true,
-  "threshold": 0.02,
-  "cooldown_ms": 200,
-  "tests": [
-    { "text": "THIS IS AMAZING", "expectDelta": 0.02 },
-    { "text": "THIS IS THE WORST!!", "expectDelta": -0.06 },
-    { "text": "THANK YOU SO MUCH 🙌", "expectDelta": 0.04 },
-    { "text": "FYI THE API CHANGED", "expectDelta": 0.00 }
-  ],
-  "examples": ["SO PROUD OF YOU", "THIS IS UNFAIR"]
-},
-{
-  "id": "FORM-CAPS-112",
-  "class": "format",
-  "label": "all_caps_run",
-  "pattern": "(?:^|\\s)([A-Z]{3,}(?:\\s+[A-Z]{3,}){2,})",
-  "scope": "ngram",
-  "multiplier": 1.00,
-  "style_weight": { "secure": 0.00, "anxious": 0.00, "avoidant": 0.00, "disorganized": 0.00 },
-  "tone_weight": { "alert": 0.00, "caution": 0.00, "clear": 0.005 },
-  "position_boost": { "start": 0.00, "end": 0.00, "caps": 0.00, "repeat": 0.01 },
-  "cooccurrence_boost": [
-    { "with": "\\b(thanks|thank\\s+you|congrats|congratulations|yay|awesome|love)\\b", "add": 0.03 },
-    { "with": "[\\uD83C-\\uDBFF\\uDC00-\\uDFFF\\u2600-\\u27BF]", "add": 0.02 },
-    { "with": "\\b(not|no|never|don’t|doesn’t|didn’t|won’t|can’t)\\b", "add": -0.04 },
-    { "with": "\\!{2,}|\\?!|!\\?", "add": -0.03 },
-    { "with": "\\b(hate|worst|awful|stupid|useless|angry|mad)\\b", "add": -0.04 }
-  ],
-  "gate": { "contextsAllow": ["all"], "contextsDeny": [] },
-  "stacking": { "policy": "singleton", "decayMs": 400, "maxStacks": 1 },
-  "interactions": { "withSarcasm": "flip_if_neg_0.9", "withNegation": "dampen_0.9" },
-  "negation_sensitive": true,
-  "sarcasm_sensitive": true,
-  "threshold": 0.02,
-  "cooldown_ms": 250,
-  "tests": [
-    { "text": "SO HAPPY FOR YOU!!!", "expectDelta": 0.03 },
-    { "text": "WHY ARE YOU LIKE THIS", "expectDelta": -0.05 }
-  ],
-  "examples": ["SO PROUD OF THIS TEAM", "THIS IS ABSOLUTELY UNACCEPTABLE"]
-},
+  {
+    "id": "FORM-CAPS-111",
+    "class": "format",
+    "label": "all_caps_word",
+    "pattern": "\\b(?!OK|FYI|ETA|IDK|IMO|DIY|FAQ|API|HTTP|HTTPS|CPU|GPU|RAM|SQL|JSON|USA|EU|UK|ASAP|LOL|OMG|BTW|ICYMI|BRB)[A-Z]{3,}\\b",
+    "scope": "token",
+    "multiplier": 1.00,
+    "style_weight": { "secure": 0.00, "anxious": 0.00, "avoidant": 0.00, "disorganized": 0.00 },
+    "tone_weight": { "alert": 0.00, "caution": 0.00, "clear": 0.005 },
+    "position_boost": { "start": 0.00, "end": 0.00, "caps": 0.00, "repeat": 0.01 },
+    "cooccurrence_boost": [
+      { "with": "\\b(thanks|thank\\s+you|congrats|congratulations|yay|awesome|love|so\\s+much)\\b", "add": 0.02 },
+      { "with": "[\\u2600-\\u27BF]", "add": 0.02 },
+      { "with": "\\b(not|no|never|don['’]t|doesn['’]t|didn['’]t|won['’]t|can['’]t)\\b", "add": -0.03 },
+      { "with": "\\!{2,}|\\?!|!\\?", "add": -0.02 },
+      { "with": "\\b(hate|worst|awful|stupid|useless|angry|mad)\\b", "add": -0.03 },
+      { "with": "\\b(sorry)\\b", "add": 0.01 }
+    ],
+    "gate": { "contextsAllow": ["all"], "contextsDeny": [] },
+    "stacking": { "policy": "diminishing", "decayMs": 250, "maxStacks": 2 },
+    "interactions": { "withSarcasm": "flip_if_neg_0.9", "withNegation": "dampen_0.9" },
+    "negation_sensitive": true,
+    "sarcasm_sensitive": true,
+    "threshold": 0.02,
+    "cooldown_ms": 200,
+    "tests": [
+      { "text": "THIS IS AMAZING", "expectDelta": 0.02 },
+      { "text": "THIS IS THE WORST!!", "expectDelta": -0.06 },
+      { "text": "THANK YOU SO MUCH 🙌", "expectDelta": 0.04 },
+      { "text": "FYI THE API CHANGED", "expectDelta": 0.00 }
+    ],
+    "examples": ["SO PROUD OF YOU", "THIS IS UNFAIR"]
+  },
+  {
+    "id": "FORM-CAPS-112",
+    "class": "format",
+    "label": "all_caps_run",
+    "pattern": "(?:^|\\s)([A-Z]{3,}(?:\\s+[A-Z]{3,}){2,})",
+    "scope": "ngram",
+    "multiplier": 1.00,
+    "style_weight": { "secure": 0.00, "anxious": 0.00, "avoidant": 0.00, "disorganized": 0.00 },
+    "tone_weight": { "alert": 0.00, "caution": 0.00, "clear": 0.005 },
+    "position_boost": { "start": 0.00, "end": 0.00, "caps": 0.00, "repeat": 0.01 },
+    "cooccurrence_boost": [
+      { "with": "\\b(thanks|thank\\s+you|congrats|congratulations|yay|awesome|love)\\b", "add": 0.03 },
+      { "with": "[\\u2600-\\u27BF]", "add": 0.02 },
+      { "with": "\\b(not|no|never|don['’]t|doesn['’]t|didn['’]t|won['’]t|can['’]t)\\b", "add": -0.04 },
+      { "with": "\\!{2,}|\\?!|!\\?", "add": -0.03 },
+      { "with": "\\b(hate|worst|awful|stupid|useless|angry|mad)\\b", "add": -0.04 }
+    ],
+    "gate": { "contextsAllow": ["all"], "contextsDeny": [] },
+    "stacking": { "policy": "singleton", "decayMs": 400, "maxStacks": 1 },
+    "interactions": { "withSarcasm": "flip_if_neg_0.9", "withNegation": "dampen_0.9" },
+    "negation_sensitive": true,
+    "sarcasm_sensitive": true,
+    "threshold": 0.02,
+    "cooldown_ms": 250,
+    "tests": [
+      { "text": "SO HAPPY FOR YOU!!!", "expectDelta": 0.03 },
+      { "text": "WHY ARE YOU LIKE THIS", "expectDelta": -0.05 }
+    ],
+    "examples": ["SO PROUD OF THIS TEAM", "THIS IS ABSOLUTELY UNACCEPTABLE"]
+  },
+
   {
     "id": "IM-A-101",
     "class": "amplifier",
@@ -804,12 +810,15 @@
     "aliases": [],
     "gate": { "contextsAllow": ["emphasis","validation","casual"], "contextsDeny": [] },
     "stacking": { "policy": "singleton", "decayMs": 300, "maxStacks": 1 },
-    "interactions": { "withSarcasm": "neutral" },
-    "negation_sensitive": false,
+    "interactions": { "withSarcasm": "neutral", "withNegation": "dampen_0.9" },
+    "negation_sensitive": true,
     "sarcasm_sensitive": false,
     "threshold": 0.02,
     "cooldown_ms": 200,
-    "tests": [{ "text": "that's amazing no cap", "expectDelta": 0.04 }],
+    "tests": [
+      { "text": "that's amazing no cap", "expectDelta": 0.04 },
+      { "text": "not good, no cap", "expectDelta": 0.02 }
+    ],
     "examples": ["you're the best no cap", "this is awful no cap"]
   },
   {
@@ -887,6 +896,7 @@
     "tone_weight": { "alert": -0.01, "caution": -0.01, "clear": 0.00 },
     "position_boost": { "start": -0.01, "end": 0.00, "caps": 0.00, "repeat": -0.01 },
     "aliases": [],
+    "exceptions": ["would like","i'd like","we'd like","they'd like"],
     "gate": { "contextsAllow": ["hesitation","approximation","casual"], "contextsDeny": [] },
     "stacking": { "policy": "diminishing", "decayMs": 150, "maxStacks": 3 },
     "interactions": { "withSarcasm": "neutral" },

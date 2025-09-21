@@ -251,6 +251,7 @@ type Bucket = 'clear'|'caution'|'alert';
 export interface AdvancedToneResult {
   primary_tone: string;
   confidence: number;
+  categories?: string[]; // Categories detected from tone patterns
   emotions: {
     joy: number;
     anger: number;
@@ -551,14 +552,14 @@ function spacyLiteSync(text: string, hintContext?: string): SpacyLite {
 class AhoCorasickNode {
   children = new Map<string, AhoCorasickNode>();
   failure: AhoCorasickNode | null = null;
-  output: { bucket: Bucket; weight: number; term: string }[] = [];
+  output: { bucket: Bucket; weight: number; term: string; category?: string }[] = [];
 }
 
 class AhoCorasickAutomaton {
   private root = new AhoCorasickNode();
   private built = false;
 
-  addPattern(pattern: string, bucket: Bucket, weight: number) {
+  addPattern(pattern: string, bucket: Bucket, weight: number, category?: string) {
     let node = this.root;
     const terms = pattern.split(' ');
     
@@ -569,7 +570,7 @@ class AhoCorasickAutomaton {
       node = node.children.get(term)!;
     }
     
-    node.output.push({ bucket, weight, term: pattern });
+    node.output.push({ bucket, weight, term: pattern, category });
     this.built = false; // Mark as needing rebuild
   }
 
@@ -842,7 +843,7 @@ class ToneDetectors {
   private edgeRegexes: { re: RegExp, cat: string, weight?: number }[] = [];
   private intensifiers: { re: RegExp, mult: number }[] = [];
   private profanity: string[] = [];
-  private tonePatternRegexes: { re: RegExp, bucket: Bucket, weight: number }[] = [];
+  private tonePatternRegexes: { re: RegExp, bucket: Bucket, weight: number, category?: string }[] = [];
   
   // ✅ Enhanced context detection system
   private contextDetectors = new Map<string, ContextDetector>();
@@ -1041,18 +1042,19 @@ class ToneDetectors {
       for (const p of tonePatterns) {
         const bucket = (['clear','caution','alert'] as Bucket[]).includes(p.tone) ? p.tone : 'caution';
         const w = typeof p.confidence === 'number' ? p.confidence : 0.85;
+        const category = p.category || 'general';
 
         // Add exact phrases & semanticVariants to Aho-Corasick
         if (p.type !== 'regex') {
-          if (p.pattern) this.ahoCorasick.addPattern(this.normalizeText(p.pattern), bucket, w);
+          if (p.pattern) this.ahoCorasick.addPattern(this.normalizeText(p.pattern), bucket, w, category);
           arrify(p.semanticVariants).forEach((v: string) =>
-            this.ahoCorasick.addPattern(this.normalizeText(v), bucket, Math.max(0.5, w * 0.95)));
+            this.ahoCorasick.addPattern(this.normalizeText(v), bucket, Math.max(0.5, w * 0.95), category));
         }
 
         // Compile regex patterns
         if (p.type === 'regex' && p.pattern) {
           try { 
-            this.tonePatternRegexes.push({ re: new RegExp(p.pattern, 'i'), bucket, weight: w }); 
+            this.tonePatternRegexes.push({ re: new RegExp(p.pattern, 'i'), bucket, weight: w, category }); 
           } catch (error) {
             logger.warn(`Failed to compile regex pattern: ${p.pattern}`, error);
           }
@@ -1117,19 +1119,19 @@ class ToneDetectors {
     return this.scan(normalizedLemmas); 
   }
 
-  private regexToneHits(terms: string[]) {
-    const hits: { bucket: Bucket; weight: number; term: string; start: number; end: number }[] = [];
+  regexToneHits(terms: string[]) {
+    const hits: { bucket: Bucket; weight: number; term: string; start: number; end: number; category?: string }[] = [];
     if (this.tonePatternRegexes.length === 0) return hits;
 
     const fullText = terms.join(' ');
-    for (const { re, bucket, weight } of this.tonePatternRegexes) {
+    for (const { re, bucket, weight, category } of this.tonePatternRegexes) {
       const match = re.exec(fullText);
       if (match) {
         const startChar = match.index || 0;
         const endChar = startChar + match[0].length;
         const startTerm = fullText.substring(0, startChar).split(' ').length - 1;
         const endTerm = Math.min(terms.length - 1, startTerm + match[0].split(' ').length - 1);
-        hits.push({ bucket, weight, term: match[0], start: Math.max(0, startTerm), end: Math.max(0, endTerm) });
+        hits.push({ bucket, weight, term: match[0], start: Math.max(0, startTerm), end: Math.max(0, endTerm), category });
       }
     }
     return hits;
@@ -1986,6 +1988,24 @@ class AdvancedFeatureExtractor {
       });
       features.edge_hits = 0;
       features.edge_list = [];
+    }
+
+    // tone pattern categories
+    logger.info('Extracting tone pattern categories');
+    try {
+      const terms = text.toLowerCase().split(/\s+/);
+      const toneHits = detectors.regexToneHits(terms);
+      const categories = [...new Set(toneHits.filter(h => h.category).map(h => h.category))];
+      features.tone_categories = categories;
+      features.tone_hits = toneHits.length;
+      logger.info('Tone categories extracted', { categories, hitCount: toneHits.length });
+    } catch (error) {
+      logger.error('Error extracting tone categories', {
+        error: error,
+        message: error instanceof Error ? error.message : String(error)
+      });
+      features.tone_categories = [];
+      features.tone_hits = 0;
     }
 
     logger.info('Feature extraction completed', { featureCount: Object.keys(features).length });
@@ -3139,6 +3159,7 @@ export class ToneAnalysisService {
       const result: AdvancedToneResult = {
         primary_tone: classification,
         confidence,
+        categories: fr.features?.tone_categories || [], // Add detected categories
         emotions,
         intensity,
         sentiment_score,

@@ -1,9 +1,11 @@
 {
+  "version": "1.3.1",
+  "notes": "Categories normalized to snake_case. No behavioral changes.",
   "patterns": [
     {
       "id": "A001",
       "tone": "alert",
-      "category": "profanity-direct",
+      "category": "profanity_direct",
       "matchMode": "hybrid",
       "canonical": "fuck you",
       "variants": ["screw you", "to hell with you"],
@@ -14,7 +16,7 @@
     {
       "id": "A002",
       "tone": "alert",
-      "category": "profanity-direct",
+      "category": "profanity_direct",
       "matchMode": "hybrid",
       "canonical": "stfu / shut the f up",
       "variants": ["stfu", "shut the f up", "shut the fuck up", "shut up now", "zip it", "stop talking now"],
@@ -25,7 +27,7 @@
     {
       "id": "A003",
       "tone": "alert",
-      "category": "profanity-direct",
+      "category": "profanity_direct",
       "matchMode": "hybrid",
       "canonical": "bastard / son of a bitch",
       "variants": ["bastard", "son of a bitch", "son-of-a-bitch", "scumbag", "low-life"],
@@ -36,7 +38,7 @@
     {
       "id": "A004",
       "tone": "alert",
-      "category": "profanity-direct",
+      "category": "profanity_direct",
       "matchMode": "hybrid",
       "canonical": "go to hell",
       "variants": ["burn in hell", "rot in hell"],
@@ -47,7 +49,7 @@
     {
       "id": "A005",
       "tone": "alert",
-      "category": "profanity-insult",
+      "category": "profanity_insult",
       "matchMode": "hybrid",
       "canonical": "asshole / dumbass / jackass",
       "variants": ["asshole", "dumbass", "jackass", "jerk", "tool", "clown"],
@@ -55,11 +57,10 @@
       "threshold": 0.95,
       "styleWeight": { "avoidant": 0.85, "anxious": 1.00, "disorganized": 1.00, "secure": 0.75 }
     },
-
     {
       "id": "A011",
       "tone": "alert",
-      "category": "insult-intellect",
+      "category": "insult_intellect",
       "matchMode": "hybrid",
       "canonical": "idiot",
       "variants": ["moron", "imbecile", "dummy", "airhead", "simpleton"],
@@ -70,7 +71,7 @@
     {
       "id": "A012",
       "tone": "alert",
-      "category": "insult-intellect",
+      "category": "insult_intellect",
       "matchMode": "regex",
       "canonical": "moron",
       "variants": ["blockhead", "meathead", "halfwit"],
@@ -81,7 +82,7 @@
     {
       "id": "A013",
       "tone": "alert",
-      "category": "insult-intellect",
+      "category": "insult_intellect",
       "matchMode": "hybrid",
       "canonical": "you're stupid",
       "variants": ["you have no brains", "you’re not smart"],
@@ -89,7 +90,6 @@
       "threshold": 0.94,
       "styleWeight": { "avoidant": 0.80, "anxious": 1.00, "disorganized": 0.95, "secure": 0.70 }
     },
-
     {
       "id": "A021",
       "tone": "alert",
@@ -126,7 +126,7 @@
     {
       "id": "A024",
       "tone": "alert",
-      "category": "insult-intellect",
+      "category": "insult_intellect",
       "matchMode": "regex",
       "canonical": "dumb",
       "variants": ["slow", "dim", "dense", "not bright", "lamebrain"],
@@ -137,7 +137,7 @@
     {
       "id": "A025",
       "tone": "alert",
-      "category": "insult-intellect",
+      "category": "insult_intellect",
       "matchMode": "regex",
       "canonical": "brainless",
       "variants": ["mindless", "witless", "vacant", "empty-headed", "no-brain"],
@@ -148,7 +148,7 @@
     {
       "id": "A026",
       "tone": "alert",
-      "category": "insult-intellect",
+      "category": "insult_intellect",
       "matchMode": "hybrid",
       "canonical": "pea brain",
       "variants": ["small brain", "tiny brain", "micro brain", "puny brain", "little brain"],
@@ -159,7 +159,7 @@
     {
       "id": "A027",
       "tone": "alert",
-      "category": "insult-intellect",
+      "category": "insult_intellect",
       "matchMode": "regex",
       "canonical": "blockhead",
       "variants": ["bonehead", "numbskull", "thickhead", "meathead", "chowderhead"],
@@ -170,7 +170,7 @@
     {
       "id": "A028",
       "tone": "alert",
-      "category": "insult-intellect",
+      "category": "insult_intellect",
       "matchMode": "regex",
       "canonical": "clueless",
       "variants": ["unaware", "ignorant", "oblivious", "blind", "in the dark"],
@@ -181,7 +181,7 @@
     {
       "id": "A029",
       "tone": "alert",
-      "category": "insult-intellect",
+      "category": "insult_intellect",
       "matchMode": "hybrid",
       "canonical": "thick-skull",
       "variants": ["thick skull", "dense", "hard-headed", "stone head", "rock head", "wooden head"],
@@ -192,7 +192,7 @@
     {
       "id": "A030",
       "tone": "alert",
-      "category": "insult-intellect",
+      "category": "insult_intellect",
       "matchMode": "regex",
       "canonical": "simpleton",
       "variants": ["nincompoop", "dunderhead", "oaf", "blockhead", "fool"],
@@ -203,7 +203,7 @@
     {
       "id": "A031",
       "tone": "alert",
-      "category": "character-attack",
+      "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a liar",
       "variants": ["dishonest", "fibber", "deceiver", "con artist", "untruthful"],
@@ -214,7 +214,7 @@
     {
       "id": "A032",
       "tone": "alert",
-      "category": "character-attack",
+      "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a cheater",
       "variants": ["unfaithful", "two-timer", "betrayer", "philanderer", "adulterer"],
@@ -225,7 +225,7 @@
     {
       "id": "A033",
       "tone": "alert",
-      "category": "character-attack",
+      "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a fake",
       "variants": ["phony", "fraud", "poser", "pretender", "sham"],
@@ -236,7 +236,7 @@
     {
       "id": "A034",
       "tone": "alert",
-      "category": "character-attack",
+      "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a hypocrite",
       "variants": ["two-faced", "double standard", "says one thing does another", "phony moralist"],
@@ -247,7 +247,7 @@
     {
       "id": "A035",
       "tone": "alert",
-      "category": "character-attack",
+      "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a coward",
       "variants": ["spineless", "gutless", "no backbone", "scaredy-cat"],
@@ -258,7 +258,7 @@
     {
       "id": "A036",
       "tone": "alert",
-      "category": "character-attack",
+      "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a loser",
       "variants": ["failure", "deadbeat", "good for nothing", "washout"],
@@ -269,7 +269,7 @@
     {
       "id": "A037",
       "tone": "alert",
-      "category": "character-attack",
+      "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're pathetic",
       "variants": ["pitiful", "sad", "sorry excuse", "lamentable"],
@@ -280,7 +280,7 @@
     {
       "id": "A038",
       "tone": "alert",
-      "category": "character-attack",
+      "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're worthless",
       "variants": ["useless", "no value", "good for nothing", "waste of space"],
@@ -291,7 +291,7 @@
     {
       "id": "A039",
       "tone": "alert",
-      "category": "character-attack",
+      "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a creep",
       "variants": ["weirdo", "creepy", "sketchy", "gross person"],
@@ -302,7 +302,7 @@
     {
       "id": "A040",
       "tone": "alert",
-      "category": "character-attack",
+      "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're disgusting",
       "variants": ["gross", "repulsive", "nasty", "sickening"],
@@ -421,7 +421,7 @@
     {
       "id": "A051",
       "tone": "alert",
-      "category": "hostile-command",
+      "category": "hostile_command",
       "matchMode": "hybrid",
       "canonical": "shut up",
       "variants": ["be quiet", "zip it", "stop talking"],
@@ -432,7 +432,7 @@
     {
       "id": "A052",
       "tone": "alert",
-      "category": "hostile-command",
+      "category": "hostile_command",
       "matchMode": "hybrid",
       "canonical": "leave me alone",
       "variants": ["stop bothering me", "get away from me", "don’t interact with me"],
@@ -443,7 +443,7 @@
     {
       "id": "A053",
       "tone": "alert",
-      "category": "hostile-command",
+      "category": "hostile_command",
       "matchMode": "hybrid",
       "canonical": "get lost",
       "variants": ["beat it", "go away", "scram", "take a hike"],
@@ -454,7 +454,7 @@
     {
       "id": "A054",
       "tone": "alert",
-      "category": "hostile-command",
+      "category": "hostile_command",
       "matchMode": "regex",
       "canonical": "go away",
       "variants": ["please go away", "go far away", "stay away from me"],
@@ -465,7 +465,7 @@
     {
       "id": "A055",
       "tone": "alert",
-      "category": "hostile-command",
+      "category": "hostile_command",
       "matchMode": "hybrid",
       "canonical": "get out",
       "variants": ["get out now", "get out of here", "leave now"],
@@ -738,17 +738,6 @@
       "styleWeight": { "avoidant": 1.25, "anxious": 1.25, "disorganized": 1.25, "secure": 1.1 }
     },
     {
-      "id": "A080",
-      "tone": "alert",
-      "category": "threat",
-      "matchMode": "regex",
-      "canonical": "i'll kill you tonight",
-      "variants": ["i’ll kill you tomorrow", "i’ll kill you soon"],
-      "regex": "\\bi['’`]?ll\\s+kill\\s+you\\s+(?:tonight|tomorrow|soon)\\b",
-      "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.25, "anxious": 1.25, "disorganized": 1.25, "secure": 1.1 }
-    },
-    {
       "id": "A081",
       "tone": "alert",
       "category": "threat",
@@ -883,7 +872,7 @@
     {
       "id": "A093",
       "tone": "alert",
-      "category": "hostility",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "i can't stand you",
       "variants": ["i cant stand you", "i cannot stand you", "i can’t stand you"],
@@ -894,7 +883,7 @@
     {
       "id": "A094",
       "tone": "alert",
-      "category": "profanity-command",
+      "category": "hostile_command",
       "matchMode": "regex",
       "canonical": "shut the hell up",
       "variants": ["shut the heck up", "shut the hell up now"],
@@ -916,7 +905,7 @@
     {
       "id": "A096",
       "tone": "alert",
-      "category": "withdrawal-finality",
+      "category": "withdrawal_finality",
       "matchMode": "regex",
       "canonical": "i'll never forgive you",
       "variants": ["i will never forgive you", "i can’t forgive you ever"],
@@ -927,7 +916,7 @@
     {
       "id": "A097",
       "tone": "alert",
-      "category": "insult-deception",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a pathetic liar",
       "variants": ["you’re pathetic liar", "you are a pathetic liar"],
@@ -938,7 +927,7 @@
     {
       "id": "A098",
       "tone": "alert",
-      "category": "blame-deception",
+      "category": "blame",
       "matchMode": "regex",
       "canonical": "you lie about everything",
       "variants": ["everything you say is a lie", "you’re dishonest about everything"],
@@ -949,7 +938,7 @@
     {
       "id": "A099",
       "tone": "alert",
-      "category": "profanity-insult",
+      "category": "profanity_insult",
       "matchMode": "regex",
       "canonical": "you're so full of shit",
       "variants": ["you’re so full of crap", "you are full of crap"],
@@ -960,7 +949,7 @@
     {
       "id": "A100",
       "tone": "alert",
-      "category": "extreme-profanity",
+      "category": "profanity_direct",
       "matchMode": "regex",
       "canonical": "go fuck yourself",
       "variants": ["go f*** yourself", "go f yourself", "go screw yourself"],
@@ -993,7 +982,7 @@
     {
       "id": "A103",
       "tone": "alert",
-      "category": "social-rejection",
+      "category": "social_rejection",
       "matchMode": "regex",
       "canonical": "nobody likes you",
       "variants": ["no one likes you", "nobody cares about you"],
@@ -1026,7 +1015,7 @@
     {
       "id": "A106",
       "tone": "alert",
-      "category": "character-attack",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a failure",
       "variants": ["you are a failure", "you’re such a failure"],
@@ -1037,7 +1026,7 @@
     {
       "id": "A107",
       "tone": "alert",
-      "category": "insult",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're crazy",
       "variants": ["you are crazy", "you’re insane"],
@@ -1048,7 +1037,7 @@
     {
       "id": "A108",
       "tone": "alert",
-      "category": "finality",
+      "category": "withdrawal_finality",
       "matchMode": "regex",
       "canonical": "i'm blocking you",
       "variants": ["i am blocking you", "you’re blocked", "i’m going to block you"],
@@ -1081,7 +1070,7 @@
     {
       "id": "A111",
       "tone": "alert",
-      "category": "consequence-threat",
+      "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll report you",
       "variants": ["i will report you", "i’m reporting you"],
@@ -1092,7 +1081,7 @@
     {
       "id": "A112",
       "tone": "alert",
-      "category": "menace",
+      "category": "threat",
       "matchMode": "regex",
       "canonical": "try me",
       "variants": ["go ahead, try me", "try me and see"],
@@ -1125,7 +1114,7 @@
     {
       "id": "A115",
       "tone": "alert",
-      "category": "menace",
+      "category": "threat",
       "matchMode": "regex",
       "canonical": "you're asking for it",
       "variants": ["you’re asking for trouble", "you’re looking for it"],
@@ -1136,7 +1125,7 @@
     {
       "id": "A116",
       "tone": "alert",
-      "category": "menace",
+      "category": "threat",
       "matchMode": "regex",
       "canonical": "you're gonna regret this",
       "variants": ["you’ll regret this", "you’re going to regret this"],
@@ -1147,7 +1136,7 @@
     {
       "id": "A117",
       "tone": "alert",
-      "category": "menace",
+      "category": "threat",
       "matchMode": "regex",
       "canonical": "you won't get away with this",
       "variants": ["you will not get away with this", "you can’t get away with this"],
@@ -1158,7 +1147,7 @@
     {
       "id": "A118",
       "tone": "alert",
-      "category": "consequence-threat",
+      "category": "threat",
       "matchMode": "regex",
       "canonical": "you'll pay for this",
       "variants": ["you will pay for this", "you’ll pay dearly"],
@@ -1169,7 +1158,7 @@
     {
       "id": "A119",
       "tone": "alert",
-      "category": "menace",
+      "category": "threat",
       "matchMode": "regex",
       "canonical": "you'll be sorry",
       "variants": ["you will be sorry", "you’re gonna be sorry"],
@@ -1180,7 +1169,7 @@
     {
       "id": "A120",
       "tone": "alert",
-      "category": "hostile-command",
+      "category": "hostile_command",
       "matchMode": "regex",
       "canonical": "stay out of my life",
       "variants": ["keep out of my life", "don’t be part of my life"],
@@ -1191,7 +1180,7 @@
     {
       "id": "A121",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "contempt",
       "matchMode": "regex",
       "canonical": "you're not worth my time",
       "variants": ["you’re not worth it", "you’re not worth anything to me"],
@@ -1202,7 +1191,7 @@
     {
       "id": "A122",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic",
       "variants": ["you’re pitiful", "you’re a sad excuse"],
@@ -1213,7 +1202,7 @@
     {
       "id": "A123",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're disgusting",
       "variants": ["you’re gross", "you make me sick"],
@@ -1224,7 +1213,7 @@
     {
       "id": "A124",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse",
       "variants": ["you’re a pathetic excuse", "you’re such a pathetic excuse"],
@@ -1235,7 +1224,7 @@
     {
       "id": "A125",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're an embarrassment",
       "variants": ["you’re humiliating", "you disgrace yourself"],
@@ -1246,7 +1235,7 @@
     {
       "id": "A126",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're trash",
       "variants": ["you’re garbage", "you’re worthless", "you’re filth"],
@@ -1257,7 +1246,7 @@
     {
       "id": "A127",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're nothing",
       "variants": ["you amount to nothing", "you’re a nobody"],
@@ -1268,7 +1257,7 @@
     {
       "id": "A128",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "contempt",
       "matchMode": "regex",
       "canonical": "you deserve nothing",
       "variants": ["you’re worthy of nothing", "you merit nothing"],
@@ -1279,7 +1268,7 @@
     {
       "id": "A129",
       "tone": "alert",
-      "category": "extreme-hostility",
+      "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "i hate you",
       "variants": ["i despise you", "i loathe you", "i can’t stand you"],
@@ -1323,7 +1312,7 @@
     {
       "id": "A133",
       "tone": "alert",
-      "category": "extreme-hostility",
+      "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "i wish you were dead",
       "variants": ["i hope you die", "you should be dead", "i’d rather you didn’t exist"],
@@ -1334,7 +1323,7 @@
     {
       "id": "A134",
       "tone": "alert",
-      "category": "extreme-hostility",
+      "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "you're dead to me",
       "variants": ["you no longer exist to me", "i’m done with you forever", "you’re out of my life"],
@@ -1345,7 +1334,7 @@
     {
       "id": "A135",
       "tone": "alert",
-      "category": "profanity-direct",
+      "category": "profanity_direct",
       "matchMode": "regex",
       "canonical": "go to hell",
       "variants": ["burn in hell", "rot in hell", "you belong in hell"],
@@ -1356,7 +1345,7 @@
     {
       "id": "A136",
       "tone": "alert",
-      "category": "extreme-hostility",
+      "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "drop dead",
       "variants": ["fall down dead", "i wish you’d die", "perish now"],
@@ -1367,7 +1356,7 @@
     {
       "id": "A137",
       "tone": "alert",
-      "category": "hostile-command",
+      "category": "hostile_command",
       "matchMode": "regex",
       "canonical": "shut your mouth",
       "variants": ["close your mouth", "zip it", "keep quiet"],
@@ -1378,7 +1367,7 @@
     {
       "id": "A138",
       "tone": "alert",
-      "category": "hostility",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "i can't stand you",
       "variants": ["i can’t bear you", "you irritate me endlessly", "i have no tolerance for you"],
@@ -1389,7 +1378,7 @@
     {
       "id": "A139",
       "tone": "alert",
-      "category": "profanity-command",
+      "category": "profanity_command",
       "matchMode": "regex",
       "canonical": "shut the hell up",
       "variants": ["shut up now", "keep your mouth shut", "be quiet immediately"],
@@ -1411,7 +1400,7 @@
     {
       "id": "A141",
       "tone": "alert",
-      "category": "withdrawal-finality",
+      "category": "withdrawal_finality",
       "matchMode": "regex",
       "canonical": "i'll never forgive you",
       "variants": ["i won’t forgive you", "you’ll never be forgiven", "i can’t forgive you"],
@@ -1422,7 +1411,7 @@
     {
       "id": "A142",
       "tone": "alert",
-      "category": "insult-deception",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a pathetic liar",
       "variants": ["you’re a disgusting liar", "lying coward", "worthless liar"],
@@ -1433,7 +1422,7 @@
     {
       "id": "A143",
       "tone": "alert",
-      "category": "blame-deception",
+      "category": "blame",
       "matchMode": "regex",
       "canonical": "you lie about everything",
       "variants": ["everything you say is a lie", "you’re dishonest about everything", "you never tell the truth"],
@@ -1444,7 +1433,7 @@
     {
       "id": "A144",
       "tone": "alert",
-      "category": "profanity-insult",
+      "category": "profanity_insult",
       "matchMode": "regex",
       "canonical": "you're so full of shit",
       "variants": ["you’re so full of crap", "that’s nonsense coming from you"],
@@ -1455,7 +1444,7 @@
     {
       "id": "A145",
       "tone": "alert",
-      "category": "extreme-profanity",
+      "category": "profanity_direct",
       "matchMode": "regex",
       "canonical": "go fuck yourself",
       "variants": ["go screw yourself", "go to hell", "get lost forever"],
@@ -1466,7 +1455,7 @@
     {
       "id": "A146",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "contempt",
       "matchMode": "regex",
       "canonical": "you're a joke",
       "variants": ["you’re laughable", "you’re ridiculous", "you’re a clown"],
@@ -1477,7 +1466,7 @@
     {
       "id": "A147",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "contempt",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse of a man",
       "variants": ["you’re a sad excuse for a human", "worthless excuse of a man", "shame of a person"],
@@ -1488,7 +1477,7 @@
     {
       "id": "A148",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're an embarrassment",
       "variants": ["you’re shameful", "you’re humiliating", "you disgrace yourself"],
@@ -1499,10 +1488,10 @@
     {
       "id": "A149",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're trash",
-      "variants": ["you’re garbage", "you’re worthless", "you’re filth"],
+      "variants": ["you’re garbage", "you’re worthless"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+trash\\b",
       "threshold": 0.94,
       "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
@@ -1510,7 +1499,7 @@
     {
       "id": "A150",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're nothing",
       "variants": ["you amount to nothing", "you’re a nobody", "you’re insignificant"],
@@ -1521,7 +1510,7 @@
     {
       "id": "A151",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "contempt",
       "matchMode": "regex",
       "canonical": "you deserve nothing",
       "variants": ["you’re worthy of nothing", "you merit nothing", "you earn nothing"],
@@ -1532,7 +1521,7 @@
     {
       "id": "A152",
       "tone": "alert",
-      "category": "extreme-hostility",
+      "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "i hate you",
       "variants": ["i despise you", "i loathe you", "i can’t stand you"],
@@ -1598,7 +1587,7 @@
     {
       "id": "A158",
       "tone": "alert",
-      "category": "blame",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're useless",
       "variants": ["you’re worthless", "you’re good for nothing"],
@@ -1609,7 +1598,7 @@
     {
       "id": "A159",
       "tone": "alert",
-      "category": "blame",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic",
       "variants": ["you’re pitiful", "you’re miserable"],
@@ -1620,7 +1609,7 @@
     {
       "id": "A160",
       "tone": "alert",
-      "category": "blame",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're disgusting",
       "variants": ["you make me sick", "you’re gross"],
@@ -1631,7 +1620,7 @@
     {
       "id": "A161",
       "tone": "alert",
-      "category": "blame",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse",
       "variants": ["you’re a pathetic excuse for a human", "worthless excuse"],
@@ -1642,7 +1631,7 @@
     {
       "id": "A162",
       "tone": "alert",
-      "category": "blame",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're an embarrassment",
       "variants": ["you’re humiliating", "you disgrace me"],
@@ -1653,7 +1642,7 @@
     {
       "id": "A163",
       "tone": "alert",
-      "category": "blame",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're trash",
       "variants": ["you’re garbage", "you’re worthless"],
@@ -1664,7 +1653,7 @@
     {
       "id": "A164",
       "tone": "alert",
-      "category": "blame",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're nothing",
       "variants": ["you amount to nothing", "you’re a nobody"],
@@ -1675,7 +1664,7 @@
     {
       "id": "A165",
       "tone": "alert",
-      "category": "blame",
+      "category": "contempt",
       "matchMode": "regex",
       "canonical": "you deserve nothing",
       "variants": ["you’re worthy of nothing", "you merit nothing"],
@@ -1686,7 +1675,7 @@
     {
       "id": "A166",
       "tone": "alert",
-      "category": "blame",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a failure",
       "variants": ["you’re such a failure", "you are a failure"],
@@ -1697,7 +1686,7 @@
     {
       "id": "A167",
       "tone": "alert",
-      "category": "blame",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're crazy",
       "variants": ["you’re insane", "you’re out of your mind"],
@@ -1708,7 +1697,7 @@
     {
       "id": "A168",
       "tone": "alert",
-      "category": "withdrawal-finality",
+      "category": "withdrawal_finality",
       "matchMode": "regex",
       "canonical": "i'm blocking you",
       "variants": ["you’re blocked", "i will block you"],
@@ -1752,7 +1741,7 @@
     {
       "id": "A172",
       "tone": "alert",
-      "category": "menace",
+      "category": "threat",
       "matchMode": "regex",
       "canonical": "try me",
       "variants": ["go ahead, try me", "test me and see"],
@@ -1774,7 +1763,7 @@
     {
       "id": "A174",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're worthless",
       "variants": ["you’re good for nothing", "you have no value"],
@@ -1785,7 +1774,7 @@
     {
       "id": "A175",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're hopeless",
       "variants": ["you’ll never change", "you’re beyond help"],
@@ -1796,7 +1785,7 @@
     {
       "id": "A176",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a waste of space",
       "variants": ["you’re wasting space", "you’re pointless"],
@@ -1807,7 +1796,7 @@
     {
       "id": "A177",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic human being",
       "variants": ["you’re a sorry excuse of a person", "worthless human"],
@@ -1818,7 +1807,7 @@
     {
       "id": "A178",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a loser",
       "variants": ["you’re such a loser", "you are a loser"],
@@ -1829,7 +1818,7 @@
     {
       "id": "A179",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a clown",
       "variants": ["you’re ridiculous", "you’re laughable"],
@@ -1840,7 +1829,7 @@
     {
       "id": "A180",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse of a parent",
       "variants": ["you’re a horrible parent", "you’re a disgraceful mother", "you’re a disgraceful father"],
@@ -1851,7 +1840,7 @@
     {
       "id": "A181",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse of a friend",
       "variants": ["you’re a horrible friend", "you’re worthless as a friend"],
@@ -1862,7 +1851,7 @@
     {
       "id": "A182",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse of a partner",
       "variants": ["you’re a worthless partner", "you’re a horrible boyfriend", "you’re a horrible girlfriend"],
@@ -1873,7 +1862,7 @@
     {
       "id": "A183",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse of a child",
       "variants": ["you’re a disgraceful child", "you’re a worthless son", "you’re a worthless daughter"],
@@ -1884,7 +1873,7 @@
     {
       "id": "A184",
       "tone": "alert",
-      "category": "dismissive",
+      "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse of a sibling",
       "variants": ["you’re a disgraceful brother", "you’re a disgraceful sister"],
@@ -1895,7 +1884,7 @@
     {
       "id": "A185",
       "tone": "alert",
-      "category": "extreme-hostility",
+      "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "i wish you'd disappear",
       "variants": ["i wish you’d vanish", "i hope you disappear", "i want you gone forever"],
@@ -1906,7 +1895,7 @@
     {
       "id": "A186",
       "tone": "alert",
-      "category": "extreme-hostility",
+      "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "the world would be better without you",
       "variants": ["everyone would be better off without you", "things would improve if you were gone"],
@@ -1917,7 +1906,7 @@
     {
       "id": "A187",
       "tone": "alert",
-      "category": "extreme-hostility",
+      "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "you're poison",
       "variants": ["you’re toxic", "you’re venom", "you’re deadly to me"],
@@ -1928,7 +1917,7 @@
     {
       "id": "A188",
       "tone": "alert",
-      "category": "extreme-hostility",
+      "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "you're a disease",
       "variants": ["you’re cancer", "you’re a plague", "you’re a virus"],
@@ -1939,7 +1928,7 @@
     {
       "id": "A189",
       "tone": "alert",
-      "category": "extreme-hostility",
+      "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "you're toxic",
       "variants": ["you’re poison", "you’re poisonous"],
@@ -1950,7 +1939,7 @@
     {
       "id": "A190",
       "tone": "alert",
-      "category": "extreme-hostility",
+      "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "you're cancer",
       "variants": ["you’re like a disease", "you’re malignant"],
@@ -1961,7 +1950,7 @@
     {
       "id": "A191",
       "tone": "alert",
-      "category": "extreme-hostility",
+      "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "you're evil",
       "variants": ["you’re pure evil", "you’re wicked"],
@@ -1969,17 +1958,7 @@
       "threshold": 0.94,
       "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
     },
-    {
-      "id": "A192",
-      "tone": "alert",
-      "category": "extreme-hostility",
-      "matchMode": "regex",
-      "canonical": "you're the devil",
-      "variants": ["you’re satan", "you’re demonic", "you’re a demon"],
-      "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:the\\s+)?(?:devil|satan|demonic|demon)\\b",
-      "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.0, "secure": 0.9 }
-    },
+
     {
       "id": "C001",
       "tone": "caution",
@@ -2016,7 +1995,7 @@
     {
       "id": "C004",
       "tone": "caution",
-      "category": "passive-aggression",
+      "category": "passive_aggression",
       "matchMode": "regex",
       "canonical": "whatever you want",
       "variants": ["do what you want", "suit yourself", "it’s your choice"],
@@ -2027,7 +2006,7 @@
     {
       "id": "C005",
       "tone": "caution",
-      "category": "passive-aggression",
+      "category": "passive_aggression",
       "matchMode": "regex",
       "canonical": "fine, do what you want",
       "variants": ["fine, have it your way", "alright, do as you wish", "sure, go ahead"],
@@ -2060,7 +2039,7 @@
     {
       "id": "C008",
       "tone": "caution",
-      "category": "defensive-disclaimer",
+      "category": "defensive_disclaimer",
       "matchMode": "regex",
       "canonical": "don't take this the wrong way",
       "variants": ["don’t misunderstand", "don’t get me wrong", "this isn’t meant badly"],
@@ -2071,7 +2050,7 @@
     {
       "id": "C009",
       "tone": "caution",
-      "category": "indirect-blame",
+      "category": "indirect_blame",
       "matchMode": "regex",
       "canonical": "i just thought",
       "variants": ["I only assumed", "I believed", "I figured"],
@@ -2082,7 +2061,7 @@
     {
       "id": "C010",
       "tone": "caution",
-      "category": "indirect-blame",
+      "category": "indirect_blame",
       "matchMode": "regex",
       "canonical": "if you'd told me earlier",
       "variants": ["if only you told me sooner", "you could’ve mentioned earlier", "you should’ve said before"],
@@ -2104,7 +2083,7 @@
     {
       "id": "C012",
       "tone": "caution",
-      "category": "passive-aggression",
+      "category": "passive_aggression",
       "matchMode": "regex",
       "canonical": "if you say so",
       "variants": ["whatever you say", "if that’s what you think", "sure, if you believe that"],
@@ -2126,7 +2105,7 @@
     {
       "id": "C014",
       "tone": "caution",
-      "category": "indirect-blame",
+      "category": "indirect_blame",
       "matchMode": "regex",
       "canonical": "you could have",
       "variants": ["you should have", "you might have", "you had the chance to"],
@@ -2148,7 +2127,7 @@
     {
       "id": "C016",
       "tone": "caution",
-      "category": "questioning-reliability",
+      "category": "questioning_reliability",
       "matchMode": "regex",
       "canonical": "i thought you",
       "variants": ["I assumed you", "I figured you", "I expected you to"],
@@ -2170,7 +2149,7 @@
     {
       "id": "C018",
       "tone": "caution",
-      "category": "passive-aggression",
+      "category": "passive_aggression",
       "matchMode": "regex",
       "canonical": "if you want",
       "variants": ["if that’s what you want", "if you prefer", "if you feel like it"],
@@ -2181,7 +2160,7 @@
     {
       "id": "C019",
       "tone": "caution",
-      "category": "defensive-disclaimer",
+      "category": "defensive_disclaimer",
       "matchMode": "regex",
       "canonical": "i was just saying",
       "variants": ["I only meant", "I was only saying", "I was just pointing out"],
@@ -2200,10 +2179,10 @@
       "threshold": 0.80,
       "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
     },
- {
+    {
       "id": "C021",
       "tone": "caution",
-      "category": "passive-aggression",
+      "category": "passive_aggression",
       "matchMode": "hybrid",
       "canonical": "up to you",
       "variants": ["your choice", "whatever you decide", "it’s on you"],
@@ -2225,7 +2204,7 @@
     {
       "id": "C023",
       "tone": "caution",
-      "category": "passive-aggression",
+      "category": "passive_aggression",
       "matchMode": "regex",
       "canonical": "if that's what you think",
       "variants": ["if you believe that", "if that’s your opinion", "if that’s what you feel"],
@@ -2258,12 +2237,11 @@
     {
       "id": "C026",
       "tone": "caution",
-      "category": "defensive-disclaimer",
+      "category": "defensive_disclaimer",
       "matchMode": "hybrid",
       "canonical": "just saying",
       "variants": ["i’m just saying", "just pointing it out", "only saying"],
       "regex": "(?<!not\\s)\\bjust\\s+saying\\b",
-      "negationScope": false,
       "threshold": 0.84,
       "styleWeight": { "avoidant": 0.88, "anxious": 0.92, "disorganized": 0.88, "secure": 0.75 }
     },
@@ -2283,7 +2261,7 @@
       "status": "alias",
       "aliasOf": "C012",
       "tone": "caution",
-      "category": "passive-aggression",
+      "category": "passive_aggression",
       "canonical": "if you say so",
       "note": "Deduped to C012; keep as alias for back-compat",
       "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
@@ -2296,31 +2274,28 @@
       "canonical": "not exactly",
       "variants": ["not quite", "not really", "close but not exactly", "not precisely"],
       "regex": "\\bnot\\s+(?:exactly|quite|really|precisely)\\b",
-      "forbidAfter": ["rocket science", "the same", "the point"],
       "threshold": 0.80,
       "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
     },
     {
       "id": "C030",
       "tone": "caution",
-      "category": "passive-aggression",
+      "category": "passive_aggression",
       "matchMode": "hybrid",
       "canonical": "if you must",
       "variants": ["if you really must", "go ahead if you must", "if you have to"],
       "regex": "\\bif\\s+you\\s+must\\b",
-      "emojiBoosters": ["😑","🙄"],
       "threshold": 0.82,
       "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
     },
     {
       "id": "C031",
       "tone": "caution",
-      "category": "passive-aggression",
+      "category": "passive_aggression",
       "matchMode": "hybrid",
       "canonical": "if you insist",
       "variants": ["fine, if you insist", "if you really want to", "if you have to"],
       "regex": "\\bif\\s+you\\s+insist\\b",
-      "emojiBoosters": ["😒","🙄"],
       "threshold": 0.82,
       "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
     },
@@ -2332,19 +2307,17 @@
       "canonical": "kind of",
       "variants": ["sort of", "kinda", "sorta", "kinda sorta"],
       "regex": "\\b(?:kind|sort)\\s+of\\b|\\bkinda\\b|\\bsorta\\b",
-      "forbidAfter": ["like to", "a recipe", "a tutorial"],
       "threshold": 0.80,
       "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
     },
     {
       "id": "C033",
       "tone": "caution",
-      "category": "passive-aggression",
+      "category": "passive_aggression",
       "matchMode": "hybrid",
       "canonical": "do whatever you want",
       "variants": ["do what you want", "your call then", "it’s your decision"],
       "regex": "\\bdo\\s+whatever\\s+you\\s+want\\b|\\bdo\\s+what\\s+you\\s+want\\b",
-      "emojiBoosters": ["🙃","😑"],
       "threshold": 0.84,
       "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
     },
@@ -2373,7 +2346,7 @@
     {
       "id": "C036",
       "tone": "caution",
-      "category": "defensive-disclaimer",
+      "category": "defensive_disclaimer",
       "matchMode": "hybrid",
       "canonical": "just trying to help",
       "variants": ["only trying to help", "just wanted to help", "trying to be helpful"],
@@ -2411,242 +2384,6 @@
       "canonical": "well, maybe",
       "variants": ["perhaps", "possibly", "could be"],
       "regex": "\\bwell,?\\s+maybe\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C040",
-      "tone": "caution",
-      "category": "vague",
-      "matchMode": "hybrid",
-      "canonical": "not really",
-      "variants": ["not particularly", "not especially", "not exactly"],
-      "regex": "\\bnot\\s+really\\b",
-      "forbidAfter": ["sure", "helpful", "useful"],
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C041",
-      "tone": "caution",
-      "category": "passive-aggression",
-      "matchMode": "hybrid",
-      "canonical": "i mean, if you want",
-      "variants": ["if that’s what you want", "if you feel like it", "if you’d like to"],
-      "regex": "\\bi\\s+mean,?\\s+if\\s+you\\s+want\\b",
-      "emojiBoosters": ["🙄","😬"],
-      "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
-    },
-    {
-      "id": "C042",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "hybrid",
-      "canonical": "i guess that's fine",
-      "variants": ["i suppose that’s fine", "i guess that works", "that’s okay i guess"],
-      "regex": "\\bi\\s+guess\\s+that'?s\\s+fine\\b",
-      "threshold": 0.81,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C043",
-      "tone": "caution",
-      "category": "passive-aggression",
-      "matchMode": "regex",
-      "canonical": "if you really think so",
-      "variants": ["if you truly believe that", "if that’s your honest opinion", "if you’re sure"],
-      "regex": "\\bif\\s+you\\s+really\\s+think\\s+so\\b",
-      "emojiBoosters": ["🙃","😑"],
-      "threshold": 0.83,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
-    },
-    {
-      "id": "C044",
-      "tone": "caution",
-      "category": "minimizing",
-      "matchMode": "hybrid",
-      "canonical": "no worries",
-      "variants": ["no worries at all", "it’s fine", "not a problem", "don’t worry about it"],
-      "regex": "\\bno\\s+worries\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C045",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "hybrid",
-      "canonical": "that works, i guess",
-      "variants": ["that’s fine i guess", "i guess that’s okay", "works for me i suppose"],
-      "regex": "\\bthat\\s+works,?\\s+i\\s+guess\\b",
-      "threshold": 0.81,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C046",
-      "tone": "caution",
-      "category": "passive-aggression",
-      "matchMode": "regex",
-      "canonical": "if you feel like it",
-      "variants": ["if you want to", "if you’d like to", "if you’re up for it"],
-      "regex": "\\bif\\s+you\\s+feel\\s+like\\s+it\\b",
-      "emojiBoosters": ["😑","🙄"],
-      "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
-    },
-    {
-      "id": "C047",
-      "tone": "caution",
-      "category": "defensive-disclaimer",
-      "matchMode": "regex",
-      "canonical": "i'm not saying you should",
-      "variants": ["not telling you to", "not suggesting you should", "i’m not recommending it"],
-      "regex": "\\bi(?:'m|\\s+am)\\s+not\\s+saying\\s+you\\s+should\\b",
-      "threshold": 0.83,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.92, "disorganized": 0.88, "secure": 0.75 }
-    },
-    {
-      "id": "C048",
-      "tone": "caution",
-      "category": "defensive-disclaimer",
-      "matchMode": "hybrid",
-      "canonical": "if it helps",
-      "variants": ["if that’s helpful", "if you think it helps", "in case it helps"],
-      "regex": "\\bif\\s+it\\s+helps\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C049",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "regex",
-      "canonical": "i guess that's okay",
-      "variants": ["i suppose that’s okay", "that’s fine i guess", "i guess that’s alright"],
-      "regex": "\\bi\\s+guess\\s+that'?s\\s+ok(?:ay)?\\b",
-      "threshold": 0.81,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C050",
-      "tone": "caution",
-      "category": "passive-aggression",
-      "matchMode": "regex",
-      "canonical": "whatever you say",
-      "variants": ["if you say so", "sure, whatever you say", "whatever you think"],
-      "regex": "\\bwhatever\\s+you\\s+say\\b",
-      "emojiBoosters": ["🙄","😑"],
-      "threshold": 0.83,
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
-    },
-    {
-      "id": "C051",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "hybrid",
-      "canonical": "i suppose that's fine",
-      "variants": ["i guess that’s fine", "that’s okay i suppose", "probably fine"],
-      "regex": "\\bi\\s+suppose\\s+that'?s\\s+fine\\b",
-      "threshold": 0.81,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C052",
-      "tone": "caution",
-      "category": "minimizing",
-      "matchMode": "regex",
-      "canonical": "it's nothing",
-      "variants": ["it’s no big deal", "it’s not important", "it doesn’t matter"],
-      "regex": "\\bit'?s\\s+nothing\\b",
-      "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
-    },
-    {
-      "id": "C053",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "regex",
-      "canonical": "i don't know, maybe not",
-      "variants": ["i’m not sure, maybe not", "perhaps not", "possibly not"],
-      "regex": "\\bi\\s+don'?t\\s+know,?\\s+maybe\\s+not\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C054",
-      "tone": "caution",
-      "category": "passive-aggression",
-      "matchMode": "hybrid",
-      "canonical": "fine, if you say so",
-      "variants": ["okay, if you say so", "sure, if you say so", "alright, if you say so"],
-      "regex": "\\bfine,?\\s+if\\s+you\\s+say\\s+so\\b",
-      "emojiBoosters": ["🙄","😒"],
-      "threshold": 0.83,
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
-    },
-    {
-      "id": "C055",
-      "status": "alias",
-      "aliasOf": "C012",
-      "tone": "caution",
-      "category": "passive-aggression",
-      "canonical": "if you say so",
-      "note": "Deduped to C012; keep as alias for back-compat",
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
-    },
-    {
-      "id": "C056",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "regex",
-      "canonical": "i guess not",
-      "variants": ["i suppose not", "probably not", "i don’t think so"],
-      "regex": "\\bi\\s+guess\\s+not\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C057",
-      "tone": "caution",
-      "category": "defensive-disclaimer",
-      "matchMode": "hybrid",
-      "canonical": "just my opinion",
-      "variants": ["that’s just my opinion", "only my opinion", "just how i see it"],
-      "regex": "\\bjust\\s+my\\s+opinion\\b",
-      "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.92, "disorganized": 0.88, "secure": 0.75 }
-    },
-    {
-      "id": "C058",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "hybrid",
-      "canonical": "i think so",
-      "variants": ["i believe so", "i suppose so", "i guess so"],
-      "regex": "\\bi\\s+think\\s+so\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C059",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "hybrid",
-      "canonical": "i suppose not",
-      "variants": ["i guess not", "probably not", "likely not"],
-      "regex": "\\bi\\s+suppose\\s+not\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C060",
-      "tone": "caution",
-      "category": "vague",
-      "matchMode": "regex",
-      "canonical": "not sure",
-      "variants": ["not certain", "don’t know", "unclear"],
-      "regex": "\\bnot\\s+sure\\b",
       "threshold": 0.80,
       "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
     }

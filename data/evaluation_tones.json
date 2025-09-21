@@ -1,8 +1,9 @@
 {
-  "version": "1.2",
-  "updated": "2025-09-14",
+  "version": "1.2.1",
+  "updated": "2025-09-20",
 
   "platt": {
+    "meta": { "clipRange": [0.05, 0.95], "fallback": "general", "notes": "Applied post-logit, pre-threshold; clip avoids saturation on short texts." },
     "general":   { "a": 1.00, "b": 0.00 },
     "conflict":  { "a": 1.12, "b": -0.06 },
     "repair":    { "a": 0.95, "b": 0.05 },
@@ -23,7 +24,16 @@
     "general":   { "neutral": 0.38, "positive": 0.20, "supportive": 0.12, "anxious": 0.10, "angry": 0.07, "frustrated": 0.08, "sad": 0.03, "assertive": 0.02 },
     "conflict":  { "angry": 0.32, "frustrated": 0.22, "anxious": 0.12, "neutral": 0.12, "supportive": 0.10, "sad": 0.06, "positive": 0.06 },
     "repair":    { "supportive": 0.33, "positive": 0.18, "neutral": 0.18, "frustrated": 0.08, "anxious": 0.10, "sad": 0.08, "angry": 0.05 },
-    "planning":  { "neutral": 0.52, "assertive": 0.20, "supportive": 0.10, "positive": 0.08, "frustrated": 0.05, "anxious": 0.05 }
+    "planning":  { "neutral": 0.52, "assertive": 0.20, "supportive": 0.10, "positive": 0.08, "frustrated": 0.05, "anxious": 0.05 },
+    "escalation":{ "angry": 0.40, "frustrated": 0.26, "anxious": 0.10, "neutral": 0.10, "supportive": 0.06, "positive": 0.04, "sad": 0.04 },
+    "safety":    { "safety_concern": 0.60, "anxious": 0.16, "sad": 0.10, "neutral": 0.08, "supportive": 0.04, "angry": 0.02 }
+  },
+
+  "fallbacks": {
+    "contextOrder": ["general", "conflict", "repair", "planning"],
+    "onMissingPlatt": "use:general",
+    "onMissingPriors": "use:general",
+    "telemetry": true
   },
 
   "costs": {
@@ -33,7 +43,8 @@
 
   "riskFloors": {
     "angry":           { "minConfidence": 0.78, "actions": ["show_deescalation_tip"] },
-    "safety_concern":  { "minConfidence": 0.60, "actions": ["escalate_safety_flow"] }
+    "safety_concern":  { "minConfidence": 0.60, "actions": ["escalate_safety_flow"] },
+    "escalation":      { "minConfidence": 0.70, "actions": ["show_deescalation_tip"] }
   },
 
   "metricTargets": {
@@ -45,7 +56,9 @@
 
   "drift": {
     "alertIfPriorsShiftBy": 0.20,
-    "windowDays": 14
+    "windowDays": 14,
+    "emitByContext": true,
+    "emitByLabel": true
   },
 
   "labels": {
@@ -59,6 +72,14 @@
     "neutral": "Neutral",
     "safety_concern": "Safety Concern"
   },
+
+  "defaults": {
+    "primaryToneMinNote": "Minimum posterior for selecting a primary tone label.",
+    "noRepeatMs": 90000,
+    "cooldown": { "noRepeatMs": 90000, "perCategoryMs": 60000 }
+  },
+
+  "notes_calibration": "Context Platt scaling + priors → posterior; thresholds applied after normalization.",
 
   "tests": [
     {
@@ -95,6 +116,28 @@
       "text": "I'm scared and don't feel safe right now.",
       "expectPrimary": "safety_concern",
       "minConfidence": 0.70
+    },
+    {
+      "id": "T-006",
+      "context": "safety",
+      "text": "I’m afraid to be here and I need help.",
+      "expectPrimary": "safety_concern",
+      "minConfidence": 0.72
+    },
+    {
+      "id": "T-007",
+      "context": "escalation",
+      "text": "You always do this and I’m done.",
+      "expectPrimary": "angry",
+      "minConfidence": 0.62
+    },
+    {
+      "id": "T-008",
+      "context": "unknown_ctx",
+      "text": "Let’s figure this out tomorrow at 3.",
+      "expectPrimary": "neutral",
+      "minConfidence": 0.35,
+      "notes": "Exercises fallback → general"
     }
   ]
 }

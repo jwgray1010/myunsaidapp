@@ -1,6 +1,6 @@
 {
-  "version": "1.6-negation+",
-  "notes": "Negation signals with Unicode-safe boundaries, dependency-aware scope, double-negation cancellation, polarity flipping, per-hit caps/cooldowns, and locale variants.",
+  "version": "1.6.1-consistent",
+  "notes": "Enable double-negation; fix NOT pattern; add ain't/nope/nah; add conservative context hooks for new families (regulation, crisis, relationship_stage, communication_style, culture). Backward-compatible and test-aligned.",
   "globals": {
     "regexFlags": "iu",
     "normalize": ["NFC","trim","squashSpaces"],
@@ -17,6 +17,7 @@
     "APO": "['’`´]",
     "DONT": "don(?:${APO})?t|do(?:${APO})?nt|doe(?:${APO})?t|dont",
     "CANT": "can(?:${APO})?t|cannot",
+    "AINT": "ain(?:${APO})?t",
     "MODALS": "(?:can|could|should|would|do|does|did|is|are|was|were|have|has|had|will|must|ain)",
     "NEGPRO": "(?:no one|nobody|none|nothing|nowhere)",
     "SCARCITY": "(?:hardly|rarely|barely|scarcely)",
@@ -34,7 +35,7 @@
 
   "operators": {
     "doubleNegation": {
-      "enabled": false,
+      "enabled": true,
       "windowTokens": 8,
       "cancelImpact": true,
       "minIndicators": 2,
@@ -44,7 +45,7 @@
       "enabled": true,
       "windowTokens": 6,
       "flipTargets": ["absolutizing","escalation","criticism","judgment"],
-      "dampenTargets": ["repair","validation","planning"]
+      "dampenTargets": ["repair","validation","planning","regulation"]
     },
     "dependency": {
       "use": true,
@@ -72,13 +73,13 @@
   "indicators": [
     {
       "id": "NEG_SIMPLE_NOT",
-      "pattern": "\\bnot\\b|\\b[nN]${APO}?t\\b",
+      "pattern": "\\bnot\\b",
       "impact": -0.25,
-      "description": "direct negation (not / n't)",
+      "description": "direct negation (not)",
       "scopeTokens": 6,
       "applyTo": ["patterns","triggers"],
       "toneAdjustments": { "alert": -0.05, "caution": -0.02 },
-      "contextAdjustments": { "planning": -0.05, "repair": -0.03 },
+      "contextAdjustments": { "planning": -0.05, "repair": -0.03, "regulation": -0.03 },
       "exceptions": ["not only","not just","not to mention","not because"],
       "perIndicatorCooldownMs": 2500,
       "dependency": { "use": true, "reducedImpactIfNoDep": 0.7, "govPosWhitelist": ["VERB","AUX","ADJ"] }
@@ -87,11 +88,20 @@
       "id": "NEG_MODAL_CONTRACTED",
       "pattern": "\\b${MODALS}${APO}?t\\b",
       "impact": -0.26,
-      "description": "contracted modal negation",
+      "description": "contracted modal negation (isn't, can't, won't, ain't)",
       "scopeTokens": 6,
       "applyTo": ["patterns","triggers"],
       "perIndicatorCooldownMs": 2500,
       "dependency": { "use": true, "reducedImpactIfNoDep": 0.75, "govPosWhitelist": ["VERB","AUX"] }
+    },
+    {
+      "id": "NEG_AINT",
+      "pattern": "\\b${AINT}\\b",
+      "impact": -0.20,
+      "description": "ain’t (colloquial negation)",
+      "scopeTokens": 5,
+      "applyTo": ["patterns","triggers"],
+      "contextAdjustments": { "culture": -0.02 }
     },
     {
       "id": "NEG_CANNOT",
@@ -108,6 +118,7 @@
       "description": "absolute negation",
       "scopeTokens": 6,
       "applyTo": ["patterns","triggers"],
+      "contextAdjustments": { "escalation": -0.01, "relationship_stage": -0.01 },
       "dependency": { "use": true, "reducedImpactIfNoDep": 0.8 }
     },
     {
@@ -117,7 +128,7 @@
       "description": "determinative no",
       "scopeTokens": 5,
       "applyTo": ["patterns","triggers","contexts"],
-      "contextAdjustments": { "planning": -0.05 }
+      "contextAdjustments": { "planning": -0.05, "communication_style": -0.02 }
     },
     {
       "id": "NEG_NONE_PRONOUNS",
@@ -151,7 +162,7 @@
       "description": "absence marker",
       "scopeTokens": 7,
       "applyTo": ["patterns","triggers","contexts"],
-      "contextAdjustments": { "planning": -0.04, "support": -0.03 },
+      "contextAdjustments": { "planning": -0.04, "support": -0.03, "regulation": -0.02 },
       "exceptions": ["without a doubt","without fail"]
     },
     {
@@ -263,7 +274,7 @@
       "description": "refusal/denial",
       "scopeTokens": 7,
       "applyTo": ["patterns","triggers","contexts"],
-      "contextAdjustments": { "boundary": -0.04 },
+      "contextAdjustments": { "boundary": -0.04, "communication_style": -0.02 },
       "exceptions": ["refuse to settle"]
     },
     {
@@ -307,13 +318,30 @@
       "scopeTokens": 5,
       "applyTo": ["patterns"],
       "exceptions": ["united","income","inline","irish","illinois","nonprofit","nonstop"]
+    },
+
+    {
+      "id": "NEG_COLLOQ_NOPE",
+      "pattern": "(?:^|\\W)nope\\b",
+      "impact": -0.12,
+      "description": "colloquial no",
+      "scopeTokens": 4,
+      "applyTo": ["patterns","triggers"]
+    },
+    {
+      "id": "NEG_COLLOQ_NAH",
+      "pattern": "(?:^|\\W)nah\\b",
+      "impact": -0.12,
+      "description": "colloquial no (nah)",
+      "scopeTokens": 4,
+      "applyTo": ["patterns","triggers"]
     }
   ],
 
   "combos": [
     {
       "id": "DOUBLE_NEG_CANCEL",
-      "whenAny": ["NEG_SIMPLE_NOT","NEG_MODAL_CONTRACTED","NEG_NEVER","NEG_NO","NEG_NONE_PRONOUNS","NEG_SCARCITY"],
+      "whenAny": ["NEG_SIMPLE_NOT","NEG_MODAL_CONTRACTED","NEG_NEVER","NEG_NO","NEG_NONE_PRONOUNS","NEG_SCARCITY","NEG_COLLOQ_NOPE","NEG_COLLOQ_NAH"],
       "windowTokens": 8,
       "minHits": 2,
       "effect": { "cancel": true, "explain": "double-negation cancellation" }
@@ -328,8 +356,8 @@
   ],
 
   "routingHints": {
-    "flipPolarityTargets": ["blame","absolutizing","gaslighting","criticism"],
-    "dampenSupportTargets": ["repair","validation","planning","reassurance"]
+    "flipPolarityTargets": ["blame","absolutizing","gaslighting","criticism","escalation"],
+    "dampenSupportTargets": ["repair","validation","planning","reassurance","regulation"]
   },
 
   "tests": [
@@ -339,6 +367,8 @@
     { "text": "Without a doubt, we can do this.", "expect": { "fires": [], "reason": "exception phrase" } },
     { "text": "I hardly ever complain.", "expect": { "fires": ["NEG_SCARCITY"] } },
     { "text": "I think not.", "expect": { "fires": ["NEG_RAISE_THINK_BELIEVE"] } },
-    { "text": "“We can’t go.” (quoted)", "expect": { "firesDampened": true } }
+    { "text": "“We can’t go.” (quoted)", "expect": { "firesDampened": true } },
+    { "text": "Nope, not today.", "expect": { "fires": ["NEG_COLLOQ_NOPE","NEG_SIMPLE_NOT"], "doubleNegCanceled": true } },
+    { "text": "Ain’t happening.", "expect": { "fires": ["NEG_AINT"] } }
   ]
 }

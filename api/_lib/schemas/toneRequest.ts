@@ -139,6 +139,7 @@ export const toneResponseSchema = z.object({
     reason: z.string(),
     confidence: z.number().min(0).max(1),
   })).optional().describe('Improvement suggestions'),
+  categories: z.array(z.string()).optional().describe('Tone pattern categories detected'),
   attachmentInsights: z.array(z.string()).optional().describe('Attachment-specific insights'),
   communicationPatterns: z.array(z.string()).optional().describe('Detected communication patterns'),
   metadata: z.object({

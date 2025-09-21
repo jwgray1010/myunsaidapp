@@ -352,6 +352,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       }),
       analysis: {
         primary_tone: result.primary_tone,     // Raw tone still available in analysis
+        categories: result.categories || [],   // Detected tone pattern categories
         emotions: result.emotions,
         intensity: result.intensity,
         sentiment_score: result.sentiment_score,
