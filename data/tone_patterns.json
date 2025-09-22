@@ -1958,40 +1958,6 @@
       "threshold": 0.94,
       "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
     },
-
-    {
-      "id": "C001",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "regex",
-      "canonical": "i guess",
-      "variants": ["I suppose", "I think so", "probably"],
-      "regex": "\\bi\\s+guess\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C002",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "regex",
-      "canonical": "kind of",
-      "variants": ["sort of", "a little", "somewhat"],
-      "regex": "\\bkind\\s+of\\b",
-      "threshold": 0.78,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C003",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "regex",
-      "canonical": "maybe",
-      "variants": ["possibly", "might be", "could be"],
-      "regex": "\\bmaybe\\b",
-      "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
     {
       "id": "C004",
       "tone": "caution",
@@ -2009,21 +1975,10 @@
       "category": "passive_aggression",
       "matchMode": "regex",
       "canonical": "fine, do what you want",
-      "variants": ["fine, have it your way", "alright, do as you wish", "sure, go ahead"],
-      "regex": "\\bfine,?\\s+do\\s+what\\s+you\\s+want\\b",
+      "variants": ["fine, have it your way", "alright, do as you wish"],
+      "regex": "\\bfine,?\\s+do\\s+what\\s+you\\s+want\\b|\\balright,?\\s+do\\s+as\\s+you\\s+wish\\b",
       "threshold": 0.86,
       "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
-    },
-    {
-      "id": "C006",
-      "tone": "caution",
-      "category": "vague",
-      "matchMode": "regex",
-      "canonical": "not really sure",
-      "variants": ["I’m uncertain", "can’t say", "not exactly sure"],
-      "regex": "\\bnot\\s+really\\s+sure\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
     },
     {
       "id": "C007",
@@ -2070,36 +2025,14 @@
       "styleWeight": { "avoidant": 0.85, "anxious": 0.95, "disorganized": 0.88, "secure": 0.75 }
     },
     {
-      "id": "C011",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "regex",
-      "canonical": "i suppose",
-      "variants": ["I guess so", "I think so", "I believe so"],
-      "regex": "\\bi\\s+suppose\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
       "id": "C012",
       "tone": "caution",
       "category": "passive_aggression",
       "matchMode": "regex",
       "canonical": "if you say so",
-      "variants": ["whatever you say", "if that’s what you think", "sure, if you believe that"],
+      "variants": ["whatever you say", "if that’s what you think"],
       "regex": "\\bif\\s+you\\s+say\\s+so\\b",
       "threshold": 0.83,
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
-    },
-    {
-      "id": "C013",
-      "tone": "caution",
-      "category": "minimizing",
-      "matchMode": "regex",
-      "canonical": "it's fine",
-      "variants": ["it’s okay", "no problem", "don’t worry about it"],
-      "regex": "\\bit['’`]?s\\s+fine\\b",
-      "threshold": 0.80,
       "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
     },
     {
@@ -2112,17 +2045,6 @@
       "regex": "\\byou\\s+could\\s+have\\b",
       "threshold": 0.85,
       "styleWeight": { "avoidant": 0.85, "anxious": 0.95, "disorganized": 0.88, "secure": 0.75 }
-    },
-    {
-      "id": "C015",
-      "tone": "caution",
-      "category": "minimizing",
-      "matchMode": "regex",
-      "canonical": "don't worry about it",
-      "variants": ["forget it", "never mind", "leave it be"],
-      "regex": "\\bdon['’`]?t\\s+worry\\s+about\\s+it\\b",
-      "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.92, "disorganized": 0.88, "secure": 0.78 }
     },
     {
       "id": "C016",
@@ -2191,18 +2113,8 @@
       "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
     },
     {
-      "id": "C022",
-      "tone": "caution",
-      "category": "vague",
-      "matchMode": "hybrid",
-      "canonical": "i'm not sure",
-      "variants": ["i am not sure", "i don’t know", "not certain", "i can’t say"],
-      "regex": "\\bi(?:'m|\\s+am)\\s+not\\s+sure\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
       "id": "C023",
+
       "tone": "caution",
       "category": "passive_aggression",
       "matchMode": "regex",
@@ -2224,17 +2136,6 @@
       "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
     },
     {
-      "id": "C025",
-      "tone": "caution",
-      "category": "minimizing",
-      "matchMode": "hybrid",
-      "canonical": "no big deal",
-      "variants": ["it’s nothing", "not important", "don’t worry about it"],
-      "regex": "\\bno\\s+big\\s+deal\\b",
-      "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
-    },
-    {
       "id": "C026",
       "tone": "caution",
       "category": "defensive_disclaimer",
@@ -2244,17 +2145,6 @@
       "regex": "(?<!not\\s)\\bjust\\s+saying\\b",
       "threshold": 0.84,
       "styleWeight": { "avoidant": 0.88, "anxious": 0.92, "disorganized": 0.88, "secure": 0.75 }
-    },
-    {
-      "id": "C027",
-      "tone": "caution",
-      "category": "minimizing",
-      "matchMode": "hybrid",
-      "canonical": "i'm fine",
-      "variants": ["i am fine", "i’m okay", "i’m alright", "no problem"],
-      "regex": "\\bi(?:'m|\\s+am)\\s+fine\\b",
-      "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
     },
     {
       "id": "C028",
@@ -2342,50 +2232,7 @@
       "regex": "\\bi\\s+guess\\s+so\\b",
       "threshold": 0.80,
       "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C036",
-      "tone": "caution",
-      "category": "defensive_disclaimer",
-      "matchMode": "hybrid",
-      "canonical": "just trying to help",
-      "variants": ["only trying to help", "just wanted to help", "trying to be helpful"],
-      "regex": "\\bjust\\s+trying\\s+to\\s+help\\b",
-      "threshold": 0.84,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.92, "disorganized": 0.88, "secure": 0.75 }
-    },
-    {
-      "id": "C037",
-      "tone": "caution",
-      "category": "minimizing",
-      "matchMode": "hybrid",
-      "canonical": "it doesn't matter",
-      "variants": ["it does not matter", "no big deal", "not important"],
-      "regex": "\\bit\\s+doesn'?t\\s+matter\\b|\\bit\\s+does\\s+not\\s+matter\\b",
-      "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
-    },
-    {
-      "id": "C038",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "regex",
-      "canonical": "i suppose you're right",
-      "variants": ["i guess you’re right", "you might be right", "i think you’re right"],
-      "regex": "\\bi\\s+suppose\\s+you'?re\\s+right\\b",
-      "threshold": 0.81,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
-    },
-    {
-      "id": "C039",
-      "tone": "caution",
-      "category": "hedging",
-      "matchMode": "regex",
-      "canonical": "well, maybe",
-      "variants": ["perhaps", "possibly", "could be"],
-      "regex": "\\bwell,?\\s+maybe\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
     }
   ]
 }
+    

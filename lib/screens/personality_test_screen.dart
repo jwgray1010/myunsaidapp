@@ -62,6 +62,12 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
     }
   }
 
+  Color _getContrastingTextColor(Color backgroundColor) {
+    // Calculate luminance to determine if we need light or dark text
+    final luminance = backgroundColor.computeLuminance();
+    return luminance > 0.5 ? Colors.black87 : Colors.white;
+  }
+
   PersonalityQuestion get currentQuestion => _allQuestions[widget.currentIndex];
 
   double get progress => (widget.currentIndex + 1) / _allQuestions.length;
@@ -277,365 +283,428 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
     final questionTypeColor = _getQuestionTypeColor(question);
     // (question type label suppressed intentionally)
 
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(gradient: AppTheme.primaryGradient),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header with progress
-              Container(
-                padding: const EdgeInsets.all(AppTheme.spaceLG),
-                child: Column(
-                  children: [
-                    // Progress bar
-                    Container(
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(
-                          AppTheme.radiusFull,
+    // Theme override specifically for personality test to fix highlighting issues
+    return Theme(
+      data: theme.copyWith(
+        // Override card theme to prevent conflicts with answer highlighting
+        cardTheme: theme.cardTheme.copyWith(
+          color: Colors.white,
+          surfaceTintColor: Colors.transparent,
+        ),
+        // Override radio theme for better visibility
+        radioTheme: RadioThemeData(
+          fillColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return questionTypeColor;
+            }
+            return Colors.grey.shade400;
+          }),
+        ),
+      ),
+      child: Scaffold(
+        body: Container(
+          decoration: BoxDecoration(gradient: AppTheme.primaryGradient),
+          child: SafeArea(
+            child: Column(
+              children: [
+                // Header with progress
+                Container(
+                  padding: const EdgeInsets.all(AppTheme.spaceLG),
+                  child: Column(
+                    children: [
+                      // Progress bar
+                      Container(
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusFull,
+                          ),
+                        ),
+                        child: FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: progress,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white,
+                                  Colors.white.withValues(alpha: 0.8),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusFull,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  blurRadius: 8,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                      child: FractionallySizedBox(
-                        alignment: Alignment.centerLeft,
-                        widthFactor: progress,
+
+                      const SizedBox(height: AppTheme.spaceMD),
+
+                      // Question counter and type
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Question ${widget.currentIndex + 1} of ${_allQuestions.length}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          // Removed type label badge
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.spaceLG,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Question card
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(AppTheme.spaceLG),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusLG,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: questionTypeColor.withValues(alpha: 0.3),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const SizedBox(height: 4),
+
+                              // Question text
+                              Text(
+                                question.question,
+                                style: TextStyle(
+                                  color: Colors.black87,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.2,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                      offset: const Offset(0, 1),
+                                      blurRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+
+                              // Special instructions for attention check
+                              if (question.isAttentionCheck) ...[
+                                const SizedBox(height: AppTheme.spaceMD),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: Colors.orange.withValues(
+                                        alpha: 0.3,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.info_outline,
+                                        color: Colors.orange.shade700,
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Please read carefully and follow the instruction',
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                color: Colors.orange.shade700,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: AppTheme.spaceLG),
+
+                        // Answer options — RadioListTile version (single-select)
+                        Column(
+                          children: question.options.asMap().entries.map((
+                            entry,
+                          ) {
+                            final idx = entry.key;
+                            final option = entry.value;
+                            final isSelected = _selectedIndex == idx;
+
+                            return Card(
+                              margin: const EdgeInsets.only(
+                                bottom: AppTheme.spaceMD,
+                              ),
+                              elevation: isSelected ? 1.5 : 0,
+                              color: isSelected
+                                  ? null
+                                  : null, // Allow RadioListTile tileColor to show
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusLG,
+                                ),
+                                side: BorderSide(
+                                  color: isSelected
+                                      ? questionTypeColor
+                                      : Colors.grey.withValues(alpha: 0.30),
+                                  width: isSelected ? 2 : 1,
+                                ),
+                              ),
+                              child: Theme(
+                                // Override theme specifically for RadioListTile to ensure proper text visibility
+                                data: Theme.of(context).copyWith(
+                                  // Override radio button theme
+                                  radioTheme: RadioThemeData(
+                                    fillColor: WidgetStateProperty.resolveWith((
+                                      states,
+                                    ) {
+                                      if (states.contains(
+                                        WidgetState.selected,
+                                      )) {
+                                        return questionTypeColor;
+                                      }
+                                      return Colors.grey.shade400;
+                                    }),
+                                  ),
+                                  // Override list tile theme for better text visibility
+                                  listTileTheme: ListTileThemeData(
+                                    textColor: isSelected
+                                        ? _getContrastingTextColor(
+                                            questionTypeColor,
+                                          )
+                                        : Colors.black87,
+                                    selectedColor: _getContrastingTextColor(
+                                      questionTypeColor,
+                                    ),
+                                  ),
+                                ),
+                                child: RadioListTile<int>(
+                                  value: idx, // bind by index
+                                  groupValue:
+                                      _selectedIndex, // current selection
+                                  onChanged: (i) => _selectByIndex(i!),
+                                  title: Text(
+                                    option.text,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          // Use contrasting color based on background
+                                          color: isSelected
+                                              ? _getContrastingTextColor(
+                                                  questionTypeColor,
+                                                )
+                                              : Colors.black87,
+                                          height: 1.15,
+                                        ),
+                                  ),
+                                  activeColor: questionTypeColor,
+                                  selected: isSelected,
+                                  tileColor: isSelected
+                                      ? questionTypeColor.withValues(
+                                          alpha: 0.08,
+                                        )
+                                      : Colors
+                                            .white, // Explicit white background for unselected
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      AppTheme.radiusLG,
+                                    ),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: AppTheme.spaceLG,
+                                    vertical: AppTheme.spaceMD,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+
+                        // Reduce excessive bottom spacing to prevent overflow on smaller devices
+                        const SizedBox(height: AppTheme.spaceLG),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Navigation buttons
+                // Navigation footer wrapped in SafeArea padding to avoid pixel overflow
+                Container(
+                  padding: EdgeInsets.only(
+                    left: AppTheme.spaceLG,
+                    right: AppTheme.spaceLG,
+                    top: AppTheme.spaceLG,
+                    bottom:
+                        AppTheme.spaceLG +
+                        MediaQuery.of(context).padding.bottom,
+                  ),
+                  child: Row(
+                    children: [
+                      // Previous button
+                      if (widget.currentIndex > 0)
+                        Expanded(
+                          child: Container(
+                            height: 56,
+                            margin: const EdgeInsets.only(
+                              right: AppTheme.spaceMD,
+                            ),
+                            child: OutlinedButton.icon(
+                              onPressed: _goPrevious,
+                              icon: const Icon(
+                                Icons.arrow_back_ios,
+                                color: Colors.white,
+                                size: 18,
+                                semanticLabel: 'Previous',
+                              ),
+                              label: Text(
+                                'Previous',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  width: 2,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppTheme.radiusLG,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      // Next button
+                      Expanded(
+                        flex: widget.currentIndex > 0 ? 1 : 1,
                         child: Container(
+                          height: 56,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
                                 Colors.white,
-                                Colors.white.withValues(alpha: 0.8),
+                                Colors.white.withValues(alpha: 0.9),
                               ],
                             ),
                             borderRadius: BorderRadius.circular(
-                              AppTheme.radiusFull,
+                              AppTheme.radiusLG,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                blurRadius: 8,
-                                spreadRadius: 1,
+                                color: Colors.black.withValues(alpha: 0.2),
+                                offset: const Offset(0, 4),
+                                blurRadius: 12,
+                                spreadRadius: 0,
                               ),
                             ],
                           ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: AppTheme.spaceMD),
-
-                    // Question counter and type
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Question ${widget.currentIndex + 1} of ${_allQuestions.length}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        // Removed type label badge
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // Content
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppTheme.spaceLG,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Question card
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(AppTheme.spaceLG),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(
-                            AppTheme.radiusLG,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: questionTypeColor.withValues(alpha: 0.3),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            const SizedBox(height: 4),
-
-                            // Question text
-                            Text(
-                              question.question,
-                              style: TextStyle(
-                                color: Colors.black87,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                height: 1.2,
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.white.withValues(alpha: 0.5),
-                                    offset: const Offset(0, 1),
-                                    blurRadius: 2,
-                                  ),
-                                ],
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: _goNext,
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusLG,
                               ),
-                              textAlign: TextAlign.center,
-                            ),
-
-                            // Special instructions for attention check
-                            if (question.isAttentionCheck) ...[
-                              const SizedBox(height: AppTheme.spaceMD),
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Colors.orange.withValues(alpha: 0.3),
-                                  ),
-                                ),
+                              child: Center(
                                 child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(
-                                      Icons.info_outline,
-                                      color: Colors.orange.shade700,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
+                                    Flexible(
                                       child: Text(
-                                        'Please read carefully and follow the instruction',
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                              color: Colors.orange.shade700,
-                                              fontWeight: FontWeight.w500,
-                                            ),
+                                        widget.currentIndex <
+                                                _allQuestions.length - 1
+                                            ? 'Next'
+                                            : 'Complete Assessment',
+                                        style: theme.textTheme.bodyMedium?.copyWith(
+                                          color: theme.colorScheme.primary,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize:
+                                              widget.currentIndex <
+                                                  _allQuestions.length - 1
+                                              ? 16
+                                              : 14, // Smaller font for longer text
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
                                       ),
+                                    ),
+                                    const SizedBox(width: AppTheme.spaceSM),
+                                    Icon(
+                                      widget.currentIndex <
+                                              _allQuestions.length - 1
+                                          ? Icons.arrow_forward_ios
+                                          : Icons.psychology,
+                                      color: theme.colorScheme.primary,
+                                      size: 20,
+                                      semanticLabel:
+                                          widget.currentIndex <
+                                              _allQuestions.length - 1
+                                          ? 'Next'
+                                          : 'Complete',
                                     ),
                                   ],
                                 ),
                               ),
-                            ],
-                          ],
+                            ),
+                          ),
                         ),
                       ),
-
-                      const SizedBox(height: AppTheme.spaceLG),
-
-                      // Answer options — RadioListTile version (single-select)
-                      Column(
-                        children: question.options.asMap().entries.map((entry) {
-                          final idx = entry.key;
-                          final option = entry.value;
-                          final isSelected = _selectedIndex == idx;
-
-                          return Card(
-                            margin: const EdgeInsets.only(
-                              bottom: AppTheme.spaceMD,
-                            ),
-                            elevation: isSelected ? 1.5 : 0,
-                            color: isSelected
-                                ? null
-                                : null, // Allow RadioListTile tileColor to show
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                AppTheme.radiusLG,
-                              ),
-                              side: BorderSide(
-                                color: isSelected
-                                    ? questionTypeColor
-                                    : Colors.grey.withValues(alpha: 0.30),
-                                width: isSelected ? 2 : 1,
-                              ),
-                            ),
-                            child: RadioListTile<int>(
-                              value: idx, // bind by index
-                              groupValue: _selectedIndex, // current selection
-                              onChanged: (i) => _selectByIndex(i!),
-                              title: Text(
-                                option.text,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      fontWeight: isSelected
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                      color: isSelected
-                                          ? questionTypeColor
-                                          : Colors.black87,
-                                      height: 1.15,
-                                    ),
-                              ),
-                              activeColor: questionTypeColor,
-                              selected: isSelected,
-                              tileColor: isSelected
-                                  ? questionTypeColor.withValues(alpha: 0.08)
-                                  : Colors
-                                        .white, // Explicit white background for unselected
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppTheme.radiusLG,
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: AppTheme.spaceLG,
-                                vertical: AppTheme.spaceMD,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-
-                      // Reduce excessive bottom spacing to prevent overflow on smaller devices
-                      const SizedBox(height: AppTheme.spaceLG),
                     ],
                   ),
                 ),
-              ),
-
-              // Navigation buttons
-              // Navigation footer wrapped in SafeArea padding to avoid pixel overflow
-              Container(
-                padding: EdgeInsets.only(
-                  left: AppTheme.spaceLG,
-                  right: AppTheme.spaceLG,
-                  top: AppTheme.spaceLG,
-                  bottom:
-                      AppTheme.spaceLG + MediaQuery.of(context).padding.bottom,
-                ),
-                child: Row(
-                  children: [
-                    // Previous button
-                    if (widget.currentIndex > 0)
-                      Expanded(
-                        child: Container(
-                          height: 56,
-                          margin: const EdgeInsets.only(
-                            right: AppTheme.spaceMD,
-                          ),
-                          child: OutlinedButton.icon(
-                            onPressed: _goPrevious,
-                            icon: const Icon(
-                              Icons.arrow_back_ios,
-                              color: Colors.white,
-                              size: 18,
-                              semanticLabel: 'Previous',
-                            ),
-                            label: Text(
-                              'Previous',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                width: 2,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppTheme.radiusLG,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                    // Next button
-                    Expanded(
-                      flex: widget.currentIndex > 0 ? 1 : 1,
-                      child: Container(
-                        height: 56,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.white,
-                              Colors.white.withValues(alpha: 0.9),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(
-                            AppTheme.radiusLG,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              offset: const Offset(0, 4),
-                              blurRadius: 12,
-                              spreadRadius: 0,
-                            ),
-                          ],
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: _goNext,
-                            borderRadius: BorderRadius.circular(
-                              AppTheme.radiusLG,
-                            ),
-                            child: Center(
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      widget.currentIndex <
-                                              _allQuestions.length - 1
-                                          ? 'Next'
-                                          : 'Complete Assessment',
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        color: theme.colorScheme.primary,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize:
-                                            widget.currentIndex <
-                                                _allQuestions.length - 1
-                                            ? 16
-                                            : 14, // Smaller font for longer text
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1,
-                                    ),
-                                  ),
-                                  const SizedBox(width: AppTheme.spaceSM),
-                                  Icon(
-                                    widget.currentIndex <
-                                            _allQuestions.length - 1
-                                        ? Icons.arrow_forward_ios
-                                        : Icons.psychology,
-                                    color: theme.colorScheme.primary,
-                                    size: 20,
-                                    semanticLabel:
-                                        widget.currentIndex <
-                                            _allQuestions.length - 1
-                                        ? 'Next'
-                                        : 'Complete',
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+              ],
+            ), // Close Column
+          ), // Close SafeArea
+        ), // Close Container (body)
+      ), // Close Scaffold
+    ); // Close Theme (return statement)
   }
 
   /// Entry point to start the modern assessment

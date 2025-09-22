@@ -68,10 +68,13 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
   const startTime = Date.now();
   const userId = getUserId(req);
   
+  // ✅ Extract context from meta if not at top level (iOS coordinator pattern)
+  const contextLabel = data.context || data.meta?.context || 'general';
+  
   logger.info('Processing advanced suggestions request', { 
     userId,
     textLength: data.text.length,
-    context: data.context,
+    context: contextLabel,
     toneOverride: data.toneOverride,
     attachment: data.attachmentStyle,
     clientSeq: data.client_seq || data.clientSeq
@@ -161,7 +164,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       // Run advanced tone analysis directly using the service for full meta-classifier benefits
       try {
         const result = await toneAnalysisService.analyzeAdvancedTone(data.text, {
-          context: data.context || 'general',
+          context: contextLabel, // Use extracted context (could be from meta.context)
           attachmentStyle: attachmentEstimate.primary || 'secure',
           includeAttachmentInsights: true,
           deepAnalysis: true,
@@ -220,7 +223,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       // 2) Generate suggestions -> returns analysis with flags + context
       suggestionAnalysis = await suggestionsService.generateAdvancedSuggestions(
         data.text,
-        data.context || 'general',
+        contextLabel, // Use extracted context (could be from meta.context)
         {
           id: userId,
           attachment: data.attachmentStyle || attachmentEstimate.primary || 'secure',

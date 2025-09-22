@@ -7,6 +7,8 @@
  *   GET /health?check=ready   -> readiness (dependencies + data validated)
  *   GET /health?check=status  -> detailed report (for dashboards/alerts)
  *   GET /health               -> default status check
+ * 
+ * Includes NLI model status monitoring for therapy advice fit gate.
  */
 
 import { VercelRequest, VercelResponse } from '@vercel/node';
@@ -18,6 +20,7 @@ import { compose, withCors, withMethods, withErrorHandling, withLogging } from '
 import { success, error } from '../_lib/http';
 import { env } from '../_lib/env';
 import { logger } from '../_lib/logger';
+import { nliLocal } from '../_lib/services/nliLocal';
 
 // ---------- Configuration ----------
 const bootTime = Date.now();
@@ -193,6 +196,20 @@ async function checkMemoryAndEventLoop(): Promise<{
   };
 }
 
+async function checkNliLocal(): Promise<{
+  ready: boolean;
+  disabled: boolean;
+  modelPath: string | null;
+  environment: string;
+}> {
+  return {
+    ready: nliLocal.ready,
+    disabled: process.env.DISABLE_NLI === '1',
+    modelPath: process.env.NLI_ONNX_PATH || null,
+    environment: process.env.NODE_ENV || 'development'
+  };
+}
+
 // ---------- Route Handlers ----------
 
 async function handleLiveness(): Promise<any> {
@@ -212,7 +229,8 @@ async function handleReadiness(): Promise<any> {
     withTimeout('firebase', checkFirebaseConnection),
     withTimeout('openai', checkOpenAI),
     withTimeout('dns', checkDns),
-    withTimeout('resources', checkMemoryAndEventLoop)
+    withTimeout('resources', checkMemoryAndEventLoop),
+    withTimeout('nli', checkNliLocal)
   ]);
 
   const { ok, failing } = summarize(checks);
@@ -233,7 +251,8 @@ async function handleDetailedStatus(): Promise<any> {
     withTimeout('firebase', checkFirebaseConnection),
     withTimeout('openai', checkOpenAI),
     withTimeout('dns', checkDns),
-    withTimeout('resources', checkMemoryAndEventLoop)
+    withTimeout('resources', checkMemoryAndEventLoop),
+    withTimeout('nli', checkNliLocal)
   ]);
 
   const { ok, failing } = summarize(checks);

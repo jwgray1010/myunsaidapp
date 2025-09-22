@@ -79,6 +79,15 @@
     "cooldown": { "noRepeatMs": 90000, "perCategoryMs": 60000 }
   },
 
+  "nli_thresholds": {
+    "default": { "entail_min": 0.55, "contra_max": 0.20 },
+    "conflict": { "entail_min": 0.60, "contra_max": 0.18 },
+    "romantic": { "entail_min": 0.53, "contra_max": 0.22 },
+    "repair": { "entail_min": 0.57, "contra_max": 0.19 },
+    "planning": { "entail_min": 0.52, "contra_max": 0.23 },
+    "general": { "entail_min": 0.55, "contra_max": 0.20 }
+  },
+
   "notes_calibration": "Context Platt scaling + priors → posterior; thresholds applied after normalization.",
 
   "tests": [

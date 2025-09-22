@@ -30,6 +30,18 @@ export const metaSchema = z.object({
   requestId: z.string().optional().describe('Unique request identifier'),
   relationshipStage: z.string().optional().describe('Current relationship stage'),
   conflictLevel: z.enum(['low', 'medium', 'high']).optional().describe('Current conflict level'),
+  context: z.string().optional().describe('Detected conversation context from tone analysis (e.g., conflict, repair, planning)'),
+  // iOS Coordinator meta fields
+  source: z.string().optional().describe('Request source (e.g., keyboard_tone_button, keyboard_manual)'),
+  request_type: z.string().optional().describe('Type of request (e.g., suggestion)'),
+  emotional_state: z.string().optional().describe('User emotional state'),
+  communication_style: z.string().optional().describe('User communication style'),
+  emotional_bucket: z.string().optional().describe('User emotional bucket'),
+  personality_type: z.string().optional().describe('User personality type'),
+  new_user: z.boolean().optional().describe('Whether user is new'),
+  attachment_provisional: z.boolean().optional().describe('Whether attachment style is provisional'),
+  learning_days_remaining: z.number().optional().describe('Days remaining in learning period'),
+  attachment_source: z.string().optional().describe('Source of attachment style determination'),
 }).passthrough().describe('Optional metadata for tracing and UX decisions');
 
 // Main SuggestionRequest schema (matching JSON schema structure)
@@ -48,7 +60,13 @@ export const suggestionRequestSchema = z.object({
   client_seq: z.number().optional().describe('Client sequence number for last-writer-wins'),
   clientSeq: z.number().optional().describe('Alternative client sequence number field'),
   requestId: z.string().optional().describe('Unique request identifier for tracing'),
-});
+  // iOS Coordinator fields
+  userId: z.string().optional().describe('User identifier from iOS coordinator'),
+  userEmail: z.union([z.string().email(), z.null()]).optional().describe('User email from iOS coordinator'),
+  maxSuggestions: z.number().min(1).max(10).optional().describe('Maximum number of suggestions to return'),
+  conversationHistory: z.array(z.any()).optional().describe('Conversation history from iOS coordinator'),
+  user_profile: z.record(z.any()).optional().describe('User profile data from iOS coordinator'),
+}).passthrough().describe('Request schema for generating therapy advice and communication guidance');
 
 export type SuggestionRequest = z.infer<typeof suggestionRequestSchema>;
 

@@ -702,7 +702,7 @@ final class ToneSuggestionCoordinator {
             "meta": [
                 "source": "keyboard_tone_button",
                 "request_type": "suggestion",
-                "context": "general",
+                "context": "general", // Default, will be overridden if tone analysis available
                 "timestamp": isoTimestamp()
             ]
         ]
@@ -716,6 +716,19 @@ final class ToneSuggestionCoordinator {
             
             // Use stored analysis instead of letting API re-analyze
             context["toneAnalysis"] = toneData
+            
+            // ✅ Extract detected context from tone analysis and use it instead of "general"
+            if let detectedContext = toneData["context"] as? String, !detectedContext.isEmpty {
+                context["meta"] = [
+                    "source": "keyboard_tone_button",
+                    "request_type": "suggestion",
+                    "context": detectedContext, // Use detected context for NLI
+                    "timestamp": isoTimestamp()
+                ]
+                #if DEBUG
+                throttledLog("🎯 Using detected context: \(detectedContext)", category: "suggestions")
+                #endif
+            }
             
             #if DEBUG
             throttledLog("🎯 REUSING stored tone analysis - avoiding redundant API call", category: "suggestions")
@@ -779,10 +792,26 @@ final class ToneSuggestionCoordinator {
             "meta": [
                 "source": "keyboard_manual",
                 "request_type": "suggestion",
-                "context": "general",
+                "context": "general", // Default, will be overridden if tone analysis available
                 "timestamp": isoTimestamp()
             ]
         ]
+        
+        // ✅ Check if we have recent tone analysis and extract detected context
+        if let storedAnalysis = lastToneAnalysis,
+           let toneData = storedAnalysis["toneAnalysis"] as? [String: Any],
+           let detectedContext = toneData["context"] as? String, !detectedContext.isEmpty {
+            context["meta"] = [
+                "source": "keyboard_manual",
+                "request_type": "suggestion",
+                "context": detectedContext, // Use detected context for NLI
+                "timestamp": isoTimestamp()
+            ]
+            #if DEBUG
+            throttledLog("🎯 Using detected context for manual suggestion: \(detectedContext)", category: "suggestions")
+            #endif
+        }
+        
         context.merge(personalityPayload()) { _, new in new }
         
         callSuggestionsAPI(context: context, usingSnapshot: textToAnalyze) { [weak self] suggestion in

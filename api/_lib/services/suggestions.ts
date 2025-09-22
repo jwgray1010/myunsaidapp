@@ -37,6 +37,7 @@ import type { ToneResponse } from '../schemas/toneRequest';
 import { adjustToneByAttachment } from './utils/attachmentToneAdjust';
 import { matchSemanticBackbone, applySemanticBias, type SemanticBackboneResult } from './utils/semanticBackbone';
 import { isContextAppropriate, logContextFilter, getContextLinkBonus, type ContextScores } from './contextAnalysis';
+import { nliLocal, hypothesisForAdvice, type FitResult } from './nliLocal';
 
 // ---- weight-mod fallback resolver (exact → alias → family → general → code_default)
 const DISABLE_WEIGHT_FALLBACKS = process.env.DISABLE_WEIGHT_FALLBACKS === '1';
@@ -1131,6 +1132,11 @@ class SuggestionsService {
     this.orchestrator = new AnalysisOrchestrator(this.mlAnalyzer, dataLoader);
     this.adviceEngine = new AdviceEngine(dataLoader);
     
+    // Initialize NLI verifier for advice-message fit checking
+    nliLocal.init(process.env.NLI_ONNX_PATH).catch(() => {
+      // Silently fail - nliLocal.ready will be false
+    });
+    
     // Initialize with comprehensive JSON validation
     this.initializeWithDataValidation();
   }
@@ -1408,6 +1414,52 @@ class SuggestionsService {
     return appropriate;
   }
 
+  /**
+   * Central NLI Advice-Message Fit Gate
+   * Checks entailment between user message and therapy advice hypothesis
+   */
+  private async nliAdviceFit(text: string, advice: any, ctx: string): Promise<FitResult> {
+    if (!nliLocal.ready) {
+      return { ok: true, entail: 0, contra: 0, reason: 'nli_disabled' };
+    }
+
+    try {
+      // Get context-specific thresholds
+      const evaluationTones = dataLoader.get('evaluationTones') || {};
+      const nliThresholds = evaluationTones.nli_thresholds || {};
+      const contextThresholds = nliThresholds[ctx] || nliThresholds.default || {
+        entail_min: 0.55,
+        contra_max: 0.20
+      };
+
+      const { entail_min, contra_max } = contextThresholds;
+      
+      // Generate hypothesis for the advice
+      const hypothesis = hypothesisForAdvice(advice);
+      
+      // Check entailment
+      const { entail, contra } = await nliLocal.score(text, hypothesis);
+      
+      // Determine if advice fits
+      const ok = entail >= entail_min && contra <= contra_max;
+      
+      return { 
+        ok, 
+        entail, 
+        contra, 
+        reason: ok ? 'nli_pass' : 'nli_fail' 
+      };
+    } catch (error) {
+      logger.warn('NLI advice fit check failed', { 
+        error: error instanceof Error ? error.message : String(error),
+        adviceId: advice?.id 
+      });
+      
+      // Fail open - allow advice if NLI check fails
+      return { ok: true, entail: 0, contra: 0, reason: 'nli_error' };
+    }
+  }
+
   private isSafeForAlertContext(suggestion: any): boolean {
     // Additional safety checks for high-alert contexts
     if (!suggestion.advice) return false;
@@ -1619,9 +1671,32 @@ class SuggestionsService {
     const safePool = applyContraindications(pool, analysis.flags);
     logger.info('Contraindications applied', { safePoolSize: safePool.length, originalPoolSize: pool.length });
 
+    // 3.5) NLI Advice–Message Fit Gate
+    const nliChecked: any[] = [];
+    for (const it of safePool) {
+      const fit = await this.nliAdviceFit(text, it, contextLabel);
+      if (fit.ok) { 
+        (it as any).__nli = fit; 
+        nliChecked.push(it); 
+      } else {
+        logger.info('NLI gate rejected advice', { 
+          id: it.id, 
+          entail: fit.entail,
+          contra: fit.contra,
+          reason: fit.reason,
+          ctx: contextLabel 
+        });
+      }
+    }
+    logger.info('NLI fit gate applied', { 
+      nliCheckedSize: nliChecked.length, 
+      safePoolSize: safePool.length,
+      nliReady: nliLocal.ready 
+    });
+
     // 4) Apply comprehensive guardrails and profanity filtering
-    const guardedPool = this.applyAdvancedGuardrails(safePool, text, analysis);
-    logger.info('Advanced guardrails applied', { guardedPoolSize: guardedPool.length, safePoolSize: safePool.length });
+    const guardedPool = this.applyAdvancedGuardrails(nliChecked, text, analysis);
+    logger.info('Advanced guardrails applied', { guardedPoolSize: guardedPool.length, nliCheckedSize: nliChecked.length });
 
     // 5) Attachment personalization
     const personalized = applyAttachmentOverrides(guardedPool, attachmentStyle);
@@ -1709,18 +1784,20 @@ class SuggestionsService {
     );
 
     // 10) Assemble response (no fallbacks)
-    const finalSuggestions = finalPicked.map(({ advice, categories, ltrScore, id, __calib }) => ({
+    const finalSuggestions = finalPicked.map(({ advice, categories, ltrScore, id, __calib, __nli }) => ({
       id,
       text: advice, // Direct therapy advice text from therapy_advice.json
       categories,
       type: 'advice' as const, // This is therapy advice, not a rewrite
       confidence: __calib ?? ltrScore ?? 0.5,
-      reason: 'Therapeutic advice based on tone analysis and attachment style',
+      reason: 'Tone+context+attachment (NLI if enabled)',
       category: 'emotional' as const, // Match schema enum
       priority: 1,
       context_specific: true,
       attachment_informed: true,
-      ltrScore
+      ltrScore,
+      // Include NLI trace in dev responses only
+      ...(process.env.NODE_ENV !== 'production' ? { nli: __nli } : {})
     }));
 
     // Cache the final suggestions for future use
