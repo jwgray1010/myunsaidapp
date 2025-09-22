@@ -8,7 +8,17 @@
  */
 
 import { logger } from '../logger';
-import { createHash } from 'crypto';
+
+// Safe crypto import for serverless environments
+let createHash: any;
+try {
+  createHash = require('crypto').createHash;
+} catch (error) {
+  console.warn('[nli] Crypto module not available, using fallback hashing');
+  createHash = (algorithm: string) => ({
+    update: (data: any) => ({ digest: () => Math.random().toString(36).substring(2, 10) })
+  });
+}
 
 // Environment flag to disable NLI
 const NLI_DISABLED = process.env.DISABLE_NLI === '1';
