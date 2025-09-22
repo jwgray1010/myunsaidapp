@@ -1148,7 +1148,7 @@ final class ToneSuggestionCoordinator {
                 // Debug logging before starting the request
                 #if DEBUG
                 print("🌐 \(req.httpMethod ?? "POST") \(req.url!.absoluteString)")
-                print("🌐 Headers: \(redactSensitiveHeaders(req.allHTTPHeaderFields))")
+                print("🌐 Headers: \(self.redactSensitiveHeaders(req.allHTTPHeaderFields))")
                 if let body = req.httpBody { 
                     print("🌐 Body: \(String(data: body, encoding: .utf8) ?? "<non-utf8>")")
                 }
@@ -2058,7 +2058,7 @@ extension ToneSuggestionCoordinator {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        print("🌐 DEBUG: Request headers: \(redactSensitiveHeaders(request.allHTTPHeaderFields))")
+        print("🌐 DEBUG: Request headers: \(self.redactSensitiveHeaders(request.allHTTPHeaderFields))")
         print("🌐 DEBUG: Request body: \(String(data: request.httpBody ?? Data(), encoding: .utf8) ?? "nil")")
 
         #if DEBUG
