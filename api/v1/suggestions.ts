@@ -2,7 +2,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { withCors, withMethods, withValidation, withErrorHandling, withLogging, withResponseNormalization } from '../_lib/wrappers';
 import { suggestionsRateLimit } from '../_lib/rateLimit';
-import { suggestionRequestSchema } from '../_lib/schemas/suggestionRequest';
+import { suggestionRequestSchema, suggestionResponseSchema } from '../_lib/schemas/suggestionRequest';
 import { normalizeSuggestionResponse } from '../_lib/schemas/normalize';
 import { suggestionsService } from '../_lib/services/suggestions';
 import { dataLoader } from '../_lib/services/dataLoader';
@@ -29,23 +29,39 @@ function ensureAtLeastOneSuggestion(items: any[], originalWasEmpty: boolean = fa
   // Log this critical situation
   console.error('CRITICAL FALLBACK: Main suggestions service completely failed to return content');
   
-  // Absolute emergency fallbacks - minimal, non-therapeutic generic advice
+  // Absolute emergency fallbacks - normalized format matching main response structure
   const emergencyFallbacks = [
     {
       id: 'critical-emergency-1',
-      advice: 'System temporarily unavailable. Please try again in a moment.',
-      category: 'system',
-      triggerTone: 'neutral',
-      contexts: ['general'],
-      ltrScore: 0.05, // Extremely low score
+      text: 'System temporarily unavailable. Please try again in a moment.',
+      advice: 'System temporarily unavailable. Please try again in a moment.', // Alias for backward compatibility
+      type: 'advice',
+      category: 'emotional', // ✅ Valid schema enum value
+      categories: ['emotional'],
+      confidence: 0.05, // Extremely low score
+      priority: 999, // Lowest priority
+      reason: 'Critical system fallback - main suggestions service failed',
+      context_specific: false,
+      attachment_informed: false,
+      triggerTone: 'neutral', // Legacy field
+      contexts: ['general'], // Legacy field
+      ltrScore: 0.05, // Legacy field
     },
     {
       id: 'critical-emergency-2', 
-      advice: 'Unable to provide suggestions right now. Please check your connection.',
-      category: 'system',
-      triggerTone: 'neutral',
-      contexts: ['general'],
-      ltrScore: 0.05,
+      text: 'Unable to provide suggestions right now. Please check your connection.',
+      advice: 'Unable to provide suggestions right now. Please check your connection.', // Alias for backward compatibility
+      type: 'advice',
+      category: 'emotional', // ✅ Valid schema enum value
+      categories: ['emotional'],
+      confidence: 0.05,
+      priority: 999, // Lowest priority
+      reason: 'Critical system fallback - main suggestions service failed',
+      context_specific: false,
+      attachment_informed: false,
+      triggerTone: 'neutral', // Legacy field
+      contexts: ['general'], // Legacy field
+      ltrScore: 0.05, // Legacy field
     }
   ];
   
@@ -425,11 +441,11 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       response.suggestions = emergencyFallbacks.map((s: any, index: number) => ({
         id: s.id ?? `critical-emergency-${index + 1}`,
         text: s.advice ?? s.text,
-        type: 'system_message', // Clearly mark as non-therapeutic
+        type: 'advice', // ✅ Valid schema enum value instead of 'system_message'
         confidence: 0.05, // Extremely low confidence
         reason: 'Critical system fallback - main suggestions service failed',
-        category: 'system',
-        categories: ['system'],
+        category: 'emotional', // ✅ Valid schema enum value instead of 'system'
+        categories: ['emotional'], // ✅ Valid schema enum value
         priority: 999, // Lowest priority
         context_specific: false,
         attachment_informed: false
@@ -461,15 +477,16 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       });
       
       // This should never happen if emergency fallback worked correctly
+      // Use normalized structure matching main response format
       response.suggestions = [{
         id: 'critical-fallback-1',
         text: 'System temporarily unavailable. Please try again.',
-        type: 'advice',
-        confidence: 0.1,
+        type: 'advice', // ✅ Valid schema enum value
+        confidence: 0.05,
         reason: 'Critical system fallback',
-        category: 'emotional',
-        categories: ['emotional'],
-        priority: 1,
+        category: 'emotional', // ✅ Valid schema enum value
+        categories: ['emotional'], // ✅ Valid schema enum value
+        priority: 999, // Lowest priority
         context_specific: false,
         attachment_informed: false
       }];
@@ -499,7 +516,32 @@ const wrappedHandler = withErrorHandling(
     withCors(
       withMethods(['POST'], 
         withValidation(suggestionRequestSchema, 
-          withResponseNormalization(normalizeSuggestionResponse, responseHandler)
+          withResponseNormalization(normalizeSuggestionResponse, 
+            // Enhanced validation: log schema validation results for monitoring
+            async (req: VercelRequest, res: VercelResponse) => {
+              const response = await responseHandler(req, res);
+              
+              // Additional validation logging for critical production monitoring
+              const validation = suggestionResponseSchema.safeParse(response);
+              if (!validation.success) {
+                logger.error('Suggestions response schema validation failed', {
+                  endpoint: '/api/v1/suggestions',
+                  userId: req.headers['x-user-id'] || 'anonymous',
+                  errors: validation.error.errors,
+                  text_length: req.body?.text?.length || 0,
+                  suggestions_count: Array.isArray(response?.suggestions) ? response.suggestions.length : 0,
+                  timestamp: new Date().toISOString()
+                });
+              } else {
+                logger.debug('Suggestions response validation passed', {
+                  userId: req.headers['x-user-id'] || 'anonymous',
+                  suggestions_count: validation.data.suggestions?.length || 0
+                });
+              }
+              
+              return response;
+            }
+          )
         )
       )
     )

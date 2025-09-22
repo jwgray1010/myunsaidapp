@@ -155,6 +155,27 @@ final class ToneSuggestionCoordinator {
     // MARK: - Helper for API timestamp format
     private func isoTimestamp() -> String { Self.iso8601.string(from: Date()) }
     
+    // ✅ Security: Redact sensitive headers for safe logging
+    private func redactSensitiveHeaders(_ headers: [String: String]?) -> [String: String] {
+        guard let headers = headers else { return [:] }
+        var redacted = headers
+        
+        // Redact Authorization tokens
+        if let auth = redacted["Authorization"], auth.contains("Bearer") {
+            redacted["Authorization"] = "Bearer <REDACTED>"
+        }
+        
+        // Redact any other sensitive headers
+        let sensitiveKeys = ["X-API-Key", "X-Auth-Token", "Cookie"]
+        for key in sensitiveKeys {
+            if redacted[key] != nil {
+                redacted[key] = "<REDACTED>"
+            }
+        }
+        
+        return redacted
+    }
+    
     // MARK: - URL normalization helper (for suggestions/observe)
     private func normalizedBaseURLString() -> String {
         let raw = apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -865,18 +886,28 @@ final class ToneSuggestionCoordinator {
             ]
         ]
         
-        // ✅ Check if we have recent tone analysis and extract detected context
+        // ✅ Check if we have recent tone analysis and pass FULL analysis + context
         if let storedAnalysis = lastToneAnalysis,
-           let toneData = storedAnalysis["toneAnalysis"] as? [String: Any],
-           let detectedContext = toneData["context"] as? String, !detectedContext.isEmpty {
-            context["meta"] = [
-                "source": "keyboard_manual",
-                "request_type": "suggestion",
-                "context": detectedContext, // Use detected context for NLI
-                "timestamp": isoTimestamp()
-            ]
+           let toneData = storedAnalysis["toneAnalysis"] as? [String: Any] {
+            
+            // Pass the complete tone analysis to suggestions API
+            context["toneAnalysis"] = toneData
+            
+            // Update context if available
+            if let detectedContext = toneData["context"] as? String, !detectedContext.isEmpty {
+                context["meta"] = [
+                    "source": "keyboard_manual",
+                    "request_type": "suggestion", 
+                    "context": detectedContext, // Use detected context for NLI
+                    "timestamp": isoTimestamp()
+                ]
+                #if DEBUG
+                throttledLog("🎯 Using detected context for manual suggestion: \(detectedContext)", category: "suggestions")
+                #endif
+            }
+            
             #if DEBUG
-            throttledLog("🎯 Using detected context for manual suggestion: \(detectedContext)", category: "suggestions")
+            throttledLog("🎯 Passing full tone analysis to suggestions API with ui_tone: \(toneData["ui_tone"] ?? "unknown")", category: "suggestions")
             #endif
         }
         
@@ -996,7 +1027,18 @@ final class ToneSuggestionCoordinator {
             completion(nil); return
         }
         throttledLog("🔧 REQUEST \(url.absoluteString)", category: "api")
-        guard url.scheme == "http" || url.scheme == "https" else { throttledLog("unsupported URL scheme", category: "api"); completion(nil); return }
+        // ✅ Security: Enforce HTTPS in production, allow HTTP only in DEBUG
+        #if DEBUG
+        guard url.scheme == "http" || url.scheme == "https" else { 
+            throttledLog("unsupported URL scheme - only http/https allowed", category: "api"); 
+            completion(nil); return 
+        }
+        #else
+        guard url.scheme == "https" else { 
+            throttledLog("SECURITY: Production requires HTTPS - rejecting \(url.scheme ?? "nil") URL", category: "api"); 
+            completion(nil); return 
+        }
+        #endif
         
         workQueue.async { [weak self] in
             guard let self else { completion(nil); return }
@@ -1106,7 +1148,7 @@ final class ToneSuggestionCoordinator {
                 // Debug logging before starting the request
                 #if DEBUG
                 print("🌐 \(req.httpMethod ?? "POST") \(req.url!.absoluteString)")
-                print("🌐 Headers: \(req.allHTTPHeaderFields ?? [:])")
+                print("🌐 Headers: \(redactSensitiveHeaders(req.allHTTPHeaderFields))")
                 if let body = req.httpBody { 
                     print("🌐 Body: \(String(data: body, encoding: .utf8) ?? "<non-utf8>")")
                 }
@@ -1241,15 +1283,13 @@ final class ToneSuggestionCoordinator {
         metaDict["learning_days_remaining"] = profile["learningDaysRemaining"] ?? 0
         metaDict["attachment_source"] = resolved.source
         
-        var payload: [String: Any] = [
+        let payload: [String: Any] = [
             "attachmentStyle": resolved.style ?? "secure",
             "meta": metaDict,
             "context": "general",
             "user_profile": profile
         ]
-        // Optional: if you still want to pass current tone to suggestions, mirror lastUiTone:
-        let toneString = lastUiTone.rawValue
-        if toneString != "neutral" { payload["toneOverride"] = toneString }
+        // Note: toneOverride removed - full tone analysis now passed directly in suggestion requests
         
         let finalPayload = payload.compactMapValues { $0 }
         cachedPersona = finalPayload
@@ -1555,7 +1595,9 @@ extension ToneSuggestionCoordinator {
         let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             print("📧 DEBUG: Text is empty - immediately resetting to neutral")
-            lastUiTone = .neutral
+            onQ {
+                self.lastUiTone = .neutral
+            }
             delegate?.didUpdateToneStatus("neutral")
             // Clear cached analysis data
             sentenceToneCache.removeAll()
@@ -1661,9 +1703,9 @@ extension ToneSuggestionCoordinator {
         do {
             let toneOut = try await postTone(base: apiBase, text: trimmed, token: cachedAPIKey.nilIfEmpty, fullTextMode: false)
             let newBuckets = (
-                clear: toneOut.buckets["clear"] ?? 0.33,
-                caution: toneOut.buckets["caution"] ?? 0.33,
-                alert: toneOut.buckets["alert"] ?? 0.34
+                clear: toneOut.finalDistribution["clear"] ?? 0.33,
+                caution: toneOut.finalDistribution["caution"] ?? 0.33,
+                alert: toneOut.finalDistribution["alert"] ?? 0.34
             )
             
             // 🔎 ANALYZED - Log buckets before any processing
@@ -1754,7 +1796,7 @@ extension ToneSuggestionCoordinator {
             // Build UI data - use the server's intended ui_distribution
             let uiData: [String: Any] = [
                 "ui_tone": toneOut.ui_tone ?? "clear",
-                "ui_distribution": toneOut.buckets  // buckets now contains ui_distribution from server
+                "ui_distribution": toneOut.finalDistribution  // Use canonical ui_distribution field
             ]
             
             // Build emotional data
@@ -1872,14 +1914,20 @@ extension ToneSuggestionCoordinator {
         return (topValue - currentValue) >= marginNeeded ? topTone : current
     }
     
-    @MainActor
     private func maybeUpdateIndicator(to newTone: Bucket) {
+        dispatchPrecondition(condition: .onQueue(workQueue))
+        
         // 📨 PUBLISH - Log the publish decision  
         print("📨 PUBLISH current=\(lastUiTone.rawValue) -> new=\(newTone.rawValue) (will update: \(newTone != lastUiTone))")
         
         guard newTone != lastUiTone else { return }
         lastUiTone = newTone
-        onToneUpdate?(newTone, true)
+        
+        // UI updates must happen on main thread
+        DispatchQueue.main.async {
+            self.onToneUpdate?(newTone, true)
+        }
+        
         #if DEBUG
         coordLog.info("🎯 [\(self.instanceId)] UI tone=\(newTone.rawValue) buckets clear=\(String(format: "%.2f", self.smoothedBuckets.clear)) caution=\(String(format: "%.2f", self.smoothedBuckets.caution)) alert=\(String(format: "%.2f", self.smoothedBuckets.alert))")
         #endif
@@ -1887,7 +1935,8 @@ extension ToneSuggestionCoordinator {
     
     // MARK: - API Helper for Tone
     private struct ToneOut: Decodable { 
-        let buckets: [String: Double]
+        let buckets: [String: Double]?           // Legacy field for backwards compatibility
+        let ui_distribution: [String: Double]?   // Canonical field from API
         let ui_tone: String?  // Trust the API's tone decision
         let metadata: ToneMetadata?
         let categories: [String]?  // Categories from tone pattern matching
@@ -1905,6 +1954,11 @@ extension ToneSuggestionCoordinator {
         let text_hash: String?
         let doc_tone: String?  // Document-level tone for UI consistency
         let document_analysis: DocumentAnalysis?
+        
+        // Prefer ui_distribution, fallback to buckets for backwards compatibility
+        var finalDistribution: [String: Double] {
+            return ui_distribution ?? buckets ?? [:]
+        }
         
         // Computed property to convert API ui_tone to our Bucket enum
         var apiTone: Bucket? {
@@ -2004,7 +2058,7 @@ extension ToneSuggestionCoordinator {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        print("🌐 DEBUG: Request headers: \(request.allHTTPHeaderFields ?? [:])")
+        print("🌐 DEBUG: Request headers: \(redactSensitiveHeaders(request.allHTTPHeaderFields))")
         print("🌐 DEBUG: Request body: \(String(data: request.httpBody ?? Data(), encoding: .utf8) ?? "nil")")
 
         #if DEBUG
@@ -2063,7 +2117,8 @@ extension ToneSuggestionCoordinator {
             print("📊 Using distribution source: \(ui.ui_distribution != nil ? "ui_distribution" : "buckets") -> \(finalDistribution)")
             
             return ToneOut(
-                buckets: finalDistribution, 
+                buckets: finalDistribution,        // Backwards compatibility
+                ui_distribution: finalDistribution, // Canonical field
                 ui_tone: ui.ui_tone,
                 metadata: ui.metadata,
                 categories: ui.categories,  // Categories from tone pattern matching
@@ -2218,30 +2273,44 @@ extension ToneSuggestionCoordinator {
     }
     
     private func performFullTextAnalysis(fullText: String, textHash: String) async {
-        guard !isAnalysisInFlight else {
-            print("📄 ToneCoordinator: Analysis already in flight, skipping")
-            return
-        }
-        
-        // Check client-side rate limiting
-        guard rateLimiter.allowRequest() else {
-            print("📄 ToneCoordinator: Rate limit exceeded, skipping full-text analysis")
-            return
-        }
-        
-        // Check cache first to avoid redundant API calls
-        if let cached = analysisCache[textHash],
-           Date().timeIntervalSince(cached.timestamp) < cacheExpiryInterval {
-            print("📄 ToneCoordinator: Using cached result for hash: \(textHash.prefix(8))")
-            await MainActor.run {
-                self.delegate?.didUpdateToneStatus(cached.tone)
+        // State check and mutation must happen synchronously on workQueue
+        let shouldProceed = await withCheckedContinuation { continuation in
+            onQ {
+                guard !self.isAnalysisInFlight else {
+                    print("📄 ToneCoordinator: Analysis already in flight, skipping")
+                    continuation.resume(returning: false)
+                    return
+                }
+                
+                // Check client-side rate limiting
+                guard self.rateLimiter.allowRequest() else {
+                    print("📄 ToneCoordinator: Rate limit exceeded, skipping full-text analysis")
+                    continuation.resume(returning: false)
+                    return
+                }
+                
+                // Check cache first to avoid redundant API calls
+                if let cached = self.analysisCache[textHash],
+                   Date().timeIntervalSince(cached.timestamp) < self.cacheExpiryInterval {
+                    print("📄 ToneCoordinator: Using cached result for hash: \(textHash.prefix(8))")
+                    Task {
+                        await MainActor.run {
+                            self.delegate?.didUpdateToneStatus(cached.tone)
+                        }
+                    }
+                    continuation.resume(returning: false)
+                    return
+                }
+                
+                // All checks passed - proceed with analysis
+                self.isAnalysisInFlight = true
+                self.currentDocSeq += 1
+                self.lastTextHash = textHash
+                continuation.resume(returning: true)
             }
-            return
         }
         
-        isAnalysisInFlight = true
-        currentDocSeq += 1
-        lastTextHash = textHash
+        guard shouldProceed else { return }
         
         let docSeq = currentDocSeq
         let startTime = Date()
@@ -2252,77 +2321,85 @@ extension ToneSuggestionCoordinator {
         do {
             let result = try await postTone(base: apiBaseURL, text: fullText, token: cachedAPIKey.nilIfEmpty, fullTextMode: true)
             
-            await MainActor.run {
-                handleFullTextAnalysisResult(result, expectedDocSeq: docSeq, expectedHash: textHash, startTime: startTime)
+            // Handle result on workQueue to maintain thread safety
+            onQ {
+                self.handleFullTextAnalysisResult(result, expectedDocSeq: docSeq, expectedHash: textHash, startTime: startTime)
             }
         } catch {
-            await MainActor.run {
+            // Handle error on workQueue to maintain thread safety
+            onQ {
                 print("📄 ToneCoordinator: Full-text analysis failed - \(error)")
-                isAnalysisInFlight = false
+                self.isAnalysisInFlight = false
             }
         }
     }
     
     private func handleFullTextAnalysisResult(_ result: ToneOut, expectedDocSeq: Int, expectedHash: String, startTime: Date) {
-        defer { isAnalysisInFlight = false }
-        
-        let duration = Date().timeIntervalSince(startTime)
-        
-        // Extract document tone from result
-        let uiTone = result.ui_tone ?? "clear"
-        let uiDistribution = result.buckets  // buckets contains ui_distribution from server
-        let confidence = result.confidence ?? 0.0
-        
-        print("📄 ToneCoordinator: Analysis complete - docSeq: \(expectedDocSeq), ui_tone: \(uiTone), duration: \(Int(duration * 1000))ms")
-        print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", uiDistribution["clear"] ?? 0)), caution: \(String(format: "%.2f", uiDistribution["caution"] ?? 0)), alert: \(String(format: "%.2f", uiDistribution["alert"] ?? 0))")
-        
-        // Cache the result for future requests
-        analysisCache[expectedHash] = (tone: uiTone, timestamp: Date())
-        
-        // Clean up old cache entries (keep memory usage bounded)
-        let now = Date()
-        analysisCache = analysisCache.filter { _, cached in
-            now.timeIntervalSince(cached.timestamp) < cacheExpiryInterval
+        // State mutations must happen on workQueue
+        onQ {
+            defer { self.isAnalysisInFlight = false }
+            
+            let duration = Date().timeIntervalSince(startTime)
+
+            // Extract document tone from result
+            let uiTone = result.ui_tone ?? "clear"
+            let uiDistribution = result.finalDistribution  // Use canonical ui_distribution field
+            let confidence = result.confidence ?? 0.0
+
+            print("📄 ToneCoordinator: Analysis complete - docSeq: \(expectedDocSeq), ui_tone: \(uiTone), duration: \(Int(duration * 1000))ms")
+            print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", uiDistribution["clear"] ?? 0)), caution: \(String(format: "%.2f", uiDistribution["caution"] ?? 0)), alert: \(String(format: "%.2f", uiDistribution["alert"] ?? 0))")
+
+            // Cache the result for future requests
+            self.analysisCache[expectedHash] = (tone: uiTone, timestamp: Date())
+
+            // Clean up old cache entries (keep memory usage bounded)
+            let now = Date()
+            self.analysisCache = self.analysisCache.filter { _, cached in
+                now.timeIntervalSince(cached.timestamp) < self.cacheExpiryInterval
+            }
+
+            // Apply document tone to UI directly
+            self.applyDocumentTone(uiTone: uiTone, uiDistribution: uiDistribution, confidence: confidence)
         }
-        
-        // Apply document tone to UI directly
-        applyDocumentTone(uiTone: uiTone, uiDistribution: uiDistribution, confidence: confidence)
     }
     
     private func handleFullTextAnalysisResponse(_ response: [String: Any]?, expectedDocSeq: Int, expectedHash: String, startTime: Date) {
-        defer { isAnalysisInFlight = false }
-        
-        let duration = Date().timeIntervalSince(startTime)
-        
-        guard let response = response else {
-            print("📄 ToneCoordinator: Analysis failed - no response")
-            return
+        // State mutations must happen on workQueue
+        onQ {
+            defer { self.isAnalysisInFlight = false }
+            
+            let duration = Date().timeIntervalSince(startTime)
+            
+            guard let response = response else {
+                print("📄 ToneCoordinator: Analysis failed - no response")
+                return
+            }
+            
+            // Validate response matches current state
+            let responseDocSeq = response["doc_seq"] as? Int ?? -1
+            let responseHash = response["text_hash"] as? String ?? ""
+            
+            guard responseDocSeq == expectedDocSeq else {
+                print("📄 ToneCoordinator: Dropping stale response - docSeq mismatch (\(responseDocSeq) != \(expectedDocSeq))")
+                return
+            }
+            
+            guard responseHash == expectedHash else {
+                print("📄 ToneCoordinator: Dropping stale response - hash mismatch")
+                return
+            }
+            
+            // Extract document tone from ui_distribution (not buckets)
+            let uiTone = response["ui_tone"] as? String ?? "clear"
+            let uiDistribution = response["ui_distribution"] as? [String: Double] ?? ["clear": 1.0, "caution": 0.0, "alert": 0.0]
+            let confidence = response["confidence"] as? Double ?? 0.0
+            
+            print("📄 ToneCoordinator: Analysis complete - docSeq: \(expectedDocSeq), ui_tone: \(uiTone), duration: \(Int(duration * 1000))ms")
+            print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", uiDistribution["clear"] ?? 0)), caution: \(String(format: "%.2f", uiDistribution["caution"] ?? 0)), alert: \(String(format: "%.2f", uiDistribution["alert"] ?? 0))")
+            
+            // Apply document tone to UI directly
+            self.applyDocumentTone(uiTone: uiTone, uiDistribution: uiDistribution, confidence: confidence)
         }
-        
-        // Validate response matches current state
-        let responseDocSeq = response["doc_seq"] as? Int ?? -1
-        let responseHash = response["text_hash"] as? String ?? ""
-        
-        guard responseDocSeq == expectedDocSeq else {
-            print("📄 ToneCoordinator: Dropping stale response - docSeq mismatch (\(responseDocSeq) != \(expectedDocSeq))")
-            return
-        }
-        
-        guard responseHash == expectedHash else {
-            print("📄 ToneCoordinator: Dropping stale response - hash mismatch")
-            return
-        }
-        
-        // Extract document tone from ui_distribution (not buckets)
-        let uiTone = response["ui_tone"] as? String ?? "clear"
-        let uiDistribution = response["ui_distribution"] as? [String: Double] ?? ["clear": 1.0, "caution": 0.0, "alert": 0.0]
-        let confidence = response["confidence"] as? Double ?? 0.0
-        
-        print("📄 ToneCoordinator: Analysis complete - docSeq: \(expectedDocSeq), ui_tone: \(uiTone), duration: \(Int(duration * 1000))ms")
-        print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", uiDistribution["clear"] ?? 0)), caution: \(String(format: "%.2f", uiDistribution["caution"] ?? 0)), alert: \(String(format: "%.2f", uiDistribution["alert"] ?? 0))")
-        
-        // Apply document tone to UI directly
-        applyDocumentTone(uiTone: uiTone, uiDistribution: uiDistribution, confidence: confidence)
     }
     
     private func sha256(_ string: String) -> String {
@@ -2333,4 +2410,6 @@ extension ToneSuggestionCoordinator {
 }
 
 // MARK: - Helpers
-private extension String { var nilIfEmpty: String? { isEmpty ? nil : self } }
+private extension String { 
+    var nilIfEmpty: String? { isEmpty ? nil : self } 
+}

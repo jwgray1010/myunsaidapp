@@ -1,6 +1,6 @@
 {
-  "version": "1.3.1",
-  "notes": "Categories normalized to snake_case. No behavioral changes.",
+  "version": "2.1.2-accurate",
+  "notes": "Categories normalized to snake_case. Added contextOverrides for gratitude.",
   "patterns": [
     {
       "id": "A001",
@@ -2233,6 +2233,14 @@
       "threshold": 0.80,
       "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
     }
-  ]
+  ],
+  "contextOverrides": {
+    "gratitude": {
+      "positive":   { "clear": 0.02 },
+      "supportive": { "clear": 0.02 },
+      "negative":   { "alert": -0.01 },
+      "frustrated": { "alert": -0.01 }
+    }
+  }
 }
     

@@ -62,7 +62,7 @@
     },
 
     "bucketGuards": {
-      "minEvidenceTokensByBucket": { "clear": 2, "caution": 1, "alert": 1 },
+      "minEvidenceTokensByBucket": { "clear": 1, "caution": 1, "alert": 1 },
       "clear": {
         "requireDeescalatoryContext": true,
         "eligibleContexts": [
@@ -130,7 +130,7 @@
       "repeatDecay": 0.6,
       "cooldown_ms": 400,
       "maxBoostsPerMessage": 3,
-      "excludeIfContexts": ["CTX_HUMOR","CTX_REPAIR"],
+      "excludeIfContexts": ["CTX_HUMOR","CTX_REPAIR","CTX_GRATITUDE"],
       "requiresAny": ["you","we","us"],
       "confidenceBoosts": { "alert": 0.25, "caution": 0.05 },
       "severity": { "alert": 0.2, "caution": 0.1 },
@@ -390,8 +390,21 @@
       "description": "Expressing thanks or appreciation",
       "clearGate": { "mode": "promote", "strength": 1.0 },
       "toneCues": [
-        "thank you","grateful","appreciate","means a lot","thanks","appreciate you","means so much","thanks so much","tysm","thx","grateful for you","🙏"
+        "thank you","thanks","thx","ty","tysm",
+        "appreciate","appreciate it","appreciate you",
+        "grateful","grateful for you",
+        "means a lot","means so much","that meant a lot",
+        "big help","so helpful",
+        "🙏","❤️","🤝"
       ],
+      "toneCuesWeighted": [
+        { "pattern": "\\b(thank\\s*you|thanks|ty|thx|tysm)\\b", "weight": 0.30, "type": "regex" },
+        { "pattern": "\\b(appreciate(\\s+(it|you))?)\\b", "weight": 0.28, "type": "regex" },
+        { "pattern": "\\b(grateful(\\s+for\\s+you)?)\\b", "weight": 0.26, "type": "regex" },
+        { "pattern": "\\b(means\\s+(a\\s+lot|so\\s+much))\\b", "weight": 0.22, "type": "regex" },
+        { "pattern": "🙏|❤️|🤝", "weight": 0.18, "type": "regex" }
+      ],
+      "positionBoost": { "start": 0.04, "end": 0.04, "allCaps": 0.0 },
       "confidenceBoosts": { "clear": 0.25 },
       "attachmentAdjustments": {
         "anxious": { "clear": 0.10 },

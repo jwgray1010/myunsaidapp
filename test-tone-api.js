@@ -57,64 +57,77 @@ async function testToneAnalysis() {
             name: "Basic positive message",
             input: {
                 text: "I love you and appreciate everything you do",
-                doc_seq: 1,
-                text_hash: "hash1"
+                mode: "legacy"
+            }
+        },
+        {
+            name: "Gratitude/appreciation test",
+            input: {
+                text: "Thanks so much for helping me today! I really appreciate it",
+                mode: "legacy"
+            }
+        },
+        {
+            name: "Short appreciation",
+            input: {
+                text: "appreciate you 🙏",
+                mode: "legacy"
             }
         },
         {
             name: "Frustrated message",
             input: {
                 text: "I'm really frustrated that you never listen to me",
-                doc_seq: 2,
-                text_hash: "hash2"
+                mode: "legacy"
             }
         },
         {
             name: "Angry escalation",
             input: {
                 text: "You always do this! You never consider my feelings and I'm sick of it!",
-                doc_seq: 3,
-                text_hash: "hash3"
+                mode: "legacy"
+            }
+        },
+        {
+            name: "Direct hate speech",
+            input: {
+                text: "i hate you!",
+                mode: "legacy"
             }
         },
         {
             name: "Anxious/worried tone",
             input: {
                 text: "I'm worried about us. Are we okay? I feel like we're drifting apart",
-                doc_seq: 4,
-                text_hash: "hash4"
+                mode: "legacy"
             }
         },
         {
             name: "Communication request",
             input: {
                 text: "Can we talk about what happened earlier? I need to understand",
-                doc_seq: 5,
-                text_hash: "hash5"
+                mode: "legacy"
             }
         },
         {
             name: "Defensive response",
             input: {
                 text: "That's not what I meant at all! You're twisting my words",
-                doc_seq: 6,
-                text_hash: "hash6"
+                mode: "legacy"
             }
         },
         {
             name: "Conflict escalation",
             input: {
                 text: "Fine! If that's how you want to be, then I'm done trying",
-                doc_seq: 7,
-                text_hash: "hash7"
+                mode: "legacy"
             }
         },
         {
             name: "Relationship concern",
             input: {
                 text: "I feel like we're not connecting anymore. What can we do?",
-                doc_seq: 8,
-                text_hash: "hash8"
+                mode: "legacy"
             }
         }
     ];
@@ -129,16 +142,19 @@ async function testToneAnalysis() {
             if (result.statusCode === 200) {
                 const { data } = result;
                 console.log(`✅ Status: ${result.statusCode}`);
-                console.log(`🎯 UI Tone: ${data.ui_tone || 'N/A'}`);
-                console.log(`📊 Primary Tone: ${data.analysis?.primary_tone || 'N/A'}`);
-                console.log(`🎪 Confidence: ${data.analysis?.confidence || 'N/A'}`);
+                console.log(`🎯 UI Tone: ${data.data?.ui_tone || data.ui_tone || 'N/A'}`);
+                console.log(`📊 Primary Tone: ${data.data?.analysis?.primary_tone || data.analysis?.primary_tone || 'N/A'}`);
+                console.log(`🎪 Confidence: ${data.data?.confidence || data.confidence || 'N/A'}`);
+                console.log(`🎯 Context: ${data.data?.context || data.context || 'N/A'}`);
                 
-                if (data.ui_distribution) {
-                    console.log(`📈 Distribution: clear=${data.ui_distribution.clear}, caution=${data.ui_distribution.caution}, alert=${data.ui_distribution.alert}`);
+                const uiDist = data.data?.ui_distribution || data.ui_distribution;
+                if (uiDist) {
+                    console.log(`📈 Distribution: clear=${uiDist.clear?.toFixed(2)}, caution=${uiDist.caution?.toFixed(2)}, alert=${uiDist.alert?.toFixed(2)}`);
                 }
                 
-                if (data.client_seq) {
-                    console.log(`🔢 Client Seq: ${data.client_seq}`);
+                const clientSeq = data.data?.client_seq || data.client_seq;
+                if (clientSeq) {
+                    console.log(`🔢 Client Seq: ${clientSeq}`);
                 }
             } else {
                 console.log(`❌ Status: ${result.statusCode}`);
@@ -160,32 +176,28 @@ async function testEdgeCases() {
             name: "Empty text",
             input: {
                 text: "",
-                doc_seq: 9,
-                text_hash: "hash9"
+                mode: "legacy"
             }
         },
         {
             name: "Very short text",
             input: {
                 text: "Ok",
-                doc_seq: 10,
-                text_hash: "hash10"
+                mode: "legacy"
             }
         },
         {
             name: "Long text",
             input: {
                 text: "I've been thinking about this for a long time and I really need to tell you how I feel about everything that's been happening between us lately. I feel like we're not communicating well and I'm not sure what to do about it.",
-                doc_seq: 11,
-                text_hash: "hash11"
+                mode: "legacy"
             }
         },
         {
             name: "Special characters",
             input: {
                 text: "Why can't you understand?! 😢💔 I'm trying my best...",
-                doc_seq: 12,
-                text_hash: "hash12"
+                mode: "legacy"
             }
         },
         {

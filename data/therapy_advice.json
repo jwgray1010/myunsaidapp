@@ -41641,5 +41641,77 @@
     "core_contexts": ["repair","planning"],
     "intents": ["organize","close_loop"],
     "tags": ["texting","topic-split","repairability"]
+  },
+   {
+    "id": "TA_GRT_001",
+    "advice": "Name the effort you noticed and the impact it had on you.",
+    "triggerTone": "clear",
+    "contexts": ["gratitude", "appreciation", "general"],
+    "attachmentStyles": ["secure","anxious","avoidant","disorganized"],
+    "severityThreshold": { "clear": 0.35 },
+    "spacyLink": ["P2201"],
+    "contextLink": ["CTX_GRATITUDE"],
+    "boostSources": ["context_classifier"],
+    "styleTuning": {}
+  },
+  {
+    "id": "TA_GRT_002",
+    "advice": "Acknowledge consistency: point out when someone shows up for you more than once.",
+    "triggerTone": "clear",
+    "contexts": ["gratitude", "appreciation", "general"],
+    "attachmentStyles": ["secure","anxious"],
+    "severityThreshold": { "clear": 0.4 },
+    "spacyLink": ["P2202"],
+    "contextLink": ["CTX_GRATITUDE"],
+    "boostSources": ["context_classifier"],
+    "styleTuning": {}
+  },
+  {
+    "id": "TA_GRT_003",
+    "advice": "Let your gratitude be specific—name the exact behavior that mattered.",
+    "triggerTone": "clear",
+    "contexts": ["gratitude", "appreciation", "general"],
+    "attachmentStyles": ["secure","disorganized"],
+    "severityThreshold": { "clear": 0.45 },
+    "spacyLink": ["P2203"],
+    "contextLink": ["CTX_GRATITUDE"],
+    "boostSources": ["context_classifier"],
+    "styleTuning": {}
+  },
+  {
+    "id": "TA_GRT_004",
+    "advice": "Notice how gratitude softens tension—send it even when things aren’t perfect.",
+    "triggerTone": "clear",
+    "contexts": ["gratitude", "general"],
+    "attachmentStyles": ["secure","avoidant"],
+    "severityThreshold": { "clear": 0.5 },
+    "spacyLink": ["P2204"],
+    "contextLink": ["CTX_GRATITUDE"],
+    "boostSources": ["context_classifier"],
+    "styleTuning": {}
+  },
+  {
+    "id": "TA_GRT_005",
+    "advice": "Pair appreciation with curiosity: thank them, then ask how it felt for them.",
+    "triggerTone": "clear",
+    "contexts": ["gratitude", "appreciation", "general"],
+    "attachmentStyles": ["anxious","secure"],
+    "severityThreshold": { "clear": 0.35 },
+    "spacyLink": ["P2205"],
+    "contextLink": ["CTX_GRATITUDE"],
+    "boostSources": ["context_classifier"],
+    "styleTuning": {}
+  },
+  {
+    "id": "TA_GRT_006",
+    "advice": "Link gratitude to presence: let them know their effort helped you feel steady or cared for.",
+    "triggerTone": "clear",
+    "contexts": ["gratitude", "general"],
+    "attachmentStyles": ["secure","disorganized"],
+    "severityThreshold": { "clear": 0.4 },
+    "spacyLink": ["P2206"],
+    "contextLink": ["CTX_GRATITUDE"],
+    "boostSources": ["context_classifier"],
+    "styleTuning": {}
   }
 ]

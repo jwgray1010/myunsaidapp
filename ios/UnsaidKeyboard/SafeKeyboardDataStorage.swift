@@ -291,11 +291,11 @@ final class SafeKeyboardDataStorage {
         }
 
         // Count total for metadata (approximate bytes via Data.count)
-        let totalItems =
-            (dirtyFlags.i ? (defaults.data(forKey: StorageKeys.pendingInteractions)?.count ?? 0) : 0) +
-            (dirtyFlags.a ? (defaults.data(forKey: StorageKeys.pendingAnalytics)?.count ?? 0) : 0) +
-            (dirtyFlags.t ? (defaults.data(forKey: StorageKeys.pendingToneData)?.count ?? 0) : 0) +
-            (dirtyFlags.s ? (defaults.data(forKey: StorageKeys.pendingSuggestions)?.count ?? 0) : 0)
+        let interactionBytes = dirtyFlags.i ? (defaults.data(forKey: StorageKeys.pendingInteractions)?.count ?? 0) : 0
+        let analyticsBytes = dirtyFlags.a ? (defaults.data(forKey: StorageKeys.pendingAnalytics)?.count ?? 0) : 0
+        let toneBytes = dirtyFlags.t ? (defaults.data(forKey: StorageKeys.pendingToneData)?.count ?? 0) : 0
+        let suggestionBytes = dirtyFlags.s ? (defaults.data(forKey: StorageKeys.pendingSuggestions)?.count ?? 0) : 0
+        let totalItems = interactionBytes + analyticsBytes + toneBytes + suggestionBytes
 
         // metadata (small, no need to debounce extra)
         let metadata: [String: Any] = [

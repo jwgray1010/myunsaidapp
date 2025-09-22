@@ -146,6 +146,40 @@ export function withResponseNormalization<T>(
   };
 }
 
+// Strict response validation wrapper for critical endpoints
+export function withResponseValidation<T>(
+  schema: z.ZodSchema<T>,
+  handler: (req: VercelRequest, res: VercelResponse) => Promise<T> | T
+): Handler {
+  return async (req: VercelRequest, res: VercelResponse) => {
+    try {
+      const result = await handler(req, res);
+      
+      // Validate response against schema
+      const validation = schema.safeParse(result);
+      
+      if (!validation.success) {
+        // Log validation errors for monitoring
+        logger.error('Response validation failed', {
+          endpoint: req.url,
+          errors: validation.error.errors,
+          result: typeof result === 'object' ? JSON.stringify(result, null, 2) : result,
+          userId: (req.headers['x-user-id'] as string) || 'anonymous'
+        });
+        
+        // In production, we might want to return the response anyway after logging
+        // For now, let's throw to catch schema mismatches in development
+        throw new Error(`Response validation failed: ${validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+      }
+      
+      res.status(200).json(validation.data);
+    } catch (err) {
+      logger.error('Response validation error:', err);
+      throw err;
+    }
+  };
+}
+
 export function compose(...wrappers: ((handler: Handler) => Handler)[]): (handler: Handler) => Handler {
   return (handler: Handler): Handler => {
     return wrappers.reduceRight((wrapped, wrapper) => wrapper(wrapped), handler);
