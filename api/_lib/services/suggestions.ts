@@ -37,7 +37,7 @@ import type { ToneResponse } from '../schemas/toneRequest';
 import { adjustToneByAttachment } from './utils/attachmentToneAdjust';
 import { matchSemanticBackbone, applySemanticBias, type SemanticBackboneResult } from './utils/semanticBackbone';
 import { isContextAppropriate, logContextFilter, getContextLinkBonus, type ContextScores } from './contextAnalysis';
-import { nliLocal, hypothesisForAdvice, type FitResult } from './nliLocal';
+import { nliLocal, hypothesisForAdvice, detectUserIntents, type FitResult } from './nliLocal';
 
 // ---- weight-mod fallback resolver (exact → alias → family → general → code_default)
 const DISABLE_WEIGHT_FALLBACKS = process.env.DISABLE_WEIGHT_FALLBACKS === '1';
@@ -900,6 +900,7 @@ class AdviceEngine {
     secondPerson?: { hasSecondPerson: boolean; confidence: number; targeting: string };
     contextScores?: Record<string, number>;
     categories?: string[];
+    userIntents?: string[]; // ✅ NEW: Detected user intents
   }): any[] {
     const W = this.currentWeights(signals.contextLabel);
 
@@ -1043,6 +1044,37 @@ class AdviceEngine {
         const ctr = (sig.accepted || 0) / shown;
         const rej = (sig.rejected || 0) / shown;
         s += (ctr * 0.3) - (rej * 0.2);
+      }
+
+      // ✅ NEW: Intent-based scoring using enriched metadata
+      if (signals.userIntents && signals.userIntents.length > 0 && it.intents && Array.isArray(it.intents)) {
+        const userIntentsSet = new Set(signals.userIntents);
+        const adviceIntentsSet = new Set(it.intents);
+        
+        // Calculate intent overlap
+        const intentMatches = Array.from(userIntentsSet).filter(intent => adviceIntentsSet.has(intent));
+        
+        if (intentMatches.length > 0) {
+          // Strong boost for intent matches - this is high-value targeting
+          const intentMatchBoost = 0.6 * intentMatches.length; // 0.6 per intent match
+          s += intentMatchBoost;
+          
+          // Log intent boost for observability
+          logger.info('Intent boost applied', {
+            adviceId: it.id,
+            matchedIntents: intentMatches,
+            boost: intentMatchBoost,
+            userIntents: signals.userIntents,
+            adviceIntents: it.intents
+          });
+        } else {
+          // Log when we have intent data but no matches (helps identify gaps)
+          logger.debug('No intent matches found', {
+            adviceId: it.id,
+            userIntents: signals.userIntents,
+            adviceIntents: it.intents
+          });
+        }
       }
 
       return { ...it, ltrScore: Number(s.toFixed(4)) };
@@ -1702,7 +1734,15 @@ class SuggestionsService {
     const personalized = applyAttachmentOverrides(guardedPool, attachmentStyle);
     logger.info('Attachment overrides applied', { personalizedSize: personalized.length, guardedPoolSize: guardedPool.length });
 
-    // 6) Rank (JSON-weighted)
+    // ✅ NEW: User intent detection for enhanced matching
+    const userIntents = detectUserIntents(text);
+    logger.info('User intents detected', { 
+      textLength: text.length, 
+      detectedIntents: userIntents,
+      intentCount: userIntents.length 
+    });
+
+    // 6) Rank (JSON-weighted) - now with intent-based scoring
     const ranked = this.adviceEngine.rank(personalized, {
       baseConfidence: analysis.tone.confidence,
       toneKey: toneKeyNorm,
@@ -1716,7 +1756,8 @@ class SuggestionsService {
       tier,
       secondPerson: analysis.secondPerson,
       contextScores: analysis.context?.scores || {},
-      categories: fullToneAnalysis?.categories || []
+      categories: fullToneAnalysis?.categories || [],
+      userIntents // ✅ NEW: Pass detected user intents for intent-based scoring
     });
     logger.info('Ranking completed', { rankedSize: ranked.length, personalizedSize: personalized.length });
 
