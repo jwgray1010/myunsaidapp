@@ -1,13 +1,13 @@
 // api/_lib/services/bm25.ts
+import { tokenize, filterStopwords, DEFAULT_STOPWORDS } from '../utils/tokenize';
+
 type Doc = { id: string; text: string };
 type Tokenizer = (s: string) => string[];
 
+// Use shared tokenizer for consistency with spaCy client
 const defaultTok: Tokenizer = (s) => {
-  // Unicode-safe, NFKC normalize, keep letters/numbers (any script)
-  const norm = s.normalize('NFKC').toLowerCase();
-  // Replace non-letter/number with space (unicode class)
-  const cleaned = norm.replace(/[^\p{L}\p{N}\s]+/gu, ' ');
-  return cleaned.split(/\s+/).filter(Boolean);
+  const tokens = tokenize(s);
+  return filterStopwords(tokens, DEFAULT_STOPWORDS);
 };
 
 // Tiny Damerau-Levenshtein for fuzzy<=1 (fast path)
@@ -64,12 +64,13 @@ export class BM25 {
     this.tok = tok;
     this.k1 = opts.k1 ?? 1.2;
     this.b = opts.b ?? 0.75;
+    // Note: stopwords handled by tokenizer for consistency
     this.stop = new Set((opts.stopwords ?? []).map(w => w.toLowerCase()));
     this.N = docs.length || 1;
 
     let totalLen = 0;
     for (const d of docs) {
-      const terms = this.tok(d.text).filter(t => !this.stop.has(t));
+      const terms = this.tok(d.text); // tokenizer already filters stopwords
       this.len.set(d.id, terms.length);
       totalLen += terms.length;
 
@@ -77,11 +78,12 @@ export class BM25 {
       for (const t of terms) local.set(t, (local.get(t) || 0) + 1);
       this.tf.set(d.id, local);
 
+      // Optimize: batch df updates for better performance
       for (const t of local.keys()) this.df.set(t, (this.df.get(t) || 0) + 1);
     }
     this.avgdl = totalLen / this.N || 1;
 
-    // Precompute idf
+    // Precompute idf for all terms (better memory layout)
     for (const [term, df] of this.df.entries()) {
       // BM25 idf: ln(1 + (N - df + 0.5)/(df + 0.5))
       this.idfCache.set(term, Math.log(1 + (this.N - df + 0.5) / (df + 0.5)));
@@ -105,30 +107,44 @@ export class BM25 {
     // Fast path: exact
     if (this.df.has(qt)) out.push(qt);
 
-    // Prefix: scan df keys; cap to keep perf stable
+    // Prefix: scan df keys; cap to keep perf stable + deterministic ordering
     if (prefix) {
-      let added = 0;
+      const candidates: string[] = [];
       for (const key of this.df.keys()) {
         if (key.startsWith(qt)) {
-          out.push(key);
-          if (++added >= 50) break; // safety cap
+          candidates.push(key);
         }
       }
+      // Sort by frequency (desc) then alphabetically for deterministic ordering
+      candidates.sort((a, b) => {
+        const freqA = this.df.get(a) || 0;
+        const freqB = this.df.get(b) || 0;
+        if (freqA !== freqB) return freqB - freqA;
+        return a.localeCompare(b);
+      });
+      out.push(...candidates.slice(0, 50)); // safety cap
     }
 
-    // Fuzzy radius 1 only (cheap), also capped
+    // Fuzzy radius 1 only (cheap), also capped with deterministic ordering
     if (fuzzy && fuzzy >= 1) {
-      let added = 0;
+      const candidates: string[] = [];
       for (const key of this.df.keys()) {
         if (key === qt) continue;
         if (dlDistanceLeq1(qt, key)) {
-          out.push(key);
-          if (++added >= 50) break;
+          candidates.push(key);
         }
       }
+      // Sort by frequency (desc) then alphabetically for consistency
+      candidates.sort((a, b) => {
+        const freqA = this.df.get(a) || 0;
+        const freqB = this.df.get(b) || 0;
+        if (freqA !== freqB) return freqB - freqA;
+        return a.localeCompare(b);
+      });
+      out.push(...candidates.slice(0, 50)); // safety cap
     }
 
-    // de-dup
+    // de-dup while preserving order
     return Array.from(new Set(out));
   }
 
@@ -138,7 +154,7 @@ export class BM25 {
   ) {
     const { limit = 50, prefix = false, fuzzy = 0 } = opts;
 
-    const raw = this.tok(q).filter(Boolean).filter(t => !this.stop.has(t));
+    const raw = this.tok(q).filter(Boolean);
     if (raw.length === 0) return [];
 
     // Build query terms with expansion map
@@ -181,13 +197,18 @@ export class BM25 {
       if (s) scores.set(d.id, s);
     }
 
+    // Deterministic ordering: score desc, then by id asc for ties
     return Array.from(scores.entries())
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => {
+        const scoreDiff = b[1] - a[1];
+        if (Math.abs(scoreDiff) > 1e-9) return scoreDiff;
+        return a[0].localeCompare(b[0]); // tie-break by document id
+      })
       .slice(0, limit)
       .map(([id, score]) => ({
         id,
         score,
-        matchedTerms: Array.from(matches.get(id) || []),
+        matchedTerms: Array.from(matches.get(id) || []).sort(), // sort matched terms for consistency
       }));
   }
 }

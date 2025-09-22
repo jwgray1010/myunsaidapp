@@ -62,8 +62,8 @@ interface SpacyPhraseEdges {
   hits?: string[];
 }
 
-// Raw spaCy result type with proper interface
-interface SpacyResult {
+// Raw spaCy client result interface
+interface RawSpacyResult {
   tokens?: SpacyToken[];
   sents?: SpacySentence[];
   deps?: SpacyDependency[];
@@ -75,7 +75,7 @@ interface SpacyResult {
 
 // Compact document interfaces for output (already defined below)
 
-// Raw spaCy client result interface
+// Alternative raw spaCy client result interface
 interface SpacyResult {
   tokens?: SpacyToken[];
   sents?: Array<{ start?: number; end?: number }>;
@@ -162,61 +162,29 @@ function charSpanToTokenSpan(
   tokens: CompactToken[],
   sentsChar: Array<{ start: number; end: number }>
 ): { start: number; end: number } | null {
-  if (!Array.isArray(tokens) || tokens.length === 0) return null;
+  if (!tokens?.length) return null;
 
-  // Apply bounds checking and saturation to character positions
-  const maxCharPos = Math.max(...tokens.map(t => Math.max(safeNumber(t.start, 0), safeNumber(t.end, 0))), 10000);
-  const safeCharStart = clamp01(charStart / maxCharPos) * maxCharPos;
-  const safeCharEnd = clamp01(charEnd / maxCharPos) * maxCharPos;
+  const cs = Math.max(0, Math.min(charStart, charEnd));
+  const ce = Math.max(cs, Math.max(charStart, charEnd));
 
-  // Ensure proper ordering
-  const orderedStart = Math.min(safeCharStart, safeCharEnd);
-  const orderedEnd = Math.max(safeCharStart, safeCharEnd);
-
-  // Prefer exact mapping when token char offsets exist
-  const haveOffsets = tokens.some(t => typeof t.start === 'number' && typeof t.end === 'number');
+  const haveOffsets = tokens.every(t => typeof t.start === 'number' && typeof t.end === 'number');
   if (haveOffsets) {
-    let tStart = -1, tEnd = -1;
-    
-    // Apply saturation to prevent excessive token processing
-    const maxTokensToCheck = sat(tokens.length, 500);
-    
-    for (let i = 0; i < Math.floor(maxTokensToCheck); i++) {
-      const t = tokens[i];
-      const tokenStart = safeNumber(t.start);
-      const tokenEnd = safeNumber(t.end);
-      
-      if (tStart === -1 && tokenStart >= orderedStart) {
-        tStart = clamp01(safeNumber(t.i) / tokens.length) * tokens.length;
-      }
-      if (tokenEnd <= orderedEnd) {
-        tEnd = clamp01(safeNumber(t.i) / tokens.length) * tokens.length;
-      }
+    let tStart = 0, tEnd = tokens.length - 1;
+    for (let i = 0; i < tokens.length; i++) {
+      if ((tokens[i].end ?? 0) > cs) { tStart = i; break; }
     }
-    
-    if (tStart === -1) tStart = 0;
-    if (tEnd === -1) tEnd = Math.max(0, tokens.length - 1);
-    if (tStart > tEnd) [tStart, tEnd] = [tEnd, tStart];
-    
-    return { 
-      start: Math.max(0, Math.floor(tStart)), 
-      end: Math.min(tokens.length - 1, Math.floor(tEnd))
-    };
+    for (let i = tStart; i < tokens.length; i++) {
+      if ((tokens[i].start ?? 0) >= ce) { tEnd = Math.max(tStart, i - 1); break; }
+      tEnd = i;
+    }
+    return { start: tStart, end: tEnd };
   }
 
-  // Heuristic fallback with bounds checking: bound by the sentence that contains charStart
-  const validSents = Array.isArray(sentsChar) ? sentsChar : [];
-  const sent = validSents.find(s => 
-    orderedStart >= safeNumber(s.start) && orderedStart < safeNumber(s.end)
-  ) ?? validSents[0];
-  
-  if (!sent) {
-    return { start: 0, end: Math.max(0, Math.min(tokens.length - 1, 10)) }; // Reasonable fallback
-  }
-  
-  // Without char offsets, approximate by covering a reasonable token range
-  const approximateRange = Math.min(20, tokens.length); // Cap the range
-  return { start: 0, end: Math.max(0, approximateRange - 1) };
+  // Fallback without offsets: cover a small window in the sentence
+  const sent = sentsChar.find(s => cs >= (s.start ?? 0) && cs < (s.end ?? 0)) ?? sentsChar[0];
+  if (!sent) return { start: 0, end: Math.min(tokens.length - 1, 20) };
+  const approx = Math.min(tokens.length, 20);
+  return { start: 0, end: approx - 1 };
 }
 
 /** Compute negation scopes as TOKEN spans using deps + subtreeSpan with fallbacks. */
@@ -230,6 +198,7 @@ function computeNegScopes(
     return [];
   }
 
+  const MAX_NEG_TOKENS = 40;
   const spans: Array<{ start: number; end: number }> = [];
   const maxDeps = Math.min(deps.length, 200); // Cap dependency processing for serverless
 
@@ -242,7 +211,13 @@ function computeNegScopes(
     const sub = subtreeSpan?.[head];
     if (sub && typeof sub.start === 'number' && typeof sub.end === 'number') {
       const ts = charSpanToTokenSpan(sub.start, sub.end, tokens, sentsChar);
-      if (ts) spans.push(ts);
+      if (ts) {
+        // Cap negation scope width after merge
+        if (ts.end - ts.start + 1 > MAX_NEG_TOKENS) {
+          ts.end = ts.start + MAX_NEG_TOKENS - 1;
+        }
+        spans.push(ts);
+      }
       continue;
     }
 
@@ -250,14 +225,25 @@ function computeNegScopes(
     const headTok = tokens.find(t => safeNumber(t.i) === head);
     if (headTok && typeof headTok.start === 'number' && typeof headTok.end === 'number') {
       const ts = charSpanToTokenSpan(headTok.start, headTok.end, tokens, sentsChar);
-      if (ts) spans.push(ts);
+      if (ts) {
+        // Cap negation scope width after merge
+        if (ts.end - ts.start + 1 > MAX_NEG_TOKENS) {
+          ts.end = ts.start + MAX_NEG_TOKENS - 1;
+        }
+        spans.push(ts);
+      }
     } else {
       // Last resort: reasonable bounds, not whole token stream
       const maxTokens = Math.min(tokens.length, 50); // Cap scope size
       const scopeStart = Math.max(0, head - 5);
       const scopeEnd = Math.min(head + 5, maxTokens - 1);
       if (scopeStart < scopeEnd) {
-        spans.push({ start: scopeStart, end: scopeEnd });
+        const span = { start: scopeStart, end: scopeEnd };
+        // Cap negation scope width after merge
+        if (span.end - span.start + 1 > MAX_NEG_TOKENS) {
+          span.end = span.start + MAX_NEG_TOKENS - 1;
+        }
+        spans.push(span);
       }
     }
   }

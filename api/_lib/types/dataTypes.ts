@@ -57,15 +57,20 @@ export interface AttachmentLearningConfig {
 
 export interface TherapyAdvice {
   id: string;
-  advice: string;
-  triggerTone: string;
-  contexts: string[];
-  attachmentStyles: string[];
-  severityThreshold: Record<string, number>;
-  spacyLink?: string[];
-  contextLink?: string[];
+  advice: string;                 // micro-therapy tip, not a script
+  triggerTone?: 'clear'|'caution'|'alert';
+  contexts?: string[];            // e.g., ['conflict','planning','general']
+  contextLink?: string[];         // include 'CTX_PATTERN' for pattern-aware items
+  attachmentStyles?: Array<'anxious'|'avoidant'|'disorganized'|'secure'>;
+  intents?: string[];             // e.g., ['reassure','boundary','repair','de-escalate']
+  // NEW — additive fields
+  patterns?: Array<'anxious.pattern'|'avoidant.pattern'|'disorganized.pattern'|'secure.pattern'>;
+  styleTuning?: Partial<Record<'anxious'|'avoidant'|'disorganized'|'secure', number>>;
+  severityThreshold?: Partial<Record<'clear'|'caution'|'alert', number>>;
   boostSources?: string[];
-  styleTuning?: Record<string, number>;
+  tags?: string[];
+  spacyLink?: string[];
+  core_contexts?: string[];
   // optional indexing-time payloads:
   __tokens?: string[];
   __vector?: number[];

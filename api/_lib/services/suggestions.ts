@@ -16,6 +16,9 @@ import { dataLoader } from './dataLoader';
 import { MLAdvancedToneAnalyzer } from './toneAnalysis';
 import { processWithSpacy, processWithSpacySync } from './spacyBridge';
 import { spacyClient } from './spacyClient';
+import { getAdviceCandidates } from './adviceIndex';
+import { foldAttachmentPatterns } from '../utils/foldAttachmentPatterns';
+import { CommunicatorProfile } from './communicatorProfile';
 import type {
   TherapyAdvice,
   ContextClassifier,
@@ -1761,10 +1764,45 @@ class SuggestionsService {
     });
     logger.info('Ranking completed', { rankedSize: ranked.length, personalizedSize: personalized.length });
 
+    // ✅ NEW: Integrate micro-advice from adviceIndex
+    const enrichedSuggestions = await this.buildEnhancedSuggestions({
+      detectedRequestCtx: contextLabel,
+      uiTone: toneKeyNorm,
+      classifierCtxScores: analysis.context?.scores || {},
+      phraseEdgeCategories: Array.isArray(analysis.flags.phraseEdgeHits) ? analysis.flags.phraseEdgeHits : [],
+      rewriteCandidates: ranked.map(r => ({
+        type: 'rewrite' as const,
+        id: r.id || String(Math.random()),
+        text: r.advice || r.text || '',
+        score: r.ltrScore || 0.5,
+        reason: r.reason || 'rewrite suggestion',
+        confidence: r.confidence || 0.5,
+        category: r.category || 'communication',
+        priority: r.priority || 1,
+        context_specific: r.context_specific || false,
+        attachment_informed: r.attachment_informed || false
+      })),
+      attachmentStyle,
+      userId: userId || 'anonymous',
+      totalCap: Math.max(3, Math.min(10, maxSuggestions)),
+      featureFlags: { SUGGESTIONS_ENABLE_ADVICE: true }
+    });
+    logger.info('Enhanced suggestions with micro-advice completed', { 
+      enhancedCount: enrichedSuggestions.length, 
+      originalRankedSize: ranked.length 
+    });
+
+    // Use enriched suggestions instead of ranked for the rest of the pipeline
+    const rankedForPipeline = enrichedSuggestions.map(s => ({
+      ...s,
+      ltrScore: s.score,
+      advice: s.type === 'micro_advice' ? s.advice : s.text
+    }));
+
     // Category guard to avoid near-duplicates
     const seenCats = new Set<string>();
-    const rankedDedup = ranked.filter(it => {
-      const cat = (it.category || it.categories?.[0] || 'general').toLowerCase();
+    const rankedDedup = rankedForPipeline.filter((it: any) => {
+      const cat = (it.category || 'general').toLowerCase();
       if (seenCats.has(cat)) return false;
       seenCats.add(cat);
       return true;
@@ -1918,6 +1956,124 @@ class SuggestionsService {
         tier: result.tier
       }
     };
+  }
+
+  // ===== Enhanced Suggestions with Micro-Advice Integration =====
+  private async buildEnhancedSuggestions(input: {
+    detectedRequestCtx: string;
+    uiTone: 'clear'|'caution'|'alert';
+    classifierCtxScores: Record<string, number>;
+    phraseEdgeCategories: string[];
+    rewriteCandidates: Array<{
+      type: 'rewrite';
+      id: string;
+      text: string;
+      score: number;
+      reason: string;
+      confidence: number;
+      category: string;
+      priority: number;
+      context_specific: boolean;
+      attachment_informed: boolean;
+    }>;
+    attachmentStyle: string;
+    userId: string;
+    totalCap?: number;
+    featureFlags?: Record<string, boolean>;
+  }) {
+    const {
+      detectedRequestCtx,
+      uiTone,
+      classifierCtxScores,
+      phraseEdgeCategories = [],
+      rewriteCandidates,
+      attachmentStyle,
+      userId,
+      totalCap = 8,
+      featureFlags = {}
+    } = input;
+
+    // (1) fold in attachment patterns
+    const communicatorProfile = new CommunicatorProfile({ userId });
+    await communicatorProfile.init();
+    const est = communicatorProfile.getAttachmentEstimate();
+    
+    const edgeHints = phraseEdgeCategories.filter(c =>
+      c === 'attachment_triggers' || c === 'codependency_patterns' || c === 'independence_patterns'
+    ) as Array<'attachment_triggers'|'codependency_patterns'|'independence_patterns'>;
+    
+    const ctxScores = foldAttachmentPatterns(classifierCtxScores, est, edgeHints);
+
+    // (2) micro-advice from adviceIndex
+    let adviceItems: any[] = [];
+    if (featureFlags.SUGGESTIONS_ENABLE_ADVICE !== false) {
+      adviceItems = await getAdviceCandidates({
+        requestCtx: detectedRequestCtx,
+        ctxScores,
+        triggerTone: uiTone,
+        limit: 8,
+        tryGetAttachmentEstimate: () => ({
+          primary: est.scores && est.scores.anxious > Math.max(est.scores.avoidant, est.scores.disorganized, est.scores.secure) ? 'anxious' :
+                  est.scores && est.scores.avoidant > Math.max(est.scores.anxious, est.scores.disorganized, est.scores.secure) ? 'avoidant' :
+                  est.scores && est.scores.disorganized > Math.max(est.scores.anxious, est.scores.avoidant, est.scores.secure) ? 'disorganized' : 'secure',
+          confidence: est.confidence
+        })
+      });
+    }
+
+    // (3) map micro-advice to suggestions
+    const adviceSuggestions = adviceItems.map((a: any, i: number) => ({
+      type: 'micro_advice' as const,
+      id: a.id,
+      advice: a.advice,
+      score: 0.5 - i * 0.001, // minor tiebreak; your ranker will refine
+      reason: 'micro-therapy tip',
+      confidence: 0.8,
+      category: a.contexts?.[0] || 'communication',
+      priority: 2,
+      context_specific: true,
+      attachment_informed: true,
+      meta: {
+        contexts: a.contexts,
+        contextLink: a.contextLink,
+        triggerTone: a.triggerTone,
+        attachmentStyles: a.attachmentStyles,
+        intent: a.intents,
+        tags: a.tags,
+        patterns: a.patterns,
+        source: 'adviceIndex'
+      }
+    }));
+
+    // (4) merge + rank (reuse your existing ranker)
+    const merged = [...rewriteCandidates, ...adviceSuggestions].sort((a, b) => b.score - a.score);
+
+    // (5) micro caps (guard UI density)
+    const MAX_MICRO = 3, MIN_MICRO = 1;
+    const micro = merged.filter(s => s.type === 'micro_advice').slice(0, MAX_MICRO);
+    const nonMicro = merged.filter(s => s.type !== 'micro_advice');
+
+    const final = [
+      ...nonMicro.slice(0, totalCap - Math.max(micro.length, MIN_MICRO)),
+      ...micro
+    ].slice(0, totalCap);
+
+    // (6) telemetry (optional)
+    logger.debug('suggestions.merged', {
+      tone: uiTone,
+      ctx: detectedRequestCtx,
+      topCtx: Object.entries(ctxScores).sort((a,b)=>b[1]-a[1]).slice(0,3),
+      microAdviceCount: micro.length,
+      patterns: {
+        anxious: ctxScores['anxious.pattern'] || 0,
+        avoidant: ctxScores['avoidant.pattern'] || 0,
+        disorganized: ctxScores['disorganized.pattern'] || 0,
+        secure: ctxScores['secure.pattern'] || 0
+      },
+      conf: est?.confidence ?? 0
+    });
+
+    return final;
   }
 
   // ===== Utility methods for analysis_meta (unchanged) =====

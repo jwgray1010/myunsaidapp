@@ -73,10 +73,11 @@ export type SuggestionRequest = z.infer<typeof suggestionRequestSchema>;
 /** SUGGESTION ITEM — accept backend fields too */
 export const suggestionItemSchema = z.object({
   // canonical
-  text: z.string(),
-  type: z.enum(['advice','emotional_support','communication_guidance','boundary_setting','conflict_resolution']),
+  text: z.string().optional(), // text is optional for micro_advice type
+  advice: z.string().optional(), // for micro_advice type
+  type: z.enum(['advice','emotional_support','communication_guidance','boundary_setting','conflict_resolution','rewrite','micro_advice']),
   confidence: z.number().min(0).max(1),
-  reason: z.string(),
+  reason: z.string().optional(), // optional for micro_advice
   attachmentFriendly: z.boolean().optional(),
   category: z.enum(['communication','emotional','relationship','conflict_resolution']).optional(),
 
@@ -86,6 +87,19 @@ export const suggestionItemSchema = z.object({
   context_specific: z.boolean().optional(),
   attachment_informed: z.boolean().optional(),
   categories: z.array(z.string()).optional(),
+  
+  // micro_advice specific fields
+  meta: z.object({
+    contexts: z.array(z.string()).optional(),
+    contextLink: z.array(z.string()).optional(),
+    triggerTone: z.string().optional(),
+    attachmentStyles: z.array(z.string()).optional(),
+    intent: z.array(z.string()).optional(),
+    tags: z.array(z.string()).optional(),
+    patterns: z.array(z.string()).optional(),
+    source: z.string().optional()
+  }).optional(),
+  score: z.number().optional()
 }).passthrough();
 
 export type SuggestionItem = z.infer<typeof suggestionItemSchema>;

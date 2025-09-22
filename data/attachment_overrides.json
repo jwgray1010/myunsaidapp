@@ -45,7 +45,11 @@
       "CTX_CONFLICT": { "alert": 0.00, "caution": 0.00, "clear": 0.00 },
       "CTX_PLANNING": { "alert": 0.00, "caution": 0.00, "clear": 0.00 },
       "CTX_BOUNDARY": { "alert": 0.00, "caution": 0.00, "clear": 0.00 },
-      "CTX_REPAIR":   { "alert": 0.00, "caution": 0.00, "clear": 0.00 }
+      "CTX_REPAIR":   { "alert": 0.00, "caution": 0.00, "clear": 0.00 },
+      "CTX_ANXIOUS_PATTERN": { "alert": 0.00, "caution": 0.00, "clear": 0.00 },
+      "CTX_AVOIDANT_PATTERN": { "alert": 0.00, "caution": 0.00, "clear": 0.00 },
+      "CTX_DISORGANIZED_PATTERN": { "alert": 0.00, "caution": 0.00, "clear": 0.00 },
+      "CTX_SECURE_PATTERN": { "alert": 0.00, "caution": 0.00, "clear": 0.00 }
     },
     "intensity_blend": { "weight": 0.20 },
     "negationSarcasm": { "negationPenalty": 1.00, "sarcasmPenalty": 1.00 },
@@ -70,7 +74,11 @@
       "context_boosts": {
         "CTX_CONFLICT": { "alert": -0.02, "caution": 0.04, "clear": 0.00 },
         "CTX_PLANNING": { "alert": 0.00, "caution": 0.03, "clear": 0.00 },
-        "CTX_REPAIR":   { "alert": -0.01, "caution": 0.05, "clear": 0.02 }
+        "CTX_REPAIR":   { "alert": -0.01, "caution": 0.05, "clear": 0.02 },
+        "CTX_ANXIOUS_PATTERN": { "alert": 0.01, "caution": 0.08, "clear": 0.02 },
+        "CTX_AVOIDANT_PATTERN": { "alert": 0.00, "caution": 0.01, "clear": 0.00 },
+        "CTX_DISORGANIZED_PATTERN": { "alert": 0.02, "caution": 0.03, "clear": 0.00 },
+        "CTX_SECURE_PATTERN": { "alert": -0.02, "caution": 0.01, "clear": 0.03 }
       },
       "intensity_blend": { "weight": 0.25 },
       "negationSarcasm": { "negationPenalty": 1.05, "sarcasmPenalty": 1.08 },
@@ -86,7 +94,11 @@
       },
       "context_boosts": {
         "CTX_PLANNING": { "alert": 0.00, "caution": 0.02, "clear": 0.04 },
-        "CTX_BOUNDARY": { "alert": 0.00, "caution": 0.03, "clear": 0.04 }
+        "CTX_BOUNDARY": { "alert": 0.00, "caution": 0.03, "clear": 0.04 },
+        "CTX_ANXIOUS_PATTERN": { "alert": 0.00, "caution": 0.01, "clear": 0.01 },
+        "CTX_AVOIDANT_PATTERN": { "alert": -0.01, "caution": 0.02, "clear": 0.06 },
+        "CTX_DISORGANIZED_PATTERN": { "alert": 0.01, "caution": 0.01, "clear": 0.00 },
+        "CTX_SECURE_PATTERN": { "alert": -0.02, "caution": 0.00, "clear": 0.04 }
       },
       "intensity_blend": { "weight": 0.18 },
       "negationSarcasm": { "negationPenalty": 1.02, "sarcasmPenalty": 1.03 },
@@ -102,7 +114,11 @@
       },
       "context_boosts": {
         "CTX_CONFLICT": { "alert": 0.05, "caution": 0.03, "clear": 0.00 },
-        "CTX_REPAIR":   { "alert": 0.00, "caution": 0.03, "clear": 0.02 }
+        "CTX_REPAIR":   { "alert": 0.00, "caution": 0.03, "clear": 0.02 },
+        "CTX_ANXIOUS_PATTERN": { "alert": 0.03, "caution": 0.04, "clear": 0.01 },
+        "CTX_AVOIDANT_PATTERN": { "alert": 0.01, "caution": 0.02, "clear": 0.00 },
+        "CTX_DISORGANIZED_PATTERN": { "alert": 0.05, "caution": 0.06, "clear": 0.01 },
+        "CTX_SECURE_PATTERN": { "alert": -0.03, "caution": -0.01, "clear": 0.02 }
       },
       "intensity_blend": { "weight": 0.30 },
       "negationSarcasm": { "negationPenalty": 1.07, "sarcasmPenalty": 1.09 },
@@ -119,7 +135,11 @@
       "context_boosts": {
         "CTX_REPAIR":   { "alert": -0.02, "caution": 0.03, "clear": 0.06 },
         "CTX_PLANNING": { "alert": 0.00, "caution": 0.00, "clear": 0.03 },
-        "CTX_BOUNDARY": { "alert": 0.00, "caution": 0.02, "clear": 0.03 }
+        "CTX_BOUNDARY": { "alert": 0.00, "caution": 0.02, "clear": 0.03 },
+        "CTX_ANXIOUS_PATTERN": { "alert": -0.01, "caution": 0.02, "clear": 0.04 },
+        "CTX_AVOIDANT_PATTERN": { "alert": -0.01, "caution": 0.01, "clear": 0.03 },
+        "CTX_DISORGANIZED_PATTERN": { "alert": -0.02, "caution": 0.01, "clear": 0.02 },
+        "CTX_SECURE_PATTERN": { "alert": -0.03, "caution": 0.01, "clear": 0.08 }
       },
       "intensity_blend": { "weight": 0.15 },
       "negationSarcasm": { "negationPenalty": 0.98, "sarcasmPenalty": 1.00 },

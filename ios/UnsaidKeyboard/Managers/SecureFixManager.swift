@@ -99,7 +99,14 @@ final class SecureFixManager {
 
     /// Main entry point for your SecureFix button.
     /// Enforces: (1) adviceGateSatisfied, (2) daily limit, (3) non-empty text.
+    /// TEMPORARILY DISABLED: OpenAI calls are disabled for now
     func handleSecureFix() {
+        // TEMPORARY: SecureFix is disabled - show message to user
+        delegate?.showUsageLimitAlert(message: "Secure Fix is temporarily disabled while we improve the feature. Stay tuned!")
+        return
+        
+        // Original implementation commented out:
+        /*
         guard adviceGateSatisfied else {
             delegate?.showUsageLimitAlert(message: "Run Tone Analysis first. After advice appears, you can use Secure Fix.")
             return
@@ -109,7 +116,7 @@ final class SecureFixManager {
             let remaining = getRemainingSecureFixUses()
             let msg = remaining > 0
                 ? "You have \(remaining) Secure Fix uses remaining today."
-                : "You’ve reached your daily limit of \(maxDailySecureFixUses) Secure Fix uses. Try again tomorrow."
+                : "You've reached your daily limit of \(maxDailySecureFixUses) Secure Fix uses. Try again tomorrow."
             delegate?.showUsageLimitAlert(message: msg)
             return
         }
@@ -128,9 +135,10 @@ final class SecureFixManager {
             if let improvedText = improved, !improvedText.isEmpty {
                 delegate?.replaceCurrentMessage(with: improvedText)
             } else {
-                delegate?.showUsageLimitAlert(message: "Couldn’t create a secure rewrite. Please try again.")
+                delegate?.showUsageLimitAlert(message: "Couldn't create a secure rewrite. Please try again.")
             }
         }
+        */
     }
 
     // MARK: - Usage accounting

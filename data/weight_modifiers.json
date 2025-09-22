@@ -126,6 +126,11 @@
     "safety":           { "emo": 0.01, "ctx": 0.02, "attach": 0.00, "ling": 0.01, "intensity": 0.02, "negPenalty": 0.05, "sarcPenalty": 0.03, "absolutesBoost": 0.03 },
     "empathy":          { "emo": 0.05, "ctx": 0.01, "attach": 0.01, "ling": 0.01, "intensity": -0.02, "negPenalty": -0.02, "sarcPenalty": -0.02, "absolutesBoost": -0.02 },
     "blame":            { "emo": 0.03, "ctx": 0.01, "attach": 0.00, "ling": 0.02, "intensity": 0.02, "negPenalty": 0.05, "sarcPenalty": 0.03, "absolutesBoost": 0.04 },
-    "practical":        { "emo": -0.02, "ctx": 0.03, "attach": 0.00, "ling": 0.03, "intensity": -0.01, "negPenalty": 0.00, "sarcPenalty": 0.00, "absolutesBoost": -0.01 }
+    "practical":        { "emo": -0.02, "ctx": 0.03, "attach": 0.00, "ling": 0.03, "intensity": -0.01, "negPenalty": 0.00, "sarcPenalty": 0.00, "absolutesBoost": -0.01 },
+
+    "anxious.pattern":     { "emo": 0.02, "ctx": 0.02, "attach": 0.05, "ling": 0.01, "intensity": 0.02, "negPenalty": 0.02, "sarcPenalty": 0.01, "absolutesBoost": 0.02 },
+    "avoidant.pattern":    { "emo": -0.01, "ctx": 0.01, "attach": 0.04, "ling": 0.02, "intensity": -0.02, "negPenalty": 0.01, "sarcPenalty": 0.00, "absolutesBoost": -0.01 },
+    "disorganized.pattern": { "emo": 0.03, "ctx": 0.02, "attach": 0.06, "ling": 0.01, "intensity": 0.03, "negPenalty": 0.04, "sarcPenalty": 0.02, "absolutesBoost": 0.03 },
+    "secure.pattern":      { "emo": 0.01, "ctx": 0.01, "attach": 0.03, "ling": 0.01, "intensity": -0.03, "negPenalty": -0.03, "sarcPenalty": -0.02, "absolutesBoost": -0.02 }
   }
 }

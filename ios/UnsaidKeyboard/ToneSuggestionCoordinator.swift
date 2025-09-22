@@ -101,6 +101,16 @@ final class ToneSuggestionCoordinator {
     private var debounceTask: Task<Void, Never>?
     private var isAnalysisInFlight = false
     
+    // MARK: - Router short-circuit guards
+    private var lastRouterSnapshotHash = 0
+    private var lastRouterTrigger: (inserted: Character?, deletion: Bool, urgent: Bool) = (nil, false, false)
+    
+    // MARK: - Suggestion hash guard
+    private var lastSuggestionHash = 0
+    
+    // MARK: - Network state debouncing
+    private var reachabilityWorkItem: DispatchWorkItem?
+    
     // MARK: - Response Caching for Scale
     private var analysisCache: [String: (tone: String, timestamp: Date)] = [:]
     private let cacheExpiryInterval: TimeInterval = 60.0 // Cache results for 60s (increased from 30s)
@@ -174,6 +184,14 @@ final class ToneSuggestionCoordinator {
         if let context = payload["context"] as? String { hashableContent += context }
         if let toneOverride = payload["toneOverride"] as? String { hashableContent += toneOverride }
         return String(hashableContent.hash)
+    }
+    
+    // MARK: - Cheap logging gate for Release
+    @inline(__always)
+    private func dlog(_ msg: @autoclosure () -> String) {
+        #if DEBUG
+        print(msg())
+        #endif
     }
     
     // MARK: - Network diagnostics
@@ -577,9 +595,7 @@ final class ToneSuggestionCoordinator {
     private func checkBackoffStatus() {
         let currentTextTrimmed = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !currentTextTrimmed.isEmpty {
-            Task { @MainActor in
-                self.onTextChanged(fullText: currentTextTrimmed, lastInserted: nil, isDeletion: false)
-            }
+            routeIfChanged(fullText: currentTextTrimmed, lastInserted: nil, isDeletion: false, urgent: true)
         }
     }
     
@@ -615,11 +631,55 @@ final class ToneSuggestionCoordinator {
         KBDLog("✅ ToneSuggestionCoordinator cleanup complete", .info, "ToneCoordinator")
     }
     
+    // MARK: - Router Pattern Optimizations
+    
+    /// Cheap hash of current text snapshot for router guards
+    private func snapshotHash(_ text: String) -> Int {
+        var hasher = Hasher()
+        hasher.combine(text)
+        return hasher.finalize()
+    }
+    
+    /// Optimized router that skips work when nothing changed
+    private func routeIfChanged(fullText: String, lastInserted: Character?, isDeletion: Bool, urgent: Bool = false) {
+        let h = snapshotHash(fullText)
+        if h == lastRouterSnapshotHash,
+           lastRouterTrigger.inserted == lastInserted,
+           lastRouterTrigger.deletion == isDeletion,
+           !urgent {
+            dlog("🚀 Router: skipped redundant analysis")
+            return // no-op, nothing changed from router's POV
+        }
+        lastRouterSnapshotHash = h
+        lastRouterTrigger = (lastInserted, isDeletion, urgent)
+        dlog("🚀 Router: proceeding with analysis")
+        Task { @MainActor in
+            onTextChanged(fullText: fullText, lastInserted: lastInserted, isDeletion: isDeletion)
+        }
+    }
+    
+    /// Network state change with debounced UI updates
+    private func handleNetworkStateChange(reachable: Bool) {
+        reachabilityWorkItem?.cancel()
+        let job = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            // Update reachability state and trigger analysis if needed
+            if reachable {
+                dlog("📶 Network: back online")
+                // Re-analyze if there's text when coming back online
+                // Note: This would need to be called from the appropriate context
+                // where fullText is available
+            } else {
+                dlog("📶 Network: went offline")
+            }
+        }
+        reachabilityWorkItem = job
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: job)
+    }
+    
     // MARK: - Public API
     func analyzeFinalSentence(_ sentence: String) {
-        Task { @MainActor in
-            self.onTextChanged(fullText: sentence, lastInserted: nil, isDeletion: false)
-        }
+        routeIfChanged(fullText: sentence, lastInserted: nil, isDeletion: false, urgent: true)
     }
     
     func startHapticSession() {
@@ -647,7 +707,7 @@ final class ToneSuggestionCoordinator {
     private var pendingRequests: [String: URLSessionDataTask] = [:]
     
     func requestSuggestions() {
-        print("🎯 DEBUG: requestSuggestions() called with currentText length: \(currentText.count)")
+        dlog("🎯 DEBUG: requestSuggestions() called with currentText length: \(currentText.count)")
         
         pendingWorkItem?.cancel()
         let snapshot = currentText
@@ -655,14 +715,14 @@ final class ToneSuggestionCoordinator {
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             guard !snapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                print("🎯 DEBUG: Snapshot is empty, clearing suggestions")
+                dlog("🎯 DEBUG: Snapshot is empty, clearing suggestions")
                 DispatchQueue.main.async {
                     self.delegate?.didUpdateSuggestions([])
                     self.delegate?.didUpdateSecureFixButtonState()
                 }
                 return
             }
-            print("🎯 DEBUG: Calling generatePerfectSuggestion with snapshot: '\(String(snapshot.prefix(50)))...'")
+            dlog("🎯 DEBUG: Calling generatePerfectSuggestion with snapshot: '\(String(snapshot.prefix(50)))...'")
             self.generatePerfectSuggestion(from: snapshot)
         }
         pendingWorkItem = work
@@ -776,12 +836,20 @@ final class ToneSuggestionCoordinator {
     
     // MARK: - Suggestion Generation
     private func generatePerfectSuggestion(from snapshot: String = "") {
-        print("🎯 DEBUG: generatePerfectSuggestion called with snapshot length: \(snapshot.count)")
+        dlog("🎯 DEBUG: generatePerfectSuggestion called with snapshot length: \(snapshot.count)")
         
         var textToAnalyze = snapshot.isEmpty ? currentText : snapshot
         if textToAnalyze.count > 1000 { textToAnalyze = String(textToAnalyze.suffix(1000)) }
         
-        print("🎯 DEBUG: About to analyze text: '\(String(textToAnalyze.prefix(50)))...' (length: \(textToAnalyze.count))")
+        // Guard against redundant suggestion requests
+        let h = snapshotHash(textToAnalyze)
+        if h == lastSuggestionHash {
+            dlog("🚀 Suggestions: skipped redundant generation")
+            return
+        }
+        lastSuggestionHash = h
+        
+        dlog("🎯 DEBUG: About to analyze text: '\(String(textToAnalyze.prefix(50)))...' (length: \(textToAnalyze.count))")
         
         var context: [String: Any] = [
             "text": textToAnalyze,
@@ -1522,13 +1590,13 @@ extension ToneSuggestionCoordinator {
         // 🔄 ROUTE TO FULL-TEXT ANALYSIS: Use document-level analysis instead of sentence-based
         switch trigger {
         case .sentenceFinalized:
-            print("🎯 DEBUG: Sentence finalized - calling scheduleImmediateFullTextAnalysis")
+            dlog("🎯 DEBUG: Sentence finalized - calling scheduleImmediateFullTextAnalysis")
             scheduleImmediateFullTextAnalysis(fullText: fullText, triggerReason: "sentence_finalized")
         case .wordEdge, .timeoutEdge, .deleteEdge:
-            print("⏱ DEBUG: Word/timeout/delete edge - calling scheduleFullTextAnalysis")
+            dlog("⏱ DEBUG: Word/timeout/delete edge - calling scheduleFullTextAnalysis")
             scheduleFullTextAnalysis(fullText: fullText, triggerReason: "typing_edge")
         case .none:
-            print("😴 DEBUG: No trigger - no analysis scheduled")
+            dlog("😴 DEBUG: No trigger - no analysis scheduled")
             break
         }
     }
@@ -1547,13 +1615,13 @@ extension ToneSuggestionCoordinator {
     }
     
     private func analyze(_ sentence: String) async {
-        print("🔬 DEBUG: analyze() called with sentence: '\(sentence)'")
+        dlog("🔬 DEBUG: analyze() called with sentence: '\(sentence)'")
         
         let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
-        print("🔬 DEBUG: trimmed sentence: '\(trimmed)' (length: \(trimmed.count))")
+        dlog("🔬 DEBUG: trimmed sentence: '\(trimmed)' (length: \(trimmed.count))")
         
         guard !trimmed.isEmpty else {
-            print("❌ DEBUG: Trimmed sentence is empty, returning")
+            dlog("❌ DEBUG: Trimmed sentence is empty, returning")
             return
         }
         

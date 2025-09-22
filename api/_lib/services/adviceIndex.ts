@@ -3,7 +3,9 @@ import { dataLoader } from './dataLoader';
 import { BM25 } from './bm25';
 import { spacyClient } from './spacyClient';
 import { logger } from '../logger';
+import { isContextAppropriate, getContextLinkBonus } from './contextAnalysis';
 import type { TherapyAdvice } from '../types/dataTypes';
+
 
 // Helper functions for serverless-safe processing
 function clamp01(x: number): number {
@@ -266,4 +268,76 @@ async function warmAdviceVectors(
   } catch (error) {
     logger.error('Vector warming failed:', error);
   }
+  
+}
+
+// additive – returns ranked micro-advice for the request context, tone & ctxScores
+export async function getAdviceCandidates(opts: {
+  requestCtx: string;                  // normalized context
+  ctxScores: Record<string, number>;   // includes *.pattern keys
+  triggerTone: 'clear'|'caution'|'alert';
+  limit?: number;                      // default 6-8
+  tryGetAttachmentEstimate?: () => { primary?: 'anxious'|'avoidant'|'disorganized'|'secure'; confidence?: number } | null;
+}) {
+  const { requestCtx, ctxScores, triggerTone, limit = 8, tryGetAttachmentEstimate } = opts;
+
+  const items = (dataLoader as any).adviceIndexItems as TherapyAdvice[] || [];
+  const bm25 = (dataLoader as any).adviceBM25 as BM25 | null;
+
+  // 1) filter by tone + context (reuse isContextAppropriate)
+  const scored = items
+    .filter(it => {
+      if (it.triggerTone && it.triggerTone !== triggerTone) return false;
+      return isContextAppropriate(it as any, requestCtx, ctxScores);
+    })
+    .map(it => {
+      // 2) score blend: bm25(text) + context link + pattern alignment + style tuning
+      let score = 0;
+
+      if (bm25) {
+        const q = [
+          requestCtx,
+          triggerTone,
+          ...(it.contexts || []),
+          ...(it.patterns || []),
+          ...(it.attachmentStyles || []),
+          ...(it.tags || [])
+        ].join(' ');
+        const results = bm25.search(q, { limit: 100 }); // search all, we'll filter later
+        const matchingResult = results.find(r => r.id === it.id);
+        if (matchingResult) {
+          score += matchingResult.score * 0.55;
+        }
+      }
+
+      // context link bonus
+      const topCtx = Object.entries(ctxScores).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k])=>k);
+      score += getContextLinkBonus(it as any, topCtx); // +0.05 max
+
+      // pattern alignment bonus (up to +0.15)
+      const patBonus = (it.patterns || []).reduce((acc, p) => {
+        const v = ctxScores[p] || 0;
+        return acc + Math.min(v, 0.15/ (it.patterns?.length || 1));
+      }, 0);
+      score += patBonus;
+
+      // style tuning (if we have an attachment primary with decent confidence)
+      const est = tryGetAttachmentEstimate?.(); // wire from coordinator via closure if needed
+      if (est?.primary && it.styleTuning?.[est.primary]) {
+        score += (it.styleTuning[est.primary] || 0);
+      }
+
+      // severity gate
+      if (it.severityThreshold?.[triggerTone] != null) {
+        const thr = Number(it.severityThreshold[triggerTone]);
+        const toneScore = (ctxScores[`${triggerTone}`] || 0); // optional if you track per-bucket
+        if (toneScore < thr) score -= 0.1;                     // soft gate, not hard filter
+      }
+
+      return { item: it, score };
+    })
+    .sort((a,b)=> b.score - a.score)
+    .slice(0, limit);
+
+  return scored.map(s => s.item);
 }

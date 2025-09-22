@@ -17,14 +17,14 @@
 import { readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { env } from 'process';
+import { performance } from 'node:perf_hooks';
 import { logger } from '../logger';
+import { tokenize, DEFAULT_STOPWORDS } from '../utils/tokenize';
 
 const CLIENT_VERSION = '1.2.0';
 
-// Prefer global performance if available (Node >=16). Fallback to Date.now.
-const now = (): number => (globalThis.performance && typeof globalThis.performance.now === 'function')
-  ? globalThis.performance.now()
-  : Date.now();
+// Prefer Node perf hooks; keep fallback
+const now = (): number => (performance?.now?.() ?? Date.now());
 
 function extractSecondPersonTokenSpans(tokens: SpacyToken[]) {
   const SECOND = new Set(['you','your',"you're",'ur','u','yours','yourself',"youre"]);
@@ -205,7 +205,7 @@ export class SpacyService {
 
   // simple entity + token regexes
   private entityPatterns = {
-    PERSON: /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g,
+    PERSON: /\b(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b/g,
     INTENSITY: /\b(very|extremely|really|quite|somewhat|a little|slightly|incredibly|totally|completely|barely|hardly|absolutely|utterly)\b/gi,
     NEGATION: /\b(not|don't|won't|can't|shouldn't|wouldn't|couldn't|haven't|hasn't|hadn't|isn't|aren't|wasn't|weren't|never|no|none|nothing|nobody|nowhere)\b/gi
   } as const;
@@ -310,6 +310,9 @@ export class SpacyService {
         });
       });
     }
+
+    // One-line startup summary
+    logger.info('SpaCy client initialized', this.getProcessingSummary());
   }
 
   // ---------- tiny NLP helpers ----------
@@ -339,8 +342,7 @@ export class SpacyService {
   }
 
   private isStopWord(word: string): boolean {
-    const stop = ['the','a','an','and','or','but','in','on','at','to','for','of','with','by','from','as','that','this'];
-    return stop.includes(word.toLowerCase());
+    return DEFAULT_STOPWORDS.has(word.toLowerCase());
   }
 
   private clamp(text: string): string {
@@ -349,22 +351,26 @@ export class SpacyService {
 
   private splitTokens(text: string): SpacyToken[] {
     const tokens: SpacyToken[] = [];
-    const rx = /\w+|[^\s\w]/g; // words or single punctuation
-    let m: RegExpExecArray | null;
-    let i = 0;
-    while ((m = rx.exec(text)) !== null) {
-      const t = m[0];
-      const start = m.index;
-      const end = m.index + t.length;
+    // Use shared Unicode/emoji-aware tokenizer for consistency
+    const tokenStrings = tokenize(text);
+    let charOffset = 0;
+    
+    for (let i = 0; i < tokenStrings.length; i++) {
+      const t = tokenStrings[i];
+      const start = text.indexOf(t, charOffset);
+      const end = start + t.length;
+      charOffset = end;
+      
       tokens.push({
         text: t,
-        index: i++,
+        index: i,
         pos: this.simplePOSTag(t),
         lemma: this.basicLemmatize(t),
         is_alpha: /^[A-Za-z]+$/.test(t),
         is_stop: this.isStopWord(t),
         is_punct: /^[^\w\s]+$/.test(t),
-        start, end
+        start, 
+        end
       });
     }
     return tokens;

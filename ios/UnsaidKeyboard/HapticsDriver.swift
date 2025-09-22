@@ -27,6 +27,11 @@ final class UnifiedHapticsController: HapticsDriver {
     private var isSessionActive = false
     private var isPlayerStarted = false
     private var engineStartCount = 0
+    private var isStartingEngine = false // Prevent double starts
+    private let supportsHaptics: Bool    // Cache capability check
+    
+    // MARK: - Cached Transient Players
+    private var cachedTransientPlayers: [String: CHHapticPatternPlayer] = [:]
     
     // MARK: - Idle Management with Cool-down
     private let idleThreshold: Float = 0.12
@@ -60,6 +65,7 @@ final class UnifiedHapticsController: HapticsDriver {
     static let shared = UnifiedHapticsController()
     
     private init() {
+        supportsHaptics = CHHapticEngine.capabilitiesForHardware().supportsHaptics
         setupEngine()
     }
     
@@ -89,12 +95,14 @@ final class UnifiedHapticsController: HapticsDriver {
     }
     
     func transient(intensity: Float, sharpness: Float) {
+        guard supportsHaptics else { return }
         hapticQueue.async { [weak self] in
             self?._playTransient(intensity: intensity, sharpness: sharpness)
         }
     }
     
     func continuous(intensity: Float, sharpness: Float) {
+        guard supportsHaptics else { return }
         let requestTime = CACurrentMediaTime()
         hapticQueue.async { [weak self] in
             self?._applyContinuous(intensity: intensity, sharpness: sharpness, requestTime: requestTime)
@@ -110,8 +118,12 @@ final class UnifiedHapticsController: HapticsDriver {
     
     // MARK: - Private Implementation
     
+    @inline(__always) private func clamp(_ v: Float) -> Float { 
+        max(0, min(1, v)) 
+    }
+
     private func setupEngine() {
-        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
+        guard supportsHaptics else {
             #if DEBUG
             os_log("Haptics not supported on this device", log: logger, type: .info)
             #endif
@@ -172,13 +184,13 @@ final class UnifiedHapticsController: HapticsDriver {
     }
     
     private func _startEngineIfNeeded() {
-        guard let engine = hapticEngine, !isEngineStarted else { return }
+        guard let engine = hapticEngine, !isEngineStarted, !isStartingEngine else { return }
+        isStartingEngine = true
         do {
             engine.playsHapticsOnly = true // keeps audio session light (safe in extensions)
             try engine.start()
             isEngineStarted = true
             engineStartCount += 1
-            if continuousPlayer == nil { createContinuousPlayer() }
             #if DEBUG
             os_log("Haptic engine started on demand (start #%d)", log: logger, type: .info, engineStartCount)
             #endif
@@ -187,6 +199,8 @@ final class UnifiedHapticsController: HapticsDriver {
             os_log("Engine start failed: %{public}@", log: logger, type: .error, error.localizedDescription)
             #endif
         }
+        isStartingEngine = false
+        if continuousPlayer == nil { createContinuousPlayer() }
     }
     
     private func _gracefulStopHapticSession() {
@@ -275,8 +289,38 @@ final class UnifiedHapticsController: HapticsDriver {
     
     // MARK: - Transient Haptics (for UI feedback with lazy engine start)
     
+    private func playerForTransient(i: Float, s: Float) throws -> CHHapticPatternPlayer {
+        // Bucket to nearest preset to reuse common patterns
+        let key: String
+        switch (i, s) {
+        case (..<0.45, ..<0.45): key = "light"   // (~0.3,0.3)
+        case (..<0.75, ..<0.75): key = "medium"  // (~0.6,0.6)
+        default:                 key = "heavy"   // (1.0,1.0)
+        }
+        
+        if let p = cachedTransientPlayers[key] { return p }
+        
+        let params: (Float, Float) = key == "light" ? (0.3, 0.3) : key == "medium" ? (0.6, 0.6) : (1.0, 1.0)
+        let pattern = try CHHapticPattern(events: [
+            CHHapticEvent(eventType: .hapticTransient,
+                         parameters: [
+                            CHHapticEventParameter(parameterID: .hapticIntensity, value: params.0),
+                            CHHapticEventParameter(parameterID: .hapticSharpness, value: params.1)
+                         ],
+                         relativeTime: 0)
+        ], parameters: [])
+        let p = try hapticEngine!.makePlayer(with: pattern)
+        cachedTransientPlayers[key] = p
+        return p
+    }
+    
     private func _playTransient(intensity: Float, sharpness: Float) {
-        guard isSessionActive, let engine = hapticEngine else { return }
+        guard isSessionActive, supportsHaptics else { return }
+        
+        let i = clamp(intensity), s = clamp(sharpness)
+        guard i > 0 || s > 0 else { scheduleIdleTimers(); return }
+        
+        guard let engine = hapticEngine else { return }
         
         do {
             // Start engine if needed for meaningful transient feedback
@@ -284,18 +328,23 @@ final class UnifiedHapticsController: HapticsDriver {
                 _startEngineIfNeeded()
             }
             
-            let intensityParam = CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity)
-            let sharpnessParam = CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness)
-            
-            let event = CHHapticEvent(
-                eventType: .hapticTransient,
-                parameters: [intensityParam, sharpnessParam],
-                relativeTime: 0
-            )
-            
-            let pattern = try CHHapticPattern(events: [event], parameters: [])
-            let player = try engine.makePlayer(with: pattern)
-            try player.start(atTime: CHHapticTimeImmediate)
+            // Try cached first; fall back to ad-hoc if caller asked for odd values
+            if let p = try? playerForTransient(i: i, s: s) {
+                try p.start(atTime: CHHapticTimeImmediate)
+            } else {
+                let intensityParam = CHHapticEventParameter(parameterID: .hapticIntensity, value: i)
+                let sharpnessParam = CHHapticEventParameter(parameterID: .hapticSharpness, value: s)
+                
+                let event = CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [intensityParam, sharpnessParam],
+                    relativeTime: 0
+                )
+                
+                let pattern = try CHHapticPattern(events: [event], parameters: [])
+                let player = try engine.makePlayer(with: pattern)
+                try player.start(atTime: CHHapticTimeImmediate)
+            }
             
         } catch {
             #if DEBUG
@@ -307,7 +356,10 @@ final class UnifiedHapticsController: HapticsDriver {
     // MARK: - Continuous Haptics (with lazy engine start and idle management)
     
     private func _applyContinuous(intensity: Float, sharpness: Float, requestTime: CFTimeInterval) {
-        guard isSessionActive else { return }
+        guard isSessionActive, supportsHaptics else { return }
+        
+        let i = clamp(intensity), s = clamp(sharpness)
+        guard i > 0 || s > 0 else { scheduleIdleTimers(); return }
         
         let now = CACurrentMediaTime()
         
@@ -321,8 +373,8 @@ final class UnifiedHapticsController: HapticsDriver {
         }
         
         // Apply smoothing
-        let smoothedIntensity = lastIntensity + smoothingFactor * (intensity - lastIntensity)
-        let smoothedSharpness = lastSharpness + smoothingFactor * (sharpness - lastSharpness)
+        let smoothedIntensity = lastIntensity + smoothingFactor * (i - lastIntensity)
+        let smoothedSharpness = lastSharpness + smoothingFactor * (s - lastSharpness)
         
         // Apply deadband
         let intensityDelta = abs(smoothedIntensity - lastIntensity)
@@ -342,6 +394,13 @@ final class UnifiedHapticsController: HapticsDriver {
         
         // Check if this is meaningful enough to start engine
         let activeMag = max(smoothedIntensity, smoothedSharpness)
+        
+        // Early ramp+stop if near idle threshold
+        if activeMag < idleThreshold && isPlayerStarted {
+            scheduleIdleTimers()
+            return
+        }
+        
         if activeMag >= meaningfulThreshold {
             // Start engine if needed on first meaningful tone
             if !isEngineStarted {
@@ -412,7 +471,7 @@ final class UnifiedHapticsController: HapticsDriver {
                 eventType: .hapticContinuous,
                 parameters: [intensity, sharpness],
                 relativeTime: 0,
-                duration: 3600
+                duration: 60 // Finite duration to avoid "long event" warnings
             )
             
             let pattern = try CHHapticPattern(events: [event], parameters: [])
@@ -439,47 +498,92 @@ final class UnifiedHapticsController: HapticsDriver {
     // MARK: - Advanced Haptic Patterns (from AdvancedHapticEngine)
     
     func playAttentionPattern() {
+        guard supportsHaptics else { return }
         hapticQueue.async { [weak self] in
             // Triple tap for attention
             self?._playTransient(intensity: 1.0, sharpness: 1.0)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self?.hapticQueue.asyncAfter(deadline: .now() + 0.1) {
                 self?._playTransient(intensity: 1.0, sharpness: 1.0)
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self?.hapticQueue.asyncAfter(deadline: .now() + 0.2) {
                 self?._playTransient(intensity: 1.0, sharpness: 1.0)
             }
         }
     }
     
     func playProgressPattern(progress: Float) {
+        guard supportsHaptics else { return }
         let clampedProgress = max(0.0, min(1.0, progress))
         continuous(intensity: clampedProgress, sharpness: 0.5)
     }
     
+    func playProgressSweep(duration: TimeInterval) {
+        guard supportsHaptics else { return }
+        hapticQueue.async { [weak self] in
+            guard let self, self.isSessionActive else { return }
+            if !self.isEngineStarted { self._startEngineIfNeeded() }
+            if self.continuousPlayer == nil { self.createContinuousPlayer() }
+            guard self.continuousPlayer != nil else { return }
+
+            let points = [
+                CHHapticParameterCurve.ControlPoint(relativeTime: 0, value: 0),
+                CHHapticParameterCurve.ControlPoint(relativeTime: duration, value: 1)
+            ]
+            let curve = CHHapticParameterCurve(parameterID: .hapticIntensityControl,
+                                              controlPoints: points,
+                                              relativeTime: 0)
+            do {
+                // For parameter curves, we need to create a new pattern with the curve
+                let intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.0)
+                let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
+                
+                let event = CHHapticEvent(
+                    eventType: .hapticContinuous,
+                    parameters: [intensity, sharpness],
+                    relativeTime: 0,
+                    duration: duration + 0.1
+                )
+                
+                let pattern = try CHHapticPattern(events: [event], parameterCurves: [curve])
+                let sweepPlayer = try self.hapticEngine!.makePlayer(with: pattern)
+                try sweepPlayer.start(atTime: CHHapticTimeImmediate)
+                
+                self.scheduleIdleTimers()
+            } catch {
+                #if DEBUG
+                os_log("Failed to play progress sweep: %{public}@", log: self.logger, type: .error, error.localizedDescription)
+                #endif
+            }
+        }
+    }
+    
     func playSuccessPattern() {
+        guard supportsHaptics else { return }
         hapticQueue.async { [weak self] in
             // Success: medium-light-medium
             self?._playTransient(intensity: 0.7, sharpness: 0.6)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self?.hapticQueue.asyncAfter(deadline: .now() + 0.1) {
                 self?._playTransient(intensity: 0.4, sharpness: 0.3)
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self?.hapticQueue.asyncAfter(deadline: .now() + 0.2) {
                 self?._playTransient(intensity: 0.7, sharpness: 0.6)
             }
         }
     }
     
     func playWarningPattern() {
+        guard supportsHaptics else { return }
         hapticQueue.async { [weak self] in
             // Warning: two sharp taps
             self?._playTransient(intensity: 0.8, sharpness: 1.0)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            self?.hapticQueue.asyncAfter(deadline: .now() + 0.15) {
                 self?._playTransient(intensity: 0.8, sharpness: 1.0)
             }
         }
     }
     
     func playErrorPattern() {
+        guard supportsHaptics else { return }
         hapticQueue.async { [weak self] in
             // Error: long heavy vibration
             guard let self = self, self.isSessionActive, let engine = self.hapticEngine else { return }

@@ -775,6 +775,114 @@
         "disorganized": { "caution": 0.05 },
         "secure": { "clear": 0.15 }
       }
+    },
+
+    {
+      "id": "CTX_ANXIOUS_PATTERN",
+      "context": "anxious.pattern",
+      "description": "Anxious attachment communication patterns and behaviors",
+      "priority": 4,
+      "polarity": "escalatory",
+      "windowTokens": 32,
+      "scope": "message",
+      "clearGate": { "mode": "neutral", "strength": 0.7 },
+      "toneCues": [
+        "read my message","saw my text","why haven't you","still waiting","did you get","are you mad","did i do something","ignoring me","check your phone","respond faster","need to know","reassurance","validation","double text"
+      ],
+      "toneCuesWeighted": [
+        {"pattern": "\\b(read|saw)\\s+(my|the)\\s+(message|text)\\b", "weight": 0.30, "type": "regex"},
+        {"pattern": "\\b(why\\s+haven't|still\\s+waiting|did\\s+you\\s+get)\\b", "weight": 0.25, "type": "regex"},
+        {"pattern": "\\b(are\\s+you\\s+mad|did\\s+i\\s+do\\s+something|ignoring\\s+me)\\b", "weight": 0.35, "type": "regex"},
+        {"pattern": "\\b(need\\s+to\\s+know|reassurance|validation)\\b", "weight": 0.20, "type": "regex"}
+      ],
+      "confidenceBoosts": { "caution": 0.25, "alert": 0.15 },
+      "attachmentAdjustments": {
+        "anxious": { "caution": 0.30, "alert": 0.20 },
+        "avoidant": { "clear": -0.10, "caution": 0.10 },
+        "disorganized": { "caution": 0.15, "alert": 0.10 },
+        "secure": { "clear": 0.10 }
+      }
+    },
+
+    {
+      "id": "CTX_AVOIDANT_PATTERN",
+      "context": "avoidant.pattern", 
+      "description": "Avoidant attachment communication patterns and behaviors",
+      "priority": 4,
+      "polarity": "deescalatory",
+      "windowTokens": 28,
+      "scope": "message",
+      "clearGate": { "mode": "promote", "strength": 0.8 },
+      "toneCues": [
+        "need space","too much","overwhelmed","step back","alone time","processing","not now","later","busy","fine","whatever","doesn't matter","independence","boundaries"
+      ],
+      "toneCuesWeighted": [
+        {"pattern": "\\b(need\\s+space|alone\\s+time|step\\s+back)\\b", "weight": 0.30, "type": "regex"},
+        {"pattern": "\\b(too\\s+much|overwhelmed|processing)\\b", "weight": 0.25, "type": "regex"},
+        {"pattern": "\\b(not\\s+now|later|busy)\\b", "weight": 0.20, "type": "regex"},
+        {"pattern": "\\b(fine|whatever|doesn't\\s+matter)\\b", "weight": 0.15, "type": "regex"}
+      ],
+      "confidenceBoosts": { "clear": 0.20, "caution": 0.10 },
+      "attachmentAdjustments": {
+        "anxious": { "caution": 0.20, "alert": 0.10 },
+        "avoidant": { "clear": 0.25, "caution": -0.05 },
+        "disorganized": { "caution": 0.10 },
+        "secure": { "clear": 0.15 }
+      }
+    },
+
+    {
+      "id": "CTX_DISORGANIZED_PATTERN",
+      "context": "disorganized.pattern",
+      "description": "Disorganized attachment communication patterns and behaviors",
+      "priority": 5,
+      "polarity": "escalatory",
+      "windowTokens": 36,
+      "scope": "message", 
+      "clearGate": { "mode": "dampen", "strength": 0.6 },
+      "toneCues": [
+        "don't know","confused","mixed signals","contradictory","push and pull","come here go away","unstable","chaotic","unpredictable","inconsistent","hot and cold","flip flop"
+      ],
+      "toneCuesWeighted": [
+        {"pattern": "\\b(don't\\s+know|confused|mixed\\s+signals)\\b", "weight": 0.30, "type": "regex"},
+        {"pattern": "\\b(contradictory|push\\s+and\\s+pull|come\\s+here\\s+go\\s+away)\\b", "weight": 0.35, "type": "regex"},
+        {"pattern": "\\b(unstable|chaotic|unpredictable|inconsistent)\\b", "weight": 0.25, "type": "regex"},
+        {"pattern": "\\b(hot\\s+and\\s+cold|flip\\s+flop)\\b", "weight": 0.20, "type": "regex"}
+      ],
+      "confidenceBoosts": { "alert": 0.30, "caution": 0.20 },
+      "attachmentAdjustments": {
+        "anxious": { "alert": 0.15, "caution": 0.20 },
+        "avoidant": { "caution": 0.15 },
+        "disorganized": { "alert": 0.35, "caution": 0.25 },
+        "secure": { "clear": 0.05 }
+      }
+    },
+
+    {
+      "id": "CTX_SECURE_PATTERN",
+      "context": "secure.pattern",
+      "description": "Secure attachment communication patterns and behaviors", 
+      "priority": 3,
+      "polarity": "deescalatory",
+      "windowTokens": 24,
+      "scope": "message",
+      "clearGate": { "mode": "promote", "strength": 1.0 },
+      "toneCues": [
+        "i feel","can we talk","i understand","let's work","together","compromise","both sides","your perspective","i hear you","healthy communication","direct","honest"
+      ],
+      "toneCuesWeighted": [
+        {"pattern": "\\b(i\\s+feel|can\\s+we\\s+talk|i\\s+understand)\\b", "weight": 0.25, "type": "regex"},
+        {"pattern": "\\b(let's\\s+work|together|compromise)\\b", "weight": 0.30, "type": "regex"},
+        {"pattern": "\\b(both\\s+sides|your\\s+perspective|i\\s+hear\\s+you)\\b", "weight": 0.35, "type": "regex"},
+        {"pattern": "\\b(direct|honest|healthy\\s+communication)\\b", "weight": 0.20, "type": "regex"}
+      ],
+      "confidenceBoosts": { "clear": 0.35, "caution": -0.10 },
+      "attachmentAdjustments": {
+        "anxious": { "clear": 0.20, "caution": -0.05 },
+        "avoidant": { "clear": 0.20 },
+        "disorganized": { "clear": 0.15, "caution": -0.05 },
+        "secure": { "clear": 0.40 }
+      }
     }
   ],
 

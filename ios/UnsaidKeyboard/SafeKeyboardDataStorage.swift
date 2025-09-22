@@ -13,9 +13,17 @@ final class SafeKeyboardDataStorage {
     // MARK: - Properties
     private let logger = Logger(subsystem: "com.example.unsaid.UnsaidKeyboard", category: "SafeDataStorage")
     private let sharedDefaults = AppGroups.shared  // Non-optional shared UserDefaults
-    private let maxQueueSize = 100          // in-memory bound
+    private let maxQueueSize = 100          // in-memory bound (reserved for future use)
     private let maxPersistedSize = 200      // on-disk bound (per bucket)
-    private let syncDebounce: TimeInterval = 0.35
+    private let syncDebounce: TimeInterval = 1.0  // Safer for keyboard extensions
+
+    // Reusable encoders/decoders to avoid repeated allocations
+    private let jsonEncoder: JSONEncoder = {
+        let enc = JSONEncoder()
+        // enc.outputFormatting = .withoutEscapingSlashes  // optional space saving
+        return enc
+    }()
+    private let jsonDecoder = JSONDecoder()
 
     // MARK: - Storage Keys
     private enum StorageKeys {
@@ -37,11 +45,9 @@ final class SafeKeyboardDataStorage {
     private struct StoredInteraction: Codable {
         let id: String
         let timestamp: TimeInterval
-        let textBeforeLength: Int
-        let textAfterLength: Int
+        let textLength: Int  // Single field instead of textBeforeLength/textAfterLength
         let toneStatus: String
         let suggestionAccepted: Bool
-        let userAcceptedSuggestion: Bool
         let suggestionLength: Int
         let analysisTime: TimeInterval
         let context: String
@@ -52,6 +58,24 @@ final class SafeKeyboardDataStorage {
         let sentimentScore: Double
         let wordCount: Int
         let appContext: String
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case timestamp = "ts"
+            case textLength = "tl"
+            case toneStatus = "tone"
+            case suggestionAccepted = "acc"
+            case suggestionLength = "sl"
+            case analysisTime = "at"
+            case context = "ctx"
+            case interactionType = "itype"
+            case communicationPattern = "cpat"
+            case attachmentStyle = "astyle"
+            case relationshipContext = "rctx"
+            case sentimentScore = "sent"
+            case wordCount = "wc"
+            case appContext = "app"
+        }
     }
 
     private struct StoredTone: Codable {
@@ -64,6 +88,18 @@ final class SafeKeyboardDataStorage {
         let analysisTime: TimeInterval
         let source: String
         let categories: [String]?  // tone pattern categories for therapy advice matching
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case timestamp = "ts"
+            case textLength = "tl"
+            case textHash = "th"
+            case tone
+            case confidence = "cf"
+            case analysisTime = "at"
+            case source = "src"
+            case categories = "cat"
+        }
     }
 
     private struct StoredSuggestion: Codable {
@@ -73,6 +109,15 @@ final class SafeKeyboardDataStorage {
         let accepted: Bool
         let context: String
         let source: String
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case timestamp = "ts"
+            case suggestionLength = "sl"
+            case accepted = "acc"
+            case context = "ctx"
+            case source = "src"
+        }
     }
 
     private struct StoredAnalytics: Codable {
@@ -81,6 +126,14 @@ final class SafeKeyboardDataStorage {
         let event: String
         let source: String
         let payload: [String: String]  // stringified to remain Codable
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case timestamp = "ts"
+            case event = "evt"
+            case source = "src"
+            case payload = "pld"
+        }
     }
 
     // MARK: - In-Memory Queues (bounded)
@@ -96,9 +149,8 @@ final class SafeKeyboardDataStorage {
     private var isProcessing = false
     private var pendingSyncWork: DispatchWorkItem?
 
-    // MARK: - Shared Defaults
-
-    // sharedDefaults already a UserDefaults
+    // Per-bucket dirty flags to skip unnecessary merges
+    private var dirty = (i: false, a: false, t: false, s: false)
 
     // MARK: - Public API
 
@@ -107,12 +159,19 @@ final class SafeKeyboardDataStorage {
             guard let self = self else { return }
             let item = self.toStoredInteraction(interaction)
             self.interactionQueue.append(item)
+            self.dirty.i = true
             self.scheduleCoalescedSync()
             self.logger.debug("✅ queued interaction: \(interaction.interactionType.rawValue)")
         }
     }
 
-    func recordToneAnalysis(text: String, tone: ToneStatus, confidence: Double, analysisTime: TimeInterval, categories: [String]? = nil) {
+    func recordToneAnalysis(
+        text: String,
+        tone: ToneStatus,
+        confidence: Double,
+        analysisTime: TimeInterval,
+        categories: [String]? = nil
+    ) {
         workQueue.async { [weak self] in
             guard let self = self else { return }
             let item = StoredTone(
@@ -127,6 +186,7 @@ final class SafeKeyboardDataStorage {
                 categories: categories
             )
             self.toneQueue.append(item)
+            self.dirty.t = true
             self.scheduleCoalescedSync()
             self.logger.debug("✅ queued tone: \(tone.rawValue) with categories: \(categories ?? [])")
         }
@@ -144,6 +204,7 @@ final class SafeKeyboardDataStorage {
                 source: "keyboard_extension"
             )
             self.suggestionQueue.append(item)
+            self.dirty.s = true
             self.scheduleCoalescedSync()
             self.logger.debug("✅ queued suggestion accepted=\(accepted)")
         }
@@ -162,6 +223,7 @@ final class SafeKeyboardDataStorage {
                 payload: stringified
             )
             self.analyticsQueue.append(item)
+            self.dirty.a = true
             self.scheduleCoalescedSync()
             self.logger.debug("✅ queued analytics: \(event)")
         }
@@ -199,43 +261,59 @@ final class SafeKeyboardDataStorage {
     private func persistSnapshots() {
         let defaults = sharedDefaults
 
-        // take immutable snapshots on queue
-        let interactions = workQueue.sync { interactionQueue.makeArray(max: maxPersistedSize) }
-        let analytics    = workQueue.sync { analyticsQueue.makeArray(max: maxPersistedSize) }
-        let tones        = workQueue.sync { toneQueue.makeArray(max: maxPersistedSize) }
-        let suggestions  = workQueue.sync { suggestionQueue.makeArray(max: maxPersistedSize) }
+        // Early-out check: only proceed if there are new items in any bucket
+        let dirtyFlags = workQueue.sync { dirty }
+        guard dirtyFlags.i || dirtyFlags.a || dirtyFlags.t || dirtyFlags.s else { return }
 
-        // read existing (as Data) and append
-        let mergedInteractions = mergeStored(existingKey: StorageKeys.pendingInteractions, new: interactions, defaults: defaults)
-        let mergedAnalytics    = mergeStored(existingKey: StorageKeys.pendingAnalytics,    new: analytics,    defaults: defaults)
-        let mergedTones        = mergeStored(existingKey: StorageKeys.pendingToneData,     new: tones,        defaults: defaults)
-        let mergedSuggestions  = mergeStored(existingKey: StorageKeys.pendingSuggestions,  new: suggestions,  defaults: defaults)
+        // Only process dirty buckets to avoid unnecessary decode/encode work
+        if dirtyFlags.i {
+            let interactions = workQueue.sync { interactionQueue.makeArray(max: maxPersistedSize) }
+            let merged = mergeStored(existingKey: StorageKeys.pendingInteractions, new: interactions, defaults: defaults)
+            store(merged, forKey: StorageKeys.pendingInteractions, defaults: defaults)
+        }
 
-        // write back
-        store(mergedInteractions, forKey: StorageKeys.pendingInteractions, defaults: defaults)
-        store(mergedAnalytics,    forKey: StorageKeys.pendingAnalytics,    defaults: defaults)
-        store(mergedTones,        forKey: StorageKeys.pendingToneData,     defaults: defaults)
-        store(mergedSuggestions,  forKey: StorageKeys.pendingSuggestions,  defaults: defaults)
+        if dirtyFlags.a {
+            let analytics = workQueue.sync { analyticsQueue.makeArray(max: maxPersistedSize) }
+            let merged = mergeStored(existingKey: StorageKeys.pendingAnalytics, new: analytics, defaults: defaults)
+            store(merged, forKey: StorageKeys.pendingAnalytics, defaults: defaults)
+        }
+
+        if dirtyFlags.t {
+            let tones = workQueue.sync { toneQueue.makeArray(max: maxPersistedSize) }
+            let merged = mergeStored(existingKey: StorageKeys.pendingToneData, new: tones, defaults: defaults)
+            store(merged, forKey: StorageKeys.pendingToneData, defaults: defaults)
+        }
+
+        if dirtyFlags.s {
+            let suggestions = workQueue.sync { suggestionQueue.makeArray(max: maxPersistedSize) }
+            let merged = mergeStored(existingKey: StorageKeys.pendingSuggestions, new: suggestions, defaults: defaults)
+            store(merged, forKey: StorageKeys.pendingSuggestions, defaults: defaults)
+        }
+
+        // Count total for metadata (approximate bytes via Data.count)
+        let totalItems =
+            (dirtyFlags.i ? (defaults.data(forKey: StorageKeys.pendingInteractions)?.count ?? 0) : 0) +
+            (dirtyFlags.a ? (defaults.data(forKey: StorageKeys.pendingAnalytics)?.count ?? 0) : 0) +
+            (dirtyFlags.t ? (defaults.data(forKey: StorageKeys.pendingToneData)?.count ?? 0) : 0) +
+            (dirtyFlags.s ? (defaults.data(forKey: StorageKeys.pendingSuggestions)?.count ?? 0) : 0)
 
         // metadata (small, no need to debounce extra)
-        let totalItems = mergedInteractions.count + mergedAnalytics.count + mergedTones.count + mergedSuggestions.count
         let metadata: [String: Any] = [
             "last_sync": Date().timeIntervalSince1970,
-            "interactions_count": mergedInteractions.count,
-            "analytics_count": mergedAnalytics.count,
-            "tone_count": mergedTones.count,
-            "suggestions_count": mergedSuggestions.count,
-            "total_items": totalItems,
+            "interactions_dirty": dirtyFlags.i,
+            "analytics_dirty": dirtyFlags.a,
+            "tone_dirty": dirtyFlags.t,
+            "suggestions_dirty": dirtyFlags.s,
+            "total_bytes_approx": totalItems,
             "has_pending_data": totalItems > 0,
             "keyboard_version": "2.0.0",
             "sync_source": "keyboard_extension"
         ]
         defaults.set(metadata, forKey: StorageKeys.storageMetadata)
-        
-        // TODO: Add smart notification triggers when needed
 
-        // clear in-memory queues after success
+        // clear in-memory queues and reset dirty flags after success
         workQueue.async {
+            self.dirty = (false, false, false, false)
             self.interactionQueue.removeAll()
             self.analyticsQueue.removeAll()
             self.toneQueue.removeAll()
@@ -257,14 +335,14 @@ final class SafeKeyboardDataStorage {
     }
 
     private func store<T: Codable>(_ value: T, forKey key: String, defaults: UserDefaults) {
-        if let data = try? JSONEncoder().encode(value) {
+        if let data = try? jsonEncoder.encode(value) {
             defaults.set(data, forKey: key)
         }
     }
 
     private func decode<T: Codable>(_ type: T.Type, key: String, defaults: UserDefaults) -> T? {
         guard let data = defaults.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(T.self, from: data)
+        return try? jsonDecoder.decode(T.self, from: data)
     }
 
     // MARK: - Public retrieval (for main app)
@@ -330,18 +408,16 @@ final class SafeKeyboardDataStorage {
     // MARK: - Helpers
 
     private func hasQueuedData() -> Bool {
-        (interactionQueue.count + analyticsQueue.count + toneQueue.count + suggestionQueue.count) > 0
+        dirty.i || dirty.a || dirty.t || dirty.s
     }
 
     private func toStoredInteraction(_ i: KeyboardInteraction) -> StoredInteraction {
         StoredInteraction(
             id: UUID().uuidString,
             timestamp: i.timestamp.timeIntervalSince1970,
-            textBeforeLength: i.textLength, // Using textLength as approximation
-            textAfterLength: i.textLength, // Using textLength as approximation
+            textLength: i.textLength, // Single field instead of before/after
             toneStatus: i.toneStatus.rawValue,
             suggestionAccepted: i.wasAccepted,
-            userAcceptedSuggestion: i.wasAccepted,
             suggestionLength: i.suggestionText?.count ?? 0,
             analysisTime: i.analysisTime,
             context: "keyboard", // Default context since not available in struct
@@ -356,12 +432,13 @@ final class SafeKeyboardDataStorage {
     }
 
     private static func sha256Hex(of text: String) -> String {
-        let digest = SHA256.hash(data: Data(text.utf8))
-        return digest.compactMap { String(format: "%02x", $0) }.joined()
+        let prefix = text.utf8.prefix(1024) // cap to 1 KB for speed
+        let digest = SHA256.hash(data: Data(prefix))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     private static func toDictionary<T: Encodable>(_ value: T) -> [String: Any] {
-        // Safe “lossy” bridge for callers needing dictionaries
+        // Safe "lossy" bridge for callers needing dictionaries
         guard let data = try? JSONEncoder().encode(value),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
         return obj
@@ -393,48 +470,48 @@ private struct RingBuffer<Element> {
 
 // MARK: - Subscription Status Access
 extension SafeKeyboardDataStorage {
-    
+
     /// Check if user has active subscription (synced from main app)
     func hasActiveSubscription() -> Bool {
         return sharedDefaults.bool(forKey: StorageKeys.subscriptionActive)
     }
-    
+
     /// Check if user has active trial (synced from main app)
     func hasActiveTrial() -> Bool {
         return sharedDefaults.bool(forKey: StorageKeys.trialActive)
     }
-    
+
     /// Check if user is in admin mode (synced from main app)
     func isAdminMode() -> Bool {
         return sharedDefaults.bool(forKey: StorageKeys.adminModeActive)
     }
-    
+
     /// Get trial start date (synced from main app)
     func getTrialStartDate() -> Date? {
         let timestamp = sharedDefaults.double(forKey: StorageKeys.trialStartDate)
         guard timestamp > 0 else { return nil }
         return Date(timeIntervalSince1970: timestamp)
     }
-    
+
     /// Check if user has access to premium features
     func hasAccessToFeatures() -> Bool {
         // TEMP: Always allow access for testing - remove this override when done!
         return true
-        
+
         // Original logic (commented out for testing):
         // Allow access if subscription, trial, or admin mode
         // return hasActiveSubscription() || hasActiveTrial() || isAdminMode()
     }
-    
+
     /// Get days remaining in trial
     func getTrialDaysRemaining() -> Int {
         guard hasActiveTrial(), let startDate = getTrialStartDate() else { return 0 }
-        
+
         let now = Date()
         let trialEnd = startDate.addingTimeInterval(7 * 24 * 60 * 60) // 7 days
         let secondsRemaining = trialEnd.timeIntervalSince(now)
         let daysRemaining = Int(ceil(secondsRemaining / (24 * 60 * 60)))
-        
+
         return max(0, daysRemaining)
     }
 }

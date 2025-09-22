@@ -174,6 +174,10 @@ final class KeyButtonFactory {
         b.titleLabel?.minimumScaleFactor = 0.65 // Allow scaling down to 70%
 
         applyBrandKeyStyle(to: b, brandBackground: .keyboardRose)
+                // TEMPORARY: Hide the button to disable SecureFix feature
+        b.isHidden = true
+        b.isEnabled = false
+        
         return b
     }
     

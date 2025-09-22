@@ -8,20 +8,44 @@
  */
 
 import { logger } from '../logger';
+import { resolveLocalPath, resolveModelPath } from '../utils/resolveLocalPath';
 
-// Safe crypto import for serverless environments
+// Safe crypto import for serverless environments with deterministic fallback
 let createHash: any;
+function djb2(s: string): string { 
+  let h = 5381; 
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h) + s.charCodeAt(i); 
+  return (h >>> 0).toString(16); 
+}
+
 try {
   createHash = require('crypto').createHash;
 } catch (error) {
-  console.warn('[nli] Crypto module not available, using fallback hashing');
+  console.warn('[nli] Crypto module not available, using deterministic fallback');
   createHash = (algorithm: string) => ({
-    update: (data: any) => ({ digest: () => Math.random().toString(36).substring(2, 10) })
+    update: (data: any) => ({ digest: () => djb2(String(data)) })
   });
 }
 
 // Environment flag to disable NLI
 const NLI_DISABLED = process.env.DISABLE_NLI === '1';
+
+/**
+ * Stable softmax with temperature (numerically safe)
+ */
+function softmaxT(logits: number[], T = Number(process.env.NLI_TEMP || 1.0)): number[] {
+  const m = Math.max(...logits);
+  const exps = logits.map(x => Math.exp((x - m) / T));
+  const Z = exps.reduce((a,b)=>a+b, 0) || 1;
+  return exps.map(x => x / Z);
+}
+
+/**
+ * Create ORT tensor with explicit dtype support
+ */
+function toTensor(ort: any, type: 'int64'|'int32', data: BigInt64Array|Int32Array) {
+  return new ort.Tensor(type, data, [1, (data as any).length]);
+}
 
 interface NLIResult {
   entail: number;
@@ -143,8 +167,7 @@ class NLILocalVerifier {
   }
 
   /**
-   * Initialize ONNX session with MNLI model
-   * Feature-detects Node vs Edge/serverless and uses appropriate runtime
+   * Initialize ONNX session with MNLI model - strictly local
    */
   async init(modelPath?: string): Promise<void> {
     if (NLI_DISABLED) {
@@ -154,43 +177,35 @@ class NLILocalVerifier {
     }
 
     try {
-      this.modelPath = modelPath || process.env.NLI_ONNX_PATH || '/var/task/models/mnli-mini.onnx';
+      // Resolve model path via env or local resolver; strictly local
+      const local = modelPath || process.env.NLI_ONNX_PATH || resolveModelPath('mnli-mini.onnx');
+      if (!local) { 
+        logger.warn('No local MNLI model found');
+        this.ready = false; 
+        return; 
+      }
+      this.modelPath = local;
       
-      // ✅ HARDENED: Dual runtime support with feature detection
+      // Try Node.js runtime first, fallback to WASM (both from node_modules)
       let ort: any;
-      try {
-        // Try Node.js runtime first (for serverful environments)
-        ort = await eval(`import('onnxruntime-node')`);
-        this.isNode = true;
+      try { 
+        ort = await import('onnxruntime-node'); 
+        this.isNode = true; 
         logger.info('Using onnxruntime-node (serverful mode)');
-      } catch (nodeError) {
-        try {
-          // Fallback to WASM runtime (for serverless/edge)
-          ort = await eval(`import('onnxruntime-web')`);
-          this.isNode = false;
-          logger.info('Using onnxruntime-web (serverless/WASM mode)');
-        } catch (webError) {
-          logger.warn('No ONNX runtime available', { 
-            nodeError: nodeError instanceof Error ? nodeError.message : String(nodeError),
-            webError: webError instanceof Error ? webError.message : String(webError)
-          });
-          this.ready = false;
-          return;
-        }
+      } catch { 
+        ort = await import('onnxruntime-web'); 
+        this.isNode = false; 
+        logger.info('Using onnxruntime-web (serverless/WASM mode)');
       }
       
       // Create session with appropriate options
-      const sessionOptions = this.isNode 
-        ? {} // Node.js can use default providers
-        : { executionProviders: ['wasm'] }; // Force WASM for serverless
-        
-      this.session = await ort.InferenceSession.create(this.modelPath, sessionOptions);
+      const opts = this.isNode ? {} : { executionProviders: ['wasm'] };
+      this.session = await ort.InferenceSession.create(local, opts);
       this.ready = true;
       
       logger.info('NLI verifier initialized successfully', { 
         modelPath: this.modelPath,
-        runtime: this.isNode ? 'node' : 'wasm',
-        disabled: NLI_DISABLED 
+        runtime: this.isNode ? 'node' : 'wasm'
       });
       
     } catch (error) {
@@ -205,24 +220,42 @@ class NLILocalVerifier {
 
   /**
    * Encode premise-hypothesis pair for MNLI model
-   * Proper BERT-style encoding: [CLS] premise [SEP] hypothesis [SEP]
-   * TODO: Replace with real WordPiece tokenizer (vocab.json/merges.txt)
+   * Enhanced hygiene & budgets: ≈ ⅔ premise / ⅓ hypothesis to retain both sides
    */
   private encodePair(premise: string, hypothesis: string): {
-    input_ids: BigInt64Array;
-    attention_mask: BigInt64Array;
-    token_type_ids: BigInt64Array;
+    input_ids: BigInt64Array | Int32Array;
+    attention_mask: BigInt64Array | Int32Array;
+    token_type_ids: BigInt64Array | Int32Array;
   } {
-    // Enhanced stub tokenizer with proper segment encoding
-    // In production: use real WordPiece/BPE tokenizer
     const maxLength = 128;
+    const useInt32 = process.env.NLI_INT32_MODEL === '1';
+    
+    // Normalize: lowercase, collapse whitespace, strip zero-width chars
+    const normalizedPremise = premise.toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim();
+    const normalizedHypothesis = hypothesis.toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim();
+    
+    // Enhanced stub tokenizer with budget split
     const vocab = new Map<string, number>([
       ['[CLS]', 101], ['[SEP]', 102], ['[PAD]', 0], ['[UNK]', 100]
     ]);
     
-    // Tokenize premise and hypothesis separately
-    const premiseTokens = premise.toLowerCase().split(/\s+/).filter(t => t.length > 0);
-    const hypothesisTokens = hypothesis.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+    // Split budget ≈ ⅔ premise / ⅓ hypothesis
+    const premiseBudget = Math.floor((maxLength - 3) * 2 / 3); // Reserve 3 for special tokens
+    const hypothesisBudget = maxLength - 3 - premiseBudget;
+    
+    // Tokenize with budget constraints
+    const premiseTokens = normalizedPremise.split(/\s+/)
+      .filter(t => t.length > 0)
+      .slice(0, premiseBudget);
+    const hypothesisTokens = normalizedHypothesis.split(/\s+/)
+      .filter(t => t.length > 0)
+      .slice(0, hypothesisBudget);
     
     // Add tokens to vocab dynamically (stub behavior)
     [...premiseTokens, ...hypothesisTokens].forEach((token, i) => {
@@ -240,14 +273,8 @@ class NLILocalVerifier {
       102  // [SEP]
     ];
     
-    // Truncate if too long
-    const truncated = sequence.slice(0, maxLength - 1);
-    if (truncated.length < sequence.length) {
-      truncated[truncated.length - 1] = 102; // Ensure final [SEP]
-    }
-    
     // Pad to fixed length
-    const input_ids = [...truncated];
+    const input_ids = [...sequence];
     while (input_ids.length < maxLength) {
       input_ids.push(0); // [PAD]
     }
@@ -271,15 +298,24 @@ class NLILocalVerifier {
       }
     }
     
-    return {
-      input_ids: new BigInt64Array(input_ids.map(BigInt)),
-      attention_mask: new BigInt64Array(attention_mask.map(BigInt)),
-      token_type_ids: new BigInt64Array(token_type_ids.map(BigInt))
-    };
+    // Return appropriate tensor types based on model requirements
+    if (useInt32) {
+      return {
+        input_ids: new Int32Array(input_ids),
+        attention_mask: new Int32Array(attention_mask),
+        token_type_ids: new Int32Array(token_type_ids)
+      };
+    } else {
+      return {
+        input_ids: new BigInt64Array(input_ids.map(BigInt)),
+        attention_mask: new BigInt64Array(attention_mask.map(BigInt)),
+        token_type_ids: new BigInt64Array(token_type_ids.map(BigInt))
+      };
+    }
   }
 
   /**
-   * Score entailment between premise and hypothesis
+   * Score entailment between premise and hypothesis with timeout
    */
   async score(premise: string, hypothesis: string): Promise<NLIResult> {
     const startTime = Date.now();
@@ -298,38 +334,14 @@ class NLILocalVerifier {
     }
 
     try {
-      // Use proper MNLI encoding with premise-hypothesis pairs
-      const encoded = this.encodePair(premise, hypothesis);
-      
-      // Run inference
-      const feeds = {
-        input_ids: encoded.input_ids,
-        attention_mask: encoded.attention_mask,
-        token_type_ids: encoded.token_type_ids
-      };
-      
-      const results = await this.session.run(feeds);
-      const logits = results.logits.data;
-      
-      // Apply softmax to get probabilities
-      // MNLI outputs: [contradiction, neutral, entailment]
-      const exp = logits.map((x: number) => Math.exp(x));
-      const sum = exp.reduce((a: number, b: number) => a + b, 0);
-      const probs = exp.map((x: number) => x / sum);
-      
-      const result = {
-        contra: probs[0] || 0,
-        neutral: probs[1] || 0,
-        entail: probs[2] || 0
-      };
-      
-      // Track successful inference
-      this.addTelemetry({
-        processingTimeMs: Date.now() - startTime,
-        inputLength,
-        confidence: Math.max(...probs),
-        fallbackUsed: false
-      });
+      // Wrap with timeout (300-500ms)
+      const timeoutMs = Number(process.env.NLI_TIMEOUT_MS || 400);
+      const result = await Promise.race([
+        this.scoreInternal(premise, hypothesis, startTime, inputLength),
+        new Promise<NLIResult>((_, reject) => 
+          setTimeout(() => reject(new Error('NLI timeout')), timeoutMs)
+        )
+      ]);
       
       return result;
     } catch (error) {
@@ -342,21 +354,80 @@ class NLILocalVerifier {
         fallbackUsed: true
       });
       
-      logger.warn('NLI scoring failed', { 
+      const isTimeout = error instanceof Error && error.message === 'NLI timeout';
+      logger.warn(isTimeout ? 'NLI timeout' : 'NLI scoring failed', { 
         error: error instanceof Error ? error.message : String(error),
         dataVersion: this.dataVersionHash,
-        errorCount: this.errorCount
+        errorCount: this.errorCount,
+        isTimeout
       });
+      
+      // Retry once if error is transient (not timeout)
+      if (!isTimeout && this.errorCount <= this.maxRetries) {
+        try {
+          return await this.scoreInternal(premise, hypothesis, startTime, inputLength);
+        } catch (retryError) {
+          // Fall through to neutral return
+        }
+      }
       
       return { entail: 0.33, contra: 0.33, neutral: 0.34 };
     }
   }
 
   /**
-   * Rules-only backstop for when NLI model is unavailable
+   * Internal scoring method without timeout wrapper
+   */
+  private async scoreInternal(premise: string, hypothesis: string, startTime: number, inputLength: number): Promise<NLIResult> {
+    // Use proper MNLI encoding with premise-hypothesis pairs
+    const encoded = this.encodePair(premise, hypothesis);
+    const useInt32 = process.env.NLI_INT32_MODEL === '1';
+    
+    // Create explicit ORT tensors with proper dtype
+    const ort = this.isNode 
+      ? await import('onnxruntime-node') 
+      : await import('onnxruntime-web');
+    
+    const feeds = {
+      input_ids: toTensor(ort, useInt32 ? 'int32' : 'int64', encoded.input_ids),
+      attention_mask: toTensor(ort, useInt32 ? 'int32' : 'int64', encoded.attention_mask),
+      token_type_ids: toTensor(ort, useInt32 ? 'int32' : 'int64', encoded.token_type_ids),
+    };
+    
+    const results = await this.session.run(feeds);
+    const logits = Array.from(results.logits.data) as number[];
+    
+    // Apply stable softmax with temperature
+    // MNLI outputs: [contradiction, neutral, entailment]
+    const probs = softmaxT(logits);
+    
+    const result = {
+      contra: probs[0] || 0,
+      neutral: probs[1] || 0,
+      entail: probs[2] || 0
+    };
+    
+    // Track successful inference
+    this.addTelemetry({
+      processingTimeMs: Date.now() - startTime,
+      inputLength,
+      confidence: Math.max(...probs),
+      fallbackUsed: false
+    });
+    
+    return result;
+  }
+
+  /**
+   * Enhanced rules-only backstop with spaCy context integration
    * Maintains fit gate functionality through heuristic matching
    */
-  rulesBackstop(text: string, advice: { text: string; intents?: string[]; context?: string; category?: string }): boolean {
+  rulesBackstop(
+    text: string, 
+    advice: { text: string; intents?: string[]; context?: string; category?: string },
+    spacyContext?: { label?: string; score?: number },
+    negScopes?: Array<{ start: number; end: number }>
+  ): boolean {
     const userIntents = detectUserIntents(text);
     const adviceIntents = advice.intents || [];
     const adviceContext = advice.context;
@@ -365,18 +436,30 @@ class NLILocalVerifier {
     console.log(`[nli-rules] User intents: [${userIntents.join(', ')}]`);
     console.log(`[nli-rules] Advice intents: [${adviceIntents.join(', ')}], context: ${adviceContext}, category: ${adviceCategory}`);
     
-    // Rule 1: Intent overlap (highest confidence)
+    // Enhanced Rule 1: Intent overlap with negation consideration
     const intentOverlap = userIntents.filter(intent => adviceIntents.includes(intent));
     if (intentOverlap.length > 0) {
+      // Down-weight positive intents under heavy negation
+      const hasHeavyNegation = negScopes && negScopes.length > 2;
+      const positiveIntents = ['expressing_appreciation', 'expressing_affection', 'making_commitment', 'expressing_positivity'];
+      const isPositiveAdvice = intentOverlap.some(intent => positiveIntents.includes(intent));
+      
+      if (hasHeavyNegation && isPositiveAdvice) {
+        console.log(`[nli-rules] ⚠ Positive intent under heavy negation - reduced confidence`);
+        return false; // Don't match positive advice to heavily negated text
+      }
+      
       console.log(`[nli-rules] ✓ Intent overlap: [${intentOverlap.join(', ')}]`);
       return true;
     }
     
-    // Rule 2: Context match (medium confidence)
+    // Enhanced Rule 2: Context match with spaCy integration
     if (adviceContext) {
-      const detectedContext = this.detectContext(text);
-      if (detectedContext === adviceContext) {
-        console.log(`[nli-rules] ✓ Context match: ${detectedContext}`);
+      const detectedContext = spacyContext?.label || this.detectContext(text);
+      const contextScore = spacyContext?.score || 0.5;
+      
+      if (detectedContext === adviceContext && contextScore > 0.3) {
+        console.log(`[nli-rules] ✓ Context match: ${detectedContext} (score: ${contextScore.toFixed(2)})`);
         return true;
       }
     }
@@ -394,7 +477,7 @@ class NLILocalVerifier {
     // Rule 4: Emergency fallback - basic keyword overlap
     const textWords = new Set(text.toLowerCase().split(/\s+/).filter(w => w.length > 3));
     const adviceWords = new Set(advice.text.toLowerCase().split(/\s+/).filter(w => w.length > 3));
-    const wordOverlap = [...textWords].filter(word => adviceWords.has(word));
+    const wordOverlap = Array.from(textWords).filter(word => adviceWords.has(word));
     
     if (wordOverlap.length >= 2) {
       console.log(`[nli-rules] ✓ Keyword overlap: [${wordOverlap.join(', ')}]`);
@@ -503,6 +586,18 @@ const INTENT_HYPOTHESES: Record<string, string> = {
   'ask_for_time': 'The person needs time to think or process.',
   'seek_ack': 'The person seeks acknowledgment for their contributions.',
   'rebalance_work': 'Invisible labor or work distribution needs rebalancing.',
+  
+  // Additional intents to reduce unknown intent logs
+  'offer_support': 'The person should offer emotional or practical support.',
+  'validate_feelings': 'The person\'s feelings need to be validated.',
+  'share_perspective': 'A different perspective should be shared.',
+  'suggest_solution': 'A practical solution should be suggested.',
+  'request_space': 'The person needs physical or emotional space.',
+  'show_appreciation': 'Appreciation or recognition should be shown.',
+  'offer_comfort': 'Comfort or reassurance should be provided.',
+  'seek_clarity': 'Clarification or understanding is needed.',
+  'express_concern': 'Concern or worry should be expressed.',
+  'propose_compromise': 'A compromise or middle ground should be found.',
 };
 
 /**

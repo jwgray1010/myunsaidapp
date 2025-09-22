@@ -46,6 +46,20 @@ private let FAST_TYPOS: [String: String] = [
     "theyve":"they've","theyd":"they'd","theyll":"they'll"
 ]
 
+// Ultra-light auto-contractions (single edit; safe to auto on commit)
+private let CONTRACTIONS_FAST: [String: String] = [
+    "im":"i'm","ive":"i've","id":"i'd","ill":"i'll",
+    "youre":"you're","youve":"you've","youd":"you'd","youll":"you'll",
+    "theyre":"they're","theyve":"they've","theyd":"they'd","theyll":"they'll",
+    "weve":"we've","wed":"we'd","well":"we'll",
+    "dont":"don't","cant":"can't","wont":"won't","isnt":"isn't","arent":"aren't",
+    "wasnt":"wasn't","werent":"weren't","hasnt":"hasn't","havent":"haven't",
+    "hadnt":"hadn't","wouldnt":"wouldn't","couldnt":"couldn't","shouldnt":"shouldn't",
+    "mustnt":"mustn't","mightnt":"mightn't","daren't":"daren't",
+    "thats":"that's","whats":"what's","whos":"who's","hows":"how's",
+    "wheres":"where's","theres":"there's","heres":"here's","whatll":"what'll","thatll":"that'll"
+]
+
 private let QWERTY_NEIGHBORS: [Character: Set<Character>] = [
     "q":["w","a"],"w":["q","e","a","s"],"e":["w","r","s","d"],
     "r":["e","t","d","f"],"t":["r","y","f","g"],"y":["t","u","g","h"],
@@ -223,6 +237,16 @@ final class LightweightSpellChecker {
     private var langDetectAnchorCount = 0
     private let langDetectStep = 40
     private var lastDetectedLang: String?
+
+    // Performance optimizations
+    private let multiLangDevice: Bool = {
+        #if canImport(UIKit)
+        return UITextChecker.availableLanguages.count > 1
+        #else
+        return false
+        #endif
+    }()
+    private let useContextScoring = false // flip on if you want bigram context scoring
 
     // PERSISTENCE: Acceptance learning
     private let acceptanceCountsKey = "spell_acceptance_counts"
@@ -546,7 +570,7 @@ final class LightweightSpellChecker {
         let d = editDistance(lw, bl)
         let tapSlip = isLikelyTapSlip(lw, bl)
         let isCommonTypo = FAST_TYPOS[lw] != nil
-        let ctxScore = bgScorer.score(prev: prev, cand: bl, next: next) // your tiny bigram table
+        let ctxScore = useContextScoring ? bgScorer.score(prev: prev, cand: bl, next: next) : 0
 
         // Native-like rules:
         //  - Always allow 1-edit if it's a neighbor tap slip or known common typo.
@@ -657,6 +681,9 @@ final class LightweightSpellChecker {
     }
 
     private func capitalizeCommonProperNouns(_ text: String) -> String {
+        // Early exit if no lowercase letters (optimization)
+        guard text.lowercased() != text else { return text }
+        
         let weekdays = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
         let months = ["january","february","march","april","may","june","july","august","september","october","november","december"]
         let languages = ["english","spanish","french","german","chinese","japanese","italian","portuguese","russian","arabic"]
@@ -697,6 +724,11 @@ final class LightweightSpellChecker {
 
     func applyPunctuationRules(to text: String) -> String {
         guard !text.isEmpty else { return text }
+        // Quick scan guard: skip if no punctuation/spacing issues likely present
+        guard text.range(of: #"[.,!?;:]"#, options: .regularExpression) != nil ||
+              text.contains("  ") ||
+              text.contains("''") || text.contains("`") else { return text }
+        
         var result = text
         result = addSpaceAfterPunctuation(result)
         result = removeSpaceBeforePunctuation(result)
@@ -906,8 +938,28 @@ final class LightweightSpellChecker {
         return .general
     }
 
+    private func simpleTokenize(_ text: String) -> [(word: String, range: NSRange)] {
+        var tokens: [(String, NSRange)] = []
+        let words = text.components(separatedBy: .whitespacesAndNewlines)
+        var location = 0
+        
+        for word in words {
+            if !word.isEmpty {
+                let range = NSRange(location: location, length: word.count)
+                tokens.append((word, range))
+            }
+            location += word.count + 1 // +1 for whitespace
+        }
+        return tokens
+    }
+
     // MARK: - Smart tokenization (lightweight)
     func smartTokenize(_ text: String) -> [(word: String, range: NSRange)] {
+        // Short-circuit for short text - use simple whitespace split
+        if text.count < 48 {
+            return simpleTokenize(text)
+        }
+        
         var tokens: [(String, NSRange)] = []
         let nsText = text as NSString
         let tagger = NLTagger(tagSchemes: [.tokenType])
@@ -953,7 +1005,7 @@ final class LightweightSpellChecker {
         let detectedMode = detectDomainMode(for: text)
         if detectedMode.shouldSkipSpellCheck { return [] }
         if userLex.isUserKnown(normalized) { return [] }
-        let language = detectLanguage(for: text) ?? preferredLanguage
+        let language = (multiLangDevice && text.count >= 40) ? (detectLanguage(for: text) ?? preferredLanguage) : preferredLanguage
         #if canImport(UIKit)
         let nsText = text as NSString
         let range = NSRange(location: 0, length: nsText.length)
@@ -964,7 +1016,7 @@ final class LightweightSpellChecker {
         var enhanced: [SpellSuggestion] = []
         for suggestion in suggestions {
             let editDist = editDistance(text, suggestion)
-            let contextScore = bgScorer.score(prev: previousWord, cand: suggestion, next: nextWord)
+            let contextScore = useContextScoring ? bgScorer.score(prev: previousWord, cand: suggestion, next: nextWord) : 0
             let isUserWord = userLex.learned.contains(suggestion.lowercased())
             let prox = proximityBoost(original: text, suggestion: suggestion)
             let adjustedConfidence = Float(0.8 + prox * 0.15)
@@ -977,7 +1029,7 @@ final class LightweightSpellChecker {
         for learnedWord in userLex.learned {
             let editDist = editDistance(text.lowercased(), learnedWord)
             if editDist <= 2 && !suggestions.contains(learnedWord) {
-                let contextScore = bgScorer.score(prev: previousWord, cand: learnedWord, next: nextWord)
+                let contextScore = useContextScoring ? bgScorer.score(prev: previousWord, cand: learnedWord, next: nextWord) : 0
                 enhanced.append(SpellSuggestion(word: learnedWord,
                                                 confidence: 0.9,
                                                 isFromUserDict: true,
@@ -1053,6 +1105,13 @@ final class LightweightSpellChecker {
         persistenceTimer = nil
     }
 
+    // MARK: - FAST CONTRACTIONS
+    private func applyFastContractionIfAny(_ word: String) -> String? {
+        let lower = word.lowercased()
+        guard let target = CONTRACTIONS_FAST[lower] else { return nil }
+        return preserveCase(template: target, like: word)
+    }
+
     // MARK: - ONE-SHOT DECISION
     struct Decision {
         let replacement: String?
@@ -1076,6 +1135,11 @@ final class LightweightSpellChecker {
 
         if isWordKnownByUser(currentWord) || allowedWords().contains(currentWord.lowercased()) {
             return Decision(replacement: nil, suggestions: [], applyAuto: false)
+        }
+
+        // Fast contraction on commit boundary (cheap + deterministic)
+        if isOnCommitBoundary, let quick = applyFastContractionIfAny(currentWord) {
+            return Decision(replacement: quick, suggestions: [quick], applyAuto: true)
         }
 
         if isOnCommitBoundary, let multi = checkMultiWordCorrection(currentWord, prev: prev, next: next) {

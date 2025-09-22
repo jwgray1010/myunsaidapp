@@ -226,6 +226,38 @@ final class KeyboardController: UIView,
         return before + after
     }
     
+    /// Hash just the visible window we already keep (~800 chars)
+    private func snapshotHash() -> Int {
+        var hasher = Hasher()
+        hasher.combine(beforeContext)
+        hasher.combine(afterContext)
+        return hasher.finalize()
+    }
+    
+    /// Optimized spelling refresh that only triggers on meaningful content changes
+    private func refreshSpellingIfMeaningful() {
+        let currentText = beforeContext + afterContext
+        let h = currentText.hash
+        if h == lastSpellTextHash { return } // no-op
+        lastSpellTextHash = h
+        spellCheckerIntegration.refreshSpellCandidates(for: currentText)
+    }
+    
+    /// Optimized router that skips work when nothing changed
+    private func routeIfChanged(lastInserted: String?, isDeletion: Bool, urgent: Bool) {
+        refreshContext() // already trims to 600/200; cheap string ops
+        let h = snapshotHash()
+        if h == lastRouterSnapshotHash,
+           lastRouterTrigger.inserted == lastInserted,
+           lastRouterTrigger.deletion == isDeletion,
+           !urgent {
+            return // no-op, nothing changed from router's POV
+        }
+        lastRouterSnapshotHash = h
+        lastRouterTrigger = (lastInserted, isDeletion)
+        scheduleAnalysisRouter(lastInserted: lastInserted, isDeletion: isDeletion, urgent: urgent)
+    }
+    
     /// Router method that calls the new sentence-aware coordinator API
     private func scheduleAnalysisRouter(lastInserted: String? = nil, isDeletion: Bool = false, urgent: Bool = false) {
         print("🔄 DEBUG: scheduleAnalysisRouter called - lastInserted: \(lastInserted ?? "nil"), isDeletion: \(isDeletion), urgent: \(urgent)")
@@ -431,6 +463,13 @@ final class KeyboardController: UIView,
     private var afterContext: String = ""
     private var didInitialSwitchAnalyze = false
     
+    // Router snapshot guards to prevent over-invoking analysis
+    private var lastRouterSnapshotHash: Int = 0
+    private var lastRouterTrigger: (inserted: String?, deletion: Bool) = (nil, false)
+    
+    // Spell refresh optimization
+    private var lastSpellTextHash: Int = 0
+    
     // Safe area constraint management
     private var safeAreaBottomConstraint: NSLayoutConstraint?
 
@@ -466,7 +505,7 @@ final class KeyboardController: UIView,
             // When coming back online, re-attempt analysis if there's text
             let fullText = snapshotFullText()
             if !fullText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                scheduleAnalysisRouter(lastInserted: nil, isDeletion: false, urgent: true)
+                routeIfChanged(lastInserted: nil, isDeletion: false, urgent: true)
             }
         }
     }
@@ -731,18 +770,18 @@ final class KeyboardController: UIView,
         proxy.deleteBackward()
         performHapticFeedback()
         // 👉 refresh candidates on delete
-        spellCheckerIntegration.refreshSpellCandidates(for: snapshotFullText())
+        refreshSpellingIfMeaningful()
         // Use router pattern for sentence-aware analysis after deletion
-        scheduleAnalysisRouter(lastInserted: nil, isDeletion: true, urgent: false)
+        routeIfChanged(lastInserted: nil, isDeletion: true, urgent: false)
     }
     
     func performDeleteTick() {
         guard let proxy = textDocumentProxy else { return }
         proxy.deleteBackward()
         // 👉 refresh candidates on repeat delete
-        spellCheckerIntegration.refreshSpellCandidates(for: snapshotFullText())
+        refreshSpellingIfMeaningful()
         // Use router pattern for sentence-aware analysis after deletion
-        scheduleAnalysisRouter(lastInserted: nil, isDeletion: true, urgent: false)
+        routeIfChanged(lastInserted: nil, isDeletion: true, urgent: false)
     }
     
     func hapticLight() {
@@ -824,7 +863,7 @@ final class KeyboardController: UIView,
         proxy.insertText(correction)
         
         // Update our text state using router pattern
-        scheduleAnalysisRouter(lastInserted: correction, isDeletion: false, urgent: true)
+        routeIfChanged(lastInserted: correction, isDeletion: false, urgent: true)
         
         // Trigger haptic feedback
         performHapticFeedback()
@@ -1161,6 +1200,23 @@ final class KeyboardController: UIView,
     // MARK: - Tone Status Management
 
     private func setToneStatus(_ tone: ToneStatus, animated: Bool = true) {
+        // Guard against redundant updates (reduces gradient/layout churn)
+        guard let bg = toneButtonBackground else {
+            KBDLog("🎯 ❌ CRITICAL ERROR: No tone button background found!", .error, "KeyboardController")
+            return
+        }
+        
+        // Skip redundant work if tone is same and visuals are synchronized
+        let visualOutOfSync = (toneGradient == nil) || 
+                             (toneGradient?.colors == nil) ||
+                             (bg.layer.animation(forKey: "alertPulse") == nil && tone == .alert) ||
+                             bg.alpha < 0.99
+        
+        if tone == currentTone && !visualOutOfSync {
+            print("🎨 APPLY skipped: redundant tone=\(tone.rawValue) (same as current)")
+            return // skip redundant work
+        }
+        
         // 🎨 APPLY - Log the apply request
         print("🎨 APPLY requested: current=\(currentTone.rawValue) -> new=\(tone.rawValue) animated=\(animated)")
         
@@ -1169,23 +1225,6 @@ final class KeyboardController: UIView,
             KBDLog("🎯 setToneStatus(\(tone.rawValue)) animated=\(animated) bg=\(self.toneButtonBackground != nil) btn=\(self.toneButton != nil)", .info, "KeyboardController")
         }
         #endif
-        
-        guard let bg = toneButtonBackground else {
-            KBDLog("🎯 ❌ CRITICAL ERROR: No tone button background found!", .error, "KeyboardController")
-            return
-        }
-        
-        // Better visual state detection for re-application
-        let visualOutOfSync =
-            (toneGradient == nil) ||
-            (toneGradient?.colors == nil) ||
-            (bg.layer.animation(forKey: "alertPulse") == nil && tone == .alert)
-        
-        // TEMPORARILY DISABLED: Skip redundant tone check for debugging
-        // guard tone != currentTone || bg.alpha < 0.99 || visualOutOfSync else {
-        //     print("🎨 APPLY skipped: redundant tone=\(tone.rawValue) (same as current)")
-        //     return // skip redundant work, but allow refresh when visual state is stale
-        // }
         
         print("🎨 APPLY proceeding: tone=\(tone.rawValue) visualOutOfSync=\(visualOutOfSync)")
 
@@ -1492,8 +1531,19 @@ final class KeyboardController: UIView,
         stack.distribution = .fill
         stack.alignment = .center
 
+        // ABC button (only in symbols mode) 
+        var abcButton: UIButton?
+        if currentMode == .symbols {
+            let abc = KeyButtonFactory.makeModeButton(title: "ABC")
+            abc.addTarget(self, action: #selector(handleABCButtonPressed), for: .touchUpInside)
+            abc.addTarget(self, action: #selector(specialButtonTouchDown(_:)), for: .touchDown)
+            abc.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+            abcButton = abc
+            stack.addArrangedSubview(abc)
+        }
+
         // Mode (123/ABC)
-        let mode = KeyButtonFactory.makeModeButton(title: currentMode == .letters ? "123" : "ABC")
+        let mode = KeyButtonFactory.makeModeButton(title: "123")  // Start with letters mode, so show "123"
         mode.addTarget(self, action: #selector(handleModeSwitch), for: .touchUpInside)
         mode.addTarget(self, action: #selector(specialButtonTouchDown(_:)), for: .touchDown)
         mode.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
@@ -1538,24 +1588,35 @@ final class KeyboardController: UIView,
         stack.addArrangedSubview(secureFix)
         stack.addArrangedSubview(returnBtn)
 
-        // Constraint-clean layout: Equal width for 123/Secure/Return, smaller globe, expandable space
+        // iOS-style constraint layout with proper button sizing
         
-        // 1. Equal width constraints for mode, secureFix, and return
-        mode.widthAnchor.constraint(equalTo: secureFix.widthAnchor).isActive = true
-        mode.widthAnchor.constraint(equalTo: returnBtn.widthAnchor).isActive = true
+        // 1. Make mode button same width as globe button (44pt)
+        mode.widthAnchor.constraint(equalTo: globe.widthAnchor).isActive = true
         
-        // 2. Globe gets smaller fixed width
+        // 2. Globe gets fixed width (baseline)
         globe.widthAnchor.constraint(equalToConstant: 44).isActive = true
         
-        // 3. Mode gets baseline width (others will match via equal width constraints)
-        mode.widthAnchor.constraint(equalToConstant: 68).isActive = true
+        // 3. ABC button (when present) same width as globe and mode
+        if let abc = abcButton {
+            abc.widthAnchor.constraint(equalTo: globe.widthAnchor).isActive = true
+        }
         
-        // 4. Space expands to fill remaining space - low hugging priority
+        // 4. Return button 50% wider than mode/globe
+        returnBtn.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 1.5).isActive = true
+        
+        // 5. Secure button same width as mode/globe
+        secureFix.widthAnchor.constraint(equalTo: mode.widthAnchor).isActive = true
+        
+        // 6. Space expands to fill remaining space - low hugging priority
         space.setContentHuggingPriority(.defaultLow, for: .horizontal)
         space.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         
-        // 5. Fixed-width buttons resist expansion
-        [mode, globe, secureFix, returnBtn].forEach { button in
+        // 7. Fixed-width buttons resist expansion
+        var fixedButtons = [mode, globe, secureFix, returnBtn]
+        if let abc = abcButton {
+            fixedButtons.append(abc)
+        }
+        fixedButtons.forEach { button in
             button.setContentHuggingPriority(.defaultHigh, for: .horizontal)
             button.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
         }
@@ -1577,7 +1638,7 @@ final class KeyboardController: UIView,
         proxy.insertText(textToInsert)
         
         // 👉 feed the spell bar after each keypress
-        spellCheckerIntegration.refreshSpellCandidates(for: snapshotFullText())
+        refreshSpellingIfMeaningful()
         
         // Auto-switch to letters mode after punctuation
         if [".", "!", "?", ",", ";", ":"].contains(title) && currentMode != .letters {
@@ -1596,24 +1657,24 @@ final class KeyboardController: UIView,
         
         // Use router pattern for sentence-aware analysis
         let urgent = ".!?".contains(title) // Urgent if punctuation that might end sentence
-        scheduleAnalysisRouter(lastInserted: textToInsert, isDeletion: false, urgent: urgent)
+        routeIfChanged(lastInserted: textToInsert, isDeletion: false, urgent: urgent)
     }
     
     @objc private func handleSpaceKey() {
         spaceHandler.handleSpaceKey()
         // Use router pattern for sentence-aware analysis after space insertion
-        scheduleAnalysisRouter(lastInserted: " ", isDeletion: false, urgent: false)
+        routeIfChanged(lastInserted: " ", isDeletion: false, urgent: false)
         // 👉 refresh (shows/hides strip appropriately after commit)
-        spellCheckerIntegration.refreshSpellCandidates(for: snapshotFullText())
+        refreshSpellingIfMeaningful()
     }
     
     @objc private func handleReturnKey() {
         guard let proxy = textDocumentProxy else { return }
         proxy.insertText("\n")
         // Use router pattern for sentence-aware analysis after return insertion
-        scheduleAnalysisRouter(lastInserted: "\n", isDeletion: false, urgent: true) // Urgent for new line
+        routeIfChanged(lastInserted: "\n", isDeletion: false, urgent: true) // Urgent for new line
         // 👉 refresh after newline
-        spellCheckerIntegration.refreshSpellCandidates(for: snapshotFullText())
+        refreshSpellingIfMeaningful()
     }
     
     @objc private func handleGlobeKey() {
@@ -1621,6 +1682,21 @@ final class KeyboardController: UIView,
     }
     
     @objc private func handleShiftPressed() {
+        // In numbers mode, shift toggles to symbols (iOS behavior)
+        if currentMode == .numbers {
+            setKeyboardMode(.symbols)
+            performHapticFeedback()
+            return
+        }
+        
+        // In symbols mode, shift returns to numbers (not letters)
+        if currentMode == .symbols {
+            setKeyboardMode(.numbers)
+            performHapticFeedback()
+            return
+        }
+        
+        // Standard shift behavior for letters mode
         let now = CACurrentMediaTime()
         let timeSinceLastTap = now - lastShiftTapAt
         
@@ -1645,8 +1721,23 @@ final class KeyboardController: UIView,
         performHapticFeedback()
     }
     
+    @objc private func handleABCButtonPressed() {
+        setKeyboardMode(.letters)
+        performHapticFeedback()
+    }
+
     @objc private func handleModeSwitch() {
-        setKeyboardMode(currentMode == .letters ? .numbers : .letters)
+        // iOS-style 3-mode cycling: letters → numbers → symbols → letters
+        let nextMode: KeyboardMode
+        switch currentMode {
+        case .letters:
+            nextMode = .numbers
+        case .numbers:
+            nextMode = .symbols
+        case .symbols:
+            nextMode = .letters
+        }
+        setKeyboardMode(nextMode)
         performHapticFeedback()
     }
     
@@ -1747,7 +1838,19 @@ final class KeyboardController: UIView,
     private func updateKeyboardForCurrentMode() {
         keyboardStackView?.removeFromSuperview()
         setupKeyboardLayout()
-        modeButton?.setTitle(currentMode == .letters ? "123" : "ABC", for: .normal)
+        
+        // iOS-style mode button titles
+        let modeTitle: String
+        switch currentMode {
+        case .letters:
+            modeTitle = "123"
+        case .numbers:
+            modeTitle = "#+="  // Indicates symbols available via mode button
+        case .symbols:
+            modeTitle = "123"  // Returns to numbers from symbols
+        }
+        modeButton?.setTitle(modeTitle, for: .normal)
+        
         updateShiftButtonAppearance()
         updateKeycaps()
         
@@ -1787,11 +1890,11 @@ final class KeyboardController: UIView,
         ensureToneButtonVisible()
         
         // Use router pattern for sentence-aware analysis
-        scheduleAnalysisRouter(lastInserted: nil, isDeletion: false, urgent: false)
+        routeIfChanged(lastInserted: nil, isDeletion: false, urgent: false)
         updateShiftForContext()
         
         // 👉 feed the spell bar
-        spellCheckerIntegration.refreshSpellCandidates(for: snapshotFullText())
+        refreshSpellingIfMeaningful()
     }
     
 
@@ -1817,7 +1920,7 @@ final class KeyboardController: UIView,
 
         if !fullText.isEmpty, !didInitialSwitchAnalyze {
             didInitialSwitchAnalyze = true
-            scheduleAnalysisRouter(lastInserted: nil, isDeletion: false, urgent: true)
+            routeIfChanged(lastInserted: nil, isDeletion: false, urgent: true)
         }
     }
 
@@ -2077,7 +2180,7 @@ final class KeyboardController: UIView,
         pressPop()
 
         // Kick an immediate analysis using router pattern
-        scheduleAnalysisRouter(lastInserted: nil, isDeletion: false, urgent: true)
+        routeIfChanged(lastInserted: nil, isDeletion: false, urgent: true)
 
         // If tone is risky, fetch suggestions too
         if currentTone == .alert || currentTone == .caution {

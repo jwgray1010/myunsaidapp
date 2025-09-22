@@ -66,20 +66,30 @@ final class EnhancedCommunicatorService {
             let dataFreshness: Double
 
             init(from bridge: PersonalityDataBridge) async {
-                attachmentStyle = await bridge.getAttachmentStyle()
-                communicationStyle = await bridge.getCommunicationStyle()
-                personalityType = await bridge.getPersonalityType()
-                emotionalState = await bridge.getCurrentEmotionalState()
-                emotionalBucket = await bridge.getCurrentEmotionalBucket()
-                isComplete = await bridge.isPersonalityTestComplete()
-                dataFreshness = await bridge.getDataFreshness()
+                async let a = bridge.getAttachmentStyle()
+                async let c = bridge.getCommunicationStyle()
+                async let p = bridge.getPersonalityType()
+                async let e = bridge.getCurrentEmotionalState()
+                async let b = bridge.getCurrentEmotionalBucket()
+                async let done = bridge.isPersonalityTestComplete()
+                async let fresh = bridge.getDataFreshness()
+                async let full = bridge.getPersonalityProfile()
 
-                let full = await bridge.getPersonalityProfile()
-                personalityScores = full["personality_scores"] as? [String: Int]
+                attachmentStyle = await a
+                communicationStyle = await c
+                personalityType = await p
+                emotionalState = await e
+                emotionalBucket = await b
+                isComplete = await done
+                dataFreshness = await fresh
 
-                if let prefs = full["communication_preferences"] as? [String: Any] {
+                let dict = await full
+                personalityScores = dict["personality_scores"] as? [String: Int]
+
+                if let prefs = dict["communication_preferences"] as? [String: Any] {
                     // Stringify values to keep Codable lean (avoid AnyCodable)
                     var out: [String: String] = [:]
+                    out.reserveCapacity(prefs.count)
                     for (k, v) in prefs {
                         out[k] = String(describing: v)
                     }
@@ -306,9 +316,12 @@ final class EnhancedCommunicatorService {
     ) async throws -> EnhancedAnalysisResponse.AnalysisResult {
 
         let personalityProfile = await EnhancedAnalysisRequest.PersonalityProfile(from: personalityBridge)
+        
+        // Trim text size to reduce payload (API typically only needs last 3k chars)
+        let safeText = String(text.suffix(3000))
 
         let req = EnhancedAnalysisRequest(
-            text: text,
+            text: safeText,
             context: .init(
                 relationshipPhase: relationshipPhase,
                 stressLevel: stressLevel,
@@ -331,8 +344,12 @@ final class EnhancedCommunicatorService {
         stressLevel: String = "moderate"
     ) async throws -> ObserveResponse {
         let personalityProfile = await EnhancedAnalysisRequest.PersonalityProfile(from: personalityBridge)
+        
+        // Trim text size to reduce payload
+        let safeText = String(text.suffix(3000))
+        
         let req = ObserveRequest(
-            text: text,
+            text: safeText,
             meta: [
                 "relationshipPhase": relationshipPhase,
                 "stressLevel": stressLevel,
@@ -407,6 +424,14 @@ final class EnhancedCommunicatorService {
 
     // MARK: - Private: Network Core
 
+    private func maybeGzip(_ data: Data) -> (data: Data, contentEncoding: String?) {
+        guard data.count > 1024 else { return (data, nil) }
+        if let gz = (try? (data as NSData).compressed(using: .zlib)) as Data? {
+            return (gz, "gzip")
+        }
+        return (data, nil)
+    }
+
     private func request<T: Decodable, Body: Encodable>(
         path: String,
         method: HTTPMethod,
@@ -419,10 +444,11 @@ final class EnhancedCommunicatorService {
         let url = buildURL(path: path)
         guard let url else { throw CommunicatorError.invalidURL }
 
-        // 🔧 DEBUG: Log full URL before each request to catch path issues
+        #if DEBUG
         print("🔧 CommunicatorService REQUEST \(url.absoluteString)")
+        #endif
 
-        var req = URLRequest(url: url, timeoutInterval: 8.0)
+        var req = URLRequest(url: url, timeoutInterval: method == .GET ? 6.0 : 8.0)
         req.httpMethod = method.rawValue
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -439,7 +465,12 @@ final class EnhancedCommunicatorService {
         }
 
         if let body = body {
-            req.httpBody = try encoder.encode(body)
+            let raw = try encoder.encode(body)
+            let zipped = maybeGzip(raw)
+            req.httpBody = zipped.data
+            if let enc = zipped.contentEncoding {
+                req.setValue(enc, forHTTPHeaderField: "Content-Encoding")
+            }
         }
         
         // Ensure GET requests have no body
@@ -506,17 +537,26 @@ final class EnhancedCommunicatorService {
 
     // MARK: - Static helpers
 
+    private static let iso: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let isoBasic: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     private static func makeCoders() -> (JSONEncoder, JSONDecoder) {
         let enc = JSONEncoder()
         let dec = JSONDecoder()
         
         // ISO8601 with fractional seconds for precise timing
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
         enc.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
-            try container.encode(formatter.string(from: date))
+            try container.encode(Self.iso.string(from: date))
         }
         
         dec.dateDecodingStrategy = .custom { decoder in
@@ -524,14 +564,12 @@ final class EnhancedCommunicatorService {
             let string = try container.decode(String.self)
             
             // Try with fractional seconds first, fallback to standard
-            if let date = formatter.date(from: string) {
+            if let date = Self.iso.date(from: string) {
                 return date
             }
             
             // Fallback for non-fractional ISO8601
-            let basicFormatter = ISO8601DateFormatter()
-            basicFormatter.formatOptions = [.withInternetDateTime]
-            if let date = basicFormatter.date(from: string) {
+            if let date = Self.isoBasic.date(from: string) {
                 return date
             }
             
@@ -553,6 +591,7 @@ final class EnhancedCommunicatorService {
         cfg.waitsForConnectivity = false
         cfg.httpCookieAcceptPolicy = .never
         cfg.httpCookieStorage = nil
+        cfg.tlsMinimumSupportedProtocolVersion = .TLSv12
         return URLSession(configuration: cfg)
     }
 }
