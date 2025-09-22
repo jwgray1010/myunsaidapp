@@ -62,7 +62,7 @@ interface FitResult {
 
 interface NLITelemetry {
   timestamp: number;
-  runtime: 'node' | 'wasm' | 'rules-only';
+  runtime: 'wasm' | 'rules-only';
   modelVersion: string;
   processingTimeMs: number;
   inputLength: number;
@@ -73,14 +73,13 @@ interface NLITelemetry {
 
 /**
  * Local NLI verifier using ONNX runtime
- * Enhanced with dual runtime support, version tracking, and rules backstop
- * Supports both Node.js (onnxruntime-node) and Edge/WASM (onnxruntime-web)
+ * Enhanced with web runtime support, version tracking, and rules backstop
+ * Supports WASM (onnxruntime-web) for serverless deployment
  */
 class NLILocalVerifier {
   private session: any = null;
   public ready: boolean = false;
   private modelPath: string | null = null;
-  private isNode: boolean = false;
   private modelVersion: string = 'v1.0'; // Version tracking for cache invalidation
   private initAttempts: number = 0;
   private maxRetries: number = 3;
@@ -118,7 +117,7 @@ class NLILocalVerifier {
   private addTelemetry(data: Partial<NLITelemetry>): void {
     const telemetry: NLITelemetry = {
       timestamp: Date.now(),
-      runtime: this.isNode ? 'node' : (this.ready ? 'wasm' : 'rules-only'),
+      runtime: this.ready ? 'wasm' : 'rules-only',
       modelVersion: this.modelVersion,
       processingTimeMs: 0,
       inputLength: 0,
@@ -158,7 +157,7 @@ class NLILocalVerifier {
     
     return {
       dataVersion: this.dataVersionHash,
-      runtime: this.isNode ? 'node' : (this.ready ? 'wasm' : 'rules-only'),
+      runtime: this.ready ? 'wasm' : 'rules-only',
       avgProcessingTimeMs: Math.round(avgProcessingTime),
       fallbackRate: Math.round(fallbackRate * 100),
       errorCount: this.errorCount,
@@ -186,33 +185,33 @@ class NLILocalVerifier {
       }
       this.modelPath = local;
       
-      // Try Node.js runtime first, fallback to WASM (both from node_modules)
+      // Use ONNX Runtime Web (serverless optimized)
       let ort: any;
       try { 
-        ort = await import('onnxruntime-node'); 
-        this.isNode = true; 
-        logger.info('Using onnxruntime-node (serverful mode)');
-      } catch { 
         ort = await import('onnxruntime-web'); 
-        this.isNode = false; 
         logger.info('Using onnxruntime-web (serverless/WASM mode)');
+      } catch (error) {
+        logger.warn('onnxruntime-web not available, running in rules-only mode', {
+          error: error instanceof Error ? error.message : String(error)
+        });
+        this.ready = false;
+        return;
       }
       
-      // Create session with appropriate options
-      const opts = this.isNode ? {} : { executionProviders: ['wasm'] };
+      // Create session with WASM execution provider
+      const opts = { executionProviders: ['wasm'] };
       this.session = await ort.InferenceSession.create(local, opts);
       this.ready = true;
       
       logger.info('NLI verifier initialized successfully', { 
         modelPath: this.modelPath,
-        runtime: this.isNode ? 'node' : 'wasm'
+        runtime: 'wasm'
       });
       
     } catch (error) {
       logger.warn('Failed to initialize NLI verifier, falling back to rules-only', { 
         error: error instanceof Error ? error.message : String(error),
-        modelPath: this.modelPath,
-        isNode: this.isNode
+        modelPath: this.modelPath
       });
       this.ready = false;
     }
@@ -384,9 +383,7 @@ class NLILocalVerifier {
     const useInt32 = process.env.NLI_INT32_MODEL === '1';
     
     // Create explicit ORT tensors with proper dtype
-    const ort = this.isNode 
-      ? await import('onnxruntime-node') 
-      : await import('onnxruntime-web');
+    const ort = await import('onnxruntime-web');
     
     const feeds = {
       input_ids: toTensor(ort, useInt32 ? 'int32' : 'int64', encoded.input_ids),
