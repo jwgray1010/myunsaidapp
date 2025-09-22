@@ -82,10 +82,14 @@ console.log('=' .repeat(60));
 
 let results = [];
 let totalTests = testCases.length;
+const crypto = require('crypto');
+
 let correctPredictions = 0;
 
-async function testToneAnalysis(text) {
+async function testToneAnalysis(text, docSeq = 1) {
   try {
+    const textHash = crypto.createHash('sha256').update(text).digest('hex');
+    
     const response = await fetch(`${API_BASE}/api/v1/tone`, {
       method: 'POST',
       headers: {
@@ -94,6 +98,8 @@ async function testToneAnalysis(text) {
       },
       body: JSON.stringify({ 
         text: text,
+        doc_seq: docSeq,
+        text_hash: textHash,
         context: 'general',
         attachment_style: 'secure',
         include_explanation: true
@@ -122,7 +128,7 @@ async function runTests() {
     console.log(`Text: "${text}"`);
     console.log(`Expected: ${expected}`);
     
-    const result = await testToneAnalysis(text);
+    const result = await testToneAnalysis(text, i + 1);  // Pass sequence number
     
     if (result) {
       const actualTone = result.ui_tone || result.primary_tone || 'unknown';

@@ -3,9 +3,9 @@
     "text": "You're fucking stupid",
     "category": "Strong Profanity + Targeting",
     "expected": "alert",
-    "actual": "unknown",
-    "correct": false,
-    "confidence": "N/A",
+    "actual": "alert",
+    "correct": true,
+    "confidence": 0.6424277312228782,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -13,9 +13,9 @@
     "text": "That's fucking annoying",
     "category": "Strong Profanity (non-targeted)",
     "expected": "caution",
-    "actual": "unknown",
+    "actual": "alert",
     "correct": false,
-    "confidence": "N/A",
+    "confidence": 0.6395309953675452,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -23,9 +23,9 @@
     "text": "F*ck this sh*t",
     "category": "Masked Profanity",
     "expected": "caution",
-    "actual": "unknown",
+    "actual": "alert",
     "correct": false,
-    "confidence": "N/A",
+    "confidence": 0.6399983767612447,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -33,8 +33,8 @@
     "text": "You're f'ing ridiculous",
     "category": "Masked Profanity + Targeting",
     "expected": "alert",
-    "actual": "unknown",
-    "correct": false,
+    "actual": "alert",
+    "correct": true,
     "confidence": "N/A",
     "explanation": [],
     "metaClassifier": {}
@@ -43,9 +43,9 @@
     "text": "You shut up right now",
     "category": "Targeted Imperative",
     "expected": "alert",
-    "actual": "unknown",
-    "correct": false,
-    "confidence": "N/A",
+    "actual": "alert",
+    "correct": true,
+    "confidence": 0.6427255749926288,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -53,9 +53,9 @@
     "text": "You need to stop this",
     "category": "Soft Imperative",
     "expected": "caution",
-    "actual": "unknown",
-    "correct": false,
-    "confidence": "N/A",
+    "actual": "caution",
+    "correct": true,
+    "confidence": 0.631244243562675,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -63,8 +63,8 @@
     "text": "Just listen to me",
     "category": "General Imperative",
     "expected": "caution",
-    "actual": "unknown",
-    "correct": false,
+    "actual": "caution",
+    "correct": true,
     "confidence": "N/A",
     "explanation": [],
     "metaClassifier": {}
@@ -73,9 +73,9 @@
     "text": "You go away",
     "category": "Targeted Imperative",
     "expected": "alert",
-    "actual": "unknown",
+    "actual": "caution",
     "correct": false,
-    "confidence": "N/A",
+    "confidence": 0.6319057448811084,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -83,9 +83,9 @@
     "text": "I'll make you regret this",
     "category": "Threat Intent",
     "expected": "alert",
-    "actual": "unknown",
-    "correct": false,
-    "confidence": "N/A",
+    "actual": "alert",
+    "correct": true,
+    "confidence": 0.6558283531555604,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -93,9 +93,9 @@
     "text": "I'm gonna report you",
     "category": "Threat Intent",
     "expected": "alert",
-    "actual": "unknown",
+    "actual": "caution",
     "correct": false,
-    "confidence": "N/A",
+    "confidence": 0.6333354893517927,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -103,9 +103,9 @@
     "text": "Do that or else",
     "category": "Threat Intent",
     "expected": "alert",
-    "actual": "unknown",
-    "correct": false,
-    "confidence": "N/A",
+    "actual": "alert",
+    "correct": true,
+    "confidence": 0.6398394657017829,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -113,9 +113,9 @@
     "text": "I will destroy your reputation",
     "category": "Threat Intent",
     "expected": "alert",
-    "actual": "unknown",
-    "correct": false,
-    "confidence": "N/A",
+    "actual": "alert",
+    "correct": true,
+    "confidence": 0.655821150017526,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -123,9 +123,9 @@
     "text": "No offense, but you're an idiot",
     "category": "Belittling + Insult",
     "expected": "alert",
-    "actual": "unknown",
-    "correct": false,
-    "confidence": "N/A",
+    "actual": "alert",
+    "correct": true,
+    "confidence": 0.6401079966557365,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -133,9 +133,9 @@
     "text": "With all due respect, that's stupid",
     "category": "Belittling Construction",
     "expected": "caution",
-    "actual": "unknown",
-    "correct": false,
-    "confidence": "N/A",
+    "actual": "caution",
+    "correct": true,
+    "confidence": 0.6324093839755637,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -143,9 +143,9 @@
     "text": "Calm down, you're overreacting",
     "category": "Dismissive Command",
     "expected": "caution",
-    "actual": "unknown",
-    "correct": false,
-    "confidence": "N/A",
+    "actual": "caution",
+    "correct": true,
+    "confidence": 0.6315649004194752,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -153,9 +153,9 @@
     "text": "Just saying, you're wrong",
     "category": "Passive Belittling",
     "expected": "caution",
-    "actual": "unknown",
-    "correct": false,
-    "confidence": "N/A",
+    "actual": "caution",
+    "correct": true,
+    "confidence": 0.633009858361437,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -163,8 +163,8 @@
     "text": "Great job, genius 🙂",
     "category": "Sarcastic Praise + Fake Softener",
     "expected": "caution",
-    "actual": "unknown",
-    "correct": false,
+    "actual": "caution",
+    "correct": true,
     "confidence": "N/A",
     "explanation": [],
     "metaClassifier": {}
@@ -173,9 +173,9 @@
     "text": "You're not stupid, but clearly you don't get it",
     "category": "Backhanded Compliment",
     "expected": "caution",
-    "actual": "unknown",
+    "actual": "alert",
     "correct": false,
-    "confidence": "N/A",
+    "confidence": 0.641415338451654,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -183,9 +183,9 @@
     "text": "Perfect work as usual 🙂",
     "category": "Sarcasm with Emoji",
     "expected": "caution",
-    "actual": "unknown",
+    "actual": "alert",
     "correct": false,
-    "confidence": "N/A",
+    "confidence": 0.62869334306642,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -193,9 +193,9 @@
     "text": "Why are you so incompetent??",
     "category": "Hostile Question + Heat",
     "expected": "alert",
-    "actual": "unknown",
+    "actual": "caution",
     "correct": false,
-    "confidence": "N/A",
+    "confidence": 0.6370090058924663,
     "explanation": [],
     "metaClassifier": {}
   },
@@ -203,147 +203,210 @@
     "text": "Why do you always do this?!",
     "category": "Rhetorical Question",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": true,
+    "confidence": 0.636231029603714,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "What is wrong with you???",
     "category": "Multiple Question Marks",
     "expected": "alert",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": false,
+    "confidence": 0.6321576521034908,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "Whatever, you never listen",
     "category": "Dismissive Language",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "alert",
+    "correct": false,
+    "confidence": 0.6416753808813216,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "Obviously you don't understand",
     "category": "Dismissive Adverb",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": true,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "As usual, you're late",
     "category": "Dismissive Pattern",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "alert",
+    "correct": false,
+    "confidence": 0.6282676818570765,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "You always do this...",
     "category": "Ellipses + Targeting",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "alert",
+    "correct": false,
+    "confidence": 0.6287446086589282,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "Reallllly interesting point",
     "category": "Word Stretching",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": true,
+    "confidence": 0.6313402596587655,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "What?! Are you serious?!",
     "category": "Interrobang Pattern",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": true,
+    "confidence": "N/A",
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "You're an idiot 😡",
     "category": "Anger Emoji + Insult",
     "expected": "alert",
-    "actual": "error",
-    "correct": false
+    "actual": "alert",
+    "correct": true,
+    "confidence": 0.6430941403709532,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "Thanks for nothing 🖕",
     "category": "Middle Finger Emoji",
     "expected": "alert",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": false,
+    "confidence": 0.6383162412219269,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "You're so helpful 🙂",
     "category": "Fake Softener Sarcasm",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": true,
+    "confidence": 0.6314666130802112,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "You constantly make these mistakes",
     "category": "Absolutes + Targeting",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": true,
+    "confidence": 0.631917955247823,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "This is literally the worst",
     "category": "Hyperbolic Language",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": true,
+    "confidence": 0.6309404437970217,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "You NEVER listen to anyone",
     "category": "Caps + Absolutes",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": true,
+    "confidence": 0.6280718982915637,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "I appreciate your help",
     "category": "Positive Expression",
     "expected": "clear",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": false,
+    "confidence": 0.6400533916653566,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "That's a good point",
     "category": "Supportive",
     "expected": "clear",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": false,
+    "confidence": 0.6318848391395547,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "Let me think about that",
     "category": "Neutral/Thoughtful",
     "expected": "clear",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": false,
+    "confidence": 0.6319149304017354,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "I understand your perspective",
     "category": "Empathetic",
     "expected": "clear",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": false,
+    "confidence": 0.63371393303889,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "Look, I'm not trying to be mean, but you're really struggling here",
     "category": "Softener + Criticism",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": true,
+    "confidence": 0.6318736402003787,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "I love how you always find a way to mess this up 🙂",
     "category": "Sarcasm + Pattern + Emoji",
     "expected": "alert",
-    "actual": "error",
-    "correct": false
+    "actual": "caution",
+    "correct": false,
+    "confidence": 0.6300197666019993,
+    "explanation": [],
+    "metaClassifier": {}
   },
   {
     "text": "You know what? Fine. Do whatever you want.",
     "category": "Resignation + Dismissiveness",
     "expected": "caution",
-    "actual": "error",
-    "correct": false
+    "actual": "alert",
+    "correct": false,
+    "confidence": 0.6402202133154619,
+    "explanation": [],
+    "metaClassifier": {}
   }
 ]

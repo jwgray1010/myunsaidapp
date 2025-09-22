@@ -149,7 +149,9 @@ async function testToneAnalysis() {
       });
 
       if (response.status === 200) {
-        const uiTone = response.data.ui_tone?.toLowerCase();
+        // Handle nested response structure
+        const responseData = response.data.data || response.data;
+        const uiTone = responseData.ui_tone?.toLowerCase();
         const match = uiTone === testCase.expected;
         
         console.log(`Actual: ${uiTone?.toUpperCase() || 'undefined'}`);
@@ -158,11 +160,11 @@ async function testToneAnalysis() {
         if (match) passCount++;
         
         // Log additional context info
-        if (response.data.context) {
-          console.log(`Context detected: ${response.data.context}`);
+        if (responseData.context) {
+          console.log(`Context detected: ${responseData.context}`);
         }
-        if (response.data.ui_distribution) {
-          const dist = response.data.ui_distribution;
+        if (responseData.ui_distribution) {
+          const dist = responseData.ui_distribution;
           console.log(`Distribution: clear=${dist.clear?.toFixed(2)}, caution=${dist.caution?.toFixed(2)}, alert=${dist.alert?.toFixed(2)}`);
         }
       } else {
