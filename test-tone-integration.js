@@ -45,7 +45,7 @@ const testCases = [
   }
 ];
 
-async function testToneAPI(baseUrl = 'http://localhost:3000') {
+async function testToneAPI(baseUrl = 'https://api.myunsaidapp.com') {
   console.log('🧪 TESTING ENHANCED TONE ANALYSIS SYSTEM');
   console.log('=' * 50);
   console.log(`Target: ${baseUrl}/api/v1/tone`);
@@ -128,7 +128,7 @@ function makeRequest(url, payload) {
 
 // Export for programmatic use or run directly
 if (require.main === module) {
-  const baseUrl = process.argv[2] || 'http://localhost:3000';
+  const baseUrl = process.argv[2] || 'https://api.myunsaidapp.com';
   testToneAPI(baseUrl).catch(console.error);
 }
 

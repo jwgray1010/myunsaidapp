@@ -1194,7 +1194,7 @@
   },
   {
     "id": "TA031",
-    "advice": "If escalation rises, slow your speaking pace.",
+    "advice": "If escalation rises, slow your texting pace.",
     "triggerTone": "alert",
     "contexts": [
       "conflict"
