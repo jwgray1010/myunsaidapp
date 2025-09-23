@@ -1,9 +1,12 @@
 {
   "version": 2,
+  "buildCommand": "npm install --package-lock-only",
+  "installCommand": "npm ci --only=production",
   "functions": {
     "api/**/*.ts": {
       "runtime": "@vercel/node@3.0.21",
-      "includeFiles": "api/{_lib,services,schemas,types,utils,cron,v1}/**/*,data/**/*"
+      "includeFiles": "api/{_lib,services,schemas,types,utils,cron,v1}/**/*,data/**/*,models/bert-base-uncased-tokenizer/**/*",
+      "excludeFiles": "node_modules/onnxruntime-node/bin/**,node_modules/@xenova/transformers/node_modules/onnxruntime-node/**,node_modules/**/*.map,**/test*/**,**/*.test.*,**/*.spec.*"
     }
   },
   "routes": [
