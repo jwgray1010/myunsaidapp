@@ -55,3 +55,6 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# ML Models (too large for git)
+models/*.onnx
