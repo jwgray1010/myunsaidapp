@@ -1,0 +1,27 @@
+# MNLI Mini Model Placeholder
+
+This file should be replaced with the actual `mnli-mini.onnx` model file.
+
+## Requirements
+
+- ONNX format MNLI (Multi-Genre Natural Language Inference) model
+- Compatible with BERT-base-uncased tokenizer
+- 3 output classes: [contradiction, neutral, entailment]
+- Input tensors: input_ids, attention_mask (token_type_ids optional)
+- Use int32 tensors for web compatibility
+
+## To obtain this file:
+
+1. Export from HuggingFace transformers
+2. Use optimum or similar ONNX conversion tool
+3. Ensure model family matches bert-base-uncased
+
+## Expected inputs:
+- input_ids: int32 tensor [batch_size, seq_len] (max 128)
+- attention_mask: int32 tensor [batch_size, seq_len]
+- token_type_ids: int32 tensor [batch_size, seq_len] (optional)
+
+## Expected outputs:
+- logits: float32 tensor [batch_size, 3] where 3 = [contradiction, neutral, entailment]
+
+The NLI service will fail gracefully if this file is missing, falling back to rules-only mode.

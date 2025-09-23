@@ -265,11 +265,6 @@ class DataLoaderService {
         null as any // Match original JS behavior - fail fast, don't use elaborate fallbacks
       );
 
-      this.cache.attachmentLearningEnhanced = this.readJsonSafe<AttachmentLearningConfig>(
-        'attachment_learning_enhanced.json',
-        null as any
-      );
-
       // Standard data files with version + array pattern (from original suggestions.js)
       this.cache.therapyAdvice = this.readJsonSafe<any>(
         'therapy_advice.json',
@@ -375,11 +370,6 @@ class DataLoaderService {
       this.cache.severityCollab = this.readJsonSafe<any>(
         'severity_collaboration.json',
         { alert: { base: 0.55 }, caution: { base: 0.40 }, clear: { base: 0.35 } }
-      );
-
-      this.cache.weightProfiles = this.readJsonSafe<any>(
-        'weightMultiplierProfiles.json',
-        { version: '1.0', profiles: {} }
       );
 
       this.cache.userPreferences = this.readJsonSafe<any>(

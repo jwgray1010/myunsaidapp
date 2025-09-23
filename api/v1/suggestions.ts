@@ -175,44 +175,30 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       };
       logger.info('Using tone override from request', toneResult);
     } 
-    // Priority 3: Run tone analysis (fallback when no tone data provided)
+    // Priority 3: Coordinator is required - no local analysis fallback
     else {
-      // Run advanced tone analysis directly using the service for full meta-classifier benefits
-      try {
-        const result = await toneAnalysisService.analyzeAdvancedTone(data.text, {
-          context: contextLabel, // Use extracted context (could be from meta.context)
-          attachmentStyle: attachmentEstimate.primary || 'secure',
-          includeAttachmentInsights: true,
-          deepAnalysis: true,
-          isNewUser
-        });
-        
-        // Map advanced result to simple format for backward compatibility
-        toneResult = {
-          classification: result.primary_tone,
-          confidence: result.confidence
-        };
-        
-        // Store full analysis for suggestions service
-        fullToneAnalysis = {
-          tone: result.primary_tone,
-          confidence: result.confidence,
-          ui_tone: 'clear', // Will be set below based on buckets
-          emotions: result.emotions,
-          analysis: result,
-          metaClassifier: result.metaClassifier,
-          categories: (result as any).categories || []
-        };
-        
-        logger.info('Advanced tone analysis completed', { 
-          primaryTone: result.primary_tone,
-          confidence: result.confidence,
-          metaClassifier: result.metaClassifier 
-        });
-      } catch (toneError) {
-        logger.error('Tone analysis error:', toneError);
-        toneResult = { classification: 'neutral', confidence: 0.5 };
-      }
+      logger.error('Missing tone analysis from Coordinator', {
+        userId,
+        textLength: data.text.length,
+        context: contextLabel,
+        hasToneAnalysis: !!data.toneAnalysis,
+        hasToneOverride: !!data.toneOverride
+      });
+      
+      return {
+        success: false,
+        error: 'Tone analysis required from Coordinator. Please provide toneAnalysis or toneOverride.',
+        suggestions: [],
+        metadata: {
+          suggestion_count: 0,
+          processingTimeMs: Date.now() - startTime,
+          model_version: '1.0.0',
+          tone_analysis_source: 'missing',
+          status: 'missing_coordinator_analysis'
+        },
+        ui_tone: 'neutral',
+        client_seq: data.client_seq || data.clientSeq
+      };
     }
 
     // Normalize tone to clear/caution/alert (not raw emotion)
@@ -252,7 +238,6 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
           relationshipStage: data.meta?.relationshipStage,
           conflictLevel: data.meta?.conflictLevel || 'low',
           isNewUser,
-          toneAnalysisResult: detectedToneResult,
           fullToneAnalysis: fullToneAnalysis
         }
       );

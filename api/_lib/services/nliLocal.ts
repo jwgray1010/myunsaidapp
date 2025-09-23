@@ -9,6 +9,7 @@
 
 import { logger } from '../logger';
 import { resolveLocalPath, resolveModelPath } from '../utils/resolveLocalPath';
+import { AutoTokenizer } from '@xenova/transformers';
 
 // Safe crypto import for serverless environments with deterministic fallback
 let createHash: any;
@@ -22,9 +23,13 @@ try {
   createHash = require('crypto').createHash;
 } catch (error) {
   console.warn('[nli] Crypto module not available, using deterministic fallback');
-  createHash = (algorithm: string) => ({
-    update: (data: any) => ({ digest: () => djb2(String(data)) })
-  });
+  createHash = (_: string) => {
+    const buf: string[] = [];
+    return {
+      update(data: any) { buf.push(String(data)); return this; },
+      digest() { return djb2(buf.join('')); }
+    };
+  };
 }
 
 // Environment flag to disable NLI
@@ -78,6 +83,7 @@ interface NLITelemetry {
  */
 class NLILocalVerifier {
   private session: any = null;
+  private tokenizer: any = null;
   public ready: boolean = false;
   private modelPath: string | null = null;
   private modelVersion: string = 'v1.0'; // Version tracking for cache invalidation
@@ -86,6 +92,7 @@ class NLILocalVerifier {
   private telemetryBuffer: NLITelemetry[] = [];
   private errorCount: number = 0;
   private dataVersionHash: string = '';
+  private labelOrder: string[] = ['contradiction', 'neutral', 'entailment']; // MNLI label order
 
   constructor() {
     // Calculate data version hash for cache invalidation
@@ -201,11 +208,28 @@ class NLILocalVerifier {
       // Create session with WASM execution provider
       const opts = { executionProviders: ['wasm'] };
       this.session = await ort.InferenceSession.create(local, opts);
+      
+      // Initialize real BERT tokenizer for proper tokenization
+      try {
+        const tokenizerPath = resolveLocalPath('models/bert-base-uncased-tokenizer');
+        if (!tokenizerPath) {
+          throw new Error('Local tokenizer path not found');
+        }
+        this.tokenizer = await AutoTokenizer.from_pretrained(tokenizerPath);
+        logger.info('BERT tokenizer initialized successfully');
+      } catch (tokenizerError) {
+        logger.warn('Failed to initialize BERT tokenizer, using fallback', {
+          error: tokenizerError instanceof Error ? tokenizerError.message : String(tokenizerError)
+        });
+        // Keep ready=true even if tokenizer fails - we'll use stub tokenizer
+      }
+      
       this.ready = true;
       
       logger.info('NLI verifier initialized successfully', { 
         modelPath: this.modelPath,
-        runtime: 'wasm'
+        runtime: 'wasm',
+        tokenizerReady: !!this.tokenizer
       });
       
     } catch (error) {
@@ -219,15 +243,14 @@ class NLILocalVerifier {
 
   /**
    * Encode premise-hypothesis pair for MNLI model
-   * Enhanced hygiene & budgets: ≈ ⅔ premise / ⅓ hypothesis to retain both sides
+   * Uses real BERT tokenizer when available, falls back to enhanced stub
    */
-  private encodePair(premise: string, hypothesis: string): {
-    input_ids: BigInt64Array | Int32Array;
-    attention_mask: BigInt64Array | Int32Array;
-    token_type_ids: BigInt64Array | Int32Array;
-  } {
+  private async encodePair(premise: string, hypothesis: string): Promise<{
+    input_ids: Int32Array;
+    attention_mask: Int32Array;
+    token_type_ids: Int32Array;
+  }> {
     const maxLength = 128;
-    const useInt32 = process.env.NLI_INT32_MODEL === '1';
     
     // Normalize: lowercase, collapse whitespace, strip zero-width chars
     const normalizedPremise = premise.toLowerCase()
@@ -239,78 +262,96 @@ class NLILocalVerifier {
       .replace(/[\u200B-\u200D\uFEFF]/g, '')
       .trim();
     
-    // Enhanced stub tokenizer with budget split
-    const vocab = new Map<string, number>([
-      ['[CLS]', 101], ['[SEP]', 102], ['[PAD]', 0], ['[UNK]', 100]
-    ]);
+    let input_ids: number[] = [];
+    let attention_mask: number[] = [];
+    let token_type_ids: number[] = [];
     
-    // Split budget ≈ ⅔ premise / ⅓ hypothesis
-    const premiseBudget = Math.floor((maxLength - 3) * 2 / 3); // Reserve 3 for special tokens
-    const hypothesisBudget = maxLength - 3 - premiseBudget;
-    
-    // Tokenize with budget constraints
-    const premiseTokens = normalizedPremise.split(/\s+/)
-      .filter(t => t.length > 0)
-      .slice(0, premiseBudget);
-    const hypothesisTokens = normalizedHypothesis.split(/\s+/)
-      .filter(t => t.length > 0)
-      .slice(0, hypothesisBudget);
-    
-    // Add tokens to vocab dynamically (stub behavior)
-    [...premiseTokens, ...hypothesisTokens].forEach((token, i) => {
-      if (!vocab.has(token)) {
-        vocab.set(token, i + 1000);
+    if (this.tokenizer) {
+      // Use real BERT tokenizer
+      try {
+        const encoded = await this.tokenizer.encode(
+          { text: normalizedPremise, text_pair: normalizedHypothesis },
+          { padding: true, truncation: true, max_length: maxLength }
+        );
+        
+        input_ids = Array.from(encoded.input_ids);
+        attention_mask = Array.from(encoded.attention_mask);
+        token_type_ids = Array.from(encoded.token_type_ids ?? new Array(input_ids.length).fill(0));
+        
+      } catch (error) {
+        logger.warn('Real tokenizer failed, falling back to stub', {
+          error: error instanceof Error ? error.message : String(error)
+        });
+        // Fall through to stub tokenizer
       }
-    });
-    
-    // Build sequence: [CLS] premise [SEP] hypothesis [SEP]
-    const sequence = [
-      101, // [CLS]
-      ...premiseTokens.map(token => vocab.get(token) || 100), // premise
-      102, // [SEP]
-      ...hypothesisTokens.map(token => vocab.get(token) || 100), // hypothesis
-      102  // [SEP]
-    ];
-    
-    // Pad to fixed length
-    const input_ids = [...sequence];
-    while (input_ids.length < maxLength) {
-      input_ids.push(0); // [PAD]
     }
     
-    // Create attention mask (1 for real tokens, 0 for padding)
-    const attention_mask = input_ids.map(id => id === 0 ? 0 : 1);
-    
-    // Create token type IDs (0 for premise segment, 1 for hypothesis segment)
-    const token_type_ids = new Array(maxLength).fill(0);
-    let inHypothesis = false;
-    let sepCount = 0;
-    
-    for (let i = 0; i < input_ids.length; i++) {
-      if (input_ids[i] === 102) { // [SEP]
-        sepCount++;
-        if (sepCount === 1) {
-          inHypothesis = true;
+    // Enhanced stub tokenizer fallback
+    if (input_ids.length === 0) {
+      const vocab = new Map<string, number>([
+        ['[CLS]', 101], ['[SEP]', 102], ['[PAD]', 0], ['[UNK]', 100]
+      ]);
+      
+      // Split budget ≈ ⅔ premise / ⅓ hypothesis
+      const premiseBudget = Math.floor((maxLength - 3) * 2 / 3); // Reserve 3 for special tokens
+      const hypothesisBudget = maxLength - 3 - premiseBudget;
+      
+      // Tokenize with budget constraints
+      const premiseTokens = normalizedPremise.split(/\s+/)
+        .filter(t => t.length > 0)
+        .slice(0, premiseBudget);
+      const hypothesisTokens = normalizedHypothesis.split(/\s+/)
+        .filter(t => t.length > 0)
+        .slice(0, hypothesisBudget);
+      
+      // Add tokens to vocab dynamically (stub behavior)
+      [...premiseTokens, ...hypothesisTokens].forEach((token, i) => {
+        if (!vocab.has(token)) {
+          vocab.set(token, i + 1000);
         }
-      } else if (inHypothesis && input_ids[i] !== 0) {
-        token_type_ids[i] = 1;
+      });
+      
+      // Build sequence: [CLS] premise [SEP] hypothesis [SEP]
+      const sequence = [
+        101, // [CLS]
+        ...premiseTokens.map(token => vocab.get(token) || 100), // premise
+        102, // [SEP]
+        ...hypothesisTokens.map(token => vocab.get(token) || 100), // hypothesis
+        102  // [SEP]
+      ];
+      
+      // Pad to fixed length
+      input_ids = [...sequence];
+      while (input_ids.length < maxLength) {
+        input_ids.push(0); // [PAD]
+      }
+      
+      // Create attention mask (1 for real tokens, 0 for padding)
+      attention_mask = input_ids.map(id => id === 0 ? 0 : 1);
+      
+      // Create token type IDs (0 for premise segment, 1 for hypothesis segment)
+      token_type_ids = new Array(maxLength).fill(0);
+      let inHypothesis = false;
+      let sepCount = 0;
+      
+      for (let i = 0; i < input_ids.length; i++) {
+        if (input_ids[i] === 102) { // [SEP]
+          sepCount++;
+          if (sepCount === 1) {
+            inHypothesis = true;
+          }
+        } else if (inHypothesis && input_ids[i] !== 0) {
+          token_type_ids[i] = 1;
+        }
       }
     }
     
-    // Return appropriate tensor types based on model requirements
-    if (useInt32) {
-      return {
-        input_ids: new Int32Array(input_ids),
-        attention_mask: new Int32Array(attention_mask),
-        token_type_ids: new Int32Array(token_type_ids)
-      };
-    } else {
-      return {
-        input_ids: new BigInt64Array(input_ids.map(BigInt)),
-        attention_mask: new BigInt64Array(attention_mask.map(BigInt)),
-        token_type_ids: new BigInt64Array(token_type_ids.map(BigInt))
-      };
-    }
+    // Return Int32Array for web compatibility
+    return {
+      input_ids: new Int32Array(input_ids),
+      attention_mask: new Int32Array(attention_mask),
+      token_type_ids: new Int32Array(token_type_ids)
+    };
   }
 
   /**
@@ -379,29 +420,52 @@ class NLILocalVerifier {
    */
   private async scoreInternal(premise: string, hypothesis: string, startTime: number, inputLength: number): Promise<NLIResult> {
     // Use proper MNLI encoding with premise-hypothesis pairs
-    const encoded = this.encodePair(premise, hypothesis);
-    const useInt32 = process.env.NLI_INT32_MODEL === '1';
+    const encoded = await this.encodePair(premise, hypothesis);
     
-    // Create explicit ORT tensors with proper dtype
+    // Create explicit ORT tensors with proper dtype (always int32 for web compatibility)
     const ort = await import('onnxruntime-web');
     
-    const feeds = {
-      input_ids: toTensor(ort, useInt32 ? 'int32' : 'int64', encoded.input_ids),
-      attention_mask: toTensor(ort, useInt32 ? 'int32' : 'int64', encoded.attention_mask),
-      token_type_ids: toTensor(ort, useInt32 ? 'int32' : 'int64', encoded.token_type_ids),
+    // Dynamically map inputs based on session.inputNames with fuzzy matching
+    const feeds: any = {};
+    const inNames = this.session.inputNames || ['input_ids', 'attention_mask', 'token_type_ids'];
+    const mapName = (re: RegExp) => inNames.find((n: string) => re.test(n));
+    
+    const idsName = mapName(/input.*ids|input_ids/i) ?? 'input_ids';
+    const attnName = mapName(/attn|attention/i) ?? 'attention_mask';
+    const typeName = mapName(/token.*type|segment/i); // may be undefined
+    
+    // Map standard BERT inputs to whatever the model expects
+    const inputMap = {
+      input_ids: encoded.input_ids,
+      attention_mask: encoded.attention_mask,
+      token_type_ids: encoded.token_type_ids
     };
     
+    [idsName, attnName].forEach((name) => {
+      feeds[name] = toTensor(ort, 'int32', inputMap[name as keyof typeof inputMap]);
+    });
+    
+    // Only feed token_type_ids if the model expects it
+    if (typeName && inputMap.token_type_ids) {
+      feeds[typeName] = toTensor(ort, 'int32', inputMap.token_type_ids);
+    }
+    
     const results = await this.session.run(feeds);
-    const logits = Array.from(results.logits.data) as number[];
+    
+    // Dynamically discover output name instead of hardcoding 'logits'
+    const outputName = this.session.outputNames?.[0] || 'logits';
+    const logits = Array.from(results[outputName].data) as number[];
     
     // Apply stable softmax with temperature
-    // MNLI outputs: [contradiction, neutral, entailment]
+    // MNLI outputs: [contradiction, neutral, entailment] (configurable order)
     const probs = softmaxT(logits);
+    const order = this.labelOrder ?? ['contradiction', 'neutral', 'entailment'];
+    const idx = (lab: string) => order.indexOf(lab);
     
     const result = {
-      contra: probs[0] || 0,
-      neutral: probs[1] || 0,
-      entail: probs[2] || 0
+      contra: probs[idx('contradiction')] ?? 0,
+      neutral: probs[idx('neutral')] ?? 0,
+      entail: probs[idx('entailment')] ?? 0
     };
     
     // Track successful inference
@@ -430,8 +494,8 @@ class NLILocalVerifier {
     const adviceContext = advice.context;
     const adviceCategory = advice.category;
     
-    console.log(`[nli-rules] User intents: [${userIntents.join(', ')}]`);
-    console.log(`[nli-rules] Advice intents: [${adviceIntents.join(', ')}], context: ${adviceContext}, category: ${adviceCategory}`);
+    logger.info(`[nli-rules] User intents: [${userIntents.join(', ')}]`);
+    logger.info(`[nli-rules] Advice intents: [${adviceIntents.join(', ')}], context: ${adviceContext}, category: ${adviceCategory}`);
     
     // Enhanced Rule 1: Intent overlap with negation consideration
     const intentOverlap = userIntents.filter(intent => adviceIntents.includes(intent));
@@ -442,11 +506,11 @@ class NLILocalVerifier {
       const isPositiveAdvice = intentOverlap.some(intent => positiveIntents.includes(intent));
       
       if (hasHeavyNegation && isPositiveAdvice) {
-        console.log(`[nli-rules] ⚠ Positive intent under heavy negation - reduced confidence`);
+        logger.info(`[nli-rules] ⚠ Positive intent under heavy negation - reduced confidence`);
         return false; // Don't match positive advice to heavily negated text
       }
       
-      console.log(`[nli-rules] ✓ Intent overlap: [${intentOverlap.join(', ')}]`);
+      logger.info(`[nli-rules] ✓ Intent overlap: [${intentOverlap.join(', ')}]`);
       return true;
     }
     
@@ -456,7 +520,7 @@ class NLILocalVerifier {
       const contextScore = spacyContext?.score || 0.5;
       
       if (detectedContext === adviceContext && contextScore > 0.3) {
-        console.log(`[nli-rules] ✓ Context match: ${detectedContext} (score: ${contextScore.toFixed(2)})`);
+        logger.info(`[nli-rules] ✓ Context match: ${detectedContext} (score: ${contextScore.toFixed(2)})`);
         return true;
       }
     }
@@ -466,7 +530,7 @@ class NLILocalVerifier {
       const textSentiment = this.detectSentiment(text);
       const categoryMatches = this.checkCategoryAlignment(textSentiment, adviceCategory);
       if (categoryMatches) {
-        console.log(`[nli-rules] ✓ Category alignment: ${textSentiment} → ${adviceCategory}`);
+        logger.info(`[nli-rules] ✓ Category alignment: ${textSentiment} → ${adviceCategory}`);
         return true;
       }
     }
@@ -477,11 +541,11 @@ class NLILocalVerifier {
     const wordOverlap = Array.from(textWords).filter(word => adviceWords.has(word));
     
     if (wordOverlap.length >= 2) {
-      console.log(`[nli-rules] ✓ Keyword overlap: [${wordOverlap.join(', ')}]`);
+      logger.info(`[nli-rules] ✓ Keyword overlap: [${wordOverlap.join(', ')}]`);
       return true;
     }
     
-    console.log(`[nli-rules] ✗ No rules match - advice rejected`);
+    logger.info(`[nli-rules] ✗ No rules match - advice rejected`);
     return false;
   }
   

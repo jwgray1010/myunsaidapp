@@ -206,6 +206,9 @@ export class SpacyService {
   // simple entity + token regexes
   private entityPatterns = {
     PERSON: /\b(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b/g,
+    DATE: /\b(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}|today|tomorrow|yesterday|next\s+(?:week|month|year)|last\s+(?:week|month|year))\b/gi,
+    ORG: /\b(?:[A-Z][a-z]*(?:\s+[A-Z][a-z]*)*\s+(?:Inc|Corp|LLC|Ltd|Company|Co|Organization|Foundation|Institute|University|College|School|Hospital|Bank|Group|Team|Department|Agency|Bureau|Office)\.?)\b/g,
+    MONEY: /\b(?:\$\d{1,3}(?:,\d{3})*(?:\.\d{2})?|\d+\s*(?:dollars?|cents?|bucks?|grand)|(?:hundred|thousand|million|billion)\s*(?:dollars?|bucks?))\b/gi,
     INTENSITY: /\b(very|extremely|really|quite|somewhat|a little|slightly|incredibly|totally|completely|barely|hardly|absolutely|utterly)\b/gi,
     NEGATION: /\b(not|don't|won't|can't|shouldn't|wouldn't|couldn't|haven't|hasn't|hadn't|isn't|aren't|wasn't|weren't|never|no|none|nothing|nobody|nowhere)\b/gi
   } as const;
@@ -395,12 +398,31 @@ export class SpacyService {
 
   private extractEntities(text: string): SpacyEntity[] {
     const ents: SpacyEntity[] = [];
-    let m: RegExpExecArray | null;
-    const rx = this.entityPatterns.PERSON;
-    while ((m = rx.exec(text)) !== null) {
-      ents.push({ text: m[0], label: 'PERSON', start: m.index, end: m.index + m[0].length });
+    
+    // Extract all entity types
+    const entityTypes = [
+      { pattern: this.entityPatterns.PERSON, label: 'PERSON' },
+      { pattern: this.entityPatterns.DATE, label: 'DATE' },
+      { pattern: this.entityPatterns.ORG, label: 'ORG' },
+      { pattern: this.entityPatterns.MONEY, label: 'MONEY' }
+    ];
+    
+    for (const { pattern, label } of entityTypes) {
+      // Reset regex lastIndex to ensure fresh start
+      pattern.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = pattern.exec(text)) !== null) {
+        ents.push({ 
+          text: m[0], 
+          label, 
+          start: m.index, 
+          end: m.index + m[0].length 
+        });
+      }
     }
-    return ents;
+    
+    // Sort by start position for consistent ordering
+    return ents.sort((a, b) => a.start - b.start);
   }
 
   private classifyNegationType(w: string): string {
@@ -449,19 +471,96 @@ export class SpacyService {
   private detectNegation(text: string): NegationAnalysis {
     const negations: any[] = [];
     const lower = text.toLowerCase();
-    // literal words
-    let m: RegExpExecArray | null;
+    
+    // Multi-token negation patterns (higher precedence)
+    const multiTokenPatterns = [
+      /\bnot\s+really\b/gi,
+      /\bno\s+longer\b/gi,
+      /\bnot\s+at\s+all\b/gi,
+      /\bnot\s+quite\b/gi,
+      /\bhardly\s+ever\b/gi,
+      /\bnever\s+again\b/gi,
+      /\bno\s+way\b/gi,
+      /\bnot\s+anymore\b/gi,
+      /\bfar\s+from\b/gi
+    ];
+    
+    for (const pattern of multiTokenPatterns) {
+      pattern.lastIndex = 0; // Reset regex
+      let m: RegExpExecArray | null;
+      while ((m = pattern.exec(text)) !== null) {
+        const pos = m.index;
+        const scope = this.scopeToClause(text, pos);
+        negations.push({ 
+          negationWord: m[0], 
+          position: pos, 
+          scope, 
+          type: 'multi_token' 
+        });
+      }
+    }
+    
+    // Single token patterns (lower precedence)
     const rx = this.entityPatterns.NEGATION;
+    rx.lastIndex = 0;
+    let m: RegExpExecArray | null;
     while ((m = rx.exec(lower)) !== null) {
       const word = m[0];
       const pos = m.index;
-      negations.push({ negationWord: word, position: pos, scope: this.scopeWindow(text, pos), type: this.classifyNegationType(word) });
+      
+      // Skip if already covered by multi-token pattern
+      const alreadyCovered = negations.some(neg => 
+        pos >= neg.position && pos < neg.position + neg.negationWord.length
+      );
+      
+      if (!alreadyCovered) {
+        const scope = this.scopeToClause(text, pos);
+        negations.push({ 
+          negationWord: word, 
+          position: pos, 
+          scope, 
+          type: this.classifyNegationType(word) 
+        });
+      }
     }
-    // json patterns
+    
+    // JSON patterns
     for (const r of this.negationPatterns) {
-      try { if (r.test(text)) negations.push({ negationWord: r.source, position: -1, scope: 'json', type: 'complex_pattern' }); } catch {}
+      try { 
+        if (r.test(text)) {
+          negations.push({ 
+            negationWord: r.source, 
+            position: -1, 
+            scope: 'json', 
+            type: 'complex_pattern' 
+          }); 
+        } 
+      } catch {}
     }
+    
     return { hasNegation: negations.length > 0, negations, negationCount: negations.length };
+  }
+
+  // Enhanced scope function that stops at clause boundaries
+  private scopeToClause(text: string, pos: number): string {
+    const before = text.slice(0, pos);
+    const after = text.slice(pos);
+    
+    // Find clause boundaries (comma, semicolon, dash, or sentence end)
+    const clauseStart = Math.max(
+      before.lastIndexOf(','),
+      before.lastIndexOf(';'),
+      before.lastIndexOf(' - '),
+      before.lastIndexOf('.'),
+      before.lastIndexOf('!'),
+      before.lastIndexOf('?'),
+      0
+    );
+    
+    const clauseEndMatch = after.match(/[,.;!\?]|\s-\s/);
+    const clauseEnd = clauseEndMatch ? pos + clauseEndMatch.index! : text.length;
+    
+    return text.slice(clauseStart, clauseEnd).trim();
   }
 
   private detectSarcasm(text: string): SarcasmAnalysis {

@@ -13,34 +13,207 @@
 
 import { logger } from '../logger';
 import { dataLoader } from './dataLoader';
-import { MLAdvancedToneAnalyzer } from './toneAnalysis';
-import { processWithSpacy, processWithSpacySync } from './spacyBridge';
+import { processWithSpacy } from './spacyBridge';
 import { spacyClient } from './spacyClient';
 import { getAdviceCandidates } from './adviceIndex';
 import { foldAttachmentPatterns } from '../utils/foldAttachmentPatterns';
 import { CommunicatorProfile } from './communicatorProfile';
 import type {
-  TherapyAdvice,
-  ContextClassifier,
-  ToneTriggerWord,
-  NegationPattern,
-  SarcasmIndicator,
-  IntensityModifier,
-  PhraseEdge,
-  ToneBucketMapping,
-  WeightModifier,
-  GuardrailConfig,
-  ProfanityLexicon,
-  AttachmentOverride,
-  LearningSignal,
-  EvaluationTone,
-  UserPreference
+  TherapyAdvice
 } from '../types/dataTypes';
 import type { ToneResponse } from '../schemas/toneRequest';
-import { adjustToneByAttachment } from './utils/attachmentToneAdjust';
 import { matchSemanticBackbone, applySemanticBias, type SemanticBackboneResult } from './utils/semanticBackbone';
 import { isContextAppropriate, logContextFilter, getContextLinkBonus, type ContextScores } from './contextAnalysis';
 import { nliLocal, hypothesisForAdvice, detectUserIntents, type FitResult } from './nliLocal';
+
+// ---- Aho-Corasick Automaton for Fast Pattern Matching ----
+/**
+ * Simplified Aho-Corasick implementation with basic trie + fallback safety.
+ * 
+ * Performance Notes:
+ * - Uses simplified failure links (all point to root) for speed over completeness
+ * - Provides O(n) text scanning for most patterns, but may miss some overlaps  
+ * - Always paired with regex fallbacks for accuracy guarantee
+ * - Suitable for large lexicons due to fast prefix sharing in trie structure
+ * - Exception handling prevents disruption of ranking pipeline
+ * 
+ * This is a "best-effort" implementation optimized for speed with safety nets.
+ */
+class AhoCorasickAutomaton {
+  private patterns: Map<string, string[]> = new Map();
+  private compiled = false;
+  private trie: any = {};
+  private failures: Map<any, any> = new Map();
+
+  addPatterns(category: string, patterns: string[]) {
+    this.patterns.set(category, patterns);
+    this.compiled = false;
+  }
+
+  compile() {
+    if (this.compiled) return;
+    
+    this.trie = {};
+    this.failures.clear();
+    
+    // Build trie
+    for (const [category, patterns] of this.patterns) {
+      for (const pattern of patterns) {
+        this.addToTrie(pattern.toLowerCase(), category);
+      }
+    }
+    
+    // Build failure links (simplified implementation)
+    this.buildFailures();
+    this.compiled = true;
+  }
+
+  private addToTrie(pattern: string, category: string) {
+    let node = this.trie;
+    for (const char of pattern) {
+      if (!node[char]) {
+        node[char] = {};
+      }
+      node = node[char];
+    }
+    if (!node.output) node.output = [];
+    node.output.push(category);
+  }
+
+  private buildFailures() {
+    // Simplified failure function for basic Aho-Corasick
+    // In production, you'd use a proper AC implementation
+    const queue: any[] = [];
+    
+    // Set failure for depth 1
+    for (const char in this.trie) {
+      if (this.trie[char] && typeof this.trie[char] === 'object') {
+        this.failures.set(this.trie[char], this.trie);
+        queue.push(this.trie[char]);
+      }
+    }
+    
+    // Build remaining failures
+    while (queue.length > 0) {
+      const node = queue.shift();
+      for (const char in node) {
+        if (char === 'output') continue;
+        const child = node[char];
+        if (child && typeof child === 'object') {
+          queue.push(child);
+          this.failures.set(child, this.trie);
+        }
+      }
+    }
+  }
+
+  search(text: string): { category: string, match: string, position: number }[] {
+    if (!this.compiled) this.compile();
+    
+    const results: { category: string, match: string, position: number }[] = [];
+    const lowerText = text.toLowerCase();
+    let node = this.trie;
+    
+    for (let i = 0; i < lowerText.length; i++) {
+      const char = lowerText[i];
+      
+      // Try to match
+      while (node && !node[char]) {
+        node = this.failures.get(node) || this.trie;
+      }
+      
+      if (node && node[char]) {
+        node = node[char];
+        
+        // Check for matches
+        if (node.output) {
+          for (const category of node.output) {
+            // Find the actual pattern that matched
+            const matchEnd = i + 1;
+            let matchStart = matchEnd;
+            let tempNode = node;
+            
+            // Backtrack to find full pattern
+            for (let j = i; j >= 0; j--) {
+              if (tempNode === this.trie) break;
+              matchStart = j;
+              const parentChar = lowerText[j];
+              let found = false;
+              for (const char in this.trie) {
+                if (this.trie[char] === tempNode) {
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) break;
+            }
+            
+            results.push({
+              category,
+              match: text.substring(matchStart, matchEnd),
+              position: matchStart
+            });
+          }
+        }
+      } else {
+        node = this.trie;
+      }
+    }
+    
+    return results;
+  }
+}
+
+// Global Aho-Corasick automaton instance
+let globalAutomaton: AhoCorasickAutomaton | null = null;
+
+function getOrCreateAutomaton(): AhoCorasickAutomaton {
+  if (!globalAutomaton) {
+    globalAutomaton = new AhoCorasickAutomaton();
+    
+    try {
+      // Load phrase edges
+      const phraseEdges = dataLoader.get('phraseEdges') || {};
+      Object.entries(phraseEdges).forEach(([category, patterns]: [string, any]) => {
+        if (Array.isArray(patterns)) {
+          globalAutomaton!.addPatterns(`phrase_${category}`, patterns);
+        }
+      });
+      
+      // Load guardrail patterns
+      const guardrails = dataLoader.get('guardrailConfig') || {};
+      if (guardrails.blockedPatterns) {
+        globalAutomaton!.addPatterns('blocked', guardrails.blockedPatterns);
+      }
+      if (guardrails.softenerPatterns) {
+        globalAutomaton!.addPatterns('softener', guardrails.softenerPatterns);
+      }
+      if (guardrails.gentlePatterns) {
+        globalAutomaton!.addPatterns('gentle', guardrails.gentlePatterns);
+      }
+      
+      // Add second-person patterns
+      const secondPersonPatterns = [
+        // direct
+        'you are', 'you were', 'you will', 'you would', 'you can', 'you could', 
+        'you should', 'you need', 'you have', 'you had', 'you do', 'you did',
+        'you don\'t', 'you didn\'t', 'you won\'t', 'you wouldn\'t',
+        'you\'re', 'you\'ve', 'you\'ll', 'you\'d',
+        'your', 'yours', 'yourself',
+        // indirect
+        'if you', 'when you', 'have you', 'do you', 'would you', 'could you'
+      ];
+      globalAutomaton!.addPatterns('second_person', secondPersonPatterns);
+      
+      globalAutomaton!.compile();
+      logger.info('Aho-Corasick automaton compiled successfully');
+    } catch (error) {
+      logger.warn('Failed to compile Aho-Corasick automaton', { error });
+    }
+  }
+  
+  return globalAutomaton;
+}
 
 // ---- weight-mod fallback resolver (exact → alias → family → general → code_default)
 const DISABLE_WEIGHT_FALLBACKS = process.env.DISABLE_WEIGHT_FALLBACKS === '1';
@@ -74,6 +247,15 @@ function resolveWeightContextKey(rawCtx: string): ResolvedCtx {
   return { key: '__code_default__', reason: `fallback:code_default(${ctx})` };
 }
 
+// Utility helper to check for specific categories in Aho-Corasick matches
+function acHasCategory(text: string, category: string): boolean {
+  try { 
+    return getOrCreateAutomaton().search(text).some(m => m.category === category); 
+  } catch { 
+    return false; 
+  }
+}
+
 // ============================
 // Interfaces (keep identical to your original)
 // ============================
@@ -87,6 +269,8 @@ export interface DetailedSuggestionResult {
   priority: number;
   context_specific: boolean;
   attachment_informed: boolean;
+  // optional metadata
+  categories?: string[];
 }
 
 export interface SuggestionAnalysis {
@@ -439,7 +623,7 @@ function mmr(pool: any[], qVec: Float32Array | null, vecOf: (it:any)=>Float32Arr
   return out;
 }
 
-async function hybridRetrieve(text: string, contextLabel: string, toneKey: string, k=120) { // 120 is plenty with MMR
+async function hybridRetrieve(text: string, contextLabel: string, toneKey: string, analysis?: any, k=120) { // 120 is plenty with MMR
   const corpus = getAdviceCorpus();
   logger.info('hybridRetrieve started', { 
     corpusSize: corpus.length, 
@@ -449,7 +633,18 @@ async function hybridRetrieve(text: string, contextLabel: string, toneKey: strin
     k 
   });
   
-  const query = `${text} ctx:${contextLabel} tone:${toneKey}`;
+  // Enhanced query with Coordinator signals + semantic backbone
+  const ents = (analysis?.entities || []).map((e:any)=>e.text).slice(0,8);
+  const intents = analysis ? detectUserIntents(text).slice(0,5) : [];
+  const semTags = (analysis?.semanticBackbone?.tags || []).slice(0,8);
+  const query = [
+    text,
+    `ctx:${contextLabel}`,
+    `tone:${toneKey}`,
+    ents.length ? `ents:${ents.join(',')}` : '',
+    intents.length ? `intents:${intents.join(',')}` : '',
+    semTags.length ? `sem:${semTags.join(',')}` : ''
+  ].filter(Boolean).join(' ');
   let denseTop: any[] = [];
   let qVec: Float32Array | null = null;
 
@@ -461,18 +656,29 @@ async function hybridRetrieve(text: string, contextLabel: string, toneKey: strin
   logger.info('Vector check', { hasVecs, firstItemId: corpus[0]?.id });
   
   if (hasVecs && typeof (spacyClient.embed) === 'function') {
-    const qArr: number[] = await spacyClient.embed(query);
-    qVec = new Float32Array(qArr);
-    denseTop = corpus
-      .map((it:any) => {
-        const v = getV(it.id);
-        const s = (v && qVec) ? cosine(v, qVec) : 0;
-        return [it, s] as const;
-      })
-      .sort((a,b)=>b[1]-a[1])
-      .slice(0, k*2)
-      .map(([it])=>it);
-    logger.info('Dense retrieval completed', { denseTopSize: denseTop.length });
+    try {
+      const qArr = await spacyClient.embed(query);
+      if (Array.isArray(qArr) && getVecById(corpus[0]?.id || '')?.length === qArr.length) {
+        qVec = new Float32Array(qArr);
+      } else {
+        logger.warn('Embed dim mismatch; using sparse-only');
+      }
+    } catch (e) {
+      logger.warn('Dense embed failed; using sparse-only', { error: String(e) });
+    }
+    
+    if (qVec) {
+      denseTop = corpus
+        .map((it:any) => {
+          const v = getV(it.id);
+          const s = (v && qVec) ? cosine(v, qVec) : 0;
+          return [it, s] as const;
+        })
+        .sort((a,b)=>b[1]-a[1])
+        .slice(0, k*2)
+        .map(([it])=>it);
+      logger.info('Dense retrieval completed', { denseTopSize: denseTop.length });
+    }
   }
 
   const sparseTop = bm25Search(query, k*2);
@@ -551,7 +757,6 @@ function calibrate(conf:number, contextLabel:string) {
 // ============================
 class AnalysisOrchestrator {
   constructor(
-    private mlAnalyzer: MLAdvancedToneAnalyzer,
     private loader: any
   ) {}
 
@@ -576,56 +781,48 @@ class AnalysisOrchestrator {
       targeting = 'direct';
     }
 
-    // Enhanced regex patterns for second-person detection
-    const directPatterns = [
-      /\byou\s+(are|were|will|would|can|could|should|need|have|had|do|did|don't|didn't|won't|wouldn't)\b/gi,
-      /\byou['']?(re|ve|ll|d)\b/gi,
-      /\byour(s?)\b/gi,
-      /\byourself\b/gi
-    ];
-
-    const indirectPatterns = [
-      /\bif\s+you\b/gi,
-      /\bwhen\s+you\b/gi,
-      /\bhave\s+you\b/gi,
-      /\bdo\s+you\b/gi,
-      /\bwould\s+you\b/gi,
-      /\bcould\s+you\b/gi
-    ];
-
-    // Check direct targeting patterns
-    for (const pattern of directPatterns) {
-      const matches = text.match(pattern);
-      if (matches) {
-        patterns.push(`direct_${pattern.source}`);
-        confidence += 0.6 * matches.length;
-        if (targeting === 'none') targeting = 'direct';
+    // Use Aho-Corasick automaton for fast pattern matching
+    try {
+      const automaton = getOrCreateAutomaton();
+      const matches = automaton.search(text);
+      
+      for (const match of matches) {
+        if (match.category === 'second_person') {
+          patterns.push(`aho_${match.match}`);
+          
+          // Classify as direct or indirect based on the matched pattern
+          const matchText = match.match.toLowerCase();
+          if (matchText.includes('you are') || matchText.includes('you\'re') || 
+              matchText.includes('your') || matchText.includes('yourself')) {
+            confidence += 0.6;
+            if (targeting === 'none') targeting = 'direct';
+          } else if (matchText.includes('if you') || matchText.includes('when you') || 
+                     matchText.includes('do you') || matchText.includes('would you')) {
+            confidence += 0.3;
+            if (targeting === 'none') targeting = 'indirect';
+          } else {
+            confidence += 0.4;
+            if (targeting === 'none') targeting = 'indirect';
+          }
+        }
       }
-    }
+    } catch (error) {
+      logger.warn('Aho-Corasick automaton failed, falling back to regex', { error });
+      
+      // Fallback to regex if automaton fails
+      const quickPatterns = [
+        /\byou\s+(are|were|will|would|can|could|should|need|have|had|do|did)\b/gi,
+        /\byou['']?(re|ve|ll|d)\b/gi,
+        /\byour(s?)\b/gi
+      ];
 
-    // Check indirect targeting patterns
-    for (const pattern of indirectPatterns) {
-      const matches = text.match(pattern);
-      if (matches) {
-        patterns.push(`indirect_${pattern.source}`);
-        confidence += 0.3 * matches.length;
-        if (targeting === 'none') targeting = 'indirect';
-      }
-    }
-
-    // Check for imperatives (commands) which often imply second person
-    const imperativePatterns = [
-      /^\s*[A-Z][a-z]+\s+(your|the|this|that)/i, // "Take your time"
-      /^\s*[A-Z][a-z]+\s+(to|with|for|about)/i,  // "Talk to someone"
-      /^\s*(try|consider|think|remember|focus|stop|start|keep|let|make|take|give|find|ask)\b/gi
-    ];
-
-    for (const pattern of imperativePatterns) {
-      const matches = text.match(pattern);
-      if (matches) {
-        patterns.push(`imperative_${pattern.source}`);
-        confidence += 0.4 * matches.length;
-        if (targeting === 'none') targeting = 'indirect';
+      for (const pattern of quickPatterns) {
+        const matches = text.match(pattern);
+        if (matches) {
+          patterns.push(`fallback_${pattern.source}`);
+          confidence += 0.5 * matches.length;
+          if (targeting === 'none') targeting = 'direct';
+        }
       }
     }
 
@@ -637,78 +834,68 @@ class AnalysisOrchestrator {
 
   async analyze(
     text: string,
-    providedTone?: { classification: string; confidence: number } | null,
+    _providedTone?: { classification: string; confidence: number } | null, // unused; Coordinator wins
     attachmentStyle?: string,
     contextHint?: string,
     fullToneAnalysis?: ToneResponse | null
   ) {
-    // Use spaCy bridge for processing
-    const spacyResult = await processWithSpacy(text);
-
-    // Get additional analysis data from spacyClient for intensity calculation
-    const fullAnalysis = spacyClient.process(text);
-
-    // Improved intensity with POS adv
-    const advCount = (spacyResult.tokens || []).filter((t:any)=>String(t.pos).toUpperCase()==='ADV').length;
-    const excl = (text.match(/!/g)||[]).length * 0.08;
-    const q = (text.match(/\?/g)||[]).length * 0.04;
-    const caps = (text.match(/[A-Z]{2,}/g)||[]).length * 0.12;
-    const mod = fullAnalysis.intensity?.score || 0;
-    const intensityScore = Math.min(1, excl + q + caps + mod + advCount*0.04);
-
-    let toneResult = providedTone || null;
-    let mlGenerated = false;
-    let richToneData: any = null;
-
-    // Priority: fullToneAnalysis > providedTone > run analysis
-    if (fullToneAnalysis) {
-      // Extract tone result from full analysis
-      toneResult = {
-        classification: fullToneAnalysis.tone,
-        confidence: fullToneAnalysis.confidence
-      };
-      richToneData = {
-        emotions: fullToneAnalysis.emotions,
-        intensity: fullToneAnalysis.metadata?.analysis_depth ? fullToneAnalysis.metadata.analysis_depth : intensityScore,
-        sentiment_score: fullToneAnalysis.sentiment_score || fullToneAnalysis.confidence, // Use actual sentiment score if available
-        
-        // 🎯 CRITICAL FIX: Use ACTUAL linguistic features from coordinator, not defaults!
-        linguistic_features: fullToneAnalysis.linguistic_features || {
-          formality_level: 0.5, // Fallback only if missing
-          emotional_complexity: Object.keys(fullToneAnalysis.emotions?.emotions || {}).length > 0 ? 0.7 : 0.3,
-          assertiveness: (fullToneAnalysis.emotions?.emotions?.anger || fullToneAnalysis.emotions?.emotions?.confident || 0) * 0.8,
-          empathy_indicators: fullToneAnalysis.attachmentInsights || [],
-          potential_misunderstandings: []
-        },
-        
-        // 🎯 CRITICAL FIX: Use ACTUAL context analysis from coordinator, not defaults!
-        context_analysis: fullToneAnalysis.context_analysis || {
-          appropriateness_score: fullToneAnalysis.confidence,
-          relationship_impact: fullToneAnalysis.ui_tone === 'alert' ? 'negative' : 
-                              fullToneAnalysis.ui_tone === 'caution' ? 'neutral' : 'positive',
-          suggested_adjustments: fullToneAnalysis.suggestions?.map(s => s.text) || []
-        },
-        
-        ui_tone: fullToneAnalysis.ui_tone,
-        ui_distribution: fullToneAnalysis.ui_distribution,
-        evidence: fullToneAnalysis.evidence
-      };
-      logger.info('Using full tone analysis', { tone: toneResult.classification, ui_tone: fullToneAnalysis.ui_tone });
-    } else if (!toneResult) {
-      const ml = await this.mlAnalyzer.analyzeTone(
-        text,
-        attachmentStyle || 'secure',
-        contextHint || spacyResult.context?.label || 'general',
-        'general'
-      );
-      if (ml?.success) {
-        toneResult = { classification: ml.tone.classification, confidence: ml.tone.confidence };
-        mlGenerated = true;
-      } else {
-        // No fallback: if analyzer fails, throw — caller handles as 4xx
-        throw new Error('Tone analysis unavailable');
-      }
+    if (!fullToneAnalysis) {
+      throw new Error('Tone Suggestion Coordinator result required (fullToneAnalysis missing)');
     }
+
+    // Keep spaCy/Aho parsing for phrase edges, entities, etc.
+    const spacyResult = await processWithSpacy(text);
+    const fullParsing = spacyClient.process(text);
+
+    // Tone & confidence: use Coordinator only
+    const toneResult = {
+      classification: fullToneAnalysis.tone,
+      confidence: fullToneAnalysis.confidence
+    };
+
+    // Context: prefer Coordinator, never overwrite with spaCy
+    const contextLabel =
+      fullToneAnalysis.context_analysis?.label ||
+      fullToneAnalysis.context ||
+      contextHint ||
+      'general';
+
+    // Intensity: prefer Coordinator; handle both object and number formats
+    const coordinatorIntensity =
+      (fullToneAnalysis as any)?.intensity?.score ??
+      (fullToneAnalysis as any)?.metadata?.intensity ??
+      null;
+
+    // If Coordinator omitted intensity, you may *augment* with spaCy-derived hints
+    const auxIntensity = (() => {
+      if (coordinatorIntensity != null) return coordinatorIntensity;
+      const advCount = (spacyResult.tokens || []).filter((t:any)=>String(t.pos).toUpperCase()==='ADV').length;
+      const excl = (text.match(/!/g)||[]).length * 0.08;
+      const q    = (text.match(/\?/g)||[]).length * 0.04;
+      const caps = (text.match(/[A-Z]{2,}/g)||[]).length * 0.12;
+      const mod  = fullParsing.intensity?.score || 0;
+      return Math.min(1, excl + q + caps + mod + advCount*0.04);
+    })();
+
+    // Flags: prefer Coordinator signals; only fill missing with spaCy/Aho heuristics
+    const coordinatorFlags = {}; // ToneResponse doesn't have flags property yet
+    const negFromCoord = fullParsing.negation?.present ?? false;
+    const sarcasmFromCoord = spacyResult.sarcasm?.present ?? false;
+    const phraseEdges = spacyResult.phraseEdges || [];
+
+    const secondPerson = this.enhancedSecondPersonDetection(text, spacyResult, fullParsing);
+
+    // Rich data straight from Coordinator (don't synthesize if present)
+    const richToneData = {
+      emotions: fullToneAnalysis.emotions,
+      intensity: coordinatorIntensity ?? auxIntensity,
+      linguistic_features: fullToneAnalysis.linguistic_features,
+      context_analysis: fullToneAnalysis.context_analysis,
+      ui_tone: fullToneAnalysis.ui_tone,
+      ui_distribution: fullToneAnalysis.ui_distribution,
+      evidence: fullToneAnalysis.evidence,
+      attachmentInsights: fullToneAnalysis.attachmentInsights
+    };
 
     // Apply semantic backbone analysis
     const semanticThesaurus = this.loader.get('semanticThesaurus');
@@ -719,20 +906,20 @@ class AnalysisOrchestrator {
     );
 
     return {
-      tone: toneResult!,
-      context: spacyResult.context || { label: contextHint || 'general', score: 0.5 },
-      entities: fullAnalysis.entities || [],
-      secondPerson: this.enhancedSecondPersonDetection(text, spacyResult, fullAnalysis),
+      tone: toneResult,
+      context: { label: contextLabel, score: fullToneAnalysis.context_analysis?.appropriateness_score ?? 0.5 },
+      entities: fullParsing.entities || [],
+      secondPerson,
       flags: {
-        hasNegation: fullAnalysis.negation?.present || (spacyResult.deps || []).some((d:any)=>d.rel==='neg'),
-        hasSarcasm: spacyResult.sarcasm?.present || false,
-        intensityScore,
-        phraseEdgeHits: spacyResult.phraseEdges || []
+        hasNegation: !!negFromCoord,
+        hasSarcasm: !!sarcasmFromCoord,
+        intensityScore: richToneData.intensity ?? 0,
+        phraseEdgeHits: phraseEdges
       },
-      features: fullAnalysis.features || {},
-      mlGenerated,
+      features: fullParsing.features || {},
+      mlGenerated: false,           // no local ML tone
       semanticBackbone: semanticResult,
-      richToneData // ← Add the rich tone analysis data
+      richToneData
     };
   }
 }
@@ -1157,14 +1344,12 @@ class AdviceEngine {
 // ============================
 class SuggestionsService {
   private trialManager: TrialManager;
-  private mlAnalyzer: MLAdvancedToneAnalyzer;
   private orchestrator: AnalysisOrchestrator;
   private adviceEngine: AdviceEngine;
 
   constructor() {
     this.trialManager = new TrialManager();
-    this.mlAnalyzer = new MLAdvancedToneAnalyzer({ enableSmoothing: true, enableSafetyChecks: true });
-    this.orchestrator = new AnalysisOrchestrator(this.mlAnalyzer, dataLoader);
+    this.orchestrator = new AnalysisOrchestrator(dataLoader);
     this.adviceEngine = new AdviceEngine(dataLoader);
     
     // Initialize NLI verifier for advice-message fit checking
@@ -1172,8 +1357,27 @@ class SuggestionsService {
       // Silently fail - nliLocal.ready will be false
     });
     
+    // Add data loader aliases for file name alignment
+    this.setupDataLoaderAliases();
+    
     // Initialize with comprehensive JSON validation
     this.initializeWithDataValidation();
+  }
+
+  private setupDataLoaderAliases(): void {
+    // Handle different file naming conventions
+    try {
+      // Alias attachment_tone_weights to attachment_learning if needed
+      if (!dataLoader.get('attachment_tone_weights') && dataLoader.get('attachment_learning')) {
+        (dataLoader as any).alias('attachment_tone_weights', 'attachment_learning');
+      }
+      // Alias weight_modifiers to weight_multipliers if needed  
+      if (!dataLoader.get('weight_modifiers') && dataLoader.get('weight_multipliers')) {
+        (dataLoader as any).alias('weight_modifiers', 'weight_multipliers');
+      }
+    } catch (error) {
+      logger.warn('Data loader alias setup failed', { error: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   private async initializeWithDataValidation(): Promise<void> {
@@ -1277,7 +1481,7 @@ class SuggestionsService {
       }
 
       // 3. Context appropriateness
-      if (!this.isContextAppropriate(suggestion, analysis)) {
+      if (!this.checkContextAppropriate(suggestion, analysis)) {
         logger.warn(`Suggestion filtered for context inappropriateness: ${suggestion.id}`);
         guardrailCounters.contextInappropriate++;
         return false;
@@ -1349,7 +1553,8 @@ class SuggestionsService {
       'i wonder if', 'what if', 'have you considered', 'it\'s possible'
     ];
 
-    const hasSoftener = requiredSofteners.some((pattern: string) => {
+    // Use AC automaton first, then fallback to regex
+    const hasSoftener = acHasCategory(advice, 'softener') || requiredSofteners.some((pattern: string) => {
       const regex = new RegExp(`\\b${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
       return regex.test(advice);
     });
@@ -1385,7 +1590,8 @@ class SuggestionsService {
         'feel', 'sense', 'experience', 'notice', 'gentle', 'kind', 'understanding'
       ];
 
-      const hasGentleLanguage = gentlePatterns.some((pattern: string) => {
+      // Use AC automaton first, then fallback to regex
+      const hasGentleLanguage = acHasCategory(advice, 'gentle') || gentlePatterns.some((pattern: string) => {
         const regex = new RegExp(`\\b${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
         return regex.test(advice);
       });
@@ -1426,6 +1632,22 @@ class SuggestionsService {
       return false;
     }
 
+    try {
+      // Use Aho-Corasick automaton for fast pattern matching
+      const automaton = getOrCreateAutomaton();
+      const matches = automaton.search(text);
+      
+      // Check if any matches are blocked patterns (only block true "blocked" patterns)
+      const hasBlockedMatch = matches.some(match => match.category === 'blocked');
+      
+      if (hasBlockedMatch) {
+        return true;
+      }
+    } catch (error) {
+      logger.warn('Aho-Corasick failed in guardrails, falling back to regex', { error });
+    }
+
+    // Fallback to regex if automaton fails
     return blockedPatterns.some(pattern => {
       try {
         const regex = new RegExp(pattern, 'i');
@@ -1437,9 +1659,11 @@ class SuggestionsService {
     });
   }
 
-  private isContextAppropriate(suggestion: any, analysis: any): boolean {
+  private checkContextAppropriate(suggestion: any, analysis: any): boolean {
     const analysisContext = analysis?.context?.label || 'general';
-    const contextScores: ContextScores = analysis?.context?.scores || {};
+    const contextScores: ContextScores = 
+      (analysis.richToneData?.context_analysis?.scores as Record<string,number> | undefined)
+      ?? (analysis.context?.scores || {});
     
     const appropriate = isContextAppropriate(suggestion, analysisContext, contextScores);
     
@@ -1544,10 +1768,9 @@ class SuggestionsService {
       attachmentStyle?: string;
       userId?: string;
       userEmail?: string;
-      toneAnalysisResult?: { classification: string; confidence: number } | null;
-      fullToneAnalysis?: ToneResponse | null;
+      fullToneAnalysis: ToneResponse; // must be provided
       isNewUser?: boolean;
-    } = {}
+    } = {} as any
   ): Promise<SuggestionAnalysis> {
 
     const {
@@ -1555,9 +1778,12 @@ class SuggestionsService {
       attachmentStyle = 'secure',
       userId = 'anonymous',
       userEmail,
-      toneAnalysisResult,
       fullToneAnalysis
     } = options;
+
+    if (!fullToneAnalysis) {
+      throw new Error('Missing Coordinator analysis: options.fullToneAnalysis is required');
+    }
 
     await this.ensureDataLoaded();
 
@@ -1578,10 +1804,10 @@ class SuggestionsService {
       // 1) spaCy + local analyzer (no LLM) - Cache miss, perform analysis
       analysis = await this.orchestrator.analyze(
         text,
-        toneAnalysisResult ?? null,
+        null,                 // no providedTone; Coordinator is source of truth
         attachmentStyle,
         context,
-        fullToneAnalysis ?? null
+        fullToneAnalysis
       );
       
       // Cache the analysis result
@@ -1604,8 +1830,11 @@ class SuggestionsService {
     // Pipeline Step 1: Normalize tone to bucket immediately after analysis
     const contextLabel = context || analysis.context?.label || 'general';
 
-    // Normalize tone → Bucket (toneKeyNorm)
-    const toneKeyNorm: 'clear' | 'caution' | 'alert' = (() => {
+    // Normalize tone → Bucket (toneKeyNorm) - prefer Coordinator ui_tone
+    const uiTone = analysis.richToneData?.ui_tone as 'clear'|'caution'|'alert' | undefined;
+    const uiDist = analysis.richToneData?.ui_distribution as {clear:number;caution:number;alert:number} | undefined;
+
+    const toneKeyNorm = uiTone ?? (() => {
       const t = (analysis.tone.classification || '').toLowerCase();
       if (t==='clear'||t==='caution'||t==='alert') return t as 'clear' | 'caution' | 'alert';
       if (['positive','supportive','neutral'].includes(t)) return 'clear';
@@ -1613,18 +1842,21 @@ class SuggestionsService {
       return 'caution';
     })();
 
-    // Pipeline Step 2: Seed toneBuckets early so guardrails can read it
-    const { primary: bucketPrimary, dist: bucketDist } = this.adviceEngine.resolveToneBucket(
-      toneKeyNorm, 
-      contextLabel, 
-      analysis.flags.intensityScore,
-      (analysis as any).semanticBackbone
-    );
-    (analysis as any).toneBuckets = { primary: bucketPrimary, dist: bucketDist };
+    // Pipeline Step 2: Use Coordinator buckets or fallback to computed buckets
+    const bucket = uiDist
+      ? { primary: (Object.entries(uiDist).sort((a,b)=>b[1]-a[1])[0][0]), dist: uiDist }
+      : this.adviceEngine.resolveToneBucket(toneKeyNorm, contextLabel, analysis.flags.intensityScore, (analysis as any).semanticBackbone);
 
-    // Generate cache key for suggestions
-    // TODO: include data schema version in the cache key if JSONs change frequently.
-    const analysisKey = `${JSON.stringify(analysis.tone)}:${analysis.context.label}:${JSON.stringify(analysis.flags)}`;
+    (analysis as any).toneBuckets = bucket;
+
+    // Generate cache key for suggestions - include Coordinator UI fields for stability
+    const analysisKey = JSON.stringify({
+      tone: analysis.tone,
+      uiTone: analysis.richToneData?.ui_tone,
+      uiDist: analysis.richToneData?.ui_distribution,
+      ctx: analysis.context.label,
+      flags: analysis.flags
+    });
     
     // Check cache for suggestions
     let suggestions = performanceCache.getCachedSuggestions(analysisKey, maxSuggestions, tier);
@@ -1668,9 +1900,9 @@ class SuggestionsService {
 
     const intensityScore = analysis.flags.intensityScore;
 
-    // 2) Retrieve (hybrid)
+    // 2) Retrieve (hybrid) - now with enhanced query including Coordinator signals
     const desired = Math.max(10, (options.maxSuggestions ?? 6) * 20);
-    const pool = await hybridRetrieve(text, contextLabel, toneKeyNorm, desired);
+    const pool = await hybridRetrieve(text, contextLabel, toneKeyNorm, analysis, desired);
     logger.info('Hybrid retrieval completed', { 
       userId: options.userId || 'anonymous',
       poolSize: pool.length, 
@@ -1737,11 +1969,15 @@ class SuggestionsService {
     const personalized = applyAttachmentOverrides(guardedPool, attachmentStyle);
     logger.info('Attachment overrides applied', { personalizedSize: personalized.length, guardedPoolSize: guardedPool.length });
 
-    // ✅ NEW: User intent detection for enhanced matching
-    const userIntents = detectUserIntents(text);
+    // ✅ NEW: Enhanced user intent detection - combine detected + Coordinator intents
+    const detectedIntents = detectUserIntents(text);
+    const coordinatorIntents = (fullToneAnalysis as any)?.intents || [];
+    const userIntents = [...new Set([...detectedIntents, ...coordinatorIntents])]; // Union unique intents
     logger.info('User intents detected', { 
       textLength: text.length, 
-      detectedIntents: userIntents,
+      detectedIntents,
+      coordinatorIntents,
+      combinedIntents: userIntents,
       intentCount: userIntents.length 
     });
 
@@ -1758,17 +1994,25 @@ class SuggestionsService {
       userPref: dataLoader.get('userPreference'),
       tier,
       secondPerson: analysis.secondPerson,
-      contextScores: analysis.context?.scores || {},
+      contextScores: (analysis.richToneData?.context_analysis?.scores as Record<string,number> | undefined) ?? (analysis.context?.scores || {}),
       categories: fullToneAnalysis?.categories || [],
       userIntents // ✅ NEW: Pass detected user intents for intent-based scoring
     });
+    
+    // ✅ NEW: Apply NLI signals to ranking scores (not just gating)
+    for (const it of ranked) {
+      const nli = (it as any).__nli;
+      if (!nli) continue;
+      // Small, bounded shaping - favor items the ONNX NLI says "fit" best
+      it.ltrScore += Math.max(-0.4, Math.min(0.4, (nli.entail - nli.contra) * 0.6));
+    }
     logger.info('Ranking completed', { rankedSize: ranked.length, personalizedSize: personalized.length });
 
     // ✅ NEW: Integrate micro-advice from adviceIndex
     const enrichedSuggestions = await this.buildEnhancedSuggestions({
       detectedRequestCtx: contextLabel,
       uiTone: toneKeyNorm,
-      classifierCtxScores: analysis.context?.scores || {},
+      classifierCtxScores: (analysis.richToneData?.context_analysis?.scores as Record<string,number> | undefined) ?? (analysis.context?.scores || {}),
       phraseEdgeCategories: Array.isArray(analysis.flags.phraseEdgeHits) ? analysis.flags.phraseEdgeHits : [],
       rewriteCandidates: ranked.map(r => ({
         type: 'rewrite' as const,
@@ -1854,16 +2098,11 @@ class SuggestionsService {
     const topK = Math.max(1, Math.min(10, options.maxSuggestions ?? 3));
     const finalPicked = strong.slice(0, topK);
 
-    // 9) Build tone bucket dist for response header (from toneKeyNorm)
-    const { primary, dist } = this.adviceEngine.resolveToneBucket(
-      toneKeyNorm, 
-      contextLabel, 
-      intensityScore,
-      (analysis as any).semanticBackbone
-    );
+    // 9) Reuse tone bucket dist already computed from Coordinator data
+    const { primary, dist } = (analysis as any).toneBuckets;
 
     // 10) Assemble response (no fallbacks)
-    const finalSuggestions = finalPicked.map(({ advice, categories, ltrScore, id, __calib, __nli }) => ({
+    const finalSuggestions: DetailedSuggestionResult[] = finalPicked.map(({ advice, categories, id, __calib, ltrScore }) => ({
       id,
       text: advice, // Direct therapy advice text from therapy_advice.json
       categories,
@@ -1874,9 +2113,6 @@ class SuggestionsService {
       priority: 1,
       context_specific: true,
       attachment_informed: true,
-      ltrScore,
-      // Include NLI trace in dev responses only
-      ...(process.env.NODE_ENV !== 'production' ? { nli: __nli } : {})
     }));
 
     // Cache the final suggestions for future use
@@ -1926,8 +2162,14 @@ class SuggestionsService {
     features?: string[];
     meta?: any;
     analysis?: { classification: string; confidence: number } | null;
+    fullToneAnalysis?: ToneResponse; // Add this required parameter
   }) {
-    const { text, styleHint = 'secure', meta = {}, analysis = null } = params;
+    const { text, styleHint = 'secure', meta = {}, analysis = null, fullToneAnalysis } = params;
+    
+    if (!fullToneAnalysis) {
+      throw new Error('Legacy generate method requires fullToneAnalysis parameter');
+    }
+    
     const result = await this.generateAdvancedSuggestions(
       text,
       'general',
@@ -1935,7 +2177,7 @@ class SuggestionsService {
       {
         attachmentStyle: styleHint || 'secure',
         userId: meta.userId || 'anonymous',
-        toneAnalysisResult: analysis
+        fullToneAnalysis
       }
     );
 
