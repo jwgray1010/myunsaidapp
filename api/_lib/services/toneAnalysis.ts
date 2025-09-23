@@ -861,6 +861,28 @@ class ToneDetectors {
     // Remove async initialization - will be lazy & sync
   }
 
+  /**
+   * Compile regex with proper flag handling for JavaScript
+   * Strips PCRE-style (?i) flags and converts to RegExp flags
+   */
+  private buildRegex(pattern: string): RegExp {
+    let flags = 'u'; // Always use unicode
+    let src = pattern;
+
+    // Handle PCRE-style inline flags
+    if (src.startsWith('(?i)')) {
+      src = src.slice(4);
+      flags += 'i';
+    }
+
+    try {
+      return new RegExp(src, flags);
+    } catch (error) {
+      logger.warn(`[tone-regex] Failed to compile pattern: ${pattern}`, error);
+      throw error;
+    }
+  }
+
   private initSyncIfNeeded() {
     logger.info('ToneDetectors.initSyncIfNeeded called', { alreadyInitialized: this.trigByLen.size > 0 });
     if (this.trigByLen.size > 0) return; // Already initialized
@@ -903,6 +925,7 @@ class ToneDetectors {
     //   "clear": { "triggerwords": [...] }
     // }
     let totalWords = 0;
+    let totalRegexes = 0;
     for (const bucket of ['clear','caution','alert'] as Bucket[]) {
       const node = trig[bucket];
       if (!node || !node.triggerwords) {
@@ -924,13 +947,29 @@ class ToneDetectors {
         
         const w = wBase * contextWeight;
 
-        // Use enhanced aho patterns if available, fallback to variants
+        // ✅ Load Aho-Corasick patterns (phrases)
         const patterns = item.aho || [item.text, ...(item.variants || [])];
         const terms = patterns.filter(Boolean);
         
         for (const t of terms) {
           push(t, bucket, w);
           totalWords++;
+        }
+
+        // ✅ Load regex patterns
+        if (item.regex) {
+          try {
+            const compiledRegex = this.buildRegex(item.regex);
+            this.tonePatternRegexes.push({
+              re: compiledRegex,
+              bucket,
+              weight: w,
+              category: item.type || 'triggerword'
+            });
+            totalRegexes++;
+          } catch (error) {
+            logger.warn(`[tone-triggerwords] Failed to compile regex for ${bucket}/${item.type}: ${item.regex}`, error);
+          }
         }
         
         // Log metadata for debugging if available
@@ -945,7 +984,8 @@ class ToneDetectors {
         }
       }
     }
-    logger.info(`Total trigger words loaded: ${totalWords}`);
+    logger.info(`[tone-triggerwords] loaded alert=${trig.alert?.triggerwords?.length || 0} caution=${trig.caution?.triggerwords?.length || 0} clear=${trig.clear?.triggerwords?.length || 0}`);
+    logger.info(`[tone-triggerwords] compiled ahoTerms=${totalWords} regexes=${totalRegexes}`);
 
     // Build oneGramMap for fast unigram lookups
     for (const { term, bucket, w } of this.oneGram) {
@@ -968,7 +1008,7 @@ class ToneDetectors {
       });
     }
 
-    const safe = (p: string) => { try { return new RegExp(p, 'i'); } catch { return null; } };
+    const safe = (p: string) => { try { return this.buildRegex(p); } catch { return null; } };
     arrify(negP?.patterns ?? negP).forEach((p: string) => { const r = safe(String(p)); if (r) this.negRegexes.push(r); });
     arrify(sarc?.patterns ?? sarc).forEach((p: string) => { const r = safe(String(p)); if (r) this.sarcRegexes.push(r); });
     arrify(edges?.edges ?? edges).forEach((e: any) => { const r = safe(e.pattern); if (r) this.edgeRegexes.push({ re: r, cat: e.category || 'edge', weight: e.weight ?? 1 }); });
@@ -1042,33 +1082,83 @@ class ToneDetectors {
     this.profanity = Array.from(profanityWithVariants);
     logger.info(`Extended profanity index: ${profanityWords.length} base → ${this.profanity.length} total (+${this.profanity.length - profanityWords.length} variants)`);
 
-    // Load tone patterns (optional, won't break boot if missing)
+    // Load tone patterns with tolerant adapter (optional, won't break boot if missing)
     const tpRaw = dataLoader.get('tonePatterns') || dataLoader.get('tone_patterns');
-    const tonePatterns = Array.isArray(tpRaw) ? tpRaw : (tpRaw?.patterns || []);
+    
+    // Tolerate several historical shapes: patterns vs rules vs top-level array
+    const tonePatterns = Array.isArray(tpRaw?.patterns) ? tpRaw.patterns     // Current format
+                       : Array.isArray(tpRaw?.rules)    ? tpRaw.rules        // Legacy format  
+                       : Array.isArray(tpRaw)           ? tpRaw               // Top-level array
+                       : [];
+
     if (Array.isArray(tonePatterns) && tonePatterns.length > 0) {
+      let loadedCount = 0;
+      let skippedCount = 0;
+      let aliasSkipped = 0;
+      let regexErrors = 0;
+      
       logger.info(`Loading ${tonePatterns.length} tone patterns`);
+      
       for (const p of tonePatterns) {
+        // Skip alias entries
+        if (p?.status === 'alias') {
+          aliasSkipped++;
+          continue;
+        }
+
+        // Skip entries missing required fields
+        if (!p?.id || (!p?.regex && !p?.pattern && !p?.canonical)) {
+          skippedCount++;
+          continue;
+        }
+
         const bucket = (['clear','caution','alert'] as Bucket[]).includes(p.tone) ? p.tone : 'caution';
-        const w = typeof p.confidence === 'number' ? p.confidence : 0.85;
+        const w = typeof p.threshold === 'number' ? p.threshold : 
+                  typeof p.confidence === 'number' ? p.confidence : 0.85;
         const category = p.category || 'general';
 
-        // Add exact phrases & semanticVariants to Aho-Corasick
-        if (p.type !== 'regex') {
-          if (p.pattern) this.ahoCorasick.addPattern(this.normalizeText(p.pattern), bucket, w, category);
-          arrify(p.semanticVariants).forEach((v: string) =>
-            this.ahoCorasick.addPattern(this.normalizeText(v), bucket, Math.max(0.5, w * 0.95), category));
-        }
-
-        // Compile regex patterns with category
-        if (p.type === 'regex' && p.pattern) {
-          try { 
-            this.tonePatternRegexes.push({ re: new RegExp(p.pattern, 'i'), bucket, weight: w, category }); 
-          } catch (error) {
-            logger.warn(`Failed to compile regex pattern: ${p.pattern}`, error);
+        try {
+          // Handle regex patterns (both p.regex and p.pattern with type='regex')
+          if (p.regex || (p.type === 'regex' && p.pattern)) {
+            const regexStr = p.regex || p.pattern;
+            try {
+              this.tonePatternRegexes.push({ 
+                re: this.buildRegex(regexStr), 
+                bucket, 
+                weight: w, 
+                category 
+              });
+              loadedCount++;
+            } catch (regexError) {
+              logger.warn(`[tone-patterns] Skipping invalid regex pattern ${p.id}: ${regexStr}`, regexError);
+              regexErrors++;
+              continue;
+            }
           }
+          // Handle exact phrases & semantic variants for Aho-Corasick
+          else {
+            const mainPattern = p.pattern || p.canonical;
+            if (mainPattern) {
+              this.ahoCorasick.addPattern(this.normalizeText(mainPattern), bucket, w, category);
+              loadedCount++;
+            }
+            
+            // Add semantic variants
+            const variants = p.variants || p.semanticVariants || [];
+            arrify(variants).forEach((v: string) => {
+              if (v) {
+                this.ahoCorasick.addPattern(this.normalizeText(v), bucket, Math.max(0.5, w * 0.95), category);
+              }
+            });
+          }
+        } catch (error) {
+          logger.warn(`[tone-patterns] Error processing pattern ${p.id}:`, error);
+          skippedCount++;
         }
       }
-      logger.info(`Loaded ${this.tonePatternRegexes.length} regex patterns from tone_patterns.json`);
+      
+      const version = typeof tpRaw?.version === 'string' ? tpRaw.version : 'unknown';
+      logger.info(`[tone-patterns] version=${version} loaded=${loadedCount}/${tonePatterns.length} regex=${this.tonePatternRegexes.length} (aliasSkipped=${aliasSkipped}, regexErrors=${regexErrors}, otherSkipped=${skippedCount})`);
     } else {
       logger.info('No tone_patterns.json found or invalid format, skipping');
     }
@@ -1140,6 +1230,9 @@ class ToneDetectors {
         const startTerm = fullText.substring(0, startChar).split(' ').length - 1;
         const endTerm = Math.min(terms.length - 1, startTerm + match[0].split(' ').length - 1);
         hits.push({ bucket, weight, term: match[0], start: Math.max(0, startTerm), end: Math.max(0, endTerm), category });
+        
+        // ✅ Log successful regex matches for debugging
+        logger.info(`[tone-match] regex hit: "${match[0]}" → bucket=${bucket} type=${category} weight=${weight}`);
       }
     }
     return hits;
@@ -2691,6 +2784,28 @@ export class ToneAnalysisService {
       allContexts: contextDetection.allContexts.length,
       deescalated: contextDetection.deescalated
     });
+    
+    // ✅ Last-ditch "insult → conflict" heuristic to catch aggressive 2nd-person attacks
+    // that slip through context detection but should trigger conflict handling
+    if ((!contextDetection.primaryContext || contextDetection.primaryContext === 'general')) {
+      const textLower = text.toLowerCase();
+      const secondPerson = /\b(?:you|you're|you are|your)\b/i.test(text);
+      const insultish = /\b(?:idiot|stupid|worst|worthless|loser|pathetic|trash|disgusting|hate|terrible|awful|horrible)\b/i.test(textLower);
+      
+      if (secondPerson && insultish) {
+        // Override context detection with conflict
+        contextDetection.primaryContext = 'conflict';
+        contextDetection.allContexts = [{
+          id: 'conflict',
+          score: 0.85,
+          confidence: 0.85,
+          boosts: { clear: 0, caution: 0.1, alert: 0.2 },
+          severity: { clear: 0, caution: 0.1, alert: 0.3 },
+          dampened: false
+        }];
+        logger.info('[context-heuristic] upgraded to conflict via 2nd-person insult detection');
+      }
+    }
     
     if (categories.length > 0) {
       logger.info('Categories detected from tone patterns', { categories });

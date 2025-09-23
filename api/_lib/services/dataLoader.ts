@@ -435,7 +435,14 @@ class DataLoaderService {
   }
 
   public getToneTriggerWords(): any {
-    return this.cache.toneTriggerWords || { version: '0', triggers: [] };
+    return this.cache.toneTriggerWords || {
+      version: '0',
+      clear:   { triggerwords: [] },
+      caution: { triggerwords: [] },
+      alert:   { triggerwords: [] },
+      engine:  { genericTokens: {}, bucketGuards: {}, contextScopes: {} },
+      weights: { contextMultipliers: {} }
+    };
   }
 
   public getIntensityModifiers(): any {
@@ -471,7 +478,14 @@ class DataLoaderService {
   }
 
   public getProfanityLexicons(): any {
-    return this.cache.profanityLexicons || { version: '0', words: [] };
+    return this.cache.profanityLexicons || { 
+      version: '0', 
+      categories: [
+        { id: 'mild',     severity: 'mild',     triggerWords: [] },
+        { id: 'moderate', severity: 'moderate', triggerWords: [] },
+        { id: 'strong',   severity: 'strong',   triggerWords: [] }
+      ]
+    };
   }
 
   public getWeightModifiers(): any {

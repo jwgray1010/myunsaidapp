@@ -95,7 +95,7 @@ final class ToneSuggestionCoordinator {
     private let instanceId = UUID().uuidString
     
     // MARK: - Full-Text Analysis State (replacing ToneScheduler)
-    private let debounceInterval: TimeInterval = 2.0 // 2s debounce for better rate limiting
+    private let debounceInterval: TimeInterval = 3.0 // 3s debounce for better rate limiting
     private var currentDocSeq: Int = 0
     private var lastTextHash: String = ""
     private var debounceTask: Task<Void, Never>?
@@ -418,9 +418,9 @@ final class ToneSuggestionCoordinator {
     
     // MARK: - Client-Side Rate Limiting
     
-    /// Simple token bucket rate limiter (max 8 calls per 12 seconds)
+    /// Simple token bucket rate limiter (max 6 calls per 12 seconds)
     private class TokenBucket {
-        private let maxTokens: Int = 8
+        private let maxTokens: Int = 6
         private let refillInterval: TimeInterval = 12.0
         private var tokens: Int
         private var lastRefill: Date
@@ -857,6 +857,7 @@ final class ToneSuggestionCoordinator {
     
     // MARK: - Suggestion Generation
     private func generatePerfectSuggestion(from snapshot: String = "") {
+        print("🎯 🔥 generatePerfectSuggestion called with snapshot length: \(snapshot.count)")
         dlog("🎯 DEBUG: generatePerfectSuggestion called with snapshot length: \(snapshot.count)")
         
         var textToAnalyze = snapshot.isEmpty ? currentText : snapshot
@@ -865,11 +866,13 @@ final class ToneSuggestionCoordinator {
         // Guard against redundant suggestion requests
         let h = snapshotHash(textToAnalyze)
         if h == lastSuggestionHash {
+            print("🎯 🔥 Suggestions: skipped redundant generation")
             dlog("🚀 Suggestions: skipped redundant generation")
             return
         }
         lastSuggestionHash = h
         
+        print("🎯 🔥 About to analyze text for suggestions: '\(String(textToAnalyze.prefix(50)))...' (length: \(textToAnalyze.count))")
         dlog("🎯 DEBUG: About to analyze text: '\(String(textToAnalyze.prefix(50)))...' (length: \(textToAnalyze.count))")
         
         var context: [String: Any] = [
@@ -932,8 +935,13 @@ final class ToneSuggestionCoordinator {
     
     // MARK: - Suggestions API (tone side-effects removed)
     private func callSuggestionsAPI(context: [String: Any], usingSnapshot snapshot: String? = nil, completion: @escaping (String?) -> Void) {
-        guard isNetworkAvailable, isAPIConfigured, Date() >= netBackoffUntil else { completion(nil); return }
+        print("🎯 🔥 callSuggestionsAPI called!")
+        guard isNetworkAvailable, isAPIConfigured, Date() >= netBackoffUntil else { 
+            print("🎯 🔥 callSuggestionsAPI early return - network/API check failed")
+            completion(nil); return 
+        }
         
+        print("🎯 🔥 callSuggestionsAPI proceeding with request...")
         let requestID = UUID()
         latestRequestID = requestID
         
@@ -1807,10 +1815,10 @@ extension ToneSuggestionCoordinator {
             
             // Build advanced analysis data
             let advancedData: [String: Any] = [
-                "sentiment_score": toneOut.analysis?.sentiment_score ?? 0.5,
-                "linguistic_features": (toneOut.analysis?.linguistic_features as? AnyCodable)?.value ?? [:],
-                "context_analysis": (toneOut.analysis?.context_analysis as? AnyCodable)?.value ?? [:],
-                "attachment_insights": (toneOut.analysis?.attachment_insights as? AnyCodable)?.value ?? [],
+                "sentiment_score": toneOut.analysis?.sentimentScore ?? 0.5,
+                "linguistic_features": (toneOut.analysis?.linguisticFeatures as? AnyCodable)?.value ?? [:],
+                "context_analysis": (toneOut.analysis?.contextAnalysis as? AnyCodable)?.value ?? [:],
+                "attachment_insights": (toneOut.analysis?.attachmentInsights as? AnyCodable)?.value ?? [],
                 "categories": toneOut.categories ?? []  // Categories from tone pattern matching for therapy advice boost
             ]
             
@@ -1933,37 +1941,43 @@ extension ToneSuggestionCoordinator {
         #endif
     }
     
-    // MARK: - API Helper for Tone
-    private struct ToneOut: Decodable { 
-        let buckets: [String: Double]?           // Legacy field for backwards compatibility
-        let ui_distribution: [String: Double]?   // Canonical field from API
-        let ui_tone: String?  // Trust the API's tone decision
+    // MARK: - API Response Models
+    private struct ToneEnvelope<T: Decodable>: Decodable {
+        let success: Bool
+        let data: T
+    }
+    
+    private struct ToneOut: Decodable {
+        let ok: Bool
+        let userId: String
+        let text: String
+        let uiTone: String?          // "clear" | "caution" | "alert" | "neutral" | "insufficient"
+        let uiDistribution: Buckets? // mirrors "buckets"
+        let buckets: Buckets?        // legacy alias in server
+        let docTone: String?         // document-level tone
+        let mode: String?
+        let docSeq: Int?
+        let textHash: String?
+        let analysis: Analysis?
         let metadata: ToneMetadata?
-        let categories: [String]?  // Categories from tone pattern matching
-        
-        // Store full analysis for suggestions reuse
-        let analysis: ToneAnalysis?
-        let primary_tone: String?
-        let emotions: [String: Double]?
+        let categories: [String]?
         let intensity: Double?
         let confidence: Double?
         
-        // Full-text mode specific fields
-        let mode: String?
-        let doc_seq: Int?
-        let text_hash: String?
-        let doc_tone: String?  // Document-level tone for UI consistency
-        let document_analysis: DocumentAnalysis?
-        
-        // Prefer ui_distribution, fallback to buckets for backwards compatibility
+        // Legacy compatibility properties
+        var ui_tone: String? { return uiTone }
+        var primary_tone: String? { return analysis?.primaryTone }
+        var emotions: [String: Double]? { return analysis?.emotions }
         var finalDistribution: [String: Double] {
-            return ui_distribution ?? buckets ?? [:]
+            if let buckets = uiDistribution ?? buckets {
+                return ["clear": buckets.clear, "caution": buckets.caution, "alert": buckets.alert]
+            }
+            return [:]
         }
-        
-        // Computed property to convert API ui_tone to our Bucket enum
         var apiTone: Bucket? {
-            guard let ui_tone = ui_tone else { return nil }
-            switch ui_tone.lowercased() {
+            let (resolvedToneString, _) = resolvedTone(from: self)
+            guard !resolvedToneString.isEmpty else { return nil }
+            switch resolvedToneString.lowercased() {
             case "clear": return .clear
             case "caution": return .caution
             case "alert": return .alert
@@ -1971,25 +1985,95 @@ extension ToneSuggestionCoordinator {
             default: return nil
             }
         }
+        
+        // Helper method for tone resolution
+        func resolvedTone(from toneOut: ToneOut) -> (tone: String, buckets: Buckets?) {
+            if let t = toneOut.uiTone { return (t, toneOut.uiDistribution ?? toneOut.buckets) }
+            if let t = toneOut.docTone { return (t, toneOut.uiDistribution ?? toneOut.buckets) }
+            if let d = toneOut.uiDistribution ?? toneOut.buckets { 
+                // Same rule as server: neutral only if all within 0.05
+                let vals = [d.clear, d.caution, d.alert].sorted(by: >)
+                let (top, mid, low) = (vals[0], vals[1], vals[2])
+                if abs(top - mid) <= 0.05 && abs(top - low) <= 0.05 { return ("neutral", d) }
+                if d.alert >= d.caution && d.alert >= d.clear { return ("alert", d) }
+                if d.caution >= d.clear { return ("caution", d) }
+                return ("clear", d)
+            }
+            return ("", nil)
+        }
+    }
+    
+    private struct Buckets: Decodable {
+        let clear: Double
+        let caution: Double
+        let alert: Double
+    }
+    
+    private struct Analysis: Decodable {
+        let primaryTone: String?
+        let emotions: [String: Double]?
+        let intensity: Double?
+        let sentimentScore: Double?
+        // Using AnyCodable for complex nested objects that we don't need to parse
+        let linguisticFeatures: AnyCodable?
+        let contextAnalysis: AnyCodable?
+        let attachmentInsights: AnyCodable?
+    }
+    
+    // MARK: - Tone Resolution Helpers
+    private func pickUiTone(_ buckets: Buckets) -> String {
+        // Same rule as server: neutral only if all within 0.05
+        let vals = [buckets.clear, buckets.caution, buckets.alert].sorted(by: >)
+        let (top, mid, low) = (vals[0], vals[1], vals[2])
+        if abs(top - mid) <= 0.05 && abs(top - low) <= 0.05 { return "neutral" }
+        if buckets.alert >= buckets.caution && buckets.alert >= buckets.clear { return "alert" }
+        if buckets.caution >= buckets.clear { return "caution" }
+        return "clear"
+    }
+    
+    private func resolvedTone(from toneOut: ToneOut) -> (tone: String, buckets: Buckets?) {
+        if let t = toneOut.uiTone { return (t, toneOut.uiDistribution ?? toneOut.buckets) }
+        if let t = toneOut.docTone { return (t, toneOut.uiDistribution ?? toneOut.buckets) }
+        if let d = toneOut.uiDistribution ?? toneOut.buckets { return (pickUiTone(d), d) }
+        // last resort: keep current
+        return ("", nil)
     }
     
     private struct DocumentAnalysis: Decodable {
-        let safety_gate_applied: Bool?
-        let doc_seq: Int?
-        let analysis_type: String?
-        let original_tone: String?
-        let safety_reason: String?
+        let safetyGateApplied: Bool?
+        let docSeq: Int?
+        let analysisType: String?
+        let originalTone: String?
+        let safetyReason: String?
+        
+        enum CodingKeys: String, CodingKey {
+            case safetyGateApplied = "safety_gate_applied"
+            case docSeq = "doc_seq"
+            case analysisType = "analysis_type"
+            case originalTone = "original_tone"
+            case safetyReason = "safety_reason"
+        }
     }
     
     private struct ToneAnalysis: Decodable {
-        let primary_tone: String
+        let primaryTone: String
         let emotions: [String: Double]?
         let intensity: Double?
-        let sentiment_score: Double?
+        let sentimentScore: Double?
         // Using AnyCodable for complex nested objects that we don't need to parse
-        let linguistic_features: AnyCodable?
-        let context_analysis: AnyCodable?
-        let attachment_insights: AnyCodable?
+        let linguisticFeatures: AnyCodable?
+        let contextAnalysis: AnyCodable?
+        let attachmentInsights: AnyCodable?
+        
+        enum CodingKeys: String, CodingKey {
+            case primaryTone = "primary_tone"
+            case emotions
+            case intensity
+            case sentimentScore = "sentiment_score"
+            case linguisticFeatures = "linguistic_features"
+            case contextAnalysis = "context_analysis"
+            case attachmentInsights = "attachment_insights"
+        }
     }
     
     // Helper for decoding arbitrary JSON values
@@ -2049,11 +2133,13 @@ extension ToneSuggestionCoordinator {
         ]
         
         if fullTextMode {
-            // Full-text mode requires additional fields
             body["mode"] = "full"
             body["doc_seq"] = currentDocSeq
             body["text_hash"] = sha256(text)
             print("📄 DEBUG: Full-text mode request - docSeq: \(currentDocSeq), hash: \(sha256(text).prefix(8))")
+        } else {
+            body["mode"] = "legacy"
+            print("📄 DEBUG: Legacy mode request")
         }
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -2067,74 +2153,43 @@ extension ToneSuggestionCoordinator {
         }
         #endif
 
-        // Use the same configured session
-        do {
-            print("🌐 DEBUG: Making network request...")
-            let (data, response) = try await session.data(for: request)
-            print("🌐 DEBUG: Received response: \(response)")
+        print("🌐 DEBUG: Making network request...")
+        let (data, response) = try await session.data(for: request)
+        
+        // Log HTTP response
+        if let httpResponse = response as? HTTPURLResponse {
+            print("🌐 DEBUG: Received response: \(httpResponse)")
+            print("🌐 DEBUG: HTTP Status: \(httpResponse.statusCode)")
             
-            guard let http = response as? HTTPURLResponse else {
-                print("❌ DEBUG: Response is not HTTPURLResponse")
-                throw URLError(.badServerResponse)
+            // Check for error status codes
+            switch httpResponse.statusCode {
+            case 401: throw APIError.authRequired
+            case 402: throw APIError.paymentRequired
+            case 500...599: throw APIError.serverError(httpResponse.statusCode)
+            default: break
             }
-            
-            print("🌐 DEBUG: HTTP Status: \(http.statusCode)")
-            print("🌐 DEBUG: Response data: \(String(data: data, encoding: .utf8) ?? "nil")")
-            
-            guard 200...299 ~= http.statusCode else {
-                print("❌ DEBUG: Bad HTTP status code: \(http.statusCode)")
-                throw URLError(.badServerResponse)
-            }
+        }
+        
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("🌐 DEBUG: Response data: \(responseString)")
+        }
 
-            if let direct = try? JSONDecoder().decode(ToneOut.self, from: data) { 
-                print("✅ DEBUG: Successfully decoded direct ToneOut")
-                return direct 
-            }
-            struct Wrapped: Decodable { let data: ToneOut }
-            if let wrapped = try? JSONDecoder().decode(Wrapped.self, from: data) { 
-                print("✅ DEBUG: Successfully decoded wrapped ToneOut")
-                return wrapped.data 
+        // Decode with proper snake_case conversion
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        
+        do {
+            let envelope = try decoder.decode(ToneEnvelope<ToneOut>.self, from: data)
+            let (toneString, buckets) = resolvedTone(from: envelope.data)
+            
+            print("📄 ToneCoordinator: Analysis complete - ui_tone: \(toneString)")
+            if let buckets = buckets {
+                print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", buckets.clear)), caution: \(String(format: "%.2f", buckets.caution)), alert: \(String(format: "%.2f", buckets.alert))")
             }
             
-            // Fallback to UI format
-            struct UI: Decodable { 
-                let ui_distribution: [String: Double]?
-                let buckets: [String: Double]?
-                let ui_tone: String?
-                let metadata: ToneMetadata?
-                let categories: [String]?  // Categories from tone pattern matching
-                // Include the essential tone analysis fields for fallback
-                let primary_tone: String?
-                let confidence: Double?
-                let emotions: [String: Double]?
-                let intensity: Double?
-            }
-            let ui = try JSONDecoder().decode(UI.self, from: data)
-            print("✅ DEBUG: Successfully decoded UI format")
-            
-            // Use ui_distribution as primary source, buckets as fallback
-            let finalDistribution = ui.ui_distribution ?? ui.buckets ?? [:]
-            print("📊 Using distribution source: \(ui.ui_distribution != nil ? "ui_distribution" : "buckets") -> \(finalDistribution)")
-            
-            return ToneOut(
-                buckets: finalDistribution,        // Backwards compatibility
-                ui_distribution: finalDistribution, // Canonical field
-                ui_tone: ui.ui_tone,
-                metadata: ui.metadata,
-                categories: ui.categories,  // Categories from tone pattern matching
-                analysis: nil, // Can't reconstruct the full analysis object
-                primary_tone: ui.primary_tone,
-                emotions: ui.emotions,
-                intensity: ui.intensity,
-                confidence: ui.confidence,
-                mode: nil, // Legacy response doesn't have mode
-                doc_seq: nil,
-                text_hash: nil,
-                doc_tone: nil,
-                document_analysis: nil
-            )
+            return envelope.data
         } catch {
-            print("❌ DEBUG: Network request failed with error: \(error)")
+            print("❌ DEBUG: Envelope decode failed: \(error)")
             throw error
         }
     }
@@ -2149,12 +2204,27 @@ extension ToneSuggestionCoordinator {
         print("📄 ToneCoordinator: Applying document tone - \(uiTone) -> \(bucket)")
         print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", uiDistribution["clear"] ?? 0)), caution: \(String(format: "%.2f", uiDistribution["caution"] ?? 0)), alert: \(String(format: "%.2f", uiDistribution["alert"] ?? 0))")
         
-        // Update UI on main thread
+        // ✅ Update internal state through the canonical path
+        onQ { [weak self] in
+            guard let self = self else { return }
+            // Optionally keep smoothed buckets in sync too:
+            self.smoothedBuckets = (
+                clear: uiDistribution["clear"] ?? 0,
+                caution: uiDistribution["caution"] ?? 0,
+                alert: uiDistribution["alert"] ?? 0
+            )
+            self.maybeUpdateIndicator(to: bucket)  // updates lastUiTone + notifies UI via onToneUpdate
+        }
+        
+        // Keep your delegate text update & suggestion request on main
         DispatchQueue.main.async { [weak self] in
-            self?.delegate?.didUpdateToneStatus(bucket.rawValue)
+            // ✅ Map insufficient to neutral for delegate (UI only expects clear|caution|alert|neutral)
+            let mappedForPill: String = (bucket == .insufficient) ? "neutral" : bucket.rawValue
+            self?.delegate?.didUpdateToneStatus(mappedForPill)
             
-            // Optional: Also update suggestions if we have any
-            // self?.delegate?.didUpdateSuggestions([])
+            // CRITICAL: Request suggestions after tone analysis completes
+            print("📄 ToneCoordinator: Requesting suggestions after tone analysis...")
+            self?.requestSuggestions()
         }
     }
     
@@ -2188,13 +2258,23 @@ extension ToneSuggestionCoordinator {
             return
         }
         
+        // Skip if text change is minimal (less than 3 characters different)
+        if !lastTextHash.isEmpty {
+            let lastLength = lastTextHash.count
+            let currentLength = trimmed.count
+            let lengthDiff = abs(currentLength - lastLength)
+            
+            if lengthDiff < 3 && currentLength > 5 {
+                print("📄 ToneCoordinator: Skipping analysis - text change too minimal (\(lengthDiff) chars diff)")
+                return
+            }
+        }
+        
         // Reset to neutral if text is too short (but not empty)
         guard shouldAnalyzeFullText(trimmed) else {
-            print("📄 ToneCoordinator: Text too short (\(trimmed.count) chars) - resetting to neutral")
-            Task { @MainActor in
-                self.lastUiTone = .neutral
-                self.delegate?.didUpdateToneStatus("neutral")
-            }
+            print("📄 ToneCoordinator: Text too short (\(trimmed.count) chars) - skipping analysis but keeping current tone")
+            // Don't reset to neutral - this prevents premature "clear" state
+            // Just skip analysis and let longer text trigger proper analysis
             lastTextHash = textHash
             return
         }
@@ -2234,11 +2314,8 @@ extension ToneSuggestionCoordinator {
         
         // Reset to neutral if text is too short (but not empty)
         guard shouldAnalyzeFullText(trimmed) else {
-            print("📄 ToneCoordinator: [Immediate] Text too short (\(trimmed.count) chars) - resetting to neutral")
-            Task { @MainActor in
-                self.lastUiTone = .neutral
-                self.delegate?.didUpdateToneStatus("neutral")
-            }
+            print("📄 ToneCoordinator: [Immediate] Text too short (\(trimmed.count) chars) - skipping analysis but keeping current tone")
+            // Don't reset to neutral - this prevents premature "clear" state
             lastTextHash = textHash
             return
         }
@@ -2259,14 +2336,14 @@ extension ToneSuggestionCoordinator {
     // MARK: - Private Full-Text Analysis Implementation
     
     private func shouldAnalyzeFullText(_ text: String) -> Bool {
-        // Aggressive gating for scale: require minimum meaningful content
-        guard text.count >= 8 else { return false }  // Increased from 4 to 8 chars
+        // More restrictive gating to reduce API calls: require more substantial content
+        guard text.count >= 8 else { return false }  // Increased from 4 to 8 chars - reduces calls on short text
         
         let words = text.split(separator: " ").filter { !$0.isEmpty }
-        guard words.count >= 3 else { return false }  // Increased from 2 to 3 words
+        guard words.count >= 2 else { return false }  // Keep at 2 words minimum
         
         // Additional: Skip very short words (likely typos/fragments)
-        let meaningfulWords = words.filter { $0.count >= 2 }
+        let meaningfulWords = words.filter { $0.count >= 2 }  // Increased from 1 to 2 to require more substantial words
         guard meaningfulWords.count >= 2 else { return false }
         
         return true
@@ -2341,13 +2418,15 @@ extension ToneSuggestionCoordinator {
             
             let duration = Date().timeIntervalSince(startTime)
 
-            // Extract document tone from result
-            let uiTone = result.ui_tone ?? "clear"
-            let uiDistribution = result.finalDistribution  // Use canonical ui_distribution field
+            // Use the resolved tone function to get the correct values
+            let (uiTone, buckets) = self.resolvedTone(from: result)
+            let uiDistribution = buckets.map { ["clear": $0.clear, "caution": $0.caution, "alert": $0.alert] } ?? [:]
             let confidence = result.confidence ?? 0.0
 
             print("📄 ToneCoordinator: Analysis complete - docSeq: \(expectedDocSeq), ui_tone: \(uiTone), duration: \(Int(duration * 1000))ms")
-            print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", uiDistribution["clear"] ?? 0)), caution: \(String(format: "%.2f", uiDistribution["caution"] ?? 0)), alert: \(String(format: "%.2f", uiDistribution["alert"] ?? 0))")
+            if let buckets = buckets {
+                print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", buckets.clear)), caution: \(String(format: "%.2f", buckets.caution)), alert: \(String(format: "%.2f", buckets.alert))")
+            }
 
             // Cache the result for future requests
             self.analysisCache[expectedHash] = (tone: uiTone, timestamp: Date())

@@ -115,6 +115,18 @@ class AssessmentIntegration {
     );
   }
 
+  /// Run scenario-based quick assessment and return merged config
+  ///
+  /// Uses custom item set (e.g., from AdaptiveAttachmentFlow.buildQuickSet())
+  /// for fast, engaging assessment while maintaining full integration pipeline.
+  static Future<MergedConfig> runScenarioQuick8AndMerge(
+    Map<String, int> responses,
+    List<PersonalityQuestion> itemSet,
+  ) async {
+    final result = AttachmentAssessment.runWithItems(responses, itemSet);
+    return await selectConfiguration(result.scores, result.routing);
+  }
+
   // ===============================
   // JSON Loading (with caching)
   // ===============================

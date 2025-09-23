@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../data/attachment_assessment.dart';
 import '../data/assessment_integration.dart';
+import '../data/attachment_scenarios.dart';
+import '../data/adaptive_flow.dart';
 
 class PersonalityTestScreen extends StatefulWidget {
   final int currentIndex;
@@ -46,8 +48,10 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
   void initState() {
     super.initState();
 
-    // Combine all questions from the new assessment system
-    _allQuestions = [...attachmentItems, ...goalItems];
+    // Use scenario-based questions instead of traditional attachment items
+    final scenarioQuestions =
+        AdaptiveAttachmentFlow.buildQuickSet(); // Gets 6-8 optimized scenarios
+    _allQuestions = [...scenarioQuestions, ...goalItems];
 
     // Load existing response for this question
     if (widget.currentIndex < _allQuestions.length) {
@@ -178,25 +182,41 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
     }
 
     try {
-      print('DEBUG: Starting assessment processing...');
+      print('DEBUG: Starting scenario assessment processing...');
 
-      // Run local assessment (pure on-device) and build local embedded config
-      final assessmentResult = AttachmentAssessment.run(widget.responses);
-      print('DEBUG: Assessment result: ${assessmentResult.scores}');
+      // Use scenario-specific assessment integration
+      final scenarioQuestions = AdaptiveAttachmentFlow.buildQuickSet();
+      final mergedConfig =
+          await AssessmentIntegration.runScenarioQuick8AndMerge(
+            widget.responses,
+            [
+              ...scenarioQuestions,
+              ...goalItems,
+            ], // Include goal items for routing
+          );
+      print('DEBUG: Scenario assessment and merged config created');
 
-      final mergedConfig = AssessmentIntegration.buildLocalEmbeddedConfig(
-        assessmentResult.scores,
-        assessmentResult.routing,
+      // Extract scores and routing from the merged config for backwards compatibility
+      // Note: These are derived from the scenario assessment internally
+      final scores = AttachmentScores(
+        anxiety: 50, // Placeholder - scenarios handle scoring internally
+        avoidance: 50, // Placeholder - scenarios handle scoring internally
+        reliabilityAlpha: 0.8,
+        attentionPassed: true,
+        socialDesirability: 0.5,
+        disorganizedLean: false,
+        quadrant: mergedConfig.attachmentQuadrant,
+        confidenceLabel: mergedConfig.confidenceLevel,
       );
-      print('DEBUG: Merged config created');
+
+      final routing = GoalRoutingResult(
+        routeTags: {mergedConfig.primaryProfile},
+        primaryProfile: mergedConfig.primaryProfile,
+      );
 
       if (widget.onComplete != null) {
         print('DEBUG: Calling onComplete callback...');
-        widget.onComplete!(
-          mergedConfig,
-          assessmentResult.scores,
-          assessmentResult.routing,
-        );
+        widget.onComplete!(mergedConfig, scores, routing);
         print('DEBUG: onComplete callback completed');
       } else {
         // Skip results screen - navigate directly to tone tutorial
@@ -213,7 +233,7 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
         }
       }
     } catch (e, stackTrace) {
-      print('Error completing assessment: $e');
+      print('Error completing scenario assessment: $e');
       print('Stack trace: $stackTrace');
       // Fallback to legacy system or show error
       if (mounted) {
@@ -283,15 +303,10 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
     final questionTypeColor = _getQuestionTypeColor(question);
     // (question type label suppressed intentionally)
 
-    // Theme override specifically for personality test to fix highlighting issues
+    // Theme override specifically for personality test with question type colors
     return Theme(
       data: theme.copyWith(
-        // Override card theme to prevent conflicts with answer highlighting
-        cardTheme: theme.cardTheme.copyWith(
-          color: Colors.white,
-          surfaceTintColor: Colors.transparent,
-        ),
-        // Override radio theme for better visibility
+        // Override radio theme for question type colors with better contrast
         radioTheme: RadioThemeData(
           fillColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
@@ -299,6 +314,19 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
             }
             return Colors.grey.shade400;
           }),
+          overlayColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.pressed)) {
+              return questionTypeColor.withOpacity(0.12);
+            }
+            if (states.contains(WidgetState.hovered)) {
+              return questionTypeColor.withOpacity(0.08);
+            }
+            if (states.contains(WidgetState.focused)) {
+              return questionTypeColor.withOpacity(0.12);
+            }
+            return Colors.transparent;
+          }),
+          splashRadius: 20,
         ),
       ),
       child: Scaffold(

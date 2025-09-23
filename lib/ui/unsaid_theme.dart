@@ -235,6 +235,31 @@ ThemeData buildUnsaidTheme() {
         TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
       },
     ),
+    // Radio button theme for proper highlighting across the app
+    radioTheme: RadioThemeData(
+      fillColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return UnsaidPalette.primary; // Use primary color when selected
+        }
+        if (states.contains(WidgetState.disabled)) {
+          return Colors.grey.shade300;
+        }
+        return Colors.grey.shade400; // Default unselected color
+      }),
+      overlayColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.pressed)) {
+          return UnsaidPalette.primary.withOpacity(0.12);
+        }
+        if (states.contains(WidgetState.hovered)) {
+          return UnsaidPalette.primary.withOpacity(0.08);
+        }
+        if (states.contains(WidgetState.focused)) {
+          return UnsaidPalette.primary.withOpacity(0.12);
+        }
+        return Colors.transparent;
+      }),
+      splashRadius: 20,
+    ),
     cardTheme: base.cardTheme.copyWith(
       color: UnsaidPalette.surface,
       margin: EdgeInsets.zero,

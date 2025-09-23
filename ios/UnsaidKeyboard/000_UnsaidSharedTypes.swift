@@ -86,7 +86,14 @@ public extension ToneStatus {
     /// Safe mapping from arbitrary strings (e.g. server/UI) to enum.
     /// Defaults to .neutral for unknown strings (for backward compatibility)
     init(from string: String?) {
-        self = ToneStatus(rawValue: (string ?? "").lowercased()) ?? .neutral
+        let inputString = string ?? ""
+        let normalizedString = inputString.lowercased()
+        let result = ToneStatus(rawValue: normalizedString) ?? .neutral
+        
+        // DEBUG: Log tone parsing
+        print("🎯 ToneStatus.init(from:) - input: '\(inputString)' -> normalized: '\(normalizedString)' -> result: \(result)")
+        
+        self = result
     }
 }
 

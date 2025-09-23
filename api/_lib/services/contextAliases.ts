@@ -11,7 +11,8 @@ export const CANONICAL_CONTEXTS = [
   "planning",
   "professional",
   "romantic",
-  "gratitude"
+  "gratitude",
+  "emotional"
 ] as const;
 
 export type CanonicalContext = typeof CANONICAL_CONTEXTS[number];
@@ -30,6 +31,7 @@ export const CONTEXT_ALIASES_1to1: Record<string, CanonicalContext> = {
   CTX_ROMANTIC: "romantic",
   CTX_GENERAL: "general",
   CTX_GRATITUDE: "gratitude",
+  CTX_EMOTIONAL: "emotional",
 
   // Already-canonical (idempotent)
   general: "general",
@@ -40,9 +42,9 @@ export const CONTEXT_ALIASES_1to1: Record<string, CanonicalContext> = {
   professional: "professional",
   romantic: "romantic",
   gratitude: "gratitude",
+  emotional: "emotional",
 
   // Heuristic emotions -> best-fit canonicals
-  emotional: "conflict",
   anger: "conflict",
   frustrated: "conflict",
   upset: "conflict",

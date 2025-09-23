@@ -606,6 +606,20 @@ class AttachmentAssessment {
     return (scores: scores, routing: routing);
   }
 
+  /// Run assessment with custom item set (e.g., scenario-based questions).
+  ///
+  /// `responses` = map of questionId -> value(1..5).
+  /// `items` = custom list of PersonalityQuestion items to score.
+  /// Goal routing still uses the standard goalItems.
+  static ({AttachmentScores scores, GoalRoutingResult routing}) runWithItems(
+    Map<String, int> responses,
+    List<PersonalityQuestion> items,
+  ) {
+    final scores = _scoreAttachmentWithItems(responses, items);
+    final routing = _routeGoals(responses);
+    return (scores: scores, routing: routing);
+  }
+
   /// ------------------------------
   /// Attachment scoring
   /// ------------------------------
@@ -679,6 +693,89 @@ class AttachmentAssessment {
     final quadrant = _quadrant(anxiety, avoidance, disorganizedLean);
 
     // 8) Confidence label
+    final conf = _confidenceLabel(alpha, anxiety, avoidance);
+
+    return AttachmentScores(
+      anxiety: anxiety,
+      avoidance: avoidance,
+      reliabilityAlpha: alpha,
+      attentionPassed: attentionPassed,
+      socialDesirability: socialDesirability,
+      disorganizedLean: disorganizedLean,
+      quadrant: quadrant,
+      confidenceLabel: conf,
+    );
+  }
+
+  /// Score attachment with custom item set (for scenario-based assessments)
+  static AttachmentScores _scoreAttachmentWithItems(
+    Map<String, int> responses,
+    List<PersonalityQuestion> items,
+  ) {
+    // 1) Extract scored items from custom set
+    final core = items.where(
+      (q) =>
+          (q.dimension == Dimension.anxiety ||
+              q.dimension == Dimension.avoidance) &&
+          !q.isAttentionCheck &&
+          !q.isSocialDesirability,
+    );
+
+    final List<double> scoredAll = [];
+    double anxSum = 0, anxW = 0, avdSum = 0, avdW = 0;
+
+    for (final q in core) {
+      final raw = (responses[q.id] ?? 3).toDouble().clamp(1, 5);
+      final val = q.reversed ? (6 - raw) : raw;
+      final w = q.weight;
+
+      if (q.dimension == Dimension.anxiety) {
+        anxSum += val * w;
+        anxW += w;
+      }
+      if (q.dimension == Dimension.avoidance) {
+        avdSum += val * w;
+        avdW += w;
+      }
+
+      scoredAll.add(val.toDouble());
+    }
+
+    // 2) Map to 0–100 (centered on 50)
+    double map100(double m) => ((m - 1.0) / 4.0 * 100.0).clamp(0, 100);
+    final anxMean = anxW > 0 ? (anxSum / anxW) : 3.0;
+    final avdMean = avdW > 0 ? (avdSum / avdW) : 3.0;
+
+    final anxiety = map100(anxMean).round();
+    final avoidance = map100(avdMean).round();
+
+    // 3) Reliability across scored items
+    final alpha = _splitHalfConsistency(scoredAll);
+
+    // 4) Reuse existing quality signals (if present in responses)
+    final attnVal = responses["CHK_ATTEN"];
+    final attentionPassed = (attnVal == 4 || attnVal == 5);
+
+    final sdVals = ["SD1", "SD2"]
+        .where(responses.containsKey)
+        .map((id) => responses[id]!.toDouble())
+        .toList();
+    final sdMean = sdVals.isEmpty
+        ? 3.0
+        : sdVals.reduce((a, b) => a + b) / sdVals.length;
+    final socialDesirability = ((sdMean - 1.0) / 4.0).clamp(0.0, 1.0);
+
+    // 5) Check for paradox indicators (PX1 from core, S_PX2/S_PX3/S_PX4 from scenarios)
+    final paradox =
+        responses["PX1"] ??
+        responses["S_PX2"] ??
+        responses["S_PX3"] ??
+        responses["S_PX4"] ??
+        3;
+    final disorganizedLean = (anxiety >= 60 && avoidance >= 60 && paradox >= 4);
+
+    // 6) Quadrant and confidence mapping (reuse existing logic)
+    final quadrant = _quadrant(anxiety, avoidance, disorganizedLean);
     final conf = _confidenceLabel(alpha, anxiety, avoidance);
 
     return AttachmentScores(

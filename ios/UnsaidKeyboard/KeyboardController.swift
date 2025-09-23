@@ -1241,6 +1241,15 @@ final class KeyboardController: UIView,
         // Destination visual state
         let gradientResult = gradientColors(for: tone)
         let (colors, baseColor) = gradientResult
+        
+        print("🎨 🔥 GRADIENT COLORS FOR \(tone.rawValue): \(colors.count) colors")
+        if colors.count >= 2 {
+            let color1 = UIColor(cgColor: colors[0])
+            let color2 = UIColor(cgColor: colors[1])
+            print("🎨 🔥 COLOR 1: \(color1)")
+            print("🎨 🔥 COLOR 2: \(color2)")
+        }
+        
         let targetAlpha: CGFloat = 1.0  // Always show background (white or colored)
         let targetScale: CGFloat = (tone == .alert) ? CGFloat(1.06) : CGFloat(1.0)
         let targetShadow: Float = toneShadowOpacity  // Always show shadow for better contrast
@@ -2015,25 +2024,31 @@ final class KeyboardController: UIView,
     }
 
     func didUpdateToneStatus(_ tone: String) {
+        let timestamp = Date().timeIntervalSince1970
+        print("🎯 🔥 [\(String(format: "%.3f", timestamp))] KEYBOARD RECEIVED TONE: '\(tone)'")
+        
         // Reset in-flight flag since we got a response
         toneRequestInFlight = false
         
         // Performance Optimization #1: Fast guard for redundant tone updates
         let normalizedTone = tone.lowercased()
         if lastToneStatusString == normalizedTone {
+            print("🎯 DEBUG: [\(String(format: "%.3f", timestamp))] Skipping redundant tone update - already set to '\(normalizedTone)'")
             return // Skip redundant update - tone hasn't actually changed
         }
         
-        KBDLog("🎯 🔥 KEYBOARD RECEIVED TONE: '\(tone)'", .info, "KeyboardController")
+        print("🎯 🔥 [\(String(format: "%.3f", timestamp))] KEYBOARD RECEIVED TONE: '\(tone)' (normalized: '\(normalizedTone)')")
         let toneStatus = ToneStatus(from: tone)
+        print("🎯 🔥 [\(String(format: "%.3f", timestamp))] CONVERTED TO TONE STATUS: \(toneStatus) (raw value: '\(toneStatus.rawValue)')")
         
         // Gate neutral to avoid flicker + spam
         if toneStatus == .neutral && !shouldAllowNeutralNow() && !sentenceLikelyEnded(currentText) {
-            logger.info("🎯 Neutral suppressed by idle gate (no sentence boundary)")
+            logger.info("🎯 [\(String(format: "%.3f", timestamp))] Neutral suppressed by idle gate (no sentence boundary)")
             return
         }
         
         currentUITone = toneStatus
+        print("🎯 🔥 [\(String(format: "%.3f", timestamp))] SETTING TONE STATUS TO: \(toneStatus)")
         setToneStatus(toneStatus)
         
         // ✅ CRITICAL: Trigger layout pass after tone data changes
