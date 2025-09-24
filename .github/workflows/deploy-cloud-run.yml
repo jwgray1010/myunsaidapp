@@ -28,7 +28,7 @@ jobs:
           project_id: unsaid-46587
 
       - name: Configure Docker
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+        run: echo "us-central1-docker.pkg.dev" | gcloud auth configure-docker --quiet
 
       - name: Build and push Docker image
         run: |
