@@ -8,7 +8,6 @@
  */
 
 import { logger } from '../logger.js';
-import { pipeline } from '@xenova/transformers';
 import { createHash as nodeCreateHash } from 'crypto';
 
 // Safe crypto with deterministic fallback
@@ -157,6 +156,9 @@ class NLILocalVerifier {
     }
 
     try {
+      // Dynamic import to avoid ESM require() issues in production
+      const { pipeline } = await import('@xenova/transformers');
+      
       // Initialize text-classification pipeline with MNLI model for maximum accuracy
       this.classifier = await pipeline('text-classification', this.modelName, {
         quantized: true,                 // faster cold start
