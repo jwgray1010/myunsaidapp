@@ -85,7 +85,8 @@ export const CONTEXT_ALIASES_EXPAND: Record<string, CanonicalContext[]> = {
 export const CTX_CONFIG = {
   MIN_SCORE: Number(process.env.SUGG_CTX_SCORE_MIN ?? "0.35"),
   TOP_K: Number(process.env.SUGG_CTX_TOPK ?? "2"),
-  STRICT_MODE: process.env.SUGGESTIONS_STRICT_CONTEXT === "true"
+  STRICT_MODE: process.env.SUGGESTIONS_STRICT_CONTEXT === "true",
+  CONFLICT_ALIASES: ["conflict", "repair", "boundary", "emotional"]
 };
 
 /**

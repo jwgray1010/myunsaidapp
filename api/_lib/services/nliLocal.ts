@@ -9,27 +9,22 @@
 
 import { logger } from '../logger.js';
 import { pipeline } from '@xenova/transformers';
+import { createHash as nodeCreateHash } from 'crypto';
 
-// Safe crypto import for serverless environments with deterministic fallback
-let createHash: any;
+// Safe crypto with deterministic fallback
 function djb2(s: string): string { 
   let h = 5381; 
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h) + s.charCodeAt(i); 
   return (h >>> 0).toString(16); 
 }
 
-try {
-  createHash = require('crypto').createHash;
-} catch (error) {
-  console.warn('[nli] Crypto module not available, using deterministic fallback');
-  createHash = (_: string) => {
-    const buf: string[] = [];
-    return {
-      update(data: any) { buf.push(String(data)); return this; },
-      digest() { return djb2(buf.join('')); }
-    };
+const createHash = nodeCreateHash || ((_: string) => {
+  const buf: string[] = [];
+  return {
+    update(data: any) { buf.push(String(data)); return this; },
+    digest() { return djb2(buf.join('')); }
   };
-}
+});
 
 // Environment flag to disable NLI
 const NLI_DISABLED = process.env.DISABLE_NLI === '1';
@@ -49,7 +44,7 @@ interface FitResult {
 
 interface NLITelemetry {
   timestamp: number;
-  runtime: 'wasm' | 'rules-only';
+  runtime: 'transformers.js' | 'rules-only';
   modelVersion: string;
   processingTimeMs: number;
   inputLength: number;
@@ -66,13 +61,13 @@ interface NLITelemetry {
 class NLILocalVerifier {
   private classifier: any = null;
   public ready: boolean = false;
-  private modelName: string = 'facebook/bart-large-mnli'; // Small, fast NLI model
+  private modelName: string = process.env.NLI_MODEL || 'Xenova/deberta-v3-base-mnli'; // High accuracy MNLI model
   private initAttempts: number = 0;
   private maxRetries: number = 3;
   private telemetryBuffer: NLITelemetry[] = [];
   private errorCount: number = 0;
   private dataVersionHash: string = '';
-  private labelMapping = { 'CONTRADICTION': 'contra', 'NEUTRAL': 'neutral', 'ENTAILMENT': 'entail' };
+  // Remove unused labelMapping
 
   constructor() {
     // Calculate data version hash for cache invalidation
@@ -86,7 +81,6 @@ class NLILocalVerifier {
     const criticalData = {
       modelName: this.modelName,
       nodeVersion: process.version,
-      timestamp: Date.now(),
       environment: process.env.NODE_ENV || 'development'
     };
     
@@ -95,7 +89,7 @@ class NLILocalVerifier {
       .digest('hex')
       .slice(0, 8); // Short hash for logging
       
-    console.log(`[nli] Data version hash: ${this.dataVersionHash}`);
+    logger.info(`[nli] Data version hash: ${this.dataVersionHash}`);
   }
 
   /**
@@ -104,7 +98,7 @@ class NLILocalVerifier {
   private addTelemetry(data: Partial<NLITelemetry>): void {
     const telemetry: NLITelemetry = {
       timestamp: Date.now(),
-      runtime: this.ready ? 'wasm' : 'rules-only',
+      runtime: this.ready ? 'transformers.js' : 'rules-only',
       modelVersion: this.modelName,
       processingTimeMs: 0,
       inputLength: 0,
@@ -144,7 +138,7 @@ class NLILocalVerifier {
     
     return {
       dataVersion: this.dataVersionHash,
-      runtime: this.ready ? 'wasm' : 'rules-only',
+      runtime: this.ready ? 'transformers.js' : 'rules-only',
       avgProcessingTimeMs: Math.round(avgProcessingTime),
       fallbackRate: Math.round(fallbackRate * 100),
       errorCount: this.errorCount,
@@ -163,20 +157,22 @@ class NLILocalVerifier {
     }
 
     try {
-      // Initialize zero-shot classification pipeline
-      // Using a smaller, faster model suitable for serverless
-      this.classifier = await pipeline('zero-shot-classification', 'microsoft/DialoGPT-medium');
+      // Initialize text-classification pipeline with MNLI model for maximum accuracy
+      this.classifier = await pipeline('text-classification', this.modelName, {
+        quantized: true,                 // faster cold start
+        progress_callback: undefined,    // silence logs in serverless
+      });
       
       this.ready = true;
       
-      logger.info('NLI verifier initialized successfully with transformers.js', { 
-        modelName: this.modelName,
+      logger.info('NLI verifier initialized successfully', { 
+        model: this.modelName,
         runtime: 'transformers.js'
       });
       
     } catch (error) {
-      logger.warn('Failed to initialize NLI verifier, falling back to rules-only', { 
-        error: error instanceof Error ? error.message : String(error)
+      logger.warn('Failed to initialize NLI; falling back to rules-only', { 
+        error: String(error)
       });
       this.ready = false;
     }
@@ -186,78 +182,107 @@ class NLILocalVerifier {
    * Score entailment between premise and hypothesis using transformers.js
    */
   async score(premise: string, hypothesis: string): Promise<NLIResult> {
-    const startTime = Date.now();
-    const inputLength = premise.length + hypothesis.length;
-    
+    const start = Date.now();
+    const inputLength = (premise?.length || 0) + (hypothesis?.length || 0);
+
     if (!this.ready || !this.classifier) {
-      this.addTelemetry({
-        processingTimeMs: Date.now() - startTime,
-        inputLength,
-        confidence: 0.33,
-        fallbackUsed: true
-      });
-      
-      // Return neutral scores when NLI unavailable
+      this.addTelemetry({ processingTimeMs: Date.now() - start, inputLength, confidence: 0.33, fallbackUsed: true });
       return { entail: 0.33, contra: 0.33, neutral: 0.34 };
     }
 
+    // Soft safety clamp to keep latency sane
+    const clamp = (s: string) => (s || '').slice(0, 1200);
+
     try {
-      // Use zero-shot classification with entailment labels
-      const candidateLabels = ['contradiction', 'neutral', 'entailment'];
-      const sequence = `${premise} [SEP] ${hypothesis}`;
-      
-      // Timeout protection
-      const timeoutMs = Number(process.env.NLI_TIMEOUT_MS || 400);
-      const result = await Promise.race([
-        this.classifier(sequence, candidateLabels),
-        new Promise<any>((_, reject) => 
-          setTimeout(() => reject(new Error('NLI timeout')), timeoutMs)
-        )
-      ]);
-      
-      // Map results to our format
-      const scores = { entail: 0.33, contra: 0.33, neutral: 0.34 };
-      
-      if (result?.scores && result?.labels) {
-        for (let i = 0; i < result.labels.length; i++) {
-          const label = result.labels[i].toLowerCase();
-          const score = result.scores[i];
-          
-          if (label.includes('entail')) scores.entail = score;
-          else if (label.includes('contra')) scores.contra = score;
-          else if (label.includes('neutral')) scores.neutral = score;
-        }
+      const timeoutMs = Number(process.env.NLI_TIMEOUT_MS || 1200);
+      const res = await Promise.race([
+        this.classifier({ text: clamp(premise), text_pair: clamp(hypothesis) }),
+        new Promise((_, r) => setTimeout(() => r(new Error('NLI timeout')), timeoutMs))
+      ]) as Array<{ label: string; score: number }>;
+
+      // Map to our triplet
+      const out: NLIResult = { entail: 0.0, contra: 0.0, neutral: 0.0 };
+      for (const { label, score } of res) {
+        const L = label.toUpperCase();
+        if (L.includes('ENTAIL')) out.entail = score;
+        else if (L.includes('CONTRAD')) out.contra = score;
+        else if (L.includes('NEUTRAL')) out.neutral = score;
       }
-      
-      const maxScore = Math.max(scores.entail, scores.contra, scores.neutral);
-      
+      // Normalize in case model returns <3 entries
+      const sum = out.entail + out.contra + out.neutral || 1;
+      out.entail /= sum; out.contra /= sum; out.neutral /= sum;
+
       this.addTelemetry({
-        processingTimeMs: Date.now() - startTime,
+        processingTimeMs: Date.now() - start,
         inputLength,
-        confidence: maxScore,
+        confidence: Math.max(out.entail, out.contra, out.neutral),
         fallbackUsed: false
       });
-      
-      return scores;
-      
-    } catch (error) {
+      return out;
+    } catch (err) {
       this.errorCount++;
-      
-      this.addTelemetry({
-        processingTimeMs: Date.now() - startTime,
-        inputLength,
-        confidence: 0.33,
-        fallbackUsed: true
-      });
-      
-      const isTimeout = error instanceof Error && error.message === 'NLI timeout';
-      logger.warn(isTimeout ? 'NLI timeout' : 'NLI scoring failed', { 
-        error: error instanceof Error ? error.message : String(error),
-        errorCount: this.errorCount,
-        isTimeout
-      });
-      
+      const isTimeout = err instanceof Error && err.message === 'NLI timeout';
+      logger.warn(isTimeout ? 'NLI timeout' : 'NLI scoring failed', { error: String(err), errorCount: this.errorCount, isTimeout });
+      this.addTelemetry({ processingTimeMs: Date.now() - start, inputLength, confidence: 0.33, fallbackUsed: true });
       return { entail: 0.33, contra: 0.33, neutral: 0.34 };
+    }
+  }
+
+  /**
+   * Batch score multiple premise-hypothesis pairs (major performance improvement)
+   * Uses transformers.js pipeline for efficient batched inference
+   */
+  async scoreBatch(premises: string[], hypotheses: string[]): Promise<{
+    entail: number[];
+    contra: number[];
+    neutral: number[];
+  }> {
+    const start = Date.now();
+    const n = Math.min(premises.length, hypotheses.length);
+    if (n === 0) return { entail: [], contra: [], neutral: [] };
+
+    if (!this.ready || !this.classifier) {
+      return { entail: Array(n).fill(0.33), contra: Array(n).fill(0.33), neutral: Array(n).fill(0.34) };
+    }
+
+    const clamp = (s: string) => (s || '').slice(0, 1200);
+    const inputs = Array.from({ length: n }, (_, i) => ({ text: clamp(premises[i]), text_pair: clamp(hypotheses[i]) }));
+
+    try {
+      const timeoutMs = Number(process.env.NLI_TIMEOUT_MS || 1500);
+      const results = await Promise.race([
+        this.classifier(inputs) as Promise<Array<Array<{ label: string; score: number }>>>,
+        new Promise((_, r) => setTimeout(() => r(new Error('NLI batch timeout')), timeoutMs))
+      ]);
+
+      const entail: number[] = [], contra: number[] = [], neutral: number[] = [];
+      for (const r of results as Array<Array<{ label: string; score: number }>>) {
+        const row: NLIResult = { entail: 0, contra: 0, neutral: 0 };
+        for (const { label, score } of r) {
+          const L = label.toUpperCase();
+          if (L.includes('ENTAIL')) row.entail = score;
+          else if (L.includes('CONTRAD')) row.contra = score;
+          else if (L.includes('NEUTRAL')) row.neutral = score;
+        }
+        const sum = row.entail + row.contra + row.neutral || 1;
+        entail.push(row.entail / sum);
+        contra.push(row.contra / sum);
+        neutral.push(row.neutral / sum);
+      }
+
+      const avgConf = entail.reduce((s, e, i) => Math.max(e, contra[i], neutral[i]) + s, 0) / n;
+      this.addTelemetry({
+        processingTimeMs: Date.now() - start,
+        inputLength: inputs.reduce((s, x) => s + x.text.length + x.text_pair.length, 0),
+        confidence: avgConf,
+        fallbackUsed: false
+      });
+      return { entail, contra, neutral };
+    } catch (err) {
+      this.errorCount++;
+      const isTimeout = err instanceof Error && err.message === 'NLI batch timeout';
+      logger.warn(isTimeout ? 'NLI batch timeout' : 'NLI batch scoring failed', { error: String(err), batchSize: n, errorCount: this.errorCount, isTimeout });
+      return { entail: Array(n).fill(0.33), contra: Array(n).fill(0.33), neutral: Array(n).fill(0.34) };
     }
   }
 

@@ -26,6 +26,48 @@ import { matchSemanticBackbone, applySemanticBias, type SemanticBackboneResult }
 import { isContextAppropriate, logContextFilter, getContextLinkBonus, type ContextScores } from './contextAnalysis';
 import { nliLocal, hypothesisForAdvice, detectUserIntents, type FitResult } from './nliLocal';
 
+// Environment variable controls for production tuning
+const ENV_CONTROLS = {
+  // Retrieval and ranking
+  RETRIEVAL_POOL_SIZE: Number(process.env.RETRIEVAL_POOL_SIZE) || 120,
+  MMR_LAMBDA: Number(process.env.MMR_LAMBDA) || 0.7,
+  MAX_SUGGESTIONS: Number(process.env.MAX_SUGGESTIONS) || 5,
+  
+  // NLI processing
+  NLI_MAX_ITEMS: Number(process.env.NLI_MAX_ITEMS) || 60,
+  NLI_BATCH_SIZE: Number(process.env.NLI_BATCH_SIZE) || 8,
+  NLI_TIMEOUT_MS: Number(process.env.NLI_TIMEOUT_MS) || 500,
+  NLI_ENTAIL_MIN_DEFAULT: Number(process.env.NLI_ENTAIL_MIN_DEFAULT) || 0.55,
+  NLI_CONTRA_MAX_DEFAULT: Number(process.env.NLI_CONTRA_MAX_DEFAULT) || 0.20,
+  
+  // Cache and performance
+  HYPOTHESIS_CACHE_MAX: Number(process.env.HYPOTHESIS_CACHE_MAX) || 1000,
+  VECTOR_CACHE_MAX: Number(process.env.VECTOR_CACHE_MAX) || 1000,
+  TONE_BUCKET_CACHE_MAX: Number(process.env.TONE_BUCKET_CACHE_MAX) || 200,
+  PERFORMANCE_CACHE_MAX: Number(process.env.PERFORMANCE_CACHE_MAX) || 1000,
+  
+  // Context processing
+  MAX_CONTEXT_LINK_BONUS: Number(process.env.MAX_CONTEXT_LINK_BONUS) || 0.12,
+  CONTEXT_SCORE_THRESHOLD: Number(process.env.CONTEXT_SCORE_THRESHOLD) || 0.05,
+  
+  // Feature flags
+  DISABLE_NLI: process.env.DISABLE_NLI === '1',
+  DISABLE_WEIGHT_FALLBACKS: process.env.DISABLE_WEIGHT_FALLBACKS === '1',
+  
+  // Cache Management
+  CACHE_EXPIRY_MS: Number(process.env.CACHE_EXPIRY_MS) || (30 * 60 * 1000), // 30 minutes default
+  CACHE_CLEANUP_PERCENTAGE: Number(process.env.CACHE_CLEANUP_PERCENTAGE) || 0.2, // 20% default
+  
+  // Search Parameters
+  BM25_LIMIT: Number(process.env.BM25_LIMIT) || 200,
+  MMR_K: Number(process.env.MMR_K) || 200
+};
+
+// Performance optimization: memoization caches
+const hypothesisCache = new Map<string, string>(); // advice.id -> hypothesis
+const toneBucketCache = new Map<string, any>(); // toneKey -> bucket result
+const vectorCache = new Map<string, Float32Array | null>(); // id -> vector (module-level LRU)
+
 // ---- Aho-Corasick Automaton for Fast Pattern Matching ----
 /**
  * Simplified Aho-Corasick implementation with basic trie + fallback safety.
@@ -112,6 +154,7 @@ class AhoCorasickAutomaton {
     
     const results: { category: string, match: string, position: number }[] = [];
     const lowerText = text.toLowerCase();
+    const seen = new Set<string>(); // Prevent duplicate category matches
     let node = this.trie;
     
     for (let i = 0; i < lowerText.length; i++) {
@@ -125,14 +168,14 @@ class AhoCorasickAutomaton {
       if (node && node[char]) {
         node = node[char];
         
-        // Check for matches
+        // Check for matches with deduplication
         if (node.output) {
           for (const category of node.output) {
-            // Simplified: just store category and current position
-            // Avoid unreliable backtracking - regex fallbacks handle accuracy
+            if (seen.has(category)) continue; // Skip already found categories
+            seen.add(category);
             results.push({
               category,
-              match: lowerText[i], // Single character match for simplicity
+              match: '', // Empty since we don't track spans reliably
               position: i
             });
           }
@@ -198,7 +241,7 @@ function getOrCreateAutomaton(): AhoCorasickAutomaton {
 }
 
 // ---- weight-mod fallback resolver (exact → alias → family → general → code_default)
-const DISABLE_WEIGHT_FALLBACKS = process.env.DISABLE_WEIGHT_FALLBACKS === '1';
+const DISABLE_WEIGHT_FALLBACKS = ENV_CONTROLS.DISABLE_WEIGHT_FALLBACKS;
 const WEIGHTS_FALLBACK_EVENT_SUG = 'weights.fallback.suggestions';
 
 function getWeightMods() { return dataLoader.get('weightModifiers'); }
@@ -413,8 +456,8 @@ interface CacheEntry {
 class PerformanceCache {
   private analysisCache = new Map<string, CacheEntry>();
   private suggestionCache = new Map<string, CacheEntry>();
-  private readonly maxCacheSize = 500;
-  private readonly cacheExpiryMs = 30 * 60 * 1000; // 30 minutes
+  private readonly maxCacheSize = ENV_CONTROLS.PERFORMANCE_CACHE_MAX;
+  private readonly cacheExpiryMs = ENV_CONTROLS.CACHE_EXPIRY_MS;
 
   private generateCacheKey(text: string, context?: string, attachmentStyle?: string): string {
     const normalized = text.toLowerCase().trim().replace(/\s+/g, ' ');
@@ -487,7 +530,7 @@ class PerformanceCache {
     // Remove least recently used entries (lowest hits + oldest timestamp)
     const entries = Array.from(cache.entries())
       .sort((a, b) => (a[1].hits + a[1].timestamp / 1000000) - (b[1].hits + b[1].timestamp / 1000000))
-      .slice(0, Math.floor(this.maxCacheSize * 0.2)); // Remove 20% of entries
+      .slice(0, Math.floor(this.maxCacheSize * ENV_CONTROLS.CACHE_CLEANUP_PERCENTAGE)); // Environment controlled percentage
     
     for (const [key] of entries) {
       cache.delete(key);
@@ -536,7 +579,7 @@ function getVecById(id: string): Float32Array | null {
   return null;
 }
 
-function bm25Search(query: string, limit = 200): any[] {
+function bm25Search(query: string, limit = ENV_CONTROLS.BM25_LIMIT): any[] {
   let bm25 = dataLoader.get('adviceBM25');
   logger.debug('bm25Search called', { 
     hasBM25: !!bm25, 
@@ -557,7 +600,10 @@ function bm25Search(query: string, limit = 200): any[] {
   return result;
 }
 
-function mmr(pool: any[], qVec: Float32Array | null, vecOf: (it:any)=>Float32Array|null, k=200, lambda=0.7) {
+function mmr(pool: any[], qVec: Float32Array | null, vecOf: (it:any)=>Float32Array|null, k=ENV_CONTROLS.MMR_K, lambda=ENV_CONTROLS.MMR_LAMBDA) {
+  // Early exit for sparse-only path (no reason to compute novelty without dense vectors)
+  if (!qVec) return pool.slice(0, k);
+  
   const out: any[] = [];
   const cand = new Set(pool);
   while (out.length < Math.min(k, pool.length) && cand.size) {
@@ -605,7 +651,44 @@ function mmr(pool: any[], qVec: Float32Array | null, vecOf: (it:any)=>Float32Arr
   return out;
 }
 
-async function hybridRetrieve(text: string, contextLabel: string, toneKey: string, analysis?: any, k=120) { // 120 is plenty with MMR
+// Memoized helper functions for performance
+function getMemoizedHypothesis(advice: any): string {
+  if (!hypothesisCache.has(advice.id)) {
+    hypothesisCache.set(advice.id, hypothesisForAdvice(advice));
+  }
+  return hypothesisCache.get(advice.id)!;
+}
+
+function getMemoizedVector(id: string): Float32Array | null {
+  if (!vectorCache.has(id)) {
+    // Use existing vector retrieval logic (placeholder for now)
+    const vector = null; // TODO: Replace with actual vector function
+    vectorCache.set(id, vector);
+    
+    // Environment-controlled LRU: keep cache under control
+    if (vectorCache.size > ENV_CONTROLS.VECTOR_CACHE_MAX) {
+      const firstKey = vectorCache.keys().next().value;
+      if (firstKey) vectorCache.delete(firstKey);
+    }
+  }
+  return vectorCache.get(id) || null;
+}
+
+function getMemoizedToneBucket(toneKey: string, contextLabel: string, intensityScore: number, resolveFn: Function): any {
+  const key = `${toneKey}|${contextLabel}|${Math.floor(intensityScore * 10)}`;
+  if (!toneBucketCache.has(key)) {
+    toneBucketCache.set(key, resolveFn(toneKey, contextLabel, intensityScore));
+    
+    // Environment-controlled LRU: keep cache under control
+    if (toneBucketCache.size > ENV_CONTROLS.TONE_BUCKET_CACHE_MAX) {
+      const firstKey = toneBucketCache.keys().next().value;
+      if (firstKey) toneBucketCache.delete(firstKey);
+    }
+  }
+  return toneBucketCache.get(key);
+}
+
+async function hybridRetrieve(text: string, contextLabel: string, toneKey: string, analysis?: any, k=ENV_CONTROLS.RETRIEVAL_POOL_SIZE) {
   const corpus = getAdviceCorpus();
   logger.info('hybridRetrieve started', { 
     corpusSize: corpus.length, 
@@ -681,7 +764,7 @@ async function hybridRetrieve(text: string, contextLabel: string, toneKey: strin
   
   // MMR with context-aware lambda
   const retrievalConfig = dataLoader.get('retrievalConfig');
-  const lambda = retrievalConfig?.mmrLambda?.[contextLabel] ?? 0.7;
+  const lambda = retrievalConfig?.mmrLambda?.[contextLabel] ?? ENV_CONTROLS.MMR_LAMBDA;
   const result = mmr(pool, qVec, (it:any)=>getV(it.id), k, lambda);
   logger.info('MMR diversification completed', { finalResultSize: result.length, lambda });
   return result;
@@ -927,7 +1010,8 @@ class AdviceEngine {
       phraseEdgeBoost: 0.4,
       premiumBoost: 0.2,
       secondPersonBoost: 0.8,
-      actionabilityBoost: 0.1
+      actionabilityBoost: 0.1,
+      contextLinkMultiplier: 1.0  // new tunable multiplier
     };
 
     const wm = getWeightMods();
@@ -1039,10 +1123,13 @@ class AdviceEngine {
     // Ensure temperature stays in reasonable bounds
     temp = Math.max(0.1, Math.min(5.0, temp));
     
-    // Apply temperature scaling: score' = score / temperature
-    // Higher temperature = more uniform distribution (lower confidence)
-    // Lower temperature = sharper distribution (higher confidence)
-    return scores.map(score => score / temp);
+    // Apply temperature scaling with bounded input scores
+    // Clamp pre-calibration scores to prevent outliers from dominating
+    return scores.map(score => {
+      const clampedScore = Math.max(-1, Math.min(3, score)); // Bound input
+      const calibrated = clampedScore / temp;
+      return Math.max(-1.5, Math.min(3.5, calibrated)); // Bound output
+    });
   }
 
   userPrefBoostFor(adviceItem: any, userPref: any): number {
@@ -1093,10 +1180,21 @@ class AdviceEngine {
       // Context link bonus (use top 3 contexts from analysis)
       const topContexts = Object.entries(signals.contextScores || {})
         .sort((a, b) => (b[1] as number) - (a[1] as number))
-        .slice(0, 3)
-        .map(([ctx]) => ctx);
-      const contextLinkBonus = getContextLinkBonus(it, topContexts);
-      s += contextLinkBonus;
+        .map(([ctx]) => ctx)
+        .filter((v, i, arr) => arr.indexOf(v) === i) // unique
+        .slice(0, 3);
+      
+      // Auto-populate contextLink if missing
+      const normalizedItem = {
+        ...it,
+        contextLink: Array.isArray(it.contextLink) && it.contextLink.length
+          ? it.contextLink
+          : (Array.isArray(it.contexts) ? it.contexts : ['general'])
+      };
+      
+      const contextLinkBonus = getContextLinkBonus(normalizedItem, topContexts) * (W.contextLinkMultiplier ?? 1);
+      const MAX_CTX_LINK_IMPACT = ENV_CONTROLS.MAX_CONTEXT_LINK_BONUS; // environment-controlled absolute cap
+      s += Math.min(contextLinkBonus, MAX_CTX_LINK_IMPACT);
 
       // Attachment
       const attachMatch = !it.attachmentStyles || it.attachmentStyles.length === 0 || it.attachmentStyles.includes(signals.attachmentStyle) ? 1 : 0;
@@ -1346,7 +1444,7 @@ class SuggestionsService {
   }
 
   private async ensureNLIReady(): Promise<void> {
-    if (process.env.DISABLE_NLI === '1') return;
+    if (ENV_CONTROLS.DISABLE_NLI) return;
     if (nliLocal.ready) return;
     if (!this._nliInitPromise) {
       this._nliInitPromise = nliLocal.init().catch(() => {
@@ -1678,15 +1776,13 @@ class SuggestionsService {
     }
 
     try {
-      // Get context-specific thresholds
+      // Get context-specific thresholds with environment variable fallbacks
       const evaluationTones = dataLoader.get('evaluationTones') || {};
       const nliThresholds = evaluationTones.nli_thresholds || {};
-      const contextThresholds = nliThresholds[ctx] || nliThresholds.default || {
-        entail_min: 0.55,
-        contra_max: 0.20
-      };
-
-      const { entail_min, contra_max } = contextThresholds;
+      const contextThresholds = nliThresholds[ctx] || nliThresholds.default || {};
+      
+      const entail_min = contextThresholds.entail_min ?? ENV_CONTROLS.NLI_ENTAIL_MIN_DEFAULT;
+      const contra_max = contextThresholds.contra_max ?? ENV_CONTROLS.NLI_CONTRA_MAX_DEFAULT;
       
       // Generate hypothesis for the advice
       const hypothesis = hypothesisForAdvice(advice);
@@ -1711,6 +1807,114 @@ class SuggestionsService {
       
       // Fail open - allow advice if NLI check fails
       return { ok: true, entail: 0, contra: 0, reason: 'nli_error' };
+    }
+  }
+
+  /**
+   * Batch NLI processing for major performance improvement
+   */
+  private async batchNLIAdviceFit(text: string, advicePool: any[], ctx: string): Promise<any[]> {
+    await this.ensureNLIReady();
+    
+    if (!nliLocal.ready) {
+      // If NLI disabled, mark all as passing and return
+      return advicePool.map(advice => {
+        (advice as any).__nli = { ok: true, entail: 0, contra: 0, reason: 'nli_disabled' };
+        return advice;
+      });
+    }
+
+    try {
+      const nliChecked: any[] = [];
+      const NLI_MAX = Math.min(ENV_CONTROLS.NLI_MAX_ITEMS, advicePool.length);
+      const nliPool = advicePool.slice(0, NLI_MAX);
+      
+      // Get context-specific thresholds with environment variable fallbacks
+      const evaluationTones = dataLoader.get('evaluationTones') || {};
+      const nliThresholds = evaluationTones.nli_thresholds || {};
+      const contextThresholds = nliThresholds[ctx] || nliThresholds.default || {};
+      
+      const entail_min = contextThresholds.entail_min ?? ENV_CONTROLS.NLI_ENTAIL_MIN_DEFAULT;
+      const contra_max = contextThresholds.contra_max ?? ENV_CONTROLS.NLI_CONTRA_MAX_DEFAULT;
+      
+      // Process in batches for performance
+      const BATCH_SIZE = ENV_CONTROLS.NLI_BATCH_SIZE;
+      for (let i = 0; i < nliPool.length; i += BATCH_SIZE) {
+        const batch = nliPool.slice(i, i + BATCH_SIZE);
+        
+        // Generate hypotheses using memoization
+        const hypotheses = batch.map(advice => getMemoizedHypothesis(advice));
+        const premises = Array(batch.length).fill(text);
+        
+        // Batch score with timeout protection
+        const timeoutMs = ENV_CONTROLS.NLI_TIMEOUT_MS;
+        try {
+          const batchResult = await Promise.race([
+            nliLocal.scoreBatch(premises, hypotheses),
+            new Promise<any>((_, reject) => 
+              setTimeout(() => reject(new Error('Batch NLI timeout')), timeoutMs)
+            )
+          ]);
+          
+          // Process batch results
+          batch.forEach((advice, idx) => {
+            const entail = batchResult.entail[idx];
+            const contra = batchResult.contra[idx];
+            const ok = entail >= entail_min && contra <= contra_max;
+            
+            if (ok) {
+              (advice as any).__nli = { ok, entail, contra, reason: 'nli_batch' };
+              nliChecked.push(advice);
+            } else {
+              logger.debug('NLI batch rejected advice', {
+                id: advice.id,
+                entail,
+                contra,
+                ctx
+              });
+            }
+          });
+          
+        } catch (error) {
+          logger.warn('NLI batch failed', { 
+            error: error instanceof Error ? error.message : String(error),
+            batchSize: batch.length
+          });
+          
+          // Fail open for this batch
+          batch.forEach(advice => {
+            (advice as any).__nli = { ok: true, entail: 0, contra: 0, reason: 'nli_batch_error' };
+            nliChecked.push(advice);
+          });
+        }
+      }
+      
+      // Add remaining items without NLI (they pass through)
+      const remaining = advicePool.slice(NLI_MAX);
+      remaining.forEach(advice => {
+        (advice as any).__nli = { ok: true, entail: 0, contra: 0, reason: 'nli_skipped' };
+        nliChecked.push(advice);
+      });
+      
+      logger.info('Batch NLI processing completed', {
+        inputSize: advicePool.length,
+        nliProcessed: NLI_MAX,
+        passed: nliChecked.length,
+        ctx
+      });
+      
+      return nliChecked;
+      
+    } catch (error) {
+      logger.error('Batch NLI processing failed', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      // Fail open - return all advice with default NLI status
+      return advicePool.map(advice => {
+        (advice as any).__nli = { ok: true, entail: 0, contra: 0, reason: 'nli_system_error' };
+        return advice;
+      });
     }
   }
 
@@ -1937,23 +2141,8 @@ class SuggestionsService {
     const safePool = applyContraindications(pool, analysis.flags);
     logger.info('Contraindications applied', { safePoolSize: safePool.length, originalPoolSize: pool.length });
 
-    // 3.5) NLI Advice–Message Fit Gate
-    const nliChecked: any[] = [];
-    for (const it of safePool) {
-      const fit = await this.nliAdviceFit(text, it, contextLabel);
-      if (fit.ok) { 
-        (it as any).__nli = fit; 
-        nliChecked.push(it); 
-      } else {
-        logger.info('NLI gate rejected advice', { 
-          id: it.id, 
-          entail: fit.entail,
-          contra: fit.contra,
-          reason: fit.reason,
-          ctx: contextLabel 
-        });
-      }
-    }
+    // 3.5) NLI Advice–Message Fit Gate (Batched for Performance)
+    const nliChecked = await this.batchNLIAdviceFit(text, safePool, contextLabel);
     logger.info('NLI fit gate applied', { 
       nliCheckedSize: nliChecked.length, 
       safePoolSize: safePool.length,
@@ -2002,8 +2191,16 @@ class SuggestionsService {
     for (const it of ranked) {
       const nli = (it as any).__nli;
       if (!nli) continue;
-      // Small, bounded shaping - favor items the ONNX NLI says "fit" best
-      it.ltrScore += Math.max(-0.4, Math.min(0.4, (nli.entail - nli.contra) * 0.6));
+      
+      // Guard against flapping: skip shaping for barely-passed items
+      const nliDelta = nli.entail - nli.contra;
+      if (Math.abs(nliDelta) < 0.05) {
+        // Tiny delta; skip shaping to keep stability
+        continue;
+      }
+      
+      // Small, bounded shaping - favor items the transformers.js NLI says "fit" best
+      it.ltrScore += Math.max(-0.4, Math.min(0.4, nliDelta * 0.6));
     }
     logger.info('Ranking completed', { rankedSize: ranked.length, personalizedSize: personalized.length });
 

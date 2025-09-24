@@ -185,10 +185,10 @@ export class SpacyService {
   private mode: Mode;
   private budgets = { maxMillis: 60, maxChars: 2000, maxTokens: 400 };
 
-  // caches
+  // caches with environment variable controls
   private _analysisLRU = new Map<string, SpacyFullAnalysis>();
   private _helperLRU   = new Map<string, SpacyHelperDoc>();
-  private _LRU_MAX = 128;
+  private _LRU_MAX = parseInt(env.SPACY_LRU_MAX || '128');
 
   // precompiled JSON-driven patterns
   private negationPatterns: RegExp[] = [];
@@ -218,6 +218,12 @@ export class SpacyService {
   constructor(opts: any = {}) {
     this.dataPath = opts.dataPath || resolve(process.cwd(), 'data');
     this.mode = (opts.mode as Mode) || (env.SPACY_MODE as Mode) || 'balanced';
+    
+    // Environment variable budget controls
+    if (env.SPACY_MAX_MILLIS) this.budgets.maxMillis = parseInt(env.SPACY_MAX_MILLIS);
+    if (env.SPACY_MAX_CHARS) this.budgets.maxChars = parseInt(env.SPACY_MAX_CHARS);
+    if (env.SPACY_MAX_TOKENS) this.budgets.maxTokens = parseInt(env.SPACY_MAX_TOKENS);
+    
     if (opts.budgets) this.budgets = { ...this.budgets, ...opts.budgets };
     this.SAFE_MODE = String(env.SPACY_SAFE_MODE || '').trim() === '1' || !!opts.safeMode;
     this._loadAll();
@@ -615,45 +621,294 @@ export class SpacyService {
     return hits;
   }
 
-  private classifyContext(text: string): ContextClassification {
+  private classifyContext(text: string, attachmentStyle?: string): ContextClassification {
+    const start = now();
     const toks = this.splitTokens(text);
     const lower = text.toLowerCase();
+    const sents = this.splitSents(text);
     const confs = this.contextClassifiers?.contexts || [];
-    const decayTau = 80; // chars; JSON-tunable later
+    const engine = this.contextClassifiers?.engine || {};
+    
+    // Environment variable controls
+    const maxContexts = parseInt(env.SPACY_MAX_CONTEXTS || '8');
+    const scoreThreshold = parseFloat(env.SPACY_CONTEXT_THRESHOLD || '0.05');
+    const usePositionBoosts = env.SPACY_POSITION_BOOSTS !== '0';
+    const useCooldowns = env.SPACY_COOLDOWNS !== '0';
+    
     const contextual: any[] = [];
+    const contextLastSeen = new Map<string, number>(); // sentence-based cooldowns
+    const bucketScores = { clear: 0, caution: 0, alert: 0 };
+    const bucketEvidence = { clear: new Set(), caution: new Set(), alert: new Set() };
 
-    for (const ctx of confs) {
-      let score = 0; const matched: string[] = [];
-      const w = ctx.weight || 1.0;
-      const phrases = [...(ctx.phrases||[]), ...(ctx.keywords||ctx.toneCues||[])];
-
-      for (const p of phrases) {
-        const rx = new RegExp(String(p).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'ig');
-        let m: RegExpExecArray | null;
-        while ((m = rx.exec(lower)) !== null) {
-          const pos = m.index;
-          const decay = Math.exp(-(lower.length - pos)/Math.max(1,decayTau));
-          score += w * (1.0 + 0.2 * (p.split(' ').length > 1 ? 1 : 0)) * decay;
-          matched.push(p);
+    // Preprocess: generic tokens and negation/sarcasm windows
+    const genericTokens = new Set([
+      ...(engine.genericTokens?.globalStop || []),
+      ...(engine.genericTokens?.pronouns || [])
+    ]);
+    const isGenericPolicy = engine.genericTokens?.policy?.ignoreForBuckets || {};
+    
+    // Calculate global format cues
+    const globalAllCapsRatio = (text.match(/[A-Z]/g) || []).length / Math.max(1, (text.match(/[A-Za-z]/g) || []).length);
+    const globalExclamationCount = (text.match(/!/g) || []).length;
+    
+    // Per-sentence analysis with sophisticated scoring
+    for (let sentIdx = 0; sentIdx < sents.length; sentIdx++) {
+      const sent = sents[sentIdx];
+      const sentText = text.slice(sent.start, sent.end);
+      const sentLower = sentText.toLowerCase();
+      
+      // Format cues (all caps, exclamations)
+      const allCapsRatio = (sentText.match(/[A-Z]/g) || []).length / Math.max(1, (sentText.match(/[A-Za-z]/g) || []).length);
+      const exclamationCount = (sentText.match(/!/g) || []).length;
+      
+      for (const ctx of confs) {
+        const ctxId = ctx.id || ctx.context;
+        const priority = ctx.priority || 1;
+        const windowTokens = ctx.windowTokens || engine.windowing?.defaultWindowTokens || 24;
+        
+        // Cooldown check
+        const lastSeen = contextLastSeen.get(ctxId) || -1;
+        const cooldownSent = Math.floor((ctx.cooldown_ms || 0) / (engine.conflictResolution?.cooldownSentenceMs || 300));
+        if (useCooldowns && lastSeen >= 0 && (sentIdx - lastSeen) < cooldownSent) {
+          continue; // Skip due to cooldown
+        }
+        
+        let score = 0;
+        const matched: string[] = [];
+        
+        // Basic tone cues (simple tokens)
+        const basicCues = ctx.toneCues || [];
+        for (const cue of basicCues) {
+          if (sentLower.includes(cue.toLowerCase())) {
+            const cueWeight = ctx.weight || 1.0;
+            score += cueWeight * 0.1;
+            matched.push(cue);
+          }
+        }
+        
+        // Weighted patterns (regex, ngrams, tokens)
+        const weightedCues = ctx.toneCuesWeighted || [];
+        for (const wcue of weightedCues) {
+          const pattern = wcue.pattern;
+          const weight = wcue.weight || 0.1;
+          const type = wcue.type || 'token';
+          
+          try {
+            let regex: RegExp;
+            if (type === 'regex') {
+              regex = new RegExp(pattern, 'gi');
+            } else if (type === 'ngram') {
+              regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+            } else { // token
+              regex = new RegExp('\\b' + pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi');
+            }
+            
+            let m: RegExpExecArray | null;
+            while ((m = regex.exec(sentText)) !== null) {
+              // Check if token is generic and should be ignored for certain buckets
+              const matchedToken = m[0].toLowerCase();
+              const isGeneric = genericTokens.has(matchedToken);
+              
+              // Apply generic token policy
+              if (isGeneric) {
+                const maxGenericPoints = engine.genericTokens?.policy?.maxPointsPerGenericToken || 0;
+                score += Math.min(weight, maxGenericPoints);
+              } else {
+                score += weight;
+              }
+              matched.push(pattern);
+              
+              // Track evidence for bucket guards
+              if (ctx.confidenceBoosts) {
+                Object.entries(ctx.confidenceBoosts).forEach(([bucket, boost]: [string, any]) => {
+                  if (boost > 0 && !isGeneric) {
+                    (bucketEvidence as any)[bucket]?.add(matchedToken);
+                  }
+                });
+              }
+            }
+          } catch (e) {
+            // Skip malformed regex
+            logger.warn(`[SpaCy] Invalid pattern: ${pattern}`);
+          }
+        }
+        
+        // Counter cues (dampening)
+        const counterCues = ctx.counterCues || [];
+        for (const counter of counterCues) {
+          if (sentLower.includes(counter.toLowerCase())) {
+            score *= 0.7; // Dampen by 30%
+          }
+        }
+        
+        // Position boosts
+        if (usePositionBoosts && ctx.positionBoost && score > 0) {
+          if (sentIdx === 0 && ctx.positionBoost.start) {
+            score += ctx.positionBoost.start;
+          }
+          if (sentIdx === sents.length - 1 && ctx.positionBoost.end) {
+            score += ctx.positionBoost.end;
+          }
+          if (allCapsRatio > 0.5 && ctx.positionBoost.allCaps) {
+            score += ctx.positionBoost.allCaps;
+          }
+        }
+        
+        // Format cue effects
+        if (allCapsRatio > 0.3) {
+          score += (engine.formatCues?.allCaps?.alert || 0);
+        }
+        if (exclamationCount > 0) {
+          score += (engine.formatCues?.exclamationsPerSentence?.alert || 0) * exclamationCount;
+        }
+        
+        // Attachment style adjustments
+        if (attachmentStyle && ctx.attachmentAdjustments && ctx.attachmentAdjustments[attachmentStyle]) {
+          const adjustments = ctx.attachmentAdjustments[attachmentStyle];
+          // Apply adjustments to bucket scores later, track context score
+          Object.entries(adjustments).forEach(([bucket, adj]: [string, any]) => {
+            (bucketScores as any)[bucket] += adj * score;
+          });
+        }
+        
+        // Repeat decay
+        const repeatDecay = ctx.repeatDecay || engine.conflictResolution?.repeatDecayDefault || 0.75;
+        if (contextLastSeen.has(ctxId)) {
+          score *= repeatDecay;
+        }
+        
+        // Apply max boosts limit
+        const maxBoosts = ctx.maxBoostsPerMessage || 999;
+        if (matched.length > maxBoosts) {
+          score *= (maxBoosts / matched.length);
+        }
+        
+        // Record context if above threshold
+        if (score > scoreThreshold) {
+          contextual.push({
+            context: ctx.context || ctxId,
+            score,
+            confidence: 0, // Will be calculated later with softmax
+            matchedPatterns: matched,
+            priority,
+            sentenceIndex: sentIdx,
+            description: ctx.description
+          });
+          
+          contextLastSeen.set(ctxId, sentIdx);
         }
       }
-      if (score > 0) contextual.push({ context: ctx.context || ctx.name, score, matchedPatterns: matched });
     }
-
-    contextual.sort((a,b)=>b.score-a.score);
-    const top = contextual[0];
-    const temp = Math.max(0.6, Math.min(1.8, this.contextClassifiers?.temperature?.[top?.context] ?? 1.0));
-    const logits = contextual.map(c => c.score);
-    const max = Math.max(...logits, 0);
-    const exps = contextual.map(c => Math.exp((c.score - max)/temp));
-    const Z = exps.reduce((a,b)=>a+b, 0) || 1;
-    const conf = exps[0]/Z;
-
+    
+    // Apply negation and sarcasm effects
+    const hasNegation = this.detectNegation(text).hasNegation;
+    const hasSarcasm = this.detectSarcasm(text).hasSarcasm;
+    
+    if (hasNegation && engine.negation?.effect) {
+      Object.entries(engine.negation.effect).forEach(([bucket, effect]: [string, any]) => {
+        (bucketScores as any)[bucket] += effect;
+      });
+    }
+    
+    if (hasSarcasm && engine.sarcasm?.effect) {
+      Object.entries(engine.sarcasm.effect).forEach(([bucket, effect]: [string, any]) => {
+        (bucketScores as any)[bucket] += effect;
+      });
+    }
+    
+    // Apply bucket guards
+    const guards = engine.bucketGuards || {};
+    const minEvidence = guards.minEvidenceTokensByBucket || {};
+    
+    // Clear bucket guard logic
+    if (guards.clear) {
+      const clearGuard = guards.clear;
+      const evidenceCount = bucketEvidence.clear.size;
+      
+      if (evidenceCount < (minEvidence.clear || 1)) {
+        bucketScores.clear *= 0.1; // Severely dampen if insufficient evidence
+      }
+      
+      if (clearGuard.requireDeescalatoryContext) {
+        const hasDeescalatory = contextual.some(c => 
+          clearGuard.eligibleContexts?.includes(c.context) || 
+          confs.find((ctx: any) => ctx.context === c.context)?.polarity === 'deescalatory'
+        );
+        if (!hasDeescalatory) {
+          bucketScores.clear *= 0.3;
+        }
+      }
+      
+      if (clearGuard.cancelIfLocalNegation && hasNegation) {
+        bucketScores.clear *= 0.2;
+      }
+      
+      if (clearGuard.dampenIfEscalatoryContextsActive) {
+        const hasEscalatory = contextual.some(c => 
+          confs.find((ctx: any) => ctx.context === c.context)?.polarity === 'escalatory'
+        );
+        if (hasEscalatory) {
+          bucketScores.clear *= clearGuard.dampenIfEscalatoryContextsActive;
+        }
+      }
+      
+      // Overshadow logic
+      if (clearGuard.overshadowedBy && bucketScores.alert >= clearGuard.overshadowedBy.atOrAbove) {
+        const ratio = bucketScores.clear / Math.max(bucketScores.alert, 0.01);
+        if (ratio < clearGuard.overshadowedBy.ratioRequiredForClear) {
+          bucketScores.clear *= 0.5;
+        }
+      }
+    }
+    
+    // Alert and caution multipliers
+    if (guards.alert) {
+      if (globalAllCapsRatio > 0.3) {
+        bucketScores.alert *= (guards.alert.allCapsMultiplier || 1.0);
+      }
+      if (globalExclamationCount > 0) {
+        bucketScores.alert *= Math.pow(guards.alert.exclamationMultiplier || 1.0, globalExclamationCount);
+      }
+    }
+    
+    // Sort by priority, then score
+    contextual.sort((a, b) => {
+      if (a.priority !== b.priority) return b.priority - a.priority;
+      return b.score - a.score;
+    });
+    
+    // Limit to max contexts and apply conflict resolution
+    const maxContextsPerSent = engine.conflictResolution?.maxContextsPerSentence || 3;
+    const filteredContexts = contextual.slice(0, Math.min(maxContexts, maxContextsPerSent));
+    
+    // Calculate softmax confidence scores
+    if (filteredContexts.length > 0) {
+      const logits = filteredContexts.map(c => c.score);
+      const maxLogit = Math.max(...logits);
+      const exps = logits.map(logit => Math.exp(logit - maxLogit));
+      const sumExps = exps.reduce((sum, exp) => sum + exp, 0);
+      
+      filteredContexts.forEach((ctx, i) => {
+        ctx.confidence = exps[i] / sumExps;
+      });
+    }
+    
+    const processingTime = now() - start;
+    if (processingTime > 5) {
+      logger.warn(`[SpaCy] Context classification took ${processingTime.toFixed(2)}ms for ${text.length} chars`);
+    }
+    
     return {
-      primaryContext: top?.context || 'general',
-      secondaryContext: contextual[1]?.context || null,
-      allContexts: contextual.map((c,i)=>({ context:c.context, score:c.score, confidence: exps[i]/Z, matchedPatterns: c.matchedPatterns })),
-      confidence: conf
+      primaryContext: filteredContexts[0]?.context || 'general',
+      secondaryContext: filteredContexts[1]?.context || null,
+      allContexts: filteredContexts.map(c => ({
+        context: c.context,
+        score: c.score,
+        confidence: c.confidence || 0,
+        matchedPatterns: c.matchedPatterns || [],
+        description: c.description
+      })),
+      confidence: filteredContexts[0]?.confidence || 0.1
     };
   }
 
@@ -680,9 +935,10 @@ export class SpacyService {
   process(text: string, opts: any = {}): SpacyProcessResult {
     const start = now();
     const original = this.clamp(text || '');
+    const attachmentStyle = opts.attachmentStyle || opts.attachment_style; // Support both formats
 
-    // LRU (by version + mode + text)
-    const key = `${CLIENT_VERSION}:${this.mode}:${original}`;
+    // LRU (by version + mode + text + attachment)
+    const key = `${CLIENT_VERSION}:${this.mode}:${attachmentStyle || 'none'}:${original}`;
     const cached = this._lruGet(this._analysisLRU, key);
     if (cached && cached.processingTimeMs < this.budgets.maxMillis) {
       return this._toProcessResult(cached);
@@ -695,15 +951,19 @@ export class SpacyService {
     // Minimal always-on
     const sents = this.splitSents(original);
     const entities = this.extractEntities(original);
-    const contextClassification = this.classifyContext(original);
+    const contextClassification = this.classifyContext(original, attachmentStyle);
 
     // Negation deps + spans
     const { deps, subtreeSpan } = this.findNegationDeps(original, tokens, sents);
 
-    // Medium/Heavy (gated)
+    // Medium/Heavy (gated by performance budgets)
     const negationAnalysis = this.detectNegation(original);
-    const sarcasmAnalysis  = (!tooMany ? this.detectSarcasm(original) : { hasSarcasm:false, sarcasmIndicators:[], sarcasmScore:0, overallSarcasmProbability:0 });
-    const intensityAnalysis= (!tooMany ? this.detectIntensity(original) : { hasIntensity:false, intensityWords:[], intensityCount:0, overallIntensity:1, dominantLevel:'neutral' });
+    const sarcasmAnalysis = (!tooMany ? this.detectSarcasm(original) : { 
+      hasSarcasm:false, sarcasmIndicators:[], sarcasmScore:0, overallSarcasmProbability:0 
+    });
+    const intensityAnalysis = (!tooMany ? this.detectIntensity(original) : { 
+      hasIntensity:false, intensityWords:[], intensityCount:0, overallIntensity:1, dominantLevel:'neutral' 
+    });
     const edgeHits = this.detectEdges(original);
 
     const processingTime = now() - start;
@@ -850,7 +1110,11 @@ export class SpacyService {
       negation_patterns: this.negationPatterns.length,
       sarcasm_patterns: this.sarcasmPatterns.length,
       intensity_modifiers: this.intensityPatterns.length,
-      edges: this.edgePatterns.length
+      edges: this.edgePatterns.length,
+      lru_cache_size: this._analysisLRU.size,
+      helper_cache_size: this._helperLRU.size,
+      cache_max_size: this._LRU_MAX,
+      budgets: this.budgets
     };
   }
 
@@ -858,6 +1122,7 @@ export class SpacyService {
     return {
       status: 'operational',
       version: CLIENT_VERSION,
+      mode: this.mode,
       dataFilesLoaded: {
         context_classifiers: !!this.contextClassifiers,
         negation_indicators: !!this.negationIndicators,
@@ -865,11 +1130,53 @@ export class SpacyService {
         intensity_modifiers: !!this.intensityModifiers,
         phrase_edges: !!this.phraseEdges
       },
+      engine_features: {
+        weighted_patterns: true,
+        priority_system: true,
+        cooldown_mechanics: true,
+        position_boosts: true,
+        attachment_adjustments: true,
+        bucket_guards: true,
+        sentence_segmentation: true,
+        environment_controls: true
+      },
       summary: this.getProcessingSummary()
     };
   }
 
-  async healthCheck(): Promise<boolean> { logger.info('SpaCy (local helper) health: OK'); return true; }
+  async healthCheck(): Promise<boolean> { 
+    logger.info('SpaCy (local helper) health: OK', this.getProcessingSummary()); 
+    return true; 
+  }
+
+  // Warmup endpoint for cold start optimization
+  async warmup(): Promise<void> {
+    const warmupTexts = [
+      'I love you so much!',
+      'This is really frustrating me',
+      'Can we talk about this later?',
+      'Thank you for understanding',
+      'I need some space right now'
+    ];
+    
+    const attachmentStyles = ['secure', 'anxious', 'avoidant', 'disorganized'];
+    
+    logger.info('[SpaCy] Starting warmup process...');
+    const start = now();
+    
+    for (const text of warmupTexts) {
+      for (const style of attachmentStyles) {
+        try {
+          this.process(text, { attachmentStyle: style });
+        } catch (e) {
+          logger.warn(`[SpaCy] Warmup failed for text: ${text}, style: ${style}`, e);
+        }
+      }
+    }
+    
+    const duration = now() - start;
+    logger.info(`[SpaCy] Warmup completed in ${duration.toFixed(2)}ms, cache size: ${this._analysisLRU.size}`);
+  }
 
   // Simple numeric vector for downstream heuristics (kept from prior version)
   async embed(text: string): Promise<number[]> {
