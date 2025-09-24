@@ -6,11 +6,6 @@ const nonEmptyString = (name: string) => z.string()
   .trim()
   .min(1, `${name} is required and cannot be empty`);
 
-const firebaseProjectId = z.string()
-  .trim()
-  .min(1, 'Firebase Project ID is required')
-  .regex(/^[a-z0-9-]+$/, 'Firebase Project ID must contain only lowercase letters, numbers, and hyphens');
-
 const apiKey = z.string()
   .trim()
   .min(20, 'API keys must be at least 20 characters')
@@ -20,12 +15,6 @@ const jwtSecret = z.string()
   .trim()
   .min(32, 'JWT secret must be at least 32 characters for security')
   .max(512, 'JWT secret cannot exceed 512 characters');
-
-const url = z.string()
-  .trim()
-  .url('Must be a valid URL')
-  .refine(url => url.startsWith('https://') || process.env.NODE_ENV !== 'production', 
-    'HTTPS required in production');
 
 const corsOrigins = z.string()
   .trim()
@@ -50,18 +39,13 @@ const envSchema = z.object({
     .pipe(z.enum(['development', 'test', 'production']))
     .default('development'),
   
-  // Firebase Configuration
-  FIREBASE_PROJECT_ID: firebaseProjectId,
-  FIREBASE_API_KEY: apiKey.describe('Firebase API Key'),
-  FIREBASE_AUTH_DOMAIN: url.describe('Firebase Auth Domain'),
-  FIREBASE_STORAGE_BUCKET: nonEmptyString('Firebase Storage Bucket'),
-  FIREBASE_MESSAGING_SENDER_ID: z.string()
-    .trim()
-    .regex(/^\d+$/, 'Firebase Messaging Sender ID must be numeric'),
-  FIREBASE_APP_ID: z.string()
-    .trim()
-    .min(1, 'Firebase App ID is required')
-    .regex(/^1:\d+:web:[a-f0-9]+$/, 'Invalid Firebase App ID format'),
+  // Firebase Configuration (optional for now)
+  FIREBASE_PROJECT_ID: z.string().trim().optional(),
+  FIREBASE_API_KEY: z.string().trim().optional(),
+  FIREBASE_AUTH_DOMAIN: z.string().trim().optional(),
+  FIREBASE_STORAGE_BUCKET: z.string().trim().optional(),
+  FIREBASE_MESSAGING_SENDER_ID: z.string().trim().optional(),
+  FIREBASE_APP_ID: z.string().trim().optional(),
   
   // OpenAI Configuration
   OPENAI_API_KEY: z.string()
@@ -216,7 +200,8 @@ export const env = getEnv();
 
 // Helper functions for feature flags
 export function isFeatureEnabled(feature: string): boolean {
-  return env.ENABLED_FEATURES.split(',').map(f => f.trim()).includes(feature);
+  const features = String(env.ENABLED_FEATURES || '');
+  return features.split(',').map((f: string) => f.trim()).includes(feature);
 }
 
 // Helper for getting typed environment with runtime checks
