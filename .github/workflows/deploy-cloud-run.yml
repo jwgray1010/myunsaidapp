@@ -24,15 +24,22 @@ jobs:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
 
-      - name: Deploy to Cloud Run (build from source)
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev
+
+      - name: Build and push Docker image
         run: |
-          gcloud run deploy "${{ secrets.SERVICE_NAME || 'unsaid-inference' }}" \
-            --source . \
-            --region "${{ secrets.GCP_REGION }}" \
+          gcloud builds submit --tag ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/inference/${{ secrets.SERVICE_NAME || 'unsaid-inference' }}:latest .
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ secrets.SERVICE_NAME || 'unsaid-inference' }} \
+            --image ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/inference/${{ secrets.SERVICE_NAME || 'unsaid-inference' }}:latest \
             --platform managed \
-            --allow-unauthenticated=false \
+            --allow-unauthenticated \
             --port 8080 \
-            --memory 512Mi \
+            --memory 2Gi \
             --cpu 1 \
-            --concurrency 20 \
+            --max-instances 10 \
+            --concurrency 80
             --max-instances 50
