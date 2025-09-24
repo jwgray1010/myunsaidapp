@@ -1,15 +1,14 @@
 /**
- * Local ONNX-based Natural Language Inference (NLI) verifier
+ * Local NLI verifier using @xenova/transformers
  * 
  * Provides entailment checking between user messages and therapy advice
  * to prevent semantic mismatches without cloud dependencies.
  * 
- * Compatible with Vercel Serverless - uses ONNX runtime for local inference.
+ * Compatible with Vercel Serverless - uses transformers.js for automatic model handling.
  */
 
-import { logger } from '../logger';
-import { resolveLocalPath, resolveModelPath } from '../utils/resolveLocalPath';
-import { AutoTokenizer } from '@xenova/transformers';
+import { logger } from '../logger.js';
+import { pipeline } from '@xenova/transformers';
 
 // Safe crypto import for serverless environments with deterministic fallback
 let createHash: any;
@@ -34,23 +33,6 @@ try {
 
 // Environment flag to disable NLI
 const NLI_DISABLED = process.env.DISABLE_NLI === '1';
-
-/**
- * Stable softmax with temperature (numerically safe)
- */
-function softmaxT(logits: number[], T = Number(process.env.NLI_TEMP || 1.0)): number[] {
-  const m = Math.max(...logits);
-  const exps = logits.map(x => Math.exp((x - m) / T));
-  const Z = exps.reduce((a,b)=>a+b, 0) || 1;
-  return exps.map(x => x / Z);
-}
-
-/**
- * Create ORT tensor with explicit dtype support
- */
-function toTensor(ort: any, type: 'int64'|'int32', data: BigInt64Array|Int32Array) {
-  return new ort.Tensor(type, data, [1, (data as any).length]);
-}
 
 interface NLIResult {
   entail: number;
@@ -77,22 +59,20 @@ interface NLITelemetry {
 }
 
 /**
- * Local NLI verifier using ONNX runtime
- * Enhanced with web runtime support, version tracking, and rules backstop
- * Supports WASM (onnxruntime-web) for serverless deployment
+ * Local NLI verifier using @xenova/transformers
+ * Enhanced with transformers.js pipeline for automatic model handling
+ * Supports serverless deployment with automatic model downloading
  */
 class NLILocalVerifier {
-  private session: any = null;
-  private tokenizer: any = null;
+  private classifier: any = null;
   public ready: boolean = false;
-  private modelPath: string | null = null;
-  private modelVersion: string = 'v1.0'; // Version tracking for cache invalidation
+  private modelName: string = 'facebook/bart-large-mnli'; // Small, fast NLI model
   private initAttempts: number = 0;
   private maxRetries: number = 3;
   private telemetryBuffer: NLITelemetry[] = [];
   private errorCount: number = 0;
   private dataVersionHash: string = '';
-  private labelOrder: string[] = ['contradiction', 'neutral', 'entailment']; // MNLI label order
+  private labelMapping = { 'CONTRADICTION': 'contra', 'NEUTRAL': 'neutral', 'ENTAILMENT': 'entail' };
 
   constructor() {
     // Calculate data version hash for cache invalidation
@@ -104,7 +84,7 @@ class NLILocalVerifier {
    */
   private updateDataVersionHash(): void {
     const criticalData = {
-      modelVersion: this.modelVersion,
+      modelName: this.modelName,
       nodeVersion: process.version,
       timestamp: Date.now(),
       environment: process.env.NODE_ENV || 'development'
@@ -125,7 +105,7 @@ class NLILocalVerifier {
     const telemetry: NLITelemetry = {
       timestamp: Date.now(),
       runtime: this.ready ? 'wasm' : 'rules-only',
-      modelVersion: this.modelVersion,
+      modelVersion: this.modelName,
       processingTimeMs: 0,
       inputLength: 0,
       confidence: 0,
@@ -173,9 +153,9 @@ class NLILocalVerifier {
   }
 
   /**
-   * Initialize ONNX session with MNLI model - strictly local
+   * Initialize transformers.js pipeline for NLI
    */
-  async init(modelPath?: string): Promise<void> {
+  async init(): Promise<void> {
     if (NLI_DISABLED) {
       logger.info('NLI explicitly disabled via DISABLE_NLI=1');
       this.ready = false;
@@ -183,185 +163,33 @@ class NLILocalVerifier {
     }
 
     try {
-      // Resolve model path via env or local resolver; strictly local
-      const local = modelPath || process.env.NLI_ONNX_PATH || resolveModelPath('mnli-mini.onnx');
-      if (!local) { 
-        logger.warn('No local MNLI model found');
-        this.ready = false; 
-        return; 
-      }
-      this.modelPath = local;
-      
-      // Use ONNX Runtime Web (serverless optimized)
-      let ort: any;
-      try { 
-        ort = await import('onnxruntime-web'); 
-        logger.info('Using onnxruntime-web (serverless/WASM mode)');
-      } catch (error) {
-        logger.warn('onnxruntime-web not available, running in rules-only mode', {
-          error: error instanceof Error ? error.message : String(error)
-        });
-        this.ready = false;
-        return;
-      }
-      
-      // Create session with WASM execution provider
-      const opts = { executionProviders: ['wasm'] };
-      this.session = await ort.InferenceSession.create(local, opts);
-      
-      // Initialize real BERT tokenizer for proper tokenization
-      try {
-        const tokenizerPath = resolveLocalPath('models/bert-base-uncased-tokenizer');
-        if (!tokenizerPath) {
-          throw new Error('Local tokenizer path not found');
-        }
-        this.tokenizer = await AutoTokenizer.from_pretrained(tokenizerPath);
-        logger.info('BERT tokenizer initialized successfully');
-      } catch (tokenizerError) {
-        logger.warn('Failed to initialize BERT tokenizer, using fallback', {
-          error: tokenizerError instanceof Error ? tokenizerError.message : String(tokenizerError)
-        });
-        // Keep ready=true even if tokenizer fails - we'll use stub tokenizer
-      }
+      // Initialize zero-shot classification pipeline
+      // Using a smaller, faster model suitable for serverless
+      this.classifier = await pipeline('zero-shot-classification', 'microsoft/DialoGPT-medium');
       
       this.ready = true;
       
-      logger.info('NLI verifier initialized successfully', { 
-        modelPath: this.modelPath,
-        runtime: 'wasm',
-        tokenizerReady: !!this.tokenizer
+      logger.info('NLI verifier initialized successfully with transformers.js', { 
+        modelName: this.modelName,
+        runtime: 'transformers.js'
       });
       
     } catch (error) {
       logger.warn('Failed to initialize NLI verifier, falling back to rules-only', { 
-        error: error instanceof Error ? error.message : String(error),
-        modelPath: this.modelPath
+        error: error instanceof Error ? error.message : String(error)
       });
       this.ready = false;
     }
   }
 
   /**
-   * Encode premise-hypothesis pair for MNLI model
-   * Uses real BERT tokenizer when available, falls back to enhanced stub
-   */
-  private async encodePair(premise: string, hypothesis: string): Promise<{
-    input_ids: Int32Array;
-    attention_mask: Int32Array;
-    token_type_ids: Int32Array;
-  }> {
-    const maxLength = 128;
-    
-    // Normalize: lowercase, collapse whitespace, strip zero-width chars
-    const normalizedPremise = premise.toLowerCase()
-      .replace(/\s+/g, ' ')
-      .replace(/[\u200B-\u200D\uFEFF]/g, '')
-      .trim();
-    const normalizedHypothesis = hypothesis.toLowerCase()
-      .replace(/\s+/g, ' ')
-      .replace(/[\u200B-\u200D\uFEFF]/g, '')
-      .trim();
-    
-    let input_ids: number[] = [];
-    let attention_mask: number[] = [];
-    let token_type_ids: number[] = [];
-    
-    if (this.tokenizer) {
-      // Use real BERT tokenizer
-      try {
-        const encoded = await this.tokenizer.encode(
-          { text: normalizedPremise, text_pair: normalizedHypothesis },
-          { padding: true, truncation: true, max_length: maxLength }
-        );
-        
-        input_ids = Array.from(encoded.input_ids);
-        attention_mask = Array.from(encoded.attention_mask);
-        token_type_ids = Array.from(encoded.token_type_ids ?? new Array(input_ids.length).fill(0));
-        
-      } catch (error) {
-        logger.warn('Real tokenizer failed, falling back to stub', {
-          error: error instanceof Error ? error.message : String(error)
-        });
-        // Fall through to stub tokenizer
-      }
-    }
-    
-    // Enhanced stub tokenizer fallback
-    if (input_ids.length === 0) {
-      const vocab = new Map<string, number>([
-        ['[CLS]', 101], ['[SEP]', 102], ['[PAD]', 0], ['[UNK]', 100]
-      ]);
-      
-      // Split budget ≈ ⅔ premise / ⅓ hypothesis
-      const premiseBudget = Math.floor((maxLength - 3) * 2 / 3); // Reserve 3 for special tokens
-      const hypothesisBudget = maxLength - 3 - premiseBudget;
-      
-      // Tokenize with budget constraints
-      const premiseTokens = normalizedPremise.split(/\s+/)
-        .filter(t => t.length > 0)
-        .slice(0, premiseBudget);
-      const hypothesisTokens = normalizedHypothesis.split(/\s+/)
-        .filter(t => t.length > 0)
-        .slice(0, hypothesisBudget);
-      
-      // Add tokens to vocab dynamically (stub behavior)
-      [...premiseTokens, ...hypothesisTokens].forEach((token, i) => {
-        if (!vocab.has(token)) {
-          vocab.set(token, i + 1000);
-        }
-      });
-      
-      // Build sequence: [CLS] premise [SEP] hypothesis [SEP]
-      const sequence = [
-        101, // [CLS]
-        ...premiseTokens.map(token => vocab.get(token) || 100), // premise
-        102, // [SEP]
-        ...hypothesisTokens.map(token => vocab.get(token) || 100), // hypothesis
-        102  // [SEP]
-      ];
-      
-      // Pad to fixed length
-      input_ids = [...sequence];
-      while (input_ids.length < maxLength) {
-        input_ids.push(0); // [PAD]
-      }
-      
-      // Create attention mask (1 for real tokens, 0 for padding)
-      attention_mask = input_ids.map(id => id === 0 ? 0 : 1);
-      
-      // Create token type IDs (0 for premise segment, 1 for hypothesis segment)
-      token_type_ids = new Array(maxLength).fill(0);
-      let inHypothesis = false;
-      let sepCount = 0;
-      
-      for (let i = 0; i < input_ids.length; i++) {
-        if (input_ids[i] === 102) { // [SEP]
-          sepCount++;
-          if (sepCount === 1) {
-            inHypothesis = true;
-          }
-        } else if (inHypothesis && input_ids[i] !== 0) {
-          token_type_ids[i] = 1;
-        }
-      }
-    }
-    
-    // Return Int32Array for web compatibility
-    return {
-      input_ids: new Int32Array(input_ids),
-      attention_mask: new Int32Array(attention_mask),
-      token_type_ids: new Int32Array(token_type_ids)
-    };
-  }
-
-  /**
-   * Score entailment between premise and hypothesis with timeout
+   * Score entailment between premise and hypothesis using transformers.js
    */
   async score(premise: string, hypothesis: string): Promise<NLIResult> {
     const startTime = Date.now();
     const inputLength = premise.length + hypothesis.length;
     
-    if (!this.ready || !this.session) {
+    if (!this.ready || !this.classifier) {
       this.addTelemetry({
         processingTimeMs: Date.now() - startTime,
         inputLength,
@@ -374,16 +202,44 @@ class NLILocalVerifier {
     }
 
     try {
-      // Wrap with timeout (300-500ms)
+      // Use zero-shot classification with entailment labels
+      const candidateLabels = ['contradiction', 'neutral', 'entailment'];
+      const sequence = `${premise} [SEP] ${hypothesis}`;
+      
+      // Timeout protection
       const timeoutMs = Number(process.env.NLI_TIMEOUT_MS || 400);
       const result = await Promise.race([
-        this.scoreInternal(premise, hypothesis, startTime, inputLength),
-        new Promise<NLIResult>((_, reject) => 
+        this.classifier(sequence, candidateLabels),
+        new Promise<any>((_, reject) => 
           setTimeout(() => reject(new Error('NLI timeout')), timeoutMs)
         )
       ]);
       
-      return result;
+      // Map results to our format
+      const scores = { entail: 0.33, contra: 0.33, neutral: 0.34 };
+      
+      if (result?.scores && result?.labels) {
+        for (let i = 0; i < result.labels.length; i++) {
+          const label = result.labels[i].toLowerCase();
+          const score = result.scores[i];
+          
+          if (label.includes('entail')) scores.entail = score;
+          else if (label.includes('contra')) scores.contra = score;
+          else if (label.includes('neutral')) scores.neutral = score;
+        }
+      }
+      
+      const maxScore = Math.max(scores.entail, scores.contra, scores.neutral);
+      
+      this.addTelemetry({
+        processingTimeMs: Date.now() - startTime,
+        inputLength,
+        confidence: maxScore,
+        fallbackUsed: false
+      });
+      
+      return scores;
+      
     } catch (error) {
       this.errorCount++;
       
@@ -397,86 +253,12 @@ class NLILocalVerifier {
       const isTimeout = error instanceof Error && error.message === 'NLI timeout';
       logger.warn(isTimeout ? 'NLI timeout' : 'NLI scoring failed', { 
         error: error instanceof Error ? error.message : String(error),
-        dataVersion: this.dataVersionHash,
         errorCount: this.errorCount,
         isTimeout
       });
       
-      // Retry once if error is transient (not timeout)
-      if (!isTimeout && this.errorCount <= this.maxRetries) {
-        try {
-          return await this.scoreInternal(premise, hypothesis, startTime, inputLength);
-        } catch (retryError) {
-          // Fall through to neutral return
-        }
-      }
-      
       return { entail: 0.33, contra: 0.33, neutral: 0.34 };
     }
-  }
-
-  /**
-   * Internal scoring method without timeout wrapper
-   */
-  private async scoreInternal(premise: string, hypothesis: string, startTime: number, inputLength: number): Promise<NLIResult> {
-    // Use proper MNLI encoding with premise-hypothesis pairs
-    const encoded = await this.encodePair(premise, hypothesis);
-    
-    // Create explicit ORT tensors with proper dtype (always int32 for web compatibility)
-    const ort = await import('onnxruntime-web');
-    
-    // Dynamically map inputs based on session.inputNames with fuzzy matching
-    const feeds: any = {};
-    const inNames = this.session.inputNames || ['input_ids', 'attention_mask', 'token_type_ids'];
-    const mapName = (re: RegExp) => inNames.find((n: string) => re.test(n));
-    
-    const idsName = mapName(/input.*ids|input_ids/i) ?? 'input_ids';
-    const attnName = mapName(/attn|attention/i) ?? 'attention_mask';
-    const typeName = mapName(/token.*type|segment/i); // may be undefined
-    
-    // Map standard BERT inputs to whatever the model expects
-    const inputMap = {
-      input_ids: encoded.input_ids,
-      attention_mask: encoded.attention_mask,
-      token_type_ids: encoded.token_type_ids
-    };
-    
-    [idsName, attnName].forEach((name) => {
-      feeds[name] = toTensor(ort, 'int32', inputMap[name as keyof typeof inputMap]);
-    });
-    
-    // Only feed token_type_ids if the model expects it
-    if (typeName && inputMap.token_type_ids) {
-      feeds[typeName] = toTensor(ort, 'int32', inputMap.token_type_ids);
-    }
-    
-    const results = await this.session.run(feeds);
-    
-    // Dynamically discover output name instead of hardcoding 'logits'
-    const outputName = this.session.outputNames?.[0] || 'logits';
-    const logits = Array.from(results[outputName].data) as number[];
-    
-    // Apply stable softmax with temperature
-    // MNLI outputs: [contradiction, neutral, entailment] (configurable order)
-    const probs = softmaxT(logits);
-    const order = this.labelOrder ?? ['contradiction', 'neutral', 'entailment'];
-    const idx = (lab: string) => order.indexOf(lab);
-    
-    const result = {
-      contra: probs[idx('contradiction')] ?? 0,
-      neutral: probs[idx('neutral')] ?? 0,
-      entail: probs[idx('entailment')] ?? 0
-    };
-    
-    // Track successful inference
-    this.addTelemetry({
-      processingTimeMs: Date.now() - startTime,
-      inputLength,
-      confidence: Math.max(...probs),
-      fallbackUsed: false
-    });
-    
-    return result;
   }
 
   /**

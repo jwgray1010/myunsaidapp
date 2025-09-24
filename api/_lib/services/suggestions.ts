@@ -1353,7 +1353,7 @@ class SuggestionsService {
     this.adviceEngine = new AdviceEngine(dataLoader);
     
     // Initialize NLI verifier for advice-message fit checking
-    nliLocal.init(process.env.NLI_ONNX_PATH).catch(() => {
+    nliLocal.init().catch(() => {
       // Silently fail - nliLocal.ready will be false
     });
     
