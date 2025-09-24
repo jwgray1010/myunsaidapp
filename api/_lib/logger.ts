@@ -197,7 +197,78 @@ export function withModule(moduleName: string, extra: Record<string, any> = {}):
   return logger.child({ module: moduleName, ...extra });
 }
 
-// Stable ID helper (kept for compatibility)
+// Stable ID helper (enhanced for request tracing)
 export function genId(prefix: string = 'id'): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
+}
+
+// Enhanced request ID generation with format control
+export function generateRequestId(prefix: string = 'req'): string {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 12);
+  return `${prefix}_${timestamp}_${random}`;
+}
+
+// Extract or generate request ID from Vercel request
+export function getRequestId(req: any): string {
+  // Priority: req.id > x-request-id header > x-trace-id > generate new
+  return req.id || 
+         req.headers['x-request-id'] || 
+         req.headers['x-trace-id'] ||
+         generateRequestId('req');
+}
+
+// Attach request ID to request object (for middleware use)
+export function attachRequestId(req: any): string {
+  if (!req.id) {
+    req.id = getRequestId(req);
+  }
+  return req.id;
+}
+
+// Create logger with request context (requestId + optional extra)
+export function withRequest(req: any, extra: Record<string, any> = {}): Logger {
+  const requestId = getRequestId(req);
+  return logger.child({ 
+    requestId, 
+    method: req.method,
+    url: req.url,
+    ...extra 
+  });
+}
+
+// Request ID middleware factory
+export function requestIdMiddleware() {
+  return (req: any, res: any, next?: () => void) => {
+    const requestId = attachRequestId(req);
+    
+    // Set response header for client tracing
+    res.setHeader('X-Request-Id', requestId);
+    
+    if (next) next();
+    return requestId;
+  };
+}
+
+// Time async operation with request tracing context
+export async function timeRequestOperation<T>(
+  req: any,
+  operationName: string,
+  operation: () => Promise<T>,
+  extra?: Record<string, any>
+): Promise<T> {
+  const startTime = Date.now();
+  const reqLogger = withRequest(req, extra);
+  
+  try {
+    reqLogger.debug(`Starting ${operationName}`);
+    const result = await operation();
+    const duration = Date.now() - startTime;
+    reqLogger.info(`Completed ${operationName}`, { duration_ms: duration });
+    return result;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    reqLogger.error(`Failed ${operationName}`, { duration_ms: duration, error });
+    throw error;
+  }
 }

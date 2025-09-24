@@ -33,22 +33,23 @@ export function withValidation<T>(schema: z.ZodSchema<T>, handler: (req: VercelR
       let data: any = {};
       
       if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
-        // Parse body for POST/PUT/PATCH requests
-        const body = await new Promise<string>((resolve) => {
-          let bodyStr = '';
-          req.on('data', (chunk) => {
-            bodyStr += chunk.toString();
+        // Use parsed body when available; fallback to manual parse
+        if (typeof (req as any).body === 'object' && (req as any).body !== null) {
+          data = (req as any).body;
+        } else {
+          // Fallback to streaming and manual parse
+          const raw = await new Promise<string>((resolve) => {
+            let s = '';
+            req.on('data', c => s += c);
+            req.on('end', () => resolve(s));
           });
-          req.on('end', () => {
-            resolve(bodyStr);
-          });
-        });
-        
-        if (body) {
-          try {
-            data = JSON.parse(body);
-          } catch (err) {
-            return badRequest(res, 'Invalid JSON in request body');
+          
+          if (raw) {
+            try {
+              data = JSON.parse(raw);
+            } catch {
+              return badRequest(res, 'Invalid JSON');
+            }
           }
         }
       } else {
@@ -85,18 +86,36 @@ export function withLogging(handler: Handler): Handler {
   return async (req: VercelRequest, res: VercelResponse) => {
     const start = Date.now();
     const { method, url } = req;
+    let logged = false;
     
     logger.info(`${method} ${url} - Started`);
+    
+    // Function to log completion
+    const logCompletion = () => {
+      if (!logged) {
+        const duration = Date.now() - start;
+        logger.info(`${method} ${url} - ${res.statusCode} ${duration}ms`);
+        logged = true;
+      }
+    };
     
     // Monkey patch res.end to capture response
     const originalEnd = res.end;
     res.end = function(chunk?: any, encoding?: any) {
-      const duration = Date.now() - start;
-      logger.info(`${method} ${url} - ${res.statusCode} ${duration}ms`);
+      logCompletion();
       return originalEnd.call(this, chunk, encoding);
     };
     
-    return handler(req, res);
+    try {
+      await handler(req, res);
+    } catch (error) {
+      // Ensure we log even if handler throws before res.end
+      logCompletion();
+      throw error;
+    } finally {
+      // Final safety net - log if neither path caught it
+      logCompletion();
+    }
   };
 }
 

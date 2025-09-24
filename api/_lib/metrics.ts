@@ -246,44 +246,80 @@ class MetricsRegistry {
     const lines: string[] = [];
     const now = Date.now();
     
-    // Counters
+    // Counters - group by metric name+labelset 
+    const countersByMetric = new Map<string, Map<string, number>>();
     Array.from(this.counters.entries()).forEach(([key, value]) => {
-      const [name] = key.split('_');
-      const labels = this.formatLabels(this.defaultLabels);
-      lines.push(`# TYPE ${name} counter`);
-      lines.push(`${name}${labels} ${value} ${now}`);
+      // Extract metric name and labels from key
+      const keyParts = key.split('_{"');
+      const metricName = keyParts[0];
+      const labelsJson = keyParts[1] ? '{"' + keyParts[1] : '{}';
+      
+      if (!countersByMetric.has(metricName)) {
+        countersByMetric.set(metricName, new Map());
+      }
+      countersByMetric.get(metricName)!.set(labelsJson, value);
     });
     
-    // Gauges
+    countersByMetric.forEach((labelMap, metricName) => {
+      lines.push(`# TYPE ${metricName} counter`);
+      labelMap.forEach((value, labelsJson) => {
+        const labels = labelsJson === '{}' ? this.defaultLabels : {...this.defaultLabels, ...JSON.parse(labelsJson)};
+        const formattedLabels = this.formatLabels(labels);
+        lines.push(`${metricName}${formattedLabels} ${value} ${now}`);
+      });
+    });
+    
+    // Gauges - group by metric name+labelset
+    const gaugesByMetric = new Map<string, Map<string, number>>();
     Array.from(this.gauges.entries()).forEach(([key, value]) => {
-      const [name] = key.split('_');
-      const labels = this.formatLabels(this.defaultLabels);
-      lines.push(`# TYPE ${name} gauge`);
-      lines.push(`${name}${labels} ${value} ${now}`);
+      const keyParts = key.split('_{"');
+      const metricName = keyParts[0];
+      const labelsJson = keyParts[1] ? '{"' + keyParts[1] : '{}';
+      
+      if (!gaugesByMetric.has(metricName)) {
+        gaugesByMetric.set(metricName, new Map());
+      }
+      gaugesByMetric.get(metricName)!.set(labelsJson, value);
     });
     
-    // Histograms (simplified buckets)
+    gaugesByMetric.forEach((labelMap, metricName) => {
+      lines.push(`# TYPE ${metricName} gauge`);
+      labelMap.forEach((value, labelsJson) => {
+        const labels = labelsJson === '{}' ? this.defaultLabels : {...this.defaultLabels, ...JSON.parse(labelsJson)};
+        const formattedLabels = this.formatLabels(labels);
+        lines.push(`${metricName}${formattedLabels} ${value} ${now}`);
+      });
+    });
+    
+    // Histograms - proper bucket format with per-metric-labelset buckets
     Array.from(this.histograms.entries()).forEach(([key, entries]) => {
       if (entries.length === 0) return;
       
-      const [name] = key.split('_');
-      const labels = this.formatLabels(this.defaultLabels);
+      const keyParts = key.split('_{"');
+      const metricName = keyParts[0];
+      const labelsJson = keyParts[1] ? '{"' + keyParts[1] : '{}';
+      const baseLabels = labelsJson === '{}' ? this.defaultLabels : {...this.defaultLabels, ...JSON.parse(labelsJson)};
+      
       const values = entries.map(e => e.value);
       const sum = values.reduce((a, b) => a + b, 0);
       const count = values.length;
       
-      lines.push(`# TYPE ${name} histogram`);
-      lines.push(`${name}_sum${labels} ${sum} ${now}`);
-      lines.push(`${name}_count${labels} ${count} ${now}`);
+      lines.push(`# TYPE ${metricName} histogram`);
       
-      // Add buckets
+      // Emit bucket{...le="X"} for each bucket
       for (const bucket of defaultHttpBuckets) {
         const bucketCount = values.filter(v => v <= bucket).length;
-        lines.push(`${name}_bucket{${this.formatLabelsInline({...this.defaultLabels, le: bucket.toString()})} ${bucketCount} ${now}`);
+        const bucketLabels = {...baseLabels, le: bucket.toString()};
+        lines.push(`${metricName}_bucket${this.formatLabels(bucketLabels)} ${bucketCount} ${now}`);
       }
       
-      const infCount = values.length;
-      lines.push(`${name}_bucket{${this.formatLabelsInline({...this.defaultLabels, le: '+Inf'})} ${infCount} ${now}`);
+      // +Inf bucket
+      const infLabels = {...baseLabels, le: '+Inf'};
+      lines.push(`${metricName}_bucket${this.formatLabels(infLabels)} ${count} ${now}`);
+      
+      // _sum and _count
+      lines.push(`${metricName}_sum${this.formatLabels(baseLabels)} ${sum} ${now}`);
+      lines.push(`${metricName}_count${this.formatLabels(baseLabels)} ${count} ${now}`);
     });
     
     return lines.join('\n');
@@ -294,8 +330,17 @@ class MetricsRegistry {
     return pairs.length > 0 ? `{${pairs.join(',')}}` : '';
   }
 
-  private formatLabelsInline(labels: Record<string, string>): string {
-    return Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',');
+  private formatLabelsInline(labels: Record<string, any>): string {
+    const pairs = Object.entries(labels)
+      .filter(([, value]) => value !== undefined && value !== null)
+      .map(([key, value]) => `${key}="${value}"`)
+      .sort(); // Consistent ordering
+    return pairs.join(', ');
+  }
+
+  // Helper for Prometheus metrics endpoint Content-Type
+  static getPrometheusContentType(): string {
+    return 'text/plain; version=0.0.4; charset=utf-8';
   }
 
   // Get raw metrics data
@@ -430,6 +475,10 @@ export const metricsRegistry = register;
 export function getPrometheusMetrics(): string {
   register.markServiceUp();
   return register.getPrometheusMetrics();
+}
+
+export function getPrometheusContentType(): string {
+  return 'text/plain; version=0.0.4; charset=utf-8';
 }
 
 // ---- Legacy exports for backwards compatibility ----

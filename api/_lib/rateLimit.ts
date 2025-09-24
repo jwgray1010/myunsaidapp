@@ -80,7 +80,8 @@ function firstIp(req: VercelRequest): string {
   const xff = (req.headers['x-forwarded-for'] as string) || '';
   const ip = xff.split(',')[0]?.trim() || 
              (req.headers['x-real-ip'] as string) ||
-             (req.socket?.remoteAddress ?? '');
+             req.socket?.remoteAddress ||
+             '';
   return ip || 'ip:unknown';
 }
 
@@ -97,7 +98,12 @@ export function createRateLimit(config: RateLimitConfig) {
     keyGenerator = defaultKeyGenerator,
     skipSuccessfulRequests = false,
     skipFailedRequests = false,
-    skip = (req) => req.method === 'OPTIONS' || req.url === '/api/health',
+    skip = (req) => {
+      // Default skip: true for OPTIONS, /api/health, /api/metrics
+      return req.method === 'OPTIONS' || 
+             req.url === '/api/health' || 
+             req.url === '/api/metrics';
+    },
     standardHeaders = true,
     legacyHeaders = false,
     message = 'Too many requests, please try again later.'
@@ -111,6 +117,13 @@ export function createRateLimit(config: RateLimitConfig) {
 
     const key = keyGenerator(req);
     const now = Date.now();
+
+    // Rolling cleanup: Clean up expired entries when accessing any key
+    Object.keys(store).forEach(k => {
+      if (store[k] && store[k].resetTime < now) {
+        delete store[k];
+      }
+    });
 
     // Clean up expired entries for this specific key
     if (store[key] && store[key].resetTime < now) {
@@ -140,7 +153,7 @@ export function createRateLimit(config: RateLimitConfig) {
     if (entry.count >= maxRequests) {
       const timeUntilReset = Math.ceil((entry.resetTime - now) / 1000);
       
-      // Set standard rate limit headers (like express-rate-limit)
+      // Set standard rate limit headers (RateLimit-*)
       if (standardHeaders) {
         res.setHeader('RateLimit-Limit', maxRequests);
         res.setHeader('RateLimit-Remaining', 0);
@@ -148,7 +161,7 @@ export function createRateLimit(config: RateLimitConfig) {
         res.setHeader('Retry-After', timeUntilReset);
       }
 
-      // Set legacy headers for backwards compatibility
+      // Set legacy headers (X-RateLimit-*) when legacyHeaders enabled
       if (legacyHeaders) {
         res.setHeader('X-RateLimit-Limit', maxRequests);
         res.setHeader('X-RateLimit-Remaining', 0);
@@ -287,7 +300,7 @@ export function createTieredRateLimit(userTier: 'free' | 'premium' | 'enterprise
     message: `${userTier} tier rate limit exceeded. Consider upgrading for higher limits.`,
     keyGenerator: (req) => {
       // Include user tier in the key for separate buckets
-      const ip = req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'unknown';
+      const ip = firstIp(req);
       return `${userTier}:${ip}`;
     }
   });

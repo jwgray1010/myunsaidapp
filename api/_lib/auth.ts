@@ -36,6 +36,34 @@ export interface AuthContext {
   permissions?: string[];
 }
 
+/// Extract Bearer token from Authorization header
+export function getBearerToken(req: VercelRequest): string | null {
+  const authHeader = (req.headers.authorization || req.headers.Authorization) as string | undefined;
+  if (!authHeader) return null;
+  
+  const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+  return match?.[1] || null;
+}
+
+/// Verify JWT token (stub implementation - JWKS integration later)
+export function verifyToken(token: string): AuthContext | null {
+  // TODO: Implement proper JWT verification with JWKS
+  // For now, return stub data for non-empty tokens
+  if (!token) return null;
+  
+  try {
+    // Placeholder: In production, decode and verify JWT properly
+    return {
+      userId: 'jwt-user-123', // Extract from verified token
+      isAuthenticated: true,
+      userEmail: 'user@example.com', // Extract from verified token
+      permissions: ['basic'] // Extract from verified token
+    };
+  } catch {
+    return null;
+  }
+}
+
 /// Normalize user ID to handle various input formats and invalid values
 function normalizeUserId(v: unknown): string {
   const raw = Array.isArray(v) ? v[0] : v;
@@ -48,36 +76,83 @@ function normalizeUserId(v: unknown): string {
 }
 
 export function extractUserId(req: VercelRequest): string {
-  return normalizeUserId(
-    req.headers['x-user-id'] ??
-    req.headers['user-id'] ??
-    req.query.userId ??
-    (req.body && (req.body as any).userId)
-  );
+  // First try Bearer token (production path)
+  const bearerToken = getBearerToken(req);
+  if (bearerToken) {
+    const tokenAuth = verifyToken(bearerToken);
+    if (tokenAuth) {
+      return tokenAuth.userId;
+    }
+  }
+
+  // Fallback to header auth only if explicitly allowed (dev mode)
+  if (process.env.ALLOW_HEADER_AUTH === '1') {
+    return normalizeUserId(
+      req.headers['x-user-id'] ??
+      req.headers['user-id'] ??
+      req.query.userId
+      // Removed req.body access to avoid unparsed body issues
+    );
+  }
+
+  return 'anonymous';
 }
 
 export function extractUserEmail(req: VercelRequest): string | undefined {
-  const email = 
-    req.headers['x-user-email'] ||
-    req.headers['user-email'] ||
-    req.query.email ||
-    req.body?.email;
+  // First try Bearer token (production path)
+  const bearerToken = getBearerToken(req);
+  if (bearerToken) {
+    const tokenAuth = verifyToken(bearerToken);
+    if (tokenAuth) {
+      return tokenAuth.userEmail;
+    }
+  }
+
+  // Fallback to header auth only if explicitly allowed (dev mode)
+  if (process.env.ALLOW_HEADER_AUTH === '1') {
+    const email = 
+      req.headers['x-user-email'] ||
+      req.headers['user-email'] ||
+      req.query.email;
+      // Removed req.body?.email to avoid unparsed body issues
     
-  return email as string | undefined;
+    return email as string | undefined;
+  }
+
+  return undefined;
 }
 
 export function getAuthContext(req: VercelRequest): AuthContext {
-  const userId = extractUserId(req);
-  const userEmail = extractUserEmail(req);
-  
-  // In a real implementation, you would validate JWT tokens here
-  const isAuthenticated = userId !== 'anonymous';
-  
+  // First try Bearer token (production path)
+  const bearerToken = getBearerToken(req);
+  if (bearerToken) {
+    const tokenAuth = verifyToken(bearerToken);
+    if (tokenAuth) {
+      return tokenAuth;
+    }
+  }
+
+  // Fallback to header-based auth only if explicitly allowed (dev mode)
+  if (process.env.ALLOW_HEADER_AUTH === '1') {
+    const userId = extractUserId(req);
+    const userEmail = extractUserEmail(req);
+    
+    const isAuthenticated = userId !== 'anonymous';
+    
+    return {
+      userId,
+      isAuthenticated,
+      userEmail,
+      permissions: isAuthenticated ? ['basic'] : []
+    };
+  }
+
+  // In production without valid Bearer token, return anonymous
   return {
-    userId,
-    isAuthenticated,
-    userEmail,
-    permissions: isAuthenticated ? ['basic'] : []
+    userId: 'anonymous',
+    isAuthenticated: false,
+    userEmail: undefined,
+    permissions: []
   };
 }
 
@@ -119,7 +194,7 @@ export function withAuth(handler: (req: VercelRequest, res: VercelResponse, auth
       logger.error('Handler error in withAuth', { error: (e as Error).message, userId: auth.userId });
       res.status(500).json({
         error: 'INTERNAL',
-        message: (e as Error).message,
+        message: 'Internal error', // Don't leak internal error details
         code: 'INTERNAL_ERROR'
       });
     }

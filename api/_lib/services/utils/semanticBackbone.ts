@@ -3,6 +3,12 @@
 
 import { dataLoader } from '../dataLoader';
 
+// Safe numeric helper
+const n = (x: unknown, d = 0): number => {
+  const v = Number(x);
+  return Number.isFinite(v) ? v : d;
+};
+
 export interface SemanticMatch {
   cluster: string;
   strength: number;
@@ -80,15 +86,17 @@ export function matchSemanticBackbone(
     let strength = 0;
     const matchedTerms: string[] = [];
 
-    // Check pattern matches (regex patterns) - apply saturation
+    // Check pattern matches (regex patterns) - apply saturation with match cap
     let patternMatchCount = 0;
     patterns.forEach((pattern: string) => {
       try {
         const regex = new RegExp(pattern, 'gi');
         const patternMatches = normalizedText.match(regex);
         if (patternMatches) {
-          patternMatchCount += patternMatches.length;
-          matchedTerms.push(...patternMatches);
+          // Cap pattern matches to prevent runaway patterns
+          const cappedMatches = Math.min(patternMatches.length, 10);
+          patternMatchCount += cappedMatches;
+          matchedTerms.push(...patternMatches.slice(0, 10)); // Only add first 10 matches
         }
       } catch (e) {
         // Skip invalid regex patterns
@@ -97,23 +105,30 @@ export function matchSemanticBackbone(
     const patternEff = sat(patternMatchCount, 3);
     strength += patternEff * 0.8; // High weight for pattern matches
 
-    // Check keyword matches - apply saturation and word boundaries
+    // Check keyword matches - apply saturation and word boundaries with match cap
     let keywordMatchCount = 0;
     keywords.forEach((keyword: string) => {
-      const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const keywordRegex = new RegExp(`\\b${escapedKeyword.toLowerCase()}\\b`, 'gi');
-      const keywordMatches = normalizedText.match(keywordRegex);
-      if (keywordMatches) {
-        keywordMatchCount += keywordMatches.length;
-        matchedTerms.push(...keywordMatches);
+      try {
+        const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const keywordRegex = new RegExp(`\\b${escapedKeyword}\\b`, 'g'); // Removed 'i' flag since text is already lowercased
+        const keywordMatches = normalizedText.match(keywordRegex);
+        if (keywordMatches) {
+          // Cap keyword matches to prevent runaway patterns  
+          const cappedMatches = Math.min(keywordMatches.length, 10);
+          keywordMatchCount += cappedMatches;
+          matchedTerms.push(...keywordMatches.slice(0, 10)); // Only add first 10 matches
+        }
+      } catch (e) {
+        // Skip invalid regex patterns
       }
     });
     const keywordEff = sat(keywordMatchCount, 3);
     strength += keywordEff * 0.6; // Medium weight for keywords
 
-    // Check phrase matches - apply saturation
+    // Check phrase matches - apply saturation with match cap
     let phraseMatchCount = 0;
     phrases.forEach((phrase: string) => {
+      if (phraseMatchCount >= 10) return; // Cap phrase matches
       if (normalizedText.includes(phrase.toLowerCase())) {
         phraseMatchCount += 1;
         matchedTerms.push(phrase);
@@ -164,11 +179,11 @@ export function matchSemanticBackbone(
   // Calculate context shifts based on semantic matches
   const contextShift: Record<string, number> = {};
   matches.forEach(match => {
-    const clusterData = clusters[match.cluster] as SemanticClusterData;
-    const contextBias = clusterData.context_bias || {};
+    const clusterData = (clusters as Record<string, SemanticClusterData>)[match.cluster] ?? {};
+    const contextBias = clusterData?.context_bias || {};
     Object.entries(contextBias).forEach(([context, weight]) => {
       const currentShift = contextShift[context] || 0;
-      const newShift = currentShift + (weight * match.strength * 0.1);
+      const newShift = currentShift + (n(weight) * match.strength * 0.1);
       contextShift[context] = clamp01(newShift);
     });
   });
@@ -201,18 +216,20 @@ export function applySemanticBias(
   // Apply tone bias from semantic cluster
   const adjustedDistribution = { ...toneDistribution };
   Object.entries(toneBias).forEach(([tone, bias]) => {
-    if (typeof bias === 'number' && adjustedDistribution[tone] !== undefined) {
-      const currentValue = adjustedDistribution[tone];
-      const biasedValue = currentValue + (bias * semanticResult.allMatches[0]?.strength * 0.1);
+    if (adjustedDistribution[tone] !== undefined) {
+      const currentValue = n(adjustedDistribution[tone]);
+      const biasValue = n(bias);
+      const primaryStrength = semanticResult.allMatches[0]?.strength || 0;
+      const biasedValue = currentValue + (biasValue * n(primaryStrength) * 0.1);
       adjustedDistribution[tone] = clamp01(biasedValue);
     }
   });
 
   // Normalize distribution
-  const total = Object.values(adjustedDistribution).reduce((sum, val) => sum + val, 0);
+  const total = Object.values(adjustedDistribution).reduce((sum, val) => sum + n(val), 0);
   if (total > 0) {
     Object.keys(adjustedDistribution).forEach(key => {
-      adjustedDistribution[key] /= total;
+      adjustedDistribution[key] = n(adjustedDistribution[key]) / total;
     });
   }
 
