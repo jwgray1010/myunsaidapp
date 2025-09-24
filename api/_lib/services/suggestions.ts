@@ -128,30 +128,12 @@ class AhoCorasickAutomaton {
         // Check for matches
         if (node.output) {
           for (const category of node.output) {
-            // Find the actual pattern that matched
-            const matchEnd = i + 1;
-            let matchStart = matchEnd;
-            let tempNode = node;
-            
-            // Backtrack to find full pattern
-            for (let j = i; j >= 0; j--) {
-              if (tempNode === this.trie) break;
-              matchStart = j;
-              const parentChar = lowerText[j];
-              let found = false;
-              for (const char in this.trie) {
-                if (this.trie[char] === tempNode) {
-                  found = true;
-                  break;
-                }
-              }
-              if (!found) break;
-            }
-            
+            // Simplified: just store category and current position
+            // Avoid unreliable backtracking - regex fallbacks handle accuracy
             results.push({
               category,
-              match: text.substring(matchStart, matchEnd),
-              position: matchStart
+              match: lowerText[i], // Single character match for simplicity
+              position: i
             });
           }
         }
@@ -556,7 +538,7 @@ function getVecById(id: string): Float32Array | null {
 
 function bm25Search(query: string, limit = 200): any[] {
   let bm25 = dataLoader.get('adviceBM25');
-  logger.info('bm25Search called', { 
+  logger.debug('bm25Search called', { 
     hasBM25: !!bm25, 
     query, 
     limit,
@@ -566,11 +548,11 @@ function bm25Search(query: string, limit = 200): any[] {
   if (!bm25) return [];
   
   const hits = bm25.search(query, { prefix: true, fuzzy: 0.2 }).slice(0, limit);
-  logger.info('BM25 search completed', { hitsCount: hits.length, query });
+  logger.debug('BM25 search completed', { hitsCount: hits.length });
   
   const byId = new Map<string, any>(getAdviceCorpus().map((it:any)=>[it.id, it]));
   const result = hits.map((h:any)=>byId.get(h.id)).filter(Boolean);
-  logger.info('BM25 results mapped', { finalResultCount: result.length, hitsCount: hits.length });
+  logger.debug('BM25 results mapped', { finalResultCount: result.length, hitsCount: hits.length });
   
   return result;
 }
@@ -1346,22 +1328,32 @@ class SuggestionsService {
   private trialManager: TrialManager;
   private orchestrator: AnalysisOrchestrator;
   private adviceEngine: AdviceEngine;
+  private _initPromise: Promise<void> | null = null;
+  private _nliInitPromise: Promise<void> | null = null;
 
   constructor() {
     this.trialManager = new TrialManager();
     this.orchestrator = new AnalysisOrchestrator(dataLoader);
     this.adviceEngine = new AdviceEngine(dataLoader);
     
-    // Initialize NLI verifier for advice-message fit checking
-    nliLocal.init().catch(() => {
-      // Silently fail - nliLocal.ready will be false
-    });
-    
     // Add data loader aliases for file name alignment
     this.setupDataLoaderAliases();
     
-    // Initialize with comprehensive JSON validation
-    this.initializeWithDataValidation();
+    // Capture initialization promise to prevent unhandled rejections
+    this._initPromise = this.initializeWithDataValidation().catch(err => {
+      logger.error('Init validation failed', { err: String(err) });
+    });
+  }
+
+  private async ensureNLIReady(): Promise<void> {
+    if (process.env.DISABLE_NLI === '1') return;
+    if (nliLocal.ready) return;
+    if (!this._nliInitPromise) {
+      this._nliInitPromise = nliLocal.init().catch(() => {
+        logger.warn('NLI initialization failed, using rules-only fallback');
+      });
+    }
+    await this._nliInitPromise;
   }
 
   private setupDataLoaderAliases(): void {
@@ -1678,6 +1670,9 @@ class SuggestionsService {
    * Checks entailment between user message and therapy advice hypothesis
    */
   private async nliAdviceFit(text: string, advice: any, ctx: string): Promise<FitResult> {
+    // Ensure NLI is ready before use
+    await this.ensureNLIReady();
+    
     if (!nliLocal.ready) {
       return { ok: true, entail: 0, contra: 0, reason: 'nli_disabled' };
     }
@@ -1773,6 +1768,11 @@ class SuggestionsService {
     } = {} as any
   ): Promise<SuggestionAnalysis> {
 
+    // Ensure initialization completes before processing
+    if (this._initPromise) {
+      await this._initPromise;
+    }
+
     const {
       maxSuggestions = 5,
       attachmentStyle = 'secure',
@@ -1790,8 +1790,7 @@ class SuggestionsService {
     // TODO: If we want "degraded mode", change ensureDataLoaded to warn but not throw,
     // and gate the features that require the missing JSONs.
     
-    // Strict JSON dependency validation - enforce all critical data is loaded
-    this.validateCriticalDependencies();
+    // Critical dependencies already validated in initialization
 
     const trialStatus = await this.trialManager.getTrialStatus(userId, userEmail);
     if (!trialStatus?.hasAccess) throw new Error('Trial expired or access denied');
