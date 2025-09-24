@@ -10,7 +10,7 @@ let tokenizer: AutoTokenizer | null = null;
 // Data directory for Cloud Run (all config files are local)
 const DATA_DIR = join(process.cwd(), 'data');
 
-app.addHook('onRequest', async (req, reply) => {
+app.addHook('onRequest', async (req: any, reply: any) => {
   const authHeader = req.headers.authorization;
   const expectedToken = process.env.INF_TOKEN;
 
@@ -21,7 +21,7 @@ app.addHook('onRequest', async (req, reply) => {
 
 app.get('/healthz', async () => ({ ok: true, timestamp: new Date().toISOString() }));
 
-app.post('/tone', async (req, reply) => {
+app.post('/tone', async (req: any, reply: any) => {
   const { text } = req.body as { text?: string } ?? {};
   if (!text) return reply.code(400).send({ error: 'text required' });
 
