@@ -20,7 +20,7 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          project_id: unsaid-46587
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
 
@@ -29,12 +29,12 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          gcloud builds submit --tag us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/inference/${{ secrets.SERVICE_NAME || 'unsaid-inference' }}:latest .
+          gcloud builds submit --tag us-central1-docker.pkg.dev/unsaid-46587/inference/unsaid-inference:latest .
 
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy ${{ secrets.SERVICE_NAME || 'unsaid-inference' }} \
-            --image us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/inference/${{ secrets.SERVICE_NAME || 'unsaid-inference' }}:latest \
+          gcloud run deploy unsaid-inference \
+            --image us-central1-docker.pkg.dev/unsaid-46587/inference/unsaid-inference:latest \
             --platform managed \
             --allow-unauthenticated \
             --port 8080 \
