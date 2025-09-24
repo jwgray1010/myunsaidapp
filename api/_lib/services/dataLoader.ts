@@ -608,7 +608,10 @@ export type AdviceItem = z.infer<typeof AdviceItem>;
 // Normalization Functions
 // ============================
 export function normalizeAdvice(db: any): AdviceItem[] {
-  const items = (db?.items ?? []).map((raw: any) => {
+  // Handle both direct array format and object with items property
+  const rawItems = Array.isArray(db) ? db : (db?.items ?? []);
+  
+  const items = rawItems.map((raw: any) => {
     const merged = {
       ...raw,
       keywords: [

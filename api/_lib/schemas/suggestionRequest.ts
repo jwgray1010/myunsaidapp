@@ -137,7 +137,7 @@ export const originalAnalysisSchema = z.object({
   communication_patterns: z.array(z.string()).optional().describe('Identified communication patterns'),
   
   // UI consistency fields
-  ui_tone: z.enum(['clear','caution','alert']).optional().describe('UI bucket for the pill color'),
+  ui_tone: z.enum(['clear','caution','alert','neutral']).optional().describe('UI bucket for the pill color'),
   ui_distribution: z.object({
     clear: z.number().min(0).max(1).optional(),
     caution: z.number().min(0).max(1).optional(),
@@ -156,7 +156,7 @@ export const responseMetadataSchema = z.object({
   attachment_style_applied: z.string().optional(),
   
   // Enhanced analysis tracking
-  tone_analysis_source: z.enum(['coordinator_cache', 'fresh_analysis', 'override']).optional().describe('Source of tone analysis data'),
+  tone_analysis_source: z.enum(['coordinator_cache', 'fresh_analysis', 'override', 'missing']).optional().describe('Source of tone analysis data'),
   complete_analysis_available: z.boolean().optional().describe('Whether complete linguistic and contextual analysis was available'),
   linguistic_features_used: z.boolean().optional().describe('Whether linguistic features were available and used'),
   context_analysis_used: z.boolean().optional().describe('Whether context analysis was available and used'),
@@ -179,7 +179,7 @@ export const suggestionResponseSchema = z.object({
   suggestions: z.array(suggestionItemSchema),
   original_analysis: originalAnalysisSchema.optional(),
   metadata: responseMetadataSchema,
-  ui_tone: z.enum(['clear','caution','alert']).optional(),
+  ui_tone: z.enum(['clear','caution','alert','neutral']).optional(),
   ui_distribution: z.object({
     clear: z.number().min(0).max(1).optional(),
     caution: z.number().min(0).max(1).optional(),
