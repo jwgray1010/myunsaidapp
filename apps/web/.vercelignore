@@ -1,0 +1,30 @@
+# Never ship model files or data files to Vercel
+services/
+data/
+**/models/**
+*.onnx
+tokenizer.json
+vocab.json
+merges.txt
+config.json
+
+# Exclude Flutter/iOS/Android build artifacts
+build/
+ios/
+android/
+lib/
+pubspec.yaml
+pubspec.lock
+
+# Exclude test files
+test-*.js
+test-*.swift
+debug-*.js
+debug-*.swift
+
+# Exclude development and non-API files
+.env*
+!.env.example
+cron/
+debug/
+**/_*/

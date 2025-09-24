@@ -1,0 +1,37 @@
+name: Deploy Cloud Run
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'services/inference/**'
+      - '.github/workflows/deploy-cloud-run.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/inference
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+
+      - name: Deploy to Cloud Run (build from source)
+        run: |
+          gcloud run deploy "${{ secrets.SERVICE_NAME || 'unsaid-inference' }}" \
+            --source . \
+            --region "${{ secrets.GCP_REGION }}" \
+            --platform managed \
+            --allow-unauthenticated=false \
+            --port 8080 \
+            --memory 512Mi \
+            --cpu 1 \
+            --concurrency 20 \
+            --max-instances 50

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "buildCommand": "npm install --package-lock-only",
+  "installCommand": "npm ci --only=production",
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "@vercel/node@3.0.21"
+    }
+  },
+  "routes": [
+    { "src": "^/api/v1/(.*)$", "dest": "/api/v1/$1" },
+    { "src": "^/api/(.*)$",    "dest": "/api/v1/$1" },
+    { "src": "^/(.*)$",        "dest": "/api/v1/index" }
+  ]
+}
