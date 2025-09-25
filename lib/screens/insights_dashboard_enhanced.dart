@@ -41,6 +41,10 @@ class InsightsDashboardEnhanced extends StatefulWidget {
 
 class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+  // *** PRESENTATION MODE ENABLED - REMOVE ALL DEMO DATA AFTER PRESENTATION ***
+  // Search for "*** DEMO DATA" to find all fake data sections
+  // *** END DEMO DATA INDICATOR ***
+
   late final TabController _tabs;
   final _storage = SecureStorageService();
   final _keyboard = KeyboardManager();
@@ -192,6 +196,14 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
   }
 
   int _computeStreakDays() {
+    // *** DEMO DATA - REMOVE AFTER PRESENTATION ***
+    // Return fake streak for presentation
+    const useDemoData = true;
+    if (useDemoData) {
+      return 5; // Demo: 5-day streak
+    }
+    // *** END DEMO DATA ***
+
     final history = _keyboard.analysisHistory.toList();
     final now = DateTime.now();
     int streak = 0;
@@ -479,6 +491,24 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
 
   Future<void> _computeBehaviorScores() async {
     final history = _keyboard.analysisHistory.toList();
+
+    // *** DEMO DATA - REMOVE AFTER PRESENTATION ***
+    // Force demo scores for presentation
+    const useDemoData = true;
+    if (useDemoData) {
+      if (!mounted) return;
+      setState(() {
+        _secureProgressScore = 78; // Demo: Good secure communication progress
+        _secureHabitsScore = 82; // Demo: Strong habit formation
+        _repairEffectivenessScore = 71; // Demo: Decent repair attempts
+        _progressHasData = true; // Show all progress circles
+        _habitsHasData = true;
+        _repairHasData = true;
+      });
+      return;
+    }
+    // *** END DEMO DATA ***
+
     // Secure Progress (existing logic - last 10 messages constructive ratio)
     final recentProgress = history.take(10).toList();
     final constructive = recentProgress.where((m) {
@@ -589,6 +619,20 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
   }
 
   Map<String, dynamic> _buildSummary(Map<String, dynamic>? analytics) {
+    // *** DEMO DATA - REMOVE AFTER PRESENTATION ***
+    // Return fake summary for presentation
+    const useDemoData = true;
+    if (useDemoData) {
+      return {
+        'ready': true,
+        'samples': 247, // Demo: Good sample size
+        'style': 'Positive & Clear', // Demo: Good communication style
+        'score': 78, // Demo: Strong communication score
+        'range': 'Consistently constructive', // Demo: Positive trend
+      };
+    }
+    // *** END DEMO DATA ***
+
     if (analytics == null || analytics.isEmpty) {
       return {
         'ready': false,
@@ -1248,7 +1292,65 @@ class _InsightsDashboardEnhancedState extends State<InsightsDashboardEnhanced>
 
   // Analytics Tab
   Widget _analyticsTab() {
-    final history = _keyboard.analysisHistory;
+    var history = _keyboard.analysisHistory;
+
+    // *** DEMO DATA - REMOVE AFTER PRESENTATION ***
+    // Add fake history for presentation
+    const useDemoData = true;
+    if (useDemoData && history.isEmpty) {
+      final now = DateTime.now();
+      history = [
+        {
+          'dominant_tone': 'positive',
+          'confidence': 0.89,
+          'timestamp': now
+              .subtract(const Duration(minutes: 15))
+              .toIso8601String(),
+          'original_message': 'Thanks for understanding, that really helps',
+        },
+        {
+          'dominant_tone': 'neutral',
+          'confidence': 0.72,
+          'timestamp': now.subtract(const Duration(hours: 2)).toIso8601String(),
+          'original_message': 'Let me know what works best for you',
+        },
+        {
+          'dominant_tone': 'positive',
+          'confidence': 0.84,
+          'timestamp': now.subtract(const Duration(hours: 6)).toIso8601String(),
+          'original_message': 'I appreciate you taking the time to explain',
+        },
+        {
+          'dominant_tone': 'caution',
+          'confidence': 0.67,
+          'timestamp': now.subtract(const Duration(days: 1)).toIso8601String(),
+          'original_message': 'I feel like we keep having this same issue',
+        },
+        {
+          'dominant_tone': 'positive',
+          'confidence': 0.91,
+          'timestamp': now
+              .subtract(const Duration(days: 1, hours: 3))
+              .toIso8601String(),
+          'original_message': 'Could we try a different approach?',
+        },
+        {
+          'dominant_tone': 'neutral',
+          'confidence': 0.75,
+          'timestamp': now.subtract(const Duration(days: 2)).toIso8601String(),
+          'original_message': 'What would be most helpful right now?',
+        },
+        {
+          'dominant_tone': 'positive',
+          'confidence': 0.87,
+          'timestamp': now.subtract(const Duration(days: 3)).toIso8601String(),
+          'original_message':
+              'I hear what you\'re saying and I want to work together',
+        },
+      ];
+    }
+    // *** END DEMO DATA ***
+
     if (history.isEmpty) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(16),

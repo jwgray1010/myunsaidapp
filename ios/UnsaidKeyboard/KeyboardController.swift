@@ -125,7 +125,7 @@ final class KeyboardController: UIView,
     private var isNetworkReachable = true // Track network state for UI updates
     
     // MARK: - Suggestion Gating
-    private var suggestionsArmed = false
+    internal var suggestionsArmed = false // Accessible to SuggestionChipManager
     private var suggestionCooldownUntil: CFTimeInterval = 0
     private let suggestionCooldown: CFTimeInterval = 0.8
     

@@ -131,7 +131,11 @@ export const suggestionItemSchema = z.object({
   meta: z.object({
     contexts: z.array(z.string()).optional(),
     contextLink: z.array(z.string()).optional(),
-    triggerTone: z.string().optional(),
+    triggerTone: z.union([
+      z.enum(['clear','caution','alert']),
+      z.string(),
+      z.array(z.string())
+    ]).optional(),
     attachmentStyles: z.array(z.string()).optional(),
     intent: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
@@ -189,6 +193,13 @@ export const originalAnalysisSchema = z.object({
     caution: z.number().min(0).max(1).optional(),
     alert: z.number().min(0).max(1).optional(),
   }).optional().describe('Original distribution from server before adjustments'),
+  
+  // ← NEW: trigger tone fields for search and matching
+  triggerTone: z.union([
+    z.enum(['clear','caution','alert']),
+    z.string()
+  ]).optional().describe('Legacy single trigger tone value (level fallback)'),
+  trigger_tone_tags: z.array(z.string()).optional().describe('Array of raw tone tags (21-label set) for search matching'),
   
   // UI consistency fields (adjusted for suggestions context)
   ui_tone: z.enum(['clear','caution','alert','neutral']).optional().describe('UI bucket for the pill color (adjusted)'),

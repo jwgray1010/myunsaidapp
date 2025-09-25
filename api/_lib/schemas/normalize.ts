@@ -2,8 +2,29 @@
 import { suggestionResponseSchema } from './suggestionRequest';
 
 type Bucket = 'clear' | 'caution' | 'alert';
+type Level = 'clear' | 'caution' | 'alert';
 
 type Dist = Record<Bucket, number>;
+
+const RAW_TONES = new Set([
+  'neutral','positive','supportive','anxious','angry','frustrated','sad','assertive','safety_concern',
+  'withdrawn','apologetic','curious','dismissive','defensive','jealous_insecure','catastrophizing',
+  'minimization','playful','reflective','logistical','confused_ambivalent'
+]);
+
+function normalizeTriggerTags(input: unknown): { level?: Level; tags: string[] } {
+  if (input == null) return { tags: [] };
+  const arr = Array.isArray(input) ? input : [input];
+  const tags = arr
+    .map(v => String(v).trim().toLowerCase())
+    .filter(Boolean);
+
+  // keep any of the 21 raw tones + pass through legacy level words
+  const hasLevel = tags.find(t => t === 'clear' || t === 'caution' || t === 'alert') as Level | undefined;
+  const rawTags = [...new Set(tags.filter(t => RAW_TONES.has(t)))];
+
+  return { level: hasLevel, tags: rawTags };
+}
 
 function clamp01(n: unknown): number {
   const x = typeof n === 'number' ? n : Number(n);
@@ -261,6 +282,13 @@ function mergeToneAliases(src: any) {
 function buildOriginalAnalysis(parsed: any, uiTone: Bucket, dist: Dist) {
   const u = mergeToneAliases(parsed);
 
+  // ← NEW: capture trigger tones but do NOT let them override uiTone
+  const tFrom =
+    parsed?.triggerTone ??
+    parsed?.original_analysis?.triggerTone ??
+    parsed?.toneAnalysis?.triggerTone;
+  const trig = normalizeTriggerTags(tFrom);
+
   // ✅ DETECT LEARNING SIGNALS from text
   const originalText = parsed?.text || parsed?.original_text || '';
   const learningSignals = detectCommunicationPatterns(originalText);
@@ -309,6 +337,10 @@ function buildOriginalAnalysis(parsed: any, uiTone: Bucket, dist: Dist) {
     // bucket helpers
     ui_tone: pickTone({ ui_tone: u.ui_tone, tone: u.tone }, dist),
     ui_distribution: dist,
+
+    // ← NEW: carry both forms for matching
+    triggerTone: trig.level ?? pickTone({ ui_tone: u.ui_tone, tone: u.tone }, dist), // keep legacy single value (non-breaking)
+    trigger_tone_tags: trig.tags, // the 21-label raw set for matching
 
     // emotion/sentiment/intensity
     sentiment,
@@ -467,6 +499,12 @@ export function normalizeSuggestionResponse(raw: unknown) {
   if (![b.clear, b.caution, b.alert].every(Number.isFinite)) {
     base.ui_distribution = normalizeDist({ clear: 1, caution: 0, alert: 0 });
   }
+
+  // ✅ SEARCH TAGS ASSEMBLY - add these to your search index tags/keywords array:
+  // const levelTag = `level:${base.ui_tone}`;              // e.g., level:alert
+  // const rawTags = (base.original_analysis?.trigger_tone_tags ?? [])
+  //   .map((t: string) => `tone:${t}`);                    // e.g., tone:angry, tone:reflective
+  // doc.tags = [...doc.tags, levelTag, ...rawTags];
 
   return base;
 }
