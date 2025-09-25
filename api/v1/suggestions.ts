@@ -6,7 +6,6 @@ import { suggestionResponseSchema } from '../_lib/schemas/suggestionRequest';
 import { normalizeSuggestionResponse } from '../_lib/schemas/normalize';
 import { suggestionsService } from '../_lib/services/suggestions';
 import { dataLoader } from '../_lib/services/dataLoader';
-import { mapToneToBuckets, toneAnalysisService } from '../_lib/services/toneAnalysis';
 import { adjustToneByAttachment, applyThresholdShift } from '../_lib/services/utils/attachmentToneAdjust';
 import { CommunicatorProfile } from '../_lib/services/communicatorProfile';
 import { logger } from '../_lib/logger';
@@ -61,23 +60,25 @@ function isValidSuggestionInputV1(body: any): { success: boolean; data?: Suggest
   }
 
   // Generate missing optional fields with defaults
-  const normalizedBody = {
+  const normalizedBody: SuggestionInputV1 = {
     ...body,
     text_sha256: body.text_sha256 || generateTextSHA256(body.text || ''),
-    compose_id: body.compose_id || `compose-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    client_seq: body.client_seq || 1,
-    toneAnalysis: body.toneAnalysis || {
-      ui_tone: 'neutral',
-      ui_distribution: { clear: 0.33, caution: 0.33, alert: 0.34 },
-      analysis: { primary_tone: 'neutral', confidence: 0.5 }
-    }
+    compose_id: body.compose_id || `compose-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+    client_seq: Number.isFinite(body.client_seq) ? body.client_seq : 1,
+    toneAnalysis: {
+      classification: body.toneAnalysis?.classification ?? 'neutral',
+      confidence: Number.isFinite(body.toneAnalysis?.confidence) ? body.toneAnalysis.confidence : 0.5,
+      ui_distribution: body.toneAnalysis?.ui_distribution ?? { clear: 0.34, caution: 0.33, alert: 0.33 },
+      intensity: Number.isFinite(body.toneAnalysis?.intensity) ? body.toneAnalysis.intensity : 0.5,
+    },
   };
   
-  return { success: true, data: normalizedBody as SuggestionInputV1 };
+  return { success: true, data: normalizedBody };
 }
 
 // Request deduplication and ordering cache (in-memory for now)
 interface RequestCacheEntry {
+  userId: string;
   compose_id: string;
   client_seq: number;
   text_sha256: string;
@@ -107,8 +108,8 @@ function cleanupCache() {
   }
 }
 
-function getCacheKey(compose_id: string, client_seq: number, text_sha256: string): string {
-  return `${compose_id}:${client_seq}:${text_sha256}`;
+function getCacheKey(userId: string, compose_id: string, client_seq: number, text_sha256: string): string {
+  return `${userId}:${compose_id}:${client_seq}:${text_sha256}`;
 }
 
 function getUserId(req: VercelRequest): string {
@@ -140,7 +141,7 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
     
     res.status(400).json({
       success: false,
-      error: 'Invalid request format. Required: text, text_sha256, client_seq, compose_id, toneAnalysis, context, attachmentStyle',
+      error: 'Invalid request format. Required: text, context, attachmentStyle. Other fields are auto-filled if missing (compose_id, client_seq, text_sha256, toneAnalysis).',
       details: validation.error,
       contract_version: 'v1'
     });
@@ -167,27 +168,23 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
     return;
   }
   
-  // STEP 3: Validate UI distribution sums correctly
-  if (!validateUIDistribution(data.toneAnalysis.ui_distribution)) {
-    logger.error('Invalid UI distribution - does not sum to 1', {
+  // STEP 3: Validate UI distribution sums correctly (defensive)
+  if (!data.toneAnalysis?.ui_distribution || !validateUIDistribution(data.toneAnalysis.ui_distribution)) {
+    // Be defensive: normalize instead of hard-failing
+    data.toneAnalysis.ui_distribution = normalizeBuckets(data.toneAnalysis.ui_distribution || { clear: 0.34, caution: 0.33, alert: 0.33 });
+    logger.warn('Invalid UI distribution normalized', {
       userId,
       compose_id: data.compose_id,
       client_seq: data.client_seq,
-      distribution: data.toneAnalysis.ui_distribution,
+      original_distribution: data.toneAnalysis?.ui_distribution,
+      normalized_distribution: data.toneAnalysis.ui_distribution,
       timestamp: new Date().toISOString()
     });
-    
-    res.status(400).json({
-      success: false,
-      error: 'Invalid UI distribution. clear + caution + alert must sum to ~1',
-      contract_version: 'v1'
-    });
-    return;
   }
   
   // STEP 4: Check for duplicate requests (idempotency)
   cleanupCache(); // Clean up old entries
-  const cacheKey = getCacheKey(data.compose_id, data.client_seq, data.text_sha256);
+  const cacheKey = getCacheKey(userId, data.compose_id, data.client_seq, data.text_sha256);
   const existing = requestCache.get(cacheKey);
   
   if (existing) {
@@ -207,10 +204,10 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
   }
   
   // STEP 5: Check client_seq ordering (prevent out-of-order requests)
-  // Find the highest client_seq for this compose_id
+  // Find the highest client_seq for this user + compose_id combination
   let maxSeqForCompose = -1;
   for (const entry of requestCache.values()) {
-    if (entry.compose_id === data.compose_id && entry.client_seq > maxSeqForCompose) {
+    if (entry.userId === userId && entry.compose_id === data.compose_id && entry.client_seq > maxSeqForCompose) {
       maxSeqForCompose = entry.client_seq;
     }
   }
@@ -325,38 +322,6 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
     // The service will handle both UI tones (clear/caution/alert) and raw tones (assertive, etc.)
     const rawToneClassification = data.toneAnalysis.classification;
     const toneKeyNorm = rawToneClassification; // Keep original raw tone for therapy advice matching
-    
-    // Only normalize for UI bucketing purposes later, but use raw tone for suggestions matching
-    const uiToneForBucketing = (() => {
-      switch (rawToneClassification) {
-        case 'clear':
-        case 'caution': 
-        case 'alert':
-          return rawToneClassification;
-        case 'neutral':
-        case 'assertive':
-        case 'supportive':
-        case 'positive':
-          return 'clear'; // These raw tones map to clear UI bucket
-        case 'frustrated':
-        case 'anxious':
-        case 'sad':
-          return 'caution'; // These raw tones map to caution UI bucket
-        case 'angry':
-        case 'hostile':
-        case 'safety_concern':
-          return 'alert'; // These raw tones map to alert UI bucket
-        case 'insufficient':
-          return 'clear'; // Insufficient data maps to clear (safe default)
-        default:
-          logger.info('Using raw tone classification for therapy advice matching', { 
-            classification: rawToneClassification,
-            compose_id: data.compose_id,
-            ui_bucket_fallback: 'clear'
-          });
-          return 'clear' as const;
-      }
-    })();
     
     // Generate suggestions using the dedicated service with canonical tone analysis
     logger.info('About to call suggestionsService.generateAdvancedSuggestions', {
@@ -607,6 +572,7 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
     
     // Cache successful response for idempotency
     requestCache.set(cacheKey, {
+      userId,
       compose_id: data.compose_id,
       client_seq: data.client_seq,
       text_sha256: data.text_sha256,
@@ -666,6 +632,12 @@ const wrappedHandler = withErrorHandling(
 );
 
 export default (req: VercelRequest, res: VercelResponse) => {
+  // Add security headers
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  
   return suggestionsRateLimit(req, res, () => {
     return wrappedHandler(req, res);
   });

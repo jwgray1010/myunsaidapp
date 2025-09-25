@@ -360,8 +360,9 @@ function detectCommunicationPatterns(text: string): {
       }
       
       // Add tone weight scores  
-      if (feature.weights) {
-        for (const [tone, weight] of Object.entries(feature.weights)) {
+      const toneWeights = feature.weights || feature.toneWeights;
+      if (toneWeights) {
+        for (const [tone, weight] of Object.entries(toneWeights)) {
           if (typeof weight === 'number') {
             scores[tone] = (scores[tone] || 0) + weight;
           }
@@ -402,10 +403,26 @@ function detectCommunicationPatterns(text: string): {
 export interface DetailedSuggestionResult {
   id: string;
   text: string;
-  type: 'advice' | 'emotional_support' | 'communication_guidance' | 'boundary_setting' | 'conflict_resolution';
+  type:
+    | 'advice'
+    | 'emotional_support'
+    | 'communication_guidance'
+    | 'boundary_setting'
+    | 'conflict_resolution'
+    | 'rewrite'
+    | 'micro_advice';
   confidence: number;
   reason: string;
-  category: 'communication' | 'emotional' | 'relationship' | 'conflict_resolution';
+  category:
+    | 'communication'
+    | 'emotional'
+    | 'relationship'
+    | 'conflict_resolution'
+    | 'practical'
+    | 'boundary'
+    | 'clarity'
+    | 'repair'
+    | 'general';
   priority: number;
   context_specific: boolean;
   attachment_informed: boolean;
@@ -1906,6 +1923,13 @@ class SuggestionsService {
       if (!dataLoader.get('weight_modifiers') && dataLoader.get('weight_multipliers')) {
         (dataLoader as any).alias('weight_modifiers', 'weight_multipliers');
       }
+      // Alias snake_case to camelCase for key files
+      if (!dataLoader.get('phraseEdges') && dataLoader.get('phrase_edges')) {
+        (dataLoader as any).alias('phraseEdges', 'phrase_edges');
+      }
+      if (!dataLoader.get('learningSignals') && dataLoader.get('learning_signals')) {
+        (dataLoader as any).alias('learningSignals', 'learning_signals');
+      }
     } catch (error) {
       logger.warn('Data loader alias setup failed', { error: error instanceof Error ? error.message : String(error) });
     }
@@ -2748,7 +2772,8 @@ class SuggestionsService {
       id,
       text: advice, // Direct therapy advice text from therapy_advice.json
       categories,
-      type: type || 'advice', // Preserve original type (micro_advice, etc.) or default to 'advice'
+      // preserve backend-emitted type; default to 'advice'
+      type: (type as DetailedSuggestionResult['type']) ?? 'advice',
       confidence: __calib ?? ltrScore ?? 0.5,
       reason: 'Tone+context+attachment (NLI if enabled)',
       category: 'emotional' as const, // Match schema enum

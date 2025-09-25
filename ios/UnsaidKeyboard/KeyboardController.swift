@@ -289,6 +289,7 @@ final class KeyboardController: UIView,
             print("🔄 DEBUG: Text is completely empty, resetting tone to neutral")
             DispatchQueue.main.async { [weak self] in
                 self?.didUpdateToneStatus("neutral")
+                self?.coordinator?.resetToCleanState() // ← add this
             }
             return
         }
@@ -624,11 +625,11 @@ final class KeyboardController: UIView,
     }
     
     deinit {
-        // Ensure haptic session is stopped when keyboard is deallocated
         hapticIdleTimer?.cancel()
         if isHapticSessionStarted {
             coordinator?.stopHapticSession()
         }
+        coordinator?.resetToCleanState() // ensure compose ends
     }
     
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -1677,13 +1678,21 @@ final class KeyboardController: UIView,
         refreshSpellingIfMeaningful()
     }
     
+    private func hostBundleIsMessages() -> Bool {
+        return parentInputVC?.extensionContext?.container?.bundleIdentifier?
+            .contains("com.apple.MobileSMS") == true
+    }
+    
     @objc private func handleReturnKey() {
         guard let proxy = textDocumentProxy else { return }
         proxy.insertText("\n")
-        // Use router pattern for sentence-aware analysis after return insertion
-        routeIfChanged(lastInserted: "\n", isDeletion: false, urgent: true) // Urgent for new line
-        // 👉 refresh after newline
+        routeIfChanged(lastInserted: "\n", isDeletion: false, urgent: true)
         refreshSpellingIfMeaningful()
+
+        if (proxy.returnKeyType ?? .default) == .send || hostBundleIsMessages() {
+            coordinator?.analyzeFinalSentence(snapshotFullText())
+            coordinator?.resetToCleanState()
+        }
     }
     
     @objc private func handleGlobeKey() {
@@ -2004,6 +2013,14 @@ final class KeyboardController: UIView,
             logger.info("💡 No suggestions to show")
             return
         }
+        
+        // Record suggestion interaction for analytics
+        SafeKeyboardDataStorage.shared.recordSuggestionInteraction(
+            suggestion: first,
+            accepted: false,          // flip to true if user taps to accept later
+            context: "keyboard"
+        )
+        
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.suggestionChipManager.showSuggestion(text: first, tone: self.currentUITone)
@@ -2050,6 +2067,15 @@ final class KeyboardController: UIView,
         currentUITone = toneStatus
         print("🎯 🔥 [\(String(format: "%.3f", timestamp))] SETTING TONE STATUS TO: \(toneStatus)")
         setToneStatus(toneStatus)
+        
+        // Record tone analysis for analytics
+        SafeKeyboardDataStorage.shared.recordToneAnalysis(
+            text: snapshotFullText(),
+            tone: toneStatus,
+            confidence: 0.7,    // if you have it from coordinator, pass that instead
+            analysisTime: 0.0,  // or real timing if available
+            categories: nil
+        )
         
         // ✅ CRITICAL: Trigger layout pass after tone data changes
         setNeedsLayout()
@@ -2191,48 +2217,18 @@ final class KeyboardController: UIView,
     // MARK: - Selector Methods
     
     @objc private func toneButtonPressed(_ sender: UIButton) {
-        // Always give crisp feedback
         pressPop()
-
-        // Kick an immediate analysis using router pattern
         routeIfChanged(lastInserted: nil, isDeletion: false, urgent: true)
 
-        // If tone is risky, fetch suggestions too
         if currentTone == .alert || currentTone == .caution {
-            guard let textBefore = textDocumentProxy?.documentContextBeforeInput?
-                    .trimmingCharacters(in: .whitespacesAndNewlines),
-                  !textBefore.isEmpty else {
-                logger.info("🎯 No text available for suggestions")
-                return
-            }
-            
-            // Performance Optimization #2: Single-flight + tap throttling (0.8s)
+            // throttle
             let now = CFAbsoluteTimeGetCurrent()
-            if now - lastSuggestionFetchTime < 0.8 {
-                return // Throttle rapid taps
-            }
-            
-            // Cancel any in-flight suggestion request
+            if now - lastSuggestionFetchTime < 0.8 { return }
             activeSuggestionTask?.cancel()
-            
             lastSuggestionFetchTime = now
-            activeSuggestionTask = Task { // @MainActor context here
-                let suggestions: [String] = await withUnsafeContinuation { continuation in
-                    coordinator?.fetchSuggestions(for: textBefore) { suggestions in
-                        continuation.resume(returning: suggestions ?? [])
-                    }
-                }
-                guard !Task.isCancelled else { return }
-                
-                guard let first = suggestions.first else {
-                    logger.info("🎯 No suggestions received")
-                    return
-                }
-                suggestionChipManager.showSuggestion(text: first, tone: currentTone)
-                secureFixManager.markAdviceShown(toneString: currentTone.rawValue)
-                quickFixButton?.alpha = 1.0
-                activeSuggestionTask = nil
-            }
+
+            // NEW: ask coordinator to use its stored snapshot + tone (canonical v1)
+            coordinator?.requestSuggestions() // Let coordinator handle suggestions with its stored data
         }
     }
     

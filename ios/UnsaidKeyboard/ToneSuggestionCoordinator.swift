@@ -404,6 +404,13 @@ final class ToneSuggestionCoordinator {
     private var latestRequestID = UUID()
     private var clientSequence: UInt64 = 0
     private var pendingClientSeq: UInt64 = 0
+    
+    // MARK: - Composition Session
+    private(set) var composeId: String = ToneSuggestionCoordinator.newComposeId()
+    
+    private static func newComposeId() -> String {
+        "compose-\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString.prefix(8))"
+    }
     private var authBackoffUntil: Date = .distantPast
     private var netBackoffUntil: Date = .distantPast
     private var inFlightRequests: [String: URLSessionDataTask] = [:]
@@ -846,6 +853,7 @@ final class ToneSuggestionCoordinator {
             self.suggestions = []
             self.lastTextHash = ""
             self.sentenceToneCache.removeAll()
+            self.composeId = ToneSuggestionCoordinator.newComposeId()   // ← rotate here
             DispatchQueue.main.async {
                 self.lastUiTone = .neutral
                 self.delegate?.didUpdateSuggestions([])
@@ -959,11 +967,24 @@ final class ToneSuggestionCoordinator {
         }
         throttledLog("suggestions features: \((safePayload["features"] as? [String])?.joined(separator: ",") ?? "<none>")", category: "api")
         
-        // Transform to canonical v1 contract before sending
-        let canonicalPayload = transformToCanonicalV1(payload: safePayload)
+        // Build canonical v1 from the actual snapshot (or context["text"])
+        let textForAdvice = snapshot ?? (context["text"] as? String) ?? ""
+        let toneFromCache = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])
+
+        let canonicalPayload = buildCanonicalV1Payload(
+            text: textForAdvice,
+            context: (context["meta"] as? [String: Any])?["context"] as? String ?? (context["context"] as? String) ?? "general",
+            persona: personalityPayload(),
+            toneFromCache: toneFromCache
+        )
+
+        // Ensure user/scalar fields are present if your server uses them
+        var payloadToSend = canonicalPayload
+        payloadToSend["userId"] = getUserId()
+        if let email = getUserEmail() { payloadToSend["userEmail"] = email }
         
         // Use retry wrapper for suggestions to handle transient network errors
-        callEndpointWithRetry(path: "api/v1/suggestions", payload: canonicalPayload) { [weak self] data in
+        callEndpointWithRetry(path: "api/v1/suggestions", payload: payloadToSend) { [weak self] data in
             guard let self else { completion(nil); return }
             guard requestID == self.latestRequestID else { completion(nil); return }
             
@@ -974,6 +995,23 @@ final class ToneSuggestionCoordinator {
                 self.storeAPIResponseInSharedStorage(endpoint: "suggestions", request: payload, response: root)
             }
             let suggestion = extractSuggestionSafely(from: body)
+            
+            // (Optional) Persist helpful correlation data for debugging
+            // Uncomment if SafeKeyboardDataStorage is available
+            /*
+            if !root.isEmpty {
+                SafeKeyboardDataStorage.shared.recordAnalytics(
+                    event: "suggestions_sent",
+                    data: [
+                        "compose_id": self.composeId,
+                        "client_seq": String(self.clientSequence - 1), // last used
+                        "text_sha256": (payloadToSend["text_sha256"] as? String) ?? "",
+                        "ui_tone": (payloadToSend["toneAnalysis"] as? [String: Any])?["classification"] as? String ?? ""
+                    ]
+                )
+            }
+            */
+            
             completion(suggestion)
         }
     }
@@ -996,65 +1034,84 @@ final class ToneSuggestionCoordinator {
         return nil
     }
     
+    // MARK: - Helper Methods
+    
+    // Normalize and sum=1
+    private func normalizeUIDistribution(_ d: [String: Double]) -> [String: Double] {
+        let c = max(0, d["clear"] ?? 0)
+        let ca = max(0, d["caution"] ?? 0)
+        let a = max(0, d["alert"] ?? 0)
+        let s = (c + ca + a)
+        guard s > 0 else { return ["clear": 1.0, "caution": 0.0, "alert": 0.0] }
+        return ["clear": c / s, "caution": ca / s, "alert": a / s]
+    }
+    
     // MARK: - Canonical V1 Contract Transformation
-    private func transformToCanonicalV1(payload: [String: Any]) -> [String: Any] {
-        guard let lastToneAnalysis = lastToneAnalysis,
-              let text = lastToneAnalysis["text"] as? String,
-              let toneData = lastToneAnalysis["toneAnalysis"] as? [String: Any] else {
-            // Fallback if no tone data available - this shouldn't happen in normal flow
-            return payload
-        }
-        
-        // Generate text_sha256
+    private func buildCanonicalV1Payload(
+        text: String,
+        context: String,
+        persona: [String: Any],
+        toneFromCache: [String: Any]? // lastToneAnalysis?["toneAnalysis"] as? [String: Any]
+    ) -> [String: Any] {
+        // 1) Hash always matches the provided text
         let textSHA256 = sha256(text)
-        
-        // Generate compose_id (session-based unique identifier)
-        let composeId = "compose-\(Date().timeIntervalSince1970)-\(UUID().uuidString.prefix(8))"
-        
-        // Get attachment style from personality payload
-        let personalityData = personalityPayload()
-        let attachmentStyle = personalityData["attachmentStyle"] as? String ?? "secure"
-        
-        // Build canonical toneAnalysis object from stored tone endpoint response
-        let toneAnalysis: [String: Any] = [
-            "classification": toneData["ui_tone"] ?? "clear",
-            "confidence": toneData["confidence"] ?? 0.5,
-            "ui_distribution": toneData["ui_distribution"] ?? [
-                "clear": 0.33,
-                "caution": 0.33,
-                "alert": 0.34
-            ],
-            "intensity": toneData["intensity"] ?? 0.5
-        ]
-        
-        // Build rich analysis object with all the data from tone endpoint
-        var rich: [String: Any] = [:]
-        
-        // Core analysis fields from tone endpoint response
-        if let analysis = toneData["analysis"] as? [String: Any] {
-            rich["emotions"] = analysis["emotions"] ?? [:]
-            rich["linguistic_features"] = analysis["linguistic_features"] ?? [:]
-            rich["context_analysis"] = analysis["context_analysis"] ?? [:]
-            rich["attachment_insights"] = analysis["attachment_insights"] ?? []
+
+        // 2) Attachment style from persona (or secure)
+        let attachmentStyle = (persona["attachmentStyle"] as? String) ?? "secure"
+
+        // 3) ToneAnalysis: prefer server cache; otherwise fallback to UI state
+        let tone: [String: Any]
+        if let t = toneFromCache {
+            // Expecting ui_tone, ui_distribution, confidence, intensity?
+            let classification = (t["ui_tone"] as? String) ?? "neutral"
+            let dist = (t["ui_distribution"] as? [String: Double]) ?? ["clear": 0.33, "caution": 0.33, "alert": 0.34]
+            let conf = (t["confidence"] as? Double) ?? 0.5
+            let intensity = (t["intensity"] as? Double)
+
+            tone = [
+                "classification": classification,
+                "confidence": conf,
+                "ui_distribution": normalizeUIDistribution(dist),
+                "intensity": intensity as Any
+            ].compactMapValues { $0 }
+        } else {
+            // Fallback from UI pill + smoothedBuckets
+            let classification = lastUiTone.rawValue // "clear"|"caution"|"alert"|"neutral"|...
+            let dist = ["clear": smoothedBuckets.clear, "caution": smoothedBuckets.caution, "alert": smoothedBuckets.alert]
+            tone = [
+                "classification": classification,
+                "confidence": 0.5,
+                "ui_distribution": normalizeUIDistribution(dist),
+                "intensity": 0.5
+            ]
         }
-        
-        // Additional rich fields directly from tone endpoint
-        rich["raw_tone"] = toneData["primary_tone"] ?? ""
-        rich["categories"] = toneData["categories"] ?? []
-        rich["sentiment_score"] = toneData["sentiment_score"] ?? 0.0
-        rich["timestamp"] = toneData["timestamp"] ?? ISO8601DateFormatter().string(from: Date())
-        rich["metadata"] = toneData["metadata"] ?? [:]
-        rich["attachmentEstimate"] = toneData["attachmentEstimate"] ?? [:]
-        rich["isNewUser"] = toneData["isNewUser"] ?? false
-        
-        // Build canonical v1 payload
+
+        // 4) Rich (optional) – preserve what you stored from tone API if available
+        var rich: [String: Any] = [:]
+        if toneFromCache != nil {
+            // If you stored an `analysis` subtree earlier, surface what you can:
+            if let analysis = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["analysis"] as? [String: Any] {
+                rich["emotions"] = analysis["emotions"] ?? [:]
+                rich["linguistic_features"] = analysis["linguistic_features"] ?? [:]
+                rich["context_analysis"] = analysis["context_analysis"] ?? [:]
+                rich["attachment_insights"] = analysis["attachment_insights"] ?? []
+            }
+            rich["raw_tone"] = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["primary_tone"] ?? ""
+            rich["categories"] = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["categories"] ?? []
+            rich["sentiment_score"] = ((lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["analysis"] as? [String: Any])?["sentiment_score"] ?? 0.0
+            rich["timestamp"] = ISO8601DateFormatter().string(from: Date())
+            rich["metadata"] = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["metadata"] ?? [:]
+            rich["attachmentEstimate"] = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["attachmentEstimate"] ?? [:]
+            rich["isNewUser"] = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["isNewUser"] ?? false
+        }
+
         return [
             "text": text,
             "text_sha256": textSHA256,
-            "client_seq": toneData["client_seq"] ?? 1,
-            "compose_id": composeId,
-            "toneAnalysis": toneAnalysis,
-            "context": payload["context"] ?? "general",
+            "client_seq": clientSequence,           // will be set by callEndpoint()
+            "compose_id": composeId,                // stable for session
+            "toneAnalysis": tone,                   // REQUIRED
+            "context": context,
             "attachmentStyle": attachmentStyle,
             "rich": rich
         ]

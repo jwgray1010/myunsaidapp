@@ -114,7 +114,10 @@ export const suggestionItemSchema = z.object({
   confidence: z.number().min(0).max(1),
   reason: z.string().optional(), // optional for micro_advice
   attachmentFriendly: z.boolean().optional(),
-  category: z.enum(['communication','emotional','relationship','conflict_resolution']).optional(),
+  category: z.enum([
+    'communication','emotional','relationship','conflict_resolution',
+    'practical','boundary','clarity','repair','general'
+  ]).optional(),
 
   // backend extras (passthrough, but typed)
   id: z.union([z.number(), z.string()]).optional(),
@@ -193,7 +196,15 @@ export const originalAnalysisSchema = z.object({
     caution: z.number().min(0).max(1).optional(),
     alert: z.number().min(0).max(1).optional(),
   }).optional().describe('Bucket probabilities used to derive ui_tone (adjusted)'),
-});
+  
+  learning_signals: z.object({
+    patterns_detected: z.array(z.string()).optional(),
+    communication_buckets: z.array(z.string()).optional(),
+    attachment_hints: z.record(z.number()).optional(),
+    tone_adjustments: z.record(z.number()).optional(),
+    therapeutic_noticings: z.array(z.string()).optional(),
+  }).optional(),
+}).passthrough();
 
 export type OriginalAnalysis = z.infer<typeof originalAnalysisSchema>;
 

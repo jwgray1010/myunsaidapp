@@ -367,9 +367,18 @@ function normalizeSuggestionItem(s: any, index: number) {
   return {
     id: String(s?.id ?? index + 1),
     text: clampText(text, 2000),
-    type: ((): 'advice' | 'rewrite' | 'note' => {
+    type: ((): (
+      'advice' | 'emotional_support' | 'communication_guidance' |
+      'boundary_setting' | 'conflict_resolution' | 'rewrite' | 'micro_advice'
+    ) => {
       const t = String(s?.type ?? 'advice').toLowerCase();
-      return (t === 'rewrite' || t === 'note') ? (t as any) : 'advice';
+      const allowed = new Set([
+        'advice','emotional_support','communication_guidance',
+        'boundary_setting','conflict_resolution','rewrite','micro_advice'
+      ]);
+      if (allowed.has(t)) return t as any;
+      if (t === 'note') return 'advice';
+      return 'advice';
     })(),
     confidence: clamp01(typeof s?.confidence === 'number' ? s.confidence : 0.55),
     reason: typeof s?.reason === 'string'
