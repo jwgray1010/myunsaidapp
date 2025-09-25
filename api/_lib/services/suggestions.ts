@@ -67,6 +67,48 @@ const ENV_CONTROLS = {
 const hypothesisCache = new Map<string, string>(); // advice.id -> hypothesis
 const toneBucketCache = new Map<string, any>(); // toneKey -> bucket result
 const vectorCache = new Map<string, Float32Array | null>(); // id -> vector (module-level LRU)
+const lruOrder: string[] = []; // Track access order for true LRU
+
+// Regex safety protection against catastrophic backtracking
+function isProbablySafeRegex(rx: RegExp | string): boolean {
+  const source = typeof rx === 'string' ? rx : rx.source;
+  // naive checks: nested groups with stars/plus, catastrophic backtracking patterns, etc.
+  return !/(.+\+){2,}|(\([^\)]*\))+[^\)]*\+|(\.\*){2,}/.test(source);
+}
+
+function safeRegexTest(pattern: string | RegExp, text: string, flags?: string): boolean {
+  try {
+    // Bound input length to prevent timeout on large inputs
+    const boundedText = text.slice(0, 2000);
+    
+    const regex = typeof pattern === 'string' ? new RegExp(pattern, flags) : pattern;
+    if (!isProbablySafeRegex(regex)) {
+      logger.warn('Potentially unsafe regex pattern skipped', { pattern: regex.source.slice(0, 100) });
+      return false;
+    }
+    
+    return regex.test(boundedText);
+  } catch (err) {
+    logger.warn('Regex test failed', { pattern: typeof pattern === 'string' ? pattern.slice(0, 100) : pattern.source.slice(0, 100), error: String(err) });
+    return false;
+  }
+}
+
+// Stable object stringification for cache keys
+function stable(obj: any): string {
+  if (obj === null || typeof obj !== 'object') return String(obj);
+  const keys = Object.keys(obj).sort();
+  return `{${keys.map(k => `${k}:${stable(obj[k])}`).join(',')}}`;
+}
+
+// Touch entry in LRU order array for proper recency tracking
+function touchLruEntry(key: string): void {
+  const index = lruOrder.indexOf(key);
+  if (index !== -1) {
+    lruOrder.splice(index, 1); // Remove from current position
+  }
+  lruOrder.push(key); // Add to end (most recent)
+}
 
 // ---- Aho-Corasick Automaton for Fast Pattern Matching ----
 /**
@@ -221,27 +263,35 @@ class AhoCorasickAutomaton {
   }
 
   private buildFailures() {
-    // Simplified failure function - all failures point to root
+    const root = this.trie;
     const queue: any[] = [];
-    
-    // Initialize failure links for depth 1 nodes
-    for (const char in this.trie) {
-      if (this.trie[char] && typeof this.trie[char] === 'object') {
-        this.failures.set(this.trie[char], this.trie);
-        queue.push(this.trie[char]);
-      }
+
+    // init: depth-1 nodes fail to root
+    for (const ch of Object.keys(root)) {
+      if (ch === 'output') continue;
+      const child = root[ch];
+      this.failures.set(child, root);
+      queue.push(child);
     }
-    
-    // BFS to build remaining failure links
-    while (queue.length > 0) {
+
+    while (queue.length) {
       const node = queue.shift();
-      for (const char in node) {
-        if (char === 'output') continue;
-        const child = node[char];
-        if (child && typeof child === 'object') {
-          queue.push(child);
-          this.failures.set(child, this.trie); // Simplified: all point to root
+      for (const ch of Object.keys(node)) {
+        if (ch === 'output') continue;
+        const child = node[ch];
+
+        // find failure for (node -> ch)
+        let f = this.failures.get(node);
+        while (f && !f[ch]) f = this.failures.get(f);
+        const failTo = f?.[ch] ?? root;
+
+        this.failures.set(child, failTo);
+
+        // merge outputs (standard AC behavior)
+        if (failTo.output) {
+          child.output = [...(child.output || []), ...failTo.output];
         }
+        queue.push(child);
       }
     }
   }
@@ -506,15 +556,9 @@ function detectCommunicationPatterns(text: string): {
     
     let hasMatch = false;
     for (const patternStr of feature.patterns) {
-      try {
-        const regex = new RegExp(patternStr, 'gi');
-        if (text.match(regex)) {
-          hasMatch = true;
-          break;
-        }
-      } catch (err) {
-        // Skip invalid patterns
-        continue;
+      if (safeRegexTest(patternStr, text, 'gi')) {
+        hasMatch = true;
+        break;
       }
     }
     
@@ -971,10 +1015,14 @@ function getMemoizedVector(id: string): Float32Array | null {
     
     // Environment-controlled LRU: keep cache under control
     if (vectorCache.size > ENV_CONTROLS.VECTOR_CACHE_MAX) {
-      const firstKey = vectorCache.keys().next().value;
-      if (firstKey) vectorCache.delete(firstKey);
+      // Evict least recently used (first in lruOrder array)
+      const lruKey = lruOrder.shift();
+      if (lruKey) vectorCache.delete(lruKey);
     }
   }
+  
+  // Update recency tracking
+  touchLruEntry(id);
   return vectorCache.get(id) || null;
 }
 
@@ -1218,12 +1266,16 @@ async function hybridRetrieve(text: string, contextLabel: string, toneKey: strin
 function applyContraindications(items: any[], flags: {hasNegation:boolean; hasSarcasm:boolean; intensityScore:number}) {
   const guard = dataLoader.get('guardrailConfig');
   const prof  = dataLoader.get('profanityLexicons');
+  
+  // Create a temporary instance to access containsProfanity method
+  const tempInstance = new (SuggestionsService as any)();
+  
   return items.filter((it:any) => {
     if (flags.intensityScore > (guard?.maxIntensityForConfront ?? 0.75)) {
       if ((it.categories ?? []).includes('confrontation')) return false;
     }
     if (flags.hasNegation && it.negationSensitive) return false;
-    if (prof?.block && prof.block.some((w:string)=>String(it.advice||'').toLowerCase().includes(w))) return false;
+    if (prof && tempInstance.containsProfanity(String(it.advice || ''), prof, false)) return false;
     return true;
   });
 }
@@ -2148,6 +2200,7 @@ class SuggestionsService {
 
   private async ensureDataLoaded(): Promise<void> {
     await ensureDataLoaded();
+    this.validateCriticalDependencies();   // <-- add validation after data loading
   }
 
   // ===== Strict JSON Dependency Validation =====
@@ -2352,31 +2405,38 @@ class SuggestionsService {
         return regex.test(advice);
       });
 
-      // Allow if has gentle language OR passes other safety checks
-      return hasGentleLanguage || suggestion.triggerTone === 'clear';
+      // Require gentle language for medium-high intensity - no bypasses
+      return hasGentleLanguage;
     }
 
     return true;
   }
 
-  private containsProfanity(text: string, profanityLexicons: any, isSecondPersonTargeted=false): boolean {
-    const cats = profanityLexicons?.categories; // preferred shape
-    const words = profanityLexicons?.words;     // legacy shape
-    if (!cats && !Array.isArray(words)) return false;
+  private containsProfanity(text: string, prof: any, is2P=false): boolean {
+    const items: Array<{ w: string; targeting?: 'any'|'self'|'other' }> = [];
 
-    // Build patterns once per instance
+    if (Array.isArray(prof?.words)) {
+      for (const w of prof.words) items.push({ w, targeting: 'any' });
+    }
+    if (Array.isArray(prof?.block)) {
+      for (const w of prof.block) items.push({ w, targeting: 'any' });
+    }
+    if (Array.isArray(prof?.categories)) {
+      for (const c of prof.categories) {
+        for (const w of (c.triggerWords || [])) items.push({ w, targeting: c.targeting || 'any' });
+      }
+    }
+
+    if (!items.length) return false;
+
     if (!(this as any)._profRegexCache) (this as any)._profRegexCache = new Map<string, RegExp>();
-    const wb = (w:string)=>`(?:^|[^\\p{L}\\p{N}])(${w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})(?=$|[^\\p{L}\\p{N}])`;
+    const wb = (w:string)=>`(?:^|[^\\p{L}\\p{N}])(${w.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')})(?=$|[^\\p{L}\\p{N}])`;
 
-    const list = cats
-      ? cats.flatMap((c:any)=>c.triggerWords?.map((w:string)=>({w, targeting:c.targeting||'any', severity:c.severity||'med'}))||[])
-      : words.map((w:string)=>({w, targeting:'any', severity:'med'}));
-
-    for (const {w, targeting} of list) {
+    for (const { w, targeting } of items) {
       let rx = (this as any)._profRegexCache.get(w);
       if (!rx) { rx = new RegExp(wb(w), 'iu'); (this as any)._profRegexCache.set(w, rx); }
       if (rx.test(text)) {
-        if (targeting === 'other' && !isSecondPersonTargeted) continue;
+        if (targeting === 'other' && !is2P) continue;
         return true;
       }
     }
@@ -2420,19 +2480,21 @@ class SuggestionsService {
         } else if (isRegExp(pattern)) {
           // Direct regex test
           return pattern.test(text);
+        } else if (isRegExp(pattern)) {
+          // Direct regex test with safety check
+          return isProbablySafeRegex(pattern) && pattern.test(text.slice(0, 2000));
         } else if (typeof pattern === 'object' && pattern?.pattern) {
           // Object with pattern property
           const p = pattern.pattern;
           if (typeof p === 'string') {
             return text.toLowerCase().includes(p.toLowerCase());
           } else if (isRegExp(p)) {
-            return p.test(text);
+            return isProbablySafeRegex(p) && p.test(text.slice(0, 2000));
           }
         }
         
-        // Try to convert unknown types to regex as last resort
-        const regex = new RegExp(String(pattern), 'i');
-        return regex.test(text);
+        // Try to convert unknown types to regex as last resort with safety
+        return safeRegexTest(String(pattern), text, 'i');
       } catch (error) {
         // Log pattern evaluation errors but don't crash
         logger.warn('Pattern evaluation failed in guardrails fallback', { 
@@ -2748,7 +2810,7 @@ class SuggestionsService {
     (analysis as any).toneBuckets = bucket;
 
     // Generate cache key for suggestions - include Coordinator UI fields for stability
-    const analysisKey = JSON.stringify({
+    const analysisKey = stable({
       tone: analysis.tone,
       uiTone: analysis.richToneData?.ui_tone,
       uiDist: analysis.richToneData?.ui_distribution,
