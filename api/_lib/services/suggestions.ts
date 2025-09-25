@@ -70,25 +70,122 @@ const vectorCache = new Map<string, Float32Array | null>(); // id -> vector (mod
 
 // ---- Aho-Corasick Automaton for Fast Pattern Matching ----
 /**
- * Simplified Aho-Corasick implementation with basic trie + fallback safety.
+ * Safe Aho-Corasick implementation with dual storage for mixed pattern types.
  * 
- * Performance Notes:
- * - Uses simplified failure links (all point to root) for speed over completeness
- * - Provides O(n) text scanning for most patterns, but may miss some overlaps  
- * - Always paired with regex fallbacks for accuracy guarantee
- * - Suitable for large lexicons due to fast prefix sharing in trie structure
- * - Exception handling prevents disruption of ranking pipeline
+ * This implementation safely handles:
+ * - String literals: compiled into AC trie for fast matching
+ * - RegExp patterns: stored separately and evaluated after AC search
+ * - Mixed object patterns: extracted and categorized appropriately
  * 
- * This is a "best-effort" implementation optimized for speed with safety nets.
+ * Prevents crashes from:
+ * - TypeError: pattern.toLowerCase is not a function
+ * - Invalid regex compilation attempts 
+ * - Unknown pattern object shapes
+ * 
+ * Architecture:
+ * - literalsByCat: Map<category, string[]> for AC trie compilation
+ * - regexesByCat: Map<category, RegExp[]> for separate regex evaluation
+ * - Dual-phase search: AC pass + regex pass with deduplication
  */
+
+// Type definitions for safe pattern handling
+type RawPattern = string | RegExp | { pattern: string | RegExp } | any;
+
+function isRegExp(x: any): x is RegExp { 
+  return Object.prototype.toString.call(x) === '[object RegExp]'; 
+}
+
+function extractPatternValue(raw: RawPattern): { type: 'literal' | 'regex' | 'empty' | 'unknown'; value: any } {
+  if (raw == null || raw === '') return { type: 'empty', value: null };
+
+  if (typeof raw === 'string') return { type: 'literal', value: raw };
+  if (isRegExp(raw)) return { type: 'regex', value: raw };
+
+  if (typeof raw === 'object' && 'pattern' in raw) {
+    const p = raw.pattern;
+    if (typeof p === 'string') return { type: 'literal', value: p };
+    if (isRegExp(p)) return { type: 'regex', value: p };
+  }
+
+  return { type: 'unknown', value: raw };
+}
+
 class AhoCorasickAutomaton {
-  private patterns: Map<string, string[]> = new Map();
+  // Dual storage: literals for AC, regexes for separate evaluation
+  private literalsByCat: Map<string, string[]> = new Map();
+  private regexesByCat: Map<string, RegExp[]> = new Map();
+  
   private compiled = false;
   private trie: any = {};
   private failures: Map<any, any> = new Map();
 
-  addPatterns(category: string, patterns: string[]) {
-    this.patterns.set(category, patterns);
+  addPatterns(category: string, patterns: RawPattern[] | any) {
+    // Safety: ensure patterns is array-like
+    if (!Array.isArray(patterns)) {
+      if (patterns == null) return;
+      
+      // Try to convert single values or object.values() to array
+      try {
+        patterns = Array.isArray(patterns) ? patterns : [patterns];
+      } catch {
+        logger?.warn('addPatterns: could not convert to array', { category, patterns: typeof patterns });
+        return;
+      }
+    }
+    
+    const literals: string[] = [];
+    const regexes: RegExp[] = [];
+
+    // Split mixed patterns into literals vs regexes
+    for (const raw of patterns) {
+      const extracted = extractPatternValue(raw);
+      
+      switch (extracted.type) {
+        case 'literal':
+          if (extracted.value && typeof extracted.value === 'string') {
+            // Store lowercased for case-insensitive AC matching
+            literals.push(extracted.value.toLowerCase().trim());
+          }
+          break;
+          
+        case 'regex':
+          regexes.push(extracted.value);
+          break;
+          
+        case 'empty':
+          // Skip null/empty patterns
+          break;
+          
+        case 'unknown':
+          // Attempt string coercion for unknown types
+          try {
+            const stringified = String(extracted.value);
+            if (stringified && 
+                stringified !== '[object Object]' && 
+                stringified !== 'undefined' && 
+                stringified !== 'null') {
+              literals.push(stringified.toLowerCase().trim());
+            }
+          } catch (error) {
+            // Log warning but don't crash - just skip this pattern
+            logger?.warn('addPatterns: failed to stringify unknown pattern', { 
+              category, 
+              pattern: extracted.value, 
+              error: error instanceof Error ? error.message : String(error)
+            });
+          }
+          break;
+      }
+    }
+
+    // Store non-empty arrays only
+    if (literals.length > 0) {
+      this.literalsByCat.set(category, literals);
+    }
+    if (regexes.length > 0) {
+      this.regexesByCat.set(category, regexes);
+    }
+    
     this.compiled = false;
   }
 
@@ -98,14 +195,15 @@ class AhoCorasickAutomaton {
     this.trie = {};
     this.failures.clear();
     
-    // Build trie
-    for (const [category, patterns] of this.patterns) {
-      for (const pattern of patterns) {
-        this.addToTrie(pattern.toLowerCase(), category);
+    // Build AC trie from string literals only
+    for (const [category, literals] of this.literalsByCat) {
+      for (const literal of literals) {
+        if (typeof literal === 'string' && literal.length > 0) {
+          this.addToTrie(literal, category);
+        }
       }
     }
     
-    // Build failure links (simplified implementation)
     this.buildFailures();
     this.compiled = true;
   }
@@ -123,11 +221,10 @@ class AhoCorasickAutomaton {
   }
 
   private buildFailures() {
-    // Simplified failure function for basic Aho-Corasick
-    // In production, you'd use a proper AC implementation
+    // Simplified failure function - all failures point to root
     const queue: any[] = [];
     
-    // Set failure for depth 1
+    // Initialize failure links for depth 1 nodes
     for (const char in this.trie) {
       if (this.trie[char] && typeof this.trie[char] === 'object') {
         this.failures.set(this.trie[char], this.trie);
@@ -135,7 +232,7 @@ class AhoCorasickAutomaton {
       }
     }
     
-    // Build remaining failures
+    // BFS to build remaining failure links
     while (queue.length > 0) {
       const node = queue.shift();
       for (const char in node) {
@@ -143,7 +240,7 @@ class AhoCorasickAutomaton {
         const child = node[char];
         if (child && typeof child === 'object') {
           queue.push(child);
-          this.failures.set(child, this.trie);
+          this.failures.set(child, this.trie); // Simplified: all point to root
         }
       }
     }
@@ -154,13 +251,14 @@ class AhoCorasickAutomaton {
     
     const results: { category: string, match: string, position: number }[] = [];
     const lowerText = text.toLowerCase();
-    const seen = new Set<string>(); // Prevent duplicate category matches
-    let node = this.trie;
+    const foundCategories = new Set<string>();
     
+    // Phase 1: Aho-Corasick search on literal patterns
+    let node = this.trie;
     for (let i = 0; i < lowerText.length; i++) {
       const char = lowerText[i];
       
-      // Try to match
+      // Follow failure links until we find a match or reach root
       while (node && !node[char]) {
         node = this.failures.get(node) || this.trie;
       }
@@ -168,19 +266,18 @@ class AhoCorasickAutomaton {
       if (node && node[char]) {
         node = node[char];
         
-        // Check for matches with deduplication
+        // Check for pattern matches at this position
         if (node.output) {
           for (const output of node.output) {
             const { category, pattern } = output;
-            if (seen.has(category)) continue; // Skip already found categories
-            seen.add(category);
-            const patternLength = pattern.length;
-            const matchText = lowerText.slice(i - patternLength + 1, i + 1);
-            results.push({
-              category,
-              match: matchText,
-              position: i
-            });
+            if (!foundCategories.has(category)) {
+              foundCategories.add(category);
+              results.push({
+                category,
+                match: pattern,
+                position: i - pattern.length + 1
+              });
+            }
           }
         }
       } else {
@@ -188,7 +285,63 @@ class AhoCorasickAutomaton {
       }
     }
     
+    // Phase 2: Regex pattern evaluation on original text
+    for (const [category, regexes] of this.regexesByCat) {
+      if (foundCategories.has(category)) continue; // Skip if already found by AC
+      
+      for (const regex of regexes) {
+        try {
+          const match = text.match(regex);
+          if (match) {
+            foundCategories.add(category);
+            results.push({
+              category,
+              match: match[0],
+              position: match.index || 0
+            });
+            break; // First match wins for this category
+          }
+        } catch (error) {
+          // Log regex errors but don't crash
+          logger?.warn('Regex evaluation failed in AC search', { 
+            category, 
+            regex: regex.toString(), 
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+    }
+    
     return results;
+  }
+
+  // Enhanced statistics for debugging pattern distribution
+  getPatternStats(): { literalCount: number; regexCount: number; categoryCount: number; categories: string[] } {
+    const literalCount = Array.from(this.literalsByCat.values()).reduce((sum, patterns) => sum + patterns.length, 0);
+    const regexCount = Array.from(this.regexesByCat.values()).reduce((sum, patterns) => sum + patterns.length, 0);
+    const allCategories = new Set([...this.literalsByCat.keys(), ...this.regexesByCat.keys()]);
+    
+    return { 
+      literalCount, 
+      regexCount, 
+      categoryCount: allCategories.size,
+      categories: Array.from(allCategories).sort()
+    };
+  }
+
+  // Debug helper to inspect loaded patterns
+  debugPatterns(): { literals: Record<string, number>; regexes: Record<string, number> } {
+    const literals: Record<string, number> = {};
+    const regexes: Record<string, number> = {};
+    
+    for (const [cat, patterns] of this.literalsByCat) {
+      literals[cat] = patterns.length;
+    }
+    for (const [cat, patterns] of this.regexesByCat) {
+      regexes[cat] = patterns.length;
+    }
+    
+    return { literals, regexes };
   }
 }
 
@@ -200,11 +353,12 @@ function getOrCreateAutomaton(): AhoCorasickAutomaton {
     globalAutomaton = new AhoCorasickAutomaton();
     
     try {
-      // Load phrase edges
+      // Load phrase edges - bypass type coercion with any[] casting
       const phraseEdges = dataLoader.get('phraseEdges') || {};
       Object.entries(phraseEdges).forEach(([category, patterns]: [string, any]) => {
-        if (Array.isArray(patterns)) {
-          globalAutomaton!.addPatterns(`phrase_${category}`, patterns);
+        if (patterns != null) {
+          // Safe loading: let addPatterns handle type detection and splitting
+          globalAutomaton!.addPatterns(`phrase_${category}`, patterns as any[]);
         }
       });
       
@@ -212,19 +366,17 @@ function getOrCreateAutomaton(): AhoCorasickAutomaton {
       const learningSignals = dataLoader.get('learningSignals') || {};
       if (learningSignals.features && Array.isArray(learningSignals.features)) {
         for (const feature of learningSignals.features) {
-          if (feature.patterns && Array.isArray(feature.patterns) && feature.buckets) {
-            const patterns = feature.patterns.map((p: string) => {
-              // Convert regex patterns to simple strings for Aho-Corasick
-              return p.replace(/\\b/g, '').replace(/\([^)]*\)/g, '').replace(/[|]/g, ' ').split(' ').filter(s => s.length > 2);
-            }).flat();
+          if (feature.patterns && feature.buckets) {
+            // Pass raw patterns without transformation - let AC class handle mixed types
+            const rawPatterns = feature.patterns as any[];
             
             // Add patterns for each bucket this feature maps to
             for (const bucket of feature.buckets) {
-              globalAutomaton!.addPatterns(`ls_${bucket}`, patterns);
+              globalAutomaton!.addPatterns(`ls_${bucket}`, rawPatterns);
             }
             
             // Also add under the feature ID for direct lookup
-            globalAutomaton!.addPatterns(`ls_feature_${feature.id}`, patterns);
+            globalAutomaton!.addPatterns(`ls_feature_${feature.id}`, rawPatterns);
           }
         }
         logger.info('Learning signals patterns loaded into automaton', { 
@@ -232,19 +384,19 @@ function getOrCreateAutomaton(): AhoCorasickAutomaton {
         });
       }
       
-      // Load guardrail patterns
+      // Load guardrail patterns - safe casting to handle mixed types
       const guardrails = dataLoader.get('guardrailConfig') || {};
       if (guardrails.blockedPatterns) {
-        globalAutomaton!.addPatterns('blocked', guardrails.blockedPatterns);
+        globalAutomaton!.addPatterns('blocked', guardrails.blockedPatterns as any[]);
       }
       if (guardrails.softenerPatterns) {
-        globalAutomaton!.addPatterns('softener', guardrails.softenerPatterns);
+        globalAutomaton!.addPatterns('softener', guardrails.softenerPatterns as any[]);
       }
       if (guardrails.gentlePatterns) {
-        globalAutomaton!.addPatterns('gentle', guardrails.gentlePatterns);
+        globalAutomaton!.addPatterns('gentle', guardrails.gentlePatterns as any[]);
       }
       
-      // Add second-person patterns
+      // Add second-person patterns (these are safe string literals)
       const secondPersonPatterns = [
         // direct
         'you are', 'you were', 'you will', 'you would', 'you can', 'you could', 
@@ -258,9 +410,26 @@ function getOrCreateAutomaton(): AhoCorasickAutomaton {
       globalAutomaton!.addPatterns('second_person', secondPersonPatterns);
       
       globalAutomaton!.compile();
-      logger.info('Aho-Corasick automaton compiled successfully');
+      
+      // Enhanced logging for pattern type distribution
+      const stats = globalAutomaton!.getPatternStats();
+      
+      logger.info('Aho-Corasick automaton compiled successfully', {
+        literalPatterns: stats.literalCount,
+        regexPatterns: stats.regexCount,
+        totalCategories: stats.categoryCount,
+        categories: stats.categories.slice(0, 10) // Log first 10 categories for debugging
+      });
+      
+      // Additional debug info in development
+      if (process.env.NODE_ENV === 'development') {
+        const debugInfo = globalAutomaton!.debugPatterns();
+        logger.info('AC Pattern Distribution (Dev)', debugInfo);
+      }
     } catch (error) {
-      logger.warn('Failed to compile Aho-Corasick automaton', { error });
+      logger.warn('Failed to compile Aho-Corasick automaton', { 
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   }
   
@@ -713,21 +882,24 @@ function getVecById(id: string): Float32Array | null {
 
 function bm25Search(query: string, limit = ENV_CONTROLS.BM25_LIMIT): any[] {
   let bm25 = dataLoader.get('adviceBM25');
-  logger.debug('bm25Search called', { 
-    hasBM25: !!bm25, 
-    query, 
-    limit,
-    bm25Type: typeof bm25
-  });
   
-  if (!bm25) return [];
+  if (!bm25) {
+    logger.warn('BM25 index not available for search');
+    return [];
+  }
   
   const hits = bm25.search(query, { prefix: true, fuzzy: 0.2 }).slice(0, limit);
-  logger.debug('BM25 search completed', { hitsCount: hits.length });
-  
   const byId = new Map<string, any>(getAdviceCorpus().map((it:any)=>[it.id, it]));
   const result = hits.map((h:any)=>byId.get(h.id)).filter(Boolean);
-  logger.debug('BM25 results mapped', { finalResultCount: result.length, hitsCount: hits.length });
+  
+  // Only log if search fails or in debug mode
+  if (result.length === 0 || process.env.NODE_ENV === 'development') {
+    logger.debug('BM25 search completed', { 
+      query: query.substring(0, 50),
+      hits: hits.length,
+      results: result.length 
+    });
+  }
   
   return result;
 }
@@ -963,13 +1135,6 @@ function matchesToneClassificationWithAttachment(item: any, toneKey: string, att
 
 async function hybridRetrieve(text: string, contextLabel: string, toneKey: string, analysis?: any, k=ENV_CONTROLS.RETRIEVAL_POOL_SIZE) {
   const corpus = getAdviceCorpus();
-  logger.info('hybridRetrieve started', { 
-    corpusSize: corpus.length, 
-    contextLabel, 
-    toneKey, 
-    text: text.substring(0, 50),
-    k 
-  });
   
   // Enhanced query with Coordinator signals + semantic backbone
   const ents = (analysis?.entities || []).map((e:any)=>e.text).slice(0,8);
@@ -993,8 +1158,8 @@ async function hybridRetrieve(text: string, contextLabel: string, toneKey: strin
   // Check if any items have vectors (not just the first one)
   const sampleWithVector = corpus.find(item => getVecById(item?.id || ''));
   const hasVecs = !!sampleWithVector;
-  logger.info('Vector check', { hasVecs, sampleItemId: sampleWithVector?.id });
   
+  // Dense retrieval with vectors
   if (hasVecs && typeof (spacyClient.embed) === 'function') {
     try {
       const qArr = await spacyClient.embed(query);
@@ -1002,10 +1167,10 @@ async function hybridRetrieve(text: string, contextLabel: string, toneKey: strin
       if (Array.isArray(qArr) && expectedDim && qArr.length === expectedDim) {
         qVec = new Float32Array(qArr);
       } else {
-        logger.warn('Embed dim mismatch; using sparse-only', { queryDim: qArr?.length, expectedDim });
+        logger.warn('Embed dimension mismatch - falling back to sparse search only', { queryDim: qArr?.length, expectedDim });
       }
     } catch (e) {
-      logger.warn('Dense embed failed; using sparse-only', { error: String(e) });
+      logger.warn('Dense embedding failed - falling back to sparse search only', { error: String(e) });
     }
     
     if (qVec) {
@@ -1018,12 +1183,10 @@ async function hybridRetrieve(text: string, contextLabel: string, toneKey: strin
         .sort((a,b)=>b[1]-a[1])
         .slice(0, k*2)
         .map(([it])=>it);
-      logger.info('Dense retrieval completed', { denseTopSize: denseTop.length });
     }
   }
 
   const sparseTop = bm25Search(query, k*2);
-  logger.info('Sparse retrieval completed', { sparseTopSize: sparseTop.length });
 
   // Fallback if both retrieval methods fail
   const fallbackIfEmpty = !denseTop.length && !sparseTop.length ? corpus.slice(0, Math.min(200, corpus.length)) : [];
@@ -1031,18 +1194,24 @@ async function hybridRetrieve(text: string, contextLabel: string, toneKey: strin
   const uniq = new Map<string, any>();
   for (const it of [...denseTop, ...sparseTop, ...fallbackIfEmpty]) if (it?.id && !uniq.has(it.id)) uniq.set(it.id, it);
   const pool = Array.from(uniq.values());
-  logger.info('Hybrid retrieval merging completed', { 
+  
+  // Log retrieval summary only
+  logger.info('Hybrid retrieval completed', { 
+    context: contextLabel,
+    tone: toneKey,
+    corpusSize: corpus.length,
     poolSize: pool.length, 
-    denseTopSize: denseTop.length, 
-    sparseTopSize: sparseTop.length,
-    fallbackUsed: fallbackIfEmpty.length > 0
+    denseHits: denseTop.length, 
+    sparseHits: sparseTop.length,
+    fallbackUsed: fallbackIfEmpty.length > 0,
+    hasVectors: hasVecs
   });
   
   // MMR with context-aware lambda
   const retrievalConfig = dataLoader.get('retrievalConfig');
   const lambda = retrievalConfig?.mmrLambda?.[contextLabel] ?? ENV_CONTROLS.MMR_LAMBDA;
   const result = mmr(pool, qVec, (it:any)=>getV(it.id), k, lambda);
-  logger.info('MMR diversification completed', { finalResultSize: result.length, lambda });
+  
   return result;
 }
 
@@ -1622,6 +1791,38 @@ class AdviceEngine {
       // User preferences
       s += W.userPrefBoost * this.userPrefBoostFor(it, signals.userPref);
 
+      // --- Tag & BoostSource boosts (global, additive)
+      const wm = getWeightMods();
+      const tagBoostMap = wm?.tagBoosts || {};
+      const bsBoostMap  = wm?.boostSourceBoosts || {};
+
+      const seenTag = new Set<string>();
+      const seenBS  = new Set<string>();
+
+      // Normalize & sum unique tag boosts
+      const itemTags = Array.isArray((it as any).tags) ? (it as any).tags : [];
+      let tagBoost = 0;
+      for (const raw of itemTags) {
+        const t = String(raw || '').toLowerCase().trim();
+        if (!t || seenTag.has(t)) continue;
+        seenTag.add(t);
+        tagBoost += Number(tagBoostMap[t] ?? 0);
+      }
+
+      // Normalize & sum unique boost-source boosts
+      const itemBS = Array.isArray((it as any).boostSources) ? (it as any).boostSources : [];
+      let bsBoost = 0;
+      for (const raw of itemBS) {
+        const b = String(raw || '').toLowerCase().trim();
+        if (!b || seenBS.has(b)) continue;
+        seenBS.add(b);
+        bsBoost += Number(bsBoostMap[b] ?? 0);
+      }
+
+      // Apply with a gentle cap to avoid runaway influence
+      const TAG_BS_CAP = 0.25; // total additive cap
+      s += Math.min(tagBoost + bsBoost, TAG_BS_CAP);
+
       // Enhanced Second-Person Detection Boost
       if (signals.secondPerson?.hasSecondPerson) {
         const spBoost = signals.secondPerson.confidence * 
@@ -2182,33 +2383,62 @@ class SuggestionsService {
     return false;
   }
 
-  private matchesBlockedPattern(text: string, blockedPatterns: string[]): boolean {
-    if (!Array.isArray(blockedPatterns)) {
+  private matchesBlockedPattern(text: string, blockedPatterns: any[] | any): boolean {
+    // Safety: handle null/undefined patterns
+    if (!blockedPatterns) {
       return false;
     }
 
     try {
       // Use Aho-Corasick automaton for fast pattern matching
+      // AC class now handles mixed pattern types safely
       const automaton = getOrCreateAutomaton();
       const matches = automaton.search(text);
       
-      // Check if any matches are blocked patterns (only block true "blocked" patterns)
+      // Check if any matches are from the 'blocked' category
       const hasBlockedMatch = matches.some(match => match.category === 'blocked');
       
       if (hasBlockedMatch) {
         return true;
       }
     } catch (error) {
-      logger.warn('Aho-Corasick failed in guardrails, falling back to regex', { error });
+      logger.warn('Aho-Corasick failed in guardrails, falling back to direct evaluation', { 
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
 
-    // Fallback to regex if automaton fails
-    return blockedPatterns.some(pattern => {
+    // Fallback: direct pattern evaluation for mixed types
+    // Convert to array if not already
+    const patternsArray = Array.isArray(blockedPatterns) ? blockedPatterns : [blockedPatterns];
+    
+    return patternsArray.some(pattern => {
       try {
-        const regex = new RegExp(pattern, 'i');
+        // Handle different pattern types safely
+        if (typeof pattern === 'string') {
+          // Simple string includes (case-insensitive)
+          return text.toLowerCase().includes(pattern.toLowerCase());
+        } else if (isRegExp(pattern)) {
+          // Direct regex test
+          return pattern.test(text);
+        } else if (typeof pattern === 'object' && pattern?.pattern) {
+          // Object with pattern property
+          const p = pattern.pattern;
+          if (typeof p === 'string') {
+            return text.toLowerCase().includes(p.toLowerCase());
+          } else if (isRegExp(p)) {
+            return p.test(text);
+          }
+        }
+        
+        // Try to convert unknown types to regex as last resort
+        const regex = new RegExp(String(pattern), 'i');
         return regex.test(text);
       } catch (error) {
-        logger.warn(`Invalid regex pattern: ${pattern}`);
+        // Log pattern evaluation errors but don't crash
+        logger.warn('Pattern evaluation failed in guardrails fallback', { 
+          pattern: typeof pattern === 'object' ? JSON.stringify(pattern) : String(pattern),
+          error: error instanceof Error ? error.message : String(error)
+        });
         return false;
       }
     });

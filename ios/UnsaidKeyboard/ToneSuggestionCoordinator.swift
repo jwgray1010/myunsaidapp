@@ -108,6 +108,80 @@ final class ToneSuggestionCoordinator {
     // MARK: - Suggestion hash guard
     private var lastSuggestionHash = 0
     
+    // MARK: - Last Analysis Cache (fixes empty snapshot issue)
+    private struct LastAnalysis {
+        let text: String
+        let uiTone: String
+        let docSeq: Int
+        let hash: String
+        let timestamp: Date
+        
+        var isStale: Bool {
+            Date().timeIntervalSince(timestamp) > 30.0 // 30s staleness limit
+        }
+    }
+    
+    private var lastAnalysis: LastAnalysis?
+    
+    // MARK: - Smart Triggering Logic
+    private var lastAnalyzedTextCount = 0
+    private var debounceTimer: Timer?
+    private let urgentCharacters: Set<Character> = ["!", "?", ".", "…", "😡", "😤", "💔"]
+    
+    /// Determines if analysis should be triggered based on typing patterns
+    private func shouldTriggerAnalysis(
+        fullText: String,
+        lastInserted: Character?,
+        isDeletion: Bool,
+        triggerReason: String
+    ) -> (shouldTrigger: Bool, isUrgent: Bool, useDebounce: Bool) {
+        
+        let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentCount = trimmed.count
+        let deltaCount = abs(currentCount - lastAnalyzedTextCount)
+        
+        // Always trigger for urgent characters (bypass debounce and rate limit)
+        if let char = lastInserted, urgentCharacters.contains(char) {
+            print("🔥 Urgent trigger: '\(char)' - immediate analysis")
+            return (true, true, false)
+        }
+        
+        // Trigger on word boundaries (space, punctuation, newline)
+        let atBoundary = lastInserted == " " || lastInserted == "\n" || 
+                        (lastInserted?.isPunctuation == true)
+        
+        // Trigger if text grew significantly (≥2 chars since last analysis)
+        let grewSignificantly = deltaCount >= 2
+        
+        if atBoundary || grewSignificantly {
+            print("📝 Boundary/growth trigger: boundary=\(atBoundary), growth=\(deltaCount)")
+            return (true, false, false)  // No debounce for these natural triggers
+        }
+        
+        // For other changes, use debounce
+        if currentCount > lastAnalyzedTextCount || isDeletion {
+            print("⏱ Debounced trigger: will wait 250ms")
+            return (true, false, true)  // Use debounce for continuous typing
+        }
+        
+        print("🚫 No trigger needed")
+        return (false, false, false)
+    }
+    
+    // MARK: - Centralized text snapshot with fallback
+    private func currentPayloadText() -> String {
+        let live = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !live.isEmpty { return live }
+        
+        // Fallback to last analyzed text if live snapshot is empty
+        if let cached = lastAnalysis, !cached.isStale {
+            dlog("🔄 Using cached analysis text (live snapshot empty)")
+            return cached.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        return ""
+    }
+    
     // MARK: - Network state debouncing
     private var reachabilityWorkItem: DispatchWorkItem?
     
@@ -426,35 +500,81 @@ final class ToneSuggestionCoordinator {
     // MARK: - Client-Side Rate Limiting
     
     /// Simple token bucket rate limiter (max 6 calls per 12 seconds)
+    /// Enhanced token bucket rate limiter with adaptive refill and burst capacity
     private class TokenBucket {
-        private let maxTokens: Int = 6
-        private let refillInterval: TimeInterval = 12.0
-        private var tokens: Int
-        private var lastRefill: Date
+        private var tokens: Int = 12           // Increased from 6
+        private let capacity: Int = 16         // Allow burst capacity (+4 tokens)
+        private var lastRefill: TimeInterval = CACurrentMediaTime()
+        private let baseRefillInterval: TimeInterval = 0.8  // 1 token per 800ms (~12/10s)
+        private var adaptiveRefillInterval: TimeInterval = 0.8
+        
+        // Adaptive rate limiting based on network performance
+        private var recentResponseTimes: [TimeInterval] = []
+        private var recentErrors = 0
+        private let performanceWindow = 5  // Track last 5 requests
         
         init() {
-            self.tokens = maxTokens
-            self.lastRefill = Date()
+            self.tokens = capacity - 4  // Start with base tokens, not full burst
         }
         
-        func allowRequest() -> Bool {
-            let now = Date()
-            let elapsed = now.timeIntervalSince(lastRefill)
+        func allowRequest(isUrgent: Bool = false) -> Bool {
+            let now = CACurrentMediaTime()
+            let elapsed = now - lastRefill
             
-            // Refill tokens if enough time has passed
-            if elapsed >= refillInterval {
-                tokens = maxTokens
+            // Refill tokens based on elapsed time
+            let tokensToAdd = Int(elapsed / adaptiveRefillInterval)
+            if tokensToAdd > 0 {
+                tokens = min(capacity, tokens + tokensToAdd)
                 lastRefill = now
             }
             
+            // Allow urgent requests even when bucket is empty (single bypass)
+            if isUrgent && tokens == 0 {
+                print("🔥 Rate limit: URGENT bypass used (punctuation/exclamation)")
+                return true
+            }
+            
             guard tokens > 0 else {
-                print("🚫 Rate limit: No tokens available (max \(maxTokens) per \(refillInterval)s)")
+                print("🚫 Rate limit: No tokens available (\(capacity) capacity, \(String(format: "%.1f", adaptiveRefillInterval * 1000))ms refill)")
                 return false
             }
             
             tokens -= 1
-            print("🪣 Rate limit: \(tokens)/\(maxTokens) tokens remaining")
+            print("🪣 Rate limit: \(tokens)/\(capacity) tokens remaining (refill: \(String(format: "%.0f", adaptiveRefillInterval * 1000))ms)")
             return true
+        }
+        
+        /// Update adaptive refill based on network performance
+        func recordResponse(responseTime: TimeInterval, hadError: Bool) {
+            recentResponseTimes.append(responseTime)
+            if recentResponseTimes.count > performanceWindow {
+                recentResponseTimes.removeFirst()
+            }
+            
+            if hadError {
+                recentErrors += 1
+            }
+            
+            // Adapt refill rate based on recent performance
+            if recentResponseTimes.count >= performanceWindow {
+                let avgResponseTime = recentResponseTimes.reduce(0, +) / Double(recentResponseTimes.count)
+                
+                if avgResponseTime < 0.2 && recentErrors == 0 {
+                    // Fast responses, no errors - allow faster refill
+                    adaptiveRefillInterval = max(0.6, baseRefillInterval * 0.75)  // 25% faster
+                } else if avgResponseTime > 1.0 || recentErrors > 1 {
+                    // Slow responses or errors - be more conservative
+                    adaptiveRefillInterval = min(1.2, baseRefillInterval * 1.5)   // 50% slower
+                } else {
+                    // Normal performance - use base rate
+                    adaptiveRefillInterval = baseRefillInterval
+                }
+                
+                // Reset error counter periodically
+                if recentErrors > 0 {
+                    recentErrors = max(0, recentErrors - 1)
+                }
+            }
         }
     }
     
@@ -735,26 +855,148 @@ final class ToneSuggestionCoordinator {
     private var pendingRequests: [String: URLSessionDataTask] = [:]
     
     func requestSuggestions() {
-        dlog("🎯 DEBUG: requestSuggestions() called with currentText length: \(currentText.count)")
+        let text = currentPayloadText()
+        let isFromCache = !currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "live" : "cache"
+        dlog("🎯 DEBUG: requestSuggestions() called - text length: \(text.count), source: \(isFromCache)")
         
         pendingWorkItem?.cancel()
-        let snapshot = currentText
-        suggestionSnapshot = snapshot
+        suggestionSnapshot = text
+        
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            guard !snapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                dlog("🎯 DEBUG: Snapshot is empty, clearing suggestions")
+            
+            // Enhanced fallback logic with minimum length guard
+            guard !text.isEmpty && text.count >= 6 else {
+                let reason = text.isEmpty ? "NO_TEXT_AVAILABLE" : "BELOW_MIN_LENGTH(\(text.count)<6)"
+                dlog("🎯 SKIP: Suggestions blocked - reason: \(reason)")
+                
                 DispatchQueue.main.async {
-                    self.delegate?.didUpdateSuggestions([])
+                    // Don't clear existing suggestions - show hint for user guidance
+                    if text.isEmpty {
+                        // Could show "Type a message to get suggestions" hint
+                    } else {
+                        // Could show "Type a bit more for suggestions" hint  
+                    }
                     self.delegate?.didUpdateSecureFixButtonState()
                 }
                 return
             }
-            dlog("🎯 DEBUG: Calling generatePerfectSuggestion with snapshot: '\(String(snapshot.prefix(50)))...'")
-            self.generatePerfectSuggestion(from: snapshot)
+            
+            // Check if another suggestions request is already in flight
+            if self.suggestionsInFlight {
+                dlog("🎯 SKIP: Suggestions blocked - reason: REQUEST_IN_FLIGHT")
+                return
+            }
+            
+            dlog("🎯 PROCEED: Calling generatePerfectSuggestion with text (\(isFromCache)): '\(String(text.prefix(50)))...'")
+            self.generatePerfectSuggestion(from: text)
         }
         pendingWorkItem = work
         workQueue.async(execute: work)
+    }
+    
+    /// Request suggestions for explicit button tap - bypasses all rate limits
+    func requestSuggestionsForButtonTap() {
+        let text = currentPayloadText()
+        let isFromCache = !currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "live" : "cache"
+        dlog("🎯 BUTTON TAP: requestSuggestionsForButtonTap() called - text length: \(text.count), source: \(isFromCache)")
+        
+        pendingWorkItem?.cancel()
+        suggestionSnapshot = text
+        
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            
+            // Enhanced fallback logic with minimum length guard
+            guard !text.isEmpty && text.count >= 6 else {
+                let reason = text.isEmpty ? "NO_TEXT_AVAILABLE" : "BELOW_MIN_LENGTH(\(text.count)<6)"
+                dlog("🎯 BUTTON TAP SKIP: Suggestions blocked - reason: \(reason)")
+                
+                DispatchQueue.main.async {
+                    // Don't clear existing suggestions - show hint for user guidance
+                    // Could show hint to user here
+                    self.delegate?.didUpdateSecureFixButtonState()
+                }
+                return
+            }
+            
+            dlog("🎯 BUTTON TAP PROCEED: Generating suggestions (bypassing rate limits) with text (\(isFromCache)): '\(String(text.prefix(50)))...'")
+            self.generatePerfectSuggestionForButtonTap(from: text)
+        }
+        
+        pendingWorkItem = work
+        workQueue.async(execute: work)
+    }
+    
+    /// Generate suggestions for button tap - bypasses all rate limits
+    private func generatePerfectSuggestionForButtonTap(from snapshot: String) {
+        print("🎯 🔥 BUTTON TAP: generatePerfectSuggestionForButtonTap called with snapshot length: \(snapshot.count)")
+        dlog("🎯 BUTTON TAP: generatePerfectSuggestionForButtonTap called with snapshot length: \(snapshot.count)")
+        
+        var textToAnalyze = snapshot
+        if textToAnalyze.count > 1000 { textToAnalyze = String(textToAnalyze.suffix(1000)) }
+        
+        print("🎯 🔥 BUTTON TAP: About to analyze text for suggestions: '\(String(textToAnalyze.prefix(50)))...' (length: \(textToAnalyze.count))")
+        
+        var context: [String: Any] = [
+            "text": textToAnalyze,
+            "userId": getUserId(),
+            "userEmail": getUserEmail() ?? NSNull(),
+            "features": ["advice", "evidence"],
+            "maxSuggestions": 3,
+            "meta": [
+                "source": "keyboard_button_tap", // Mark as explicit user action
+                "request_type": "suggestion",
+                "context": "general",
+                "timestamp": isoTimestamp(),
+                "bypass_rate_limits": true // Flag for backend
+            ]
+        ]
+        
+        // ✅ Include cached tone analysis if available
+        if let storedAnalysis = lastToneAnalysis,
+           let toneData = storedAnalysis["toneAnalysis"] as? [String: Any] {
+            context["toneAnalysis"] = toneData
+            
+            if let detectedContext = toneData["context"] as? String, !detectedContext.isEmpty {
+                context["meta"] = [
+                    "source": "keyboard_button_tap",
+                    "request_type": "suggestion", 
+                    "context": detectedContext,
+                    "timestamp": isoTimestamp(),
+                    "bypass_rate_limits": true
+                ]
+            }
+            
+            #if DEBUG
+            throttledLog("🎯 BUTTON TAP: Using cached tone analysis with ui_tone: \(toneData["ui_tone"] ?? "unknown")", category: "suggestions")
+            #endif
+        } else {
+            #if DEBUG
+            throttledLog("🎯 BUTTON TAP: No cached tone analysis available, proceeding with default", category: "suggestions")
+            #endif
+        }
+        
+        context.merge(personalityPayload()) { _, new in new }
+        
+        // Call regular API - the bypass is handled by not checking rate limits above
+        callSuggestionsAPI(context: context, usingSnapshot: textToAnalyze) { [weak self] suggestion in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                if let s = suggestion, !s.isEmpty {
+                    self.suggestions = [s]
+                    self.delegate?.didUpdateSuggestions(self.suggestions)
+                    self.delegate?.didUpdateSecureFixButtonState()
+                    self.storeSuggestionGenerated(suggestion: s)
+                    print("🎯 🔥 BUTTON TAP: Successfully generated suggestion")
+                } else {
+                    self.suggestions = []
+                    self.delegate?.didUpdateSuggestions([])
+                    self.delegate?.didUpdateSecureFixButtonState()
+                    print("🎯 🔥 BUTTON TAP: No suggestion generated")
+                }
+            }
+        }
     }
     
     func fetchSuggestions(for text: String, completion: @escaping ([String]?) -> Void) {
@@ -763,7 +1005,7 @@ final class ToneSuggestionCoordinator {
         }
         
         // Check client-side rate limiting
-        guard rateLimiter.allowRequest() else {
+        guard rateLimiter.allowRequest(isUrgent: false) else {
             print("🚫 Suggestions: Rate limit exceeded, skipping")
             completion(nil)
             return
@@ -1580,7 +1822,7 @@ final class ToneSuggestionCoordinator {
         KBDLog("🧪 Testing tone API with text: '\(text)'", .info)
         
         // Check client-side rate limiting first
-        guard rateLimiter.allowRequest() else {
+        guard rateLimiter.allowRequest(isUrgent: false) else {
             KBDLog("🧪 Rate limit exceeded - cannot test API", .error)
             return
         }
@@ -1811,7 +2053,7 @@ extension ToneSuggestionCoordinator {
         }
         
         // Check client-side rate limiting
-        guard rateLimiter.allowRequest() else {
+        guard rateLimiter.allowRequest(isUrgent: false) else {
             print("🚫 DEBUG: Rate limit exceeded, skipping analysis")
             return
         }
@@ -2262,13 +2504,21 @@ extension ToneSuggestionCoordinator {
     
     // MARK: - Full-Text Analysis Methods (unified ToneScheduler functionality)
     
-    /// Schedule full-text analysis with debouncing
+    /// Schedule full-text analysis with smart triggering and debouncing
     /// - Parameters:
     ///   - fullText: Complete text content to analyze
     ///   - triggerReason: Why analysis was triggered (idle, punctuation, etc.)
-    func scheduleFullTextAnalysis(fullText: String, triggerReason: String = "idle") {
+    ///   - lastInserted: Last character typed (for smart triggering)
+    ///   - isDeletion: Whether this was a deletion operation
+    func scheduleFullTextAnalysis(
+        fullText: String, 
+        triggerReason: String = "idle",
+        lastInserted: Character? = nil,
+        isDeletion: Bool = false
+    ) {
         // Cancel previous debounce
         debounceTask?.cancel()
+        debounceTimer?.invalidate()
         
         let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
         let textHash = sha256(trimmed)
@@ -2281,6 +2531,7 @@ extension ToneSuggestionCoordinator {
                 self.delegate?.didUpdateToneStatus("neutral")
             }
             lastTextHash = ""
+            lastAnalyzedTextCount = 0
             return
         }
         
@@ -2290,37 +2541,66 @@ extension ToneSuggestionCoordinator {
             return
         }
         
-        // Skip if text change is minimal (less than 3 characters different)
-        if !lastTextHash.isEmpty {
-            let lastLength = lastTextHash.count
-            let currentLength = trimmed.count
-            let lengthDiff = abs(currentLength - lastLength)
-            
-            if lengthDiff < 3 && currentLength > 5 {
-                print("📄 ToneCoordinator: Skipping analysis - text change too minimal (\(lengthDiff) chars diff)")
-                return
-            }
+        // Apply smart triggering logic
+        let (shouldTrigger, isUrgent, useDebounce) = shouldTriggerAnalysis(
+            fullText: trimmed,
+            lastInserted: lastInserted,
+            isDeletion: isDeletion,
+            triggerReason: triggerReason
+        )
+        
+        guard shouldTrigger else {
+            print("📄 ToneCoordinator: Smart trigger declined analysis")
+            return
         }
         
         // Reset to neutral if text is too short (but not empty)
         guard shouldAnalyzeFullText(trimmed) else {
             print("📄 ToneCoordinator: Text too short (\(trimmed.count) chars) - skipping analysis but keeping current tone")
-            // Don't reset to neutral - this prevents premature "clear" state
-            // Just skip analysis and let longer text trigger proper analysis
             lastTextHash = textHash
             return
         }
         
-        print("📄 ToneCoordinator: Scheduling full-text analysis for \(trimmed.count) chars, trigger: \(triggerReason)")
-        
-        debounceTask = Task { [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: UInt64(self?.debounceInterval ?? 0.4 * 1_000_000_000))
-                await self?.performFullTextAnalysis(fullText: trimmed, textHash: textHash)
-            } catch {
-                // Task cancelled (normal for debouncing)
+        let performAnalysis = { [weak self] in
+            Task {
+                await self?.performFullTextAnalysisWithRateLimit(
+                    fullText: trimmed,
+                    textHash: textHash,
+                    isUrgent: isUrgent
+                )
             }
         }
+        
+        if useDebounce {
+            // Use 250ms debounce for continuous typing
+            print("📄 ToneCoordinator: Debouncing analysis for 250ms")
+            debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) { _ in
+                _ = performAnalysis()
+            }
+        } else {
+            // Immediate analysis for word boundaries, urgent chars, growth
+            print("📄 ToneCoordinator: Immediate analysis - trigger: \(triggerReason), urgent: \(isUrgent)")
+            _ = performAnalysis()
+        }
+    }
+    
+    /// Perform full-text analysis with enhanced rate limiting
+    private func performFullTextAnalysisWithRateLimit(
+        fullText: String,
+        textHash: String,
+        isUrgent: Bool = false
+    ) async {
+        // Check rate limiting with urgent bypass
+        guard rateLimiter.allowRequest(isUrgent: isUrgent) else {
+            dlog("🚫 Rate limited: Analysis skipped for text hash \(String(textHash.prefix(8)))")
+            return
+        }
+        
+        // Record that we're about to attempt analysis
+        lastAnalyzedTextCount = fullText.count
+        
+        // Perform the actual analysis
+        await performFullTextAnalysis(fullText: fullText, textHash: textHash)
     }
     
     /// Immediately trigger analysis (for urgent cases like punctuation)
@@ -2429,12 +2709,21 @@ extension ToneSuggestionCoordinator {
         // Use updated postTone method with full-text mode
         do {
             let result = try await postTone(base: apiBaseURL, text: fullText, token: cachedAPIKey.nilIfEmpty, fullTextMode: true)
+            let responseTime = Date().timeIntervalSince(startTime)
+            
+            // Record performance for adaptive rate limiting
+            rateLimiter.recordResponse(responseTime: responseTime, hadError: false)
             
             // Handle result on workQueue to maintain thread safety
             onQ {
                 self.handleFullTextAnalysisResult(result, expectedDocSeq: docSeq, expectedHash: textHash, startTime: startTime)
             }
         } catch {
+            let responseTime = Date().timeIntervalSince(startTime)
+            
+            // Record error for adaptive rate limiting
+            rateLimiter.recordResponse(responseTime: responseTime, hadError: true)
+            
             // Handle error on workQueue to maintain thread safety
             onQ {
                 print("📄 ToneCoordinator: Full-text analysis failed - \(error)")
@@ -2459,6 +2748,16 @@ extension ToneSuggestionCoordinator {
             if let buckets = buckets {
                 print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", buckets.clear)), caution: \(String(format: "%.2f", buckets.caution)), alert: \(String(format: "%.2f", buckets.alert))")
             }
+
+            // Cache the successful analysis for fallback use in suggestions
+            self.lastAnalysis = LastAnalysis(
+                text: result.text,
+                uiTone: uiTone,
+                docSeq: expectedDocSeq,
+                hash: expectedHash,
+                timestamp: Date()
+            )
+            print("💾 Cached analysis: '\(String(result.text.prefix(50)))...', tone: \(uiTone)")
 
             // Cache the result for future requests
             self.analysisCache[expectedHash] = (tone: uiTone, timestamp: Date())

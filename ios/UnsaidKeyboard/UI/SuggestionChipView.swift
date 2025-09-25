@@ -2,7 +2,9 @@
 //  SuggestionChipView.swift
 //  UnsaidKeyboard
 //
-//  Lightweight, accessible suggestion “chip” with expand/collapse,
+//  Lightweight, accessible s    /// Sets the collapsed preview content and visual tone.
+    /// Note: In **neutral** tone we intentionally hide the icon (no "sparkles").
+
 //  adaptive animations, and no “sparkles” icon in neutral state.
 //
 
@@ -21,7 +23,9 @@ final class SuggestionChipView: UIControl {
     // MARK: - UI
     private let capsule = UIView()
     private let iconView = UIImageView()
-    private let textLabel = UILabel()
+    private let textLabel = UILabel()               // collapsed preview
+    private let scrollView = UIScrollView()         // expanded container
+    private let textView = UITextView()             // expanded, scrollable
     private let chevronButton = UIButton(type: .system)
     private let closeButton = UIButton(type: .system)
 
@@ -42,6 +46,16 @@ final class SuggestionChipView: UIControl {
     private var didNotifyDismiss = false
     private var hasDismissed = false
 
+    // MARK: - Paging state (no UIScrollView)
+    private var pages: [NSRange] = []
+    private var currentPage = 0
+    private let layoutManager = NSLayoutManager()
+    private let textStorage = NSTextStorage()
+    private let textContainer = NSTextContainer(size: .zero)
+    
+    // How many lines per page when expanded (tweak to taste)
+    private let linesPerPageExpanded = 4
+
     // Layout
     private let collapsedHeight: CGFloat = 44
     private let compactVPad: CGFloat = 8
@@ -51,6 +65,7 @@ final class SuggestionChipView: UIControl {
 
     private var compactConstraints: [NSLayoutConstraint] = []
     private var expandedConstraints: [NSLayoutConstraint] = []
+    private var maxExpandedHeightConstraint: NSLayoutConstraint?
 
     // Performance toggles
     private var enableShadows: Bool {
@@ -79,14 +94,20 @@ final class SuggestionChipView: UIControl {
     // MARK: - Public
 
     /// Sets the collapsed preview content and visual tone.
-    /// Note: In **neutral** tone we intentionally hide the icon (no “sparkles”).
+    /// Note: In **neutral** tone we intentionally hide the icon (no "sparkles").
     func setPreview(text: String, tone: ToneStatus, textHash: String) {
         self.fullText = text
         self.textHash = textHash
 
+        textLabel.isHidden = false
         textLabel.text = text
         textLabel.numberOfLines = 1
         textLabel.lineBreakMode = .byTruncatingTail
+
+        // reset expanded views
+        scrollView.isHidden = true
+        textView.text = ""
+        
         applyTone(tone, animated: false)
 
         // Accessibility
@@ -102,9 +123,10 @@ final class SuggestionChipView: UIControl {
 
     /// Sets the fully expanded content layout.
     func setExpanded(fullText: String) {
-        textLabel.text = fullText
-        textLabel.numberOfLines = 0
-        textLabel.lineBreakMode = .byWordWrapping
+        // show scrollable body
+        textLabel.isHidden = true
+        scrollView.isHidden = false
+        textView.text = fullText
         accessibilityValue = fullText
         accessibilityHint = "Swipe up or press close to dismiss"
     }
@@ -217,13 +239,49 @@ final class SuggestionChipView: UIControl {
         textLabel.textColor = .white
         textLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
+        // TextKit plumbing
+        textStorage.addLayoutManager(layoutManager)
+        layoutManager.addTextContainer(textContainer)
+        textContainer.lineFragmentPadding = 0
+        textContainer.maximumNumberOfLines = 0
+        textContainer.lineBreakMode = .byWordWrapping
+
+        // Expanded scrollable text
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.isHidden = true     // hidden in collapsed mode
+        scrollView.alwaysBounceVertical = true
+        scrollView.showsVerticalScrollIndicator = true
+        scrollView.contentInset = .zero
+
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.isEditable = false
+        textView.isScrollEnabled = false   // let scrollView handle scrolling
+        textView.backgroundColor = .clear
+        textView.textColor = .white
+        textView.font = .systemFont(ofSize: 15, weight: .semibold)
+        textView.textContainerInset = .init(top: 0, left: 0, bottom: 0, right: 0)
+        textView.textContainer.lineFragmentPadding = 0
+        textView.adjustsFontForContentSizeCategory = true
+        textView.accessibilityTraits.insert(.staticText)
+
+        scrollView.addSubview(textView)
+        NSLayoutConstraint.activate([
+            textView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            textView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            textView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            textView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            textView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
+        ])
+
         // Chevron (expand/collapse)
         chevronButton.translatesAutoresizingMaskIntoConstraints = false
         chevronButton.setImage(UIImage(systemName: "chevron.right"), for: .normal)
         chevronButton.tintColor = .white
         chevronButton.accessibilityLabel = "Expand suggestion"
         chevronButton.addAction(UIAction { [weak self] _ in
-            self?.expandIfNeeded()
+            guard let self else { return }
+            if !self.isExpanded { self.expandIfNeeded(); return }
+            self.advancePageIfPossible()
         }, for: .touchUpInside)
         chevronButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
@@ -250,22 +308,43 @@ final class SuggestionChipView: UIControl {
         mainStack.spacing = 10
         capsule.addSubview(mainStack)
 
+        // Put scrollView under mainStack to span full width when expanded
+        capsule.addSubview(scrollView)
+
         // Compact constraints (collapsed)
         compactConstraints = [
             mainStack.topAnchor.constraint(equalTo: capsule.topAnchor, constant: compactVPad),
             mainStack.leadingAnchor.constraint(equalTo: capsule.leadingAnchor, constant: hPadCompact),
             mainStack.trailingAnchor.constraint(equalTo: capsule.trailingAnchor, constant: -hPadCompact),
             mainStack.bottomAnchor.constraint(equalTo: capsule.bottomAnchor, constant: -compactVPad),
-            heightAnchor.constraint(lessThanOrEqualToConstant: collapsedHeight)
+            heightAnchor.constraint(lessThanOrEqualToConstant: collapsedHeight),
+
+            // keep scrollView out of layout when hidden
+            scrollView.topAnchor.constraint(equalTo: mainStack.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: capsule.leadingAnchor, constant: hPadCompact),
+            scrollView.trailingAnchor.constraint(equalTo: capsule.trailingAnchor, constant: -hPadCompact),
+            scrollView.bottomAnchor.constraint(equalTo: capsule.bottomAnchor, constant: -compactVPad),
+            scrollView.heightAnchor.constraint(equalToConstant: 0) // collapsed state keeps it zero
         ]
 
-        // Expanded constraints (more padding; height stretches naturally)
+        // Expanded constraints
         expandedConstraints = [
+            // top row (icon + chevron + close) remains
             mainStack.topAnchor.constraint(equalTo: capsule.topAnchor, constant: expandedVPad),
             mainStack.leadingAnchor.constraint(equalTo: capsule.leadingAnchor, constant: hPadExpanded),
             mainStack.trailingAnchor.constraint(equalTo: capsule.trailingAnchor, constant: -hPadExpanded),
-            mainStack.bottomAnchor.constraint(equalTo: capsule.bottomAnchor, constant: -expandedVPad)
+
+            // scrollable body below
+            scrollView.topAnchor.constraint(equalTo: mainStack.bottomAnchor, constant: 8),
+            scrollView.leadingAnchor.constraint(equalTo: capsule.leadingAnchor, constant: hPadExpanded),
+            scrollView.trailingAnchor.constraint(equalTo: capsule.trailingAnchor, constant: -hPadExpanded),
+            scrollView.bottomAnchor.constraint(equalTo: capsule.bottomAnchor, constant: -expandedVPad)
         ]
+
+        // cap max expanded height (~40% of container height, clamped)
+        let maxH: CGFloat = 160   // good default for keyboard area
+        maxExpandedHeightConstraint = heightAnchor.constraint(lessThanOrEqualToConstant: maxH)
+        // (Activate this only while expanded)
 
         NSLayoutConstraint.activate(compactConstraints)
 
@@ -287,40 +366,48 @@ final class SuggestionChipView: UIControl {
         super.layoutSubviews()
         capsule.layer.shadowOpacity = enableShadows ? 1 : 0
         capsule.layer.shadowPath = UIBezierPath(roundedRect: capsule.bounds, cornerRadius: 18).cgPath
+        
+        // Keep pages in sync with size changes
+        if isExpanded {
+            let oldWidth = textContainer.size.width
+            let newWidth = max(10, capsule.bounds.width - (hPadExpanded * 2))
+            if abs(newWidth - oldWidth) > 0.5 {  // reflow only on meaningful changes
+                recomputePages()
+                currentPage = min(currentPage, max(0, pages.count - 1))
+                showCurrentPage()
+            }
+        }
     }
 
     // MARK: - Behavior
 
     private func expandIfNeeded() {
-        guard !isExpanded else { return }
+        guard !isExpanded else { 
+            advancePageIfPossible()
+            return
+        }
         isExpanded = true
         UnifiedHapticsController.shared.selection()
         onExpanded?()
 
-        // stop auto-hide while expanded
-        autoHideTimer?.invalidate()
-        autoHideTimer = nil
+        autoHideTimer?.invalidate(); autoHideTimer = nil
 
-        // Rotate chevron and expand layout
-        let rotateChevron = {
-            self.chevronButton.transform = CGAffineTransform(rotationAngle: .pi / 2)
-        }
+        // Rotate chevron
+        let rotateChevron = { self.chevronButton.transform = CGAffineTransform(rotationAngle: .pi / 2) }
 
-        if shouldAnimate {
-            UIView.animate(withDuration: 0.18, animations: rotateChevron)
-            UIView.animate(withDuration: 0.26, delay: 0, options: [.curveEaseInOut]) {
-                NSLayoutConstraint.deactivate(self.compactConstraints)
-                NSLayoutConstraint.activate(self.expandedConstraints)
-                self.setExpanded(fullText: self.fullText)
-                self.superview?.layoutIfNeeded()
-            }
-        } else {
-            rotateChevron()
-            NSLayoutConstraint.deactivate(compactConstraints)
-            NSLayoutConstraint.activate(expandedConstraints)
-            setExpanded(fullText: fullText)
-            superview?.layoutIfNeeded()
-        }
+        if shouldAnimate { UIView.animate(withDuration: 0.18) { rotateChevron() } } else { rotateChevron() }
+
+        // Switch to expanded constraints & compute pages for current width
+        NSLayoutConstraint.deactivate(compactConstraints)
+        NSLayoutConstraint.activate(expandedConstraints)
+        setExpanded(fullText: fullText)
+
+        // Build pages based on current width and target line count
+        recomputePages()
+        currentPage = 0
+        showCurrentPage()
+
+        superview?.layoutIfNeeded()
     }
 
     @objc private func handleSwipeUp() {
@@ -337,6 +424,7 @@ final class SuggestionChipView: UIControl {
         let applyBlock = {
             self.capsule.backgroundColor = colors.bg
             self.textLabel.textColor = colors.textColor
+            self.textView.textColor = colors.textColor
             self.chevronButton.tintColor = colors.iconColor
             self.closeButton.tintColor = colors.iconColor
 
@@ -372,6 +460,97 @@ final class SuggestionChipView: UIControl {
         case .clear:
             return (UIColor.systemGreen.withAlphaComponent(0.92), "checkmark.seal.fill", .white, .white)
         }
+    }
+
+    // MARK: - Page Computation and Navigation
+
+    private func recomputePages() {
+        guard isExpanded else { pages = []; currentPage = 0; return }
+
+        // Measure with the label's available width
+        let width = max(10, capsule.bounds.width - (hPadExpanded * 2))
+        let height = CGFloat.greatestFiniteMagnitude
+        textContainer.size = CGSize(width: width, height: height)
+
+        // Build attributed string matching the label's look
+        let attr = NSMutableAttributedString(string: fullText)
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byWordWrapping
+        attr.addAttributes([
+            .font: textLabel.font as Any,
+            .foregroundColor: textLabel.textColor as Any,
+            .paragraphStyle: style
+        ], range: NSRange(location: 0, length: attr.length))
+
+        textStorage.setAttributedString(attr)
+
+        // Walk line fragments and group into page ranges
+        var lineRanges: [NSRange] = []
+        var glyphIndex = 0
+        while glyphIndex < layoutManager.numberOfGlyphs {
+            var lineRange = NSRange(location: 0, length: 0)
+            layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: &lineRange)
+            lineRanges.append(lineRange)
+            glyphIndex = NSMaxRange(lineRange)
+        }
+
+        // Group every N lines into a page
+        pages.removeAll(keepingCapacity: true)
+        var i = 0
+        while i < lineRanges.count {
+            let slice = Array(lineRanges[i..<min(i + linesPerPageExpanded, lineRanges.count)])
+            let loc = slice.first!.location
+            let len = NSMaxRange(slice.last!) - loc
+            pages.append(NSRange(location: loc, length: len))
+            i += linesPerPageExpanded
+        }
+
+        // Fall back to single page if we didn't detect lines (very short text)
+        if pages.isEmpty {
+            pages = [NSRange(location: 0, length: textStorage.length)]
+        }
+
+        // Show/hide chevron depending on more pages
+        chevronButton.isHidden = (pages.count <= 1)
+    }
+
+    private func showCurrentPage() {
+        guard currentPage < pages.count else { return }
+        let page = pages[currentPage]
+        // Keep the label multi-line but clamp the visible substring to this page
+        let visible = (textStorage.string as NSString).substring(with: page)
+        textLabel.text = visible
+
+        // If last page, dim or hide chevron
+        chevronButton.alpha = (currentPage == pages.count - 1) ? 0.3 : 1.0
+        chevronButton.isEnabled = (currentPage < pages.count - 1)
+    }
+
+    private func advancePageIfPossible() {
+        guard isExpanded else { expandIfNeeded(); return }
+        guard currentPage + 1 < pages.count else {
+            // Optional behaviors on last page:
+            // 1) Dismiss:
+            // onDismiss?(); dismiss(animated: true); return
+            // 2) Collapse back to preview:
+            collapseToPreview(); return
+        }
+        currentPage += 1
+        UnifiedHapticsController.shared.lightTap()
+        if shouldAnimate {
+            UIView.transition(with: textLabel, duration: 0.18, options: .transitionCrossDissolve) { self.showCurrentPage() }
+        } else {
+            showCurrentPage()
+        }
+    }
+
+    private func collapseToPreview() {
+        isExpanded = false
+        chevronButton.transform = .identity
+        NSLayoutConstraint.deactivate(expandedConstraints)
+        NSLayoutConstraint.activate(compactConstraints)
+        setPreview(text: fullText, tone: .neutral, textHash: textHash) // tone will be reapplied by presenter
+        superview?.layoutIfNeeded()
     }
 
     // MARK: - Auto-hide (collapsed only)

@@ -58,7 +58,7 @@ export const suggestionRequestSchema = z.object({
   
   // Enhanced toneAnalysis to match SuggestionInputV1 interface
   toneAnalysis: z.object({
-    classification: z.string().describe('Tone classification from tone.ts (e.g., clear, caution, alert, neutral)'),
+    classification: z.enum(['clear', 'caution', 'alert', 'neutral']).describe('Tone classification from tone.ts (clear, caution, alert, neutral)'),
     confidence: z.number().min(0).max(1).describe('Confidence score for the tone classification'),
     ui_distribution: z.object({
       clear: z.number().min(0).max(1).describe('Clear tone probability'),
@@ -68,8 +68,9 @@ export const suggestionRequestSchema = z.object({
     intensity: z.number().min(0).max(1).optional().describe('Emotional intensity score'),
   }).optional().describe('Pre-computed tone analysis result from coordinator - when provided, eliminates duplicate tone analysis computation'),
   
-  context: z.string().optional().describe('Communication context - auto-detected from text if not provided'),
-  attachmentStyle: z.string().optional().describe('User attachment style (secure, anxious, avoidant, disorganized)'),
+  
+  context: contextSchema.describe('Communication context - auto-detected from text if not provided'),
+  attachmentStyle: attachmentStyleSchema.optional().describe('User attachment style (secure, anxious, avoidant, disorganized)'),
   
   // Rich analysis data from tone.ts 
   rich: z.object({
@@ -134,7 +135,7 @@ export const suggestionItemSchema = z.object({
     attachmentStyles: z.array(z.string()).optional(),
     intent: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
-    patterns: z.array(z.string()).optional(),
+    patterns: z.array(z.string()).optional().describe('Pattern IDs/labels for matching, not raw regex expressions'),
     source: z.string().optional()
   }).optional(),
   score: z.number().optional()

@@ -129,6 +129,7 @@ export async function initAdviceSearch(): Promise<void> {
       ...uniq(it.contexts || []),
       ...uniq(it.attachmentStyles || []),
       ...uniq(it.boostSources || []),
+      ...uniq((it as any).tags || []),           // ← add this line
       ...uniq((it as any).keywords || [])
     ].filter(Boolean).join(' ')
   }));

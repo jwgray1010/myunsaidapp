@@ -22,17 +22,42 @@ final class SuggestionChipManager {
     private weak var suggestionBar: UIView?
     private var activeChip: SuggestionChipView?
     
+    // 🔒 When true, only explicit button taps may show chips.
+    private var requireExplicitTap = false
+    
     // First-time user tutorial management
     private static let tutorialShownKey = "UnsaidKeyboardTutorialShown"
+
+    enum SuggestionOrigin { 
+        case auto
+        case explicitTap 
+    }
 
     init(containerView: UIView) {
         self.containerView = containerView
     }
 
-    func showSuggestion(text: String, tone: ToneStatus) {
+    func showSuggestion(text: String, tone: ToneStatus, origin: SuggestionOrigin = .auto) {
         #if DEBUG
+        KBDLog("📨 ChipManager.showSuggestion origin=\(origin) requireExplicitTap=\(requireExplicitTap)", .debug, "ChipManager")
         KBDLog("📨 ChipManager: showSuggestion called with text: '\(text)', tone: \(tone)", .debug, "ChipManager")
         #endif
+        
+        // Block autos when user closed a chip, until next explicit tap
+        if requireExplicitTap && origin == .auto {
+            #if DEBUG
+            KBDLog("🚫 ChipManager: auto blocked (awaiting explicit tap)", .debug, "ChipManager")
+            #endif
+            return
+        }
+
+        // If this came from an explicit tap, clear the gate
+        if origin == .explicitTap { 
+            requireExplicitTap = false 
+            #if DEBUG
+            KBDLog("🔓 ChipManager: explicit tap - clearing gate", .debug, "ChipManager")
+            #endif
+        }
         
         guard let containerView = containerView else { return }
 
@@ -91,7 +116,11 @@ final class SuggestionChipManager {
             #if DEBUG
             KBDLog("⏰ ChipManager: Clearing active chip reference (timeout)", .debug, "ChipManager")
             #endif
+            // ⏱️ Also pause autos after timeout so we don't nag; explicit tap re-enables
+            self.requireExplicitTap = true
             if self.activeChip === chip { self.activeChip = nil }
+            // Disarm so the next suggestion needs a tap again
+            (containerView as? KeyboardController)?.suggestionsArmed = false
         }
 
         containerView.addSubview(chip) // layout first
@@ -126,6 +155,8 @@ final class SuggestionChipManager {
                 guard let self, let chip else { return }
                 bar?.isUserInteractionEnabled = oldBarUserInteraction
                 self.delegate?.suggestionChipDidDismiss(chip)
+                // ✅ User explicitly closed a suggestion: require explicit tap to show next ones
+                self.requireExplicitTap = true
                 if self.activeChip === chip { 
                     #if DEBUG
                     KBDLog("🗑️ ChipManager: Clearing active chip reference (user dismissed)", .debug, "ChipManager")
@@ -141,6 +172,25 @@ final class SuggestionChipManager {
                 chip.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -12)
             ])
             containerView.bringSubviewToFront(chip)
+            
+            // Handle dismiss for fallback case too
+            chip.onDismissed = { [weak self, weak chip] in
+                guard let self, let chip else { return }
+                KBDLog("🏁 ChipManager: Chip fully dismissed, clearing reference", .debug, "ChipManager")
+                if self.activeChip === chip { self.activeChip = nil }
+            }
+            chip.onDismiss = { [weak self, weak chip] in
+                guard let self, let chip else { return }
+                self.delegate?.suggestionChipDidDismiss(chip)
+                // ✅ User explicitly closed a suggestion: require explicit tap to show next ones
+                self.requireExplicitTap = true
+                if self.activeChip === chip { 
+                    #if DEBUG
+                    KBDLog("🗑️ ChipManager: Clearing active chip reference (user dismissed)", .debug, "ChipManager")
+                    #endif
+                    self.activeChip = nil 
+                }
+            }
         }
         
         activeChip = chip
@@ -166,6 +216,16 @@ final class SuggestionChipManager {
         if isTutorialMessage(text) {
             markTutorialAsShown()
         }
+    }
+    
+    // MARK: - Convenience Methods for Origin-based Suggestions
+    
+    func showAutoSuggestion(text: String, toneString: String) {
+        showSuggestion(text: text, tone: ToneStatus(from: toneString), origin: .auto)
+    }
+
+    func showButtonSuggestion(text: String, toneString: String) {
+        showSuggestion(text: text, tone: ToneStatus(from: toneString), origin: .explicitTap)
     }
     
     private func isTutorialMessage(_ text: String) -> Bool {

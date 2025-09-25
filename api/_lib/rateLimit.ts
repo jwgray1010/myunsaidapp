@@ -1,4 +1,4 @@
-// api/_lib/ratelimit.ts
+// api/_lib/rateLimit.ts
 /**
  * IMPROVED RATE LIMITING FOR UNSAID API
  * 
@@ -99,10 +99,10 @@ export function createRateLimit(config: RateLimitConfig) {
     skipSuccessfulRequests = false,
     skipFailedRequests = false,
     skip = (req) => {
-      // Default skip: true for OPTIONS, /api/health, /api/metrics
+      // Default skip: true for OPTIONS, /api/health, /api/metrics (with query params)
       return req.method === 'OPTIONS' || 
-             req.url === '/api/health' || 
-             req.url === '/api/metrics';
+             req.url?.startsWith('/api/health') || 
+             req.url?.startsWith('/api/metrics');
     },
     standardHeaders = true,
     legacyHeaders = false,

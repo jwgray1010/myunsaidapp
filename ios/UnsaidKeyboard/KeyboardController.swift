@@ -124,6 +124,11 @@ final class KeyboardController: UIView,
     private var coordinator: ToneSuggestionCoordinator?
     private var isNetworkReachable = true // Track network state for UI updates
     
+    // MARK: - Suggestion Gating
+    private var suggestionsArmed = false
+    private var suggestionCooldownUntil: CFTimeInterval = 0
+    private let suggestionCooldown: CFTimeInterval = 0.8
+    
     // MARK: - Configuration and Logging
     private var didConfigure = false
     private let logger = Logger(subsystem: "com.example.unsaid.UnsaidKeyboard", category: "KeyboardController")
@@ -190,9 +195,9 @@ final class KeyboardController: UIView,
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         
         // Too short overall
-        if trimmed.count < 4 { 
+        if trimmed.count < 4 {
             print("📏 Analysis skipped: text too short (\(trimmed.count) chars)")
-            return false 
+            return false
         }
         
         // Single word that's too short
@@ -268,9 +273,9 @@ final class KeyboardController: UIView,
             return
         }
         
-        guard let coordinator = coordinator else { 
+        guard let coordinator = coordinator else {
             print("❌ DEBUG: coordinator is nil in scheduleAnalysisRouter")
-            return 
+            return
         }
         
         print("✅ DEBUG: coordinator exists and network is reachable, proceeding with full-text analysis")
@@ -283,13 +288,21 @@ final class KeyboardController: UIView,
         print("📝 DEBUG: Full text snapshot: '\(String(fullText.prefix(100)))...' (length: \(fullText.count))")
         
         // Special case: If text is completely empty, reset to neutral
-        // This only happens when the entire message has been deleted
+        // Only reset if this appears to be an intentional clear (not momentary empty proxy)
         let trimmedText = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedText.isEmpty {
-            print("🔄 DEBUG: Text is completely empty, resetting tone to neutral")
-            DispatchQueue.main.async { [weak self] in
-                self?.didUpdateToneStatus("neutral")
-                self?.coordinator?.resetToCleanState() // ← add this
+            // Guard against momentary empty snapshots - only reset if we previously had substantial text
+            if currentText.trimmingCharacters(in: .whitespacesAndNewlines).count > 10 {
+                print("🔄 DEBUG: Text cleared from substantial content, resetting tone to neutral")
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.didUpdateToneStatus("neutral")
+                    self.suggestionChipManager.dismissCurrentChip()
+                    self.suggestionsArmed = false        // ← critical
+                    self.coordinator?.resetToCleanState()
+                }
+            } else {
+                print("🚫 DEBUG: Ignoring momentary empty snapshot (previous text was minimal)")
             }
             return
         }
@@ -493,15 +506,14 @@ final class KeyboardController: UIView,
         // Update tone button state based on connectivity
         if let toneButton = toneButton {
             toneButton.isEnabled = reachable
-            if !reachable {
-                // Set to neutral/disabled state when offline
-                setToneStatus(.neutral, animated: false)
-            }
+            // REMOVED: Don't force-neutral on brief offline - just disable button
+            // This prevents tone state corruption during network blips
         }
         
         // Dismiss suggestion chips when going offline
         if !reachable {
             suggestionChipManager.dismissCurrentChip()
+            suggestionsArmed = false
         } else {
             // When coming back online, re-attempt analysis if there's text
             let fullText = snapshotFullText()
@@ -796,9 +808,9 @@ final class KeyboardController: UIView,
     }
     
     func suggestionChipDidDismiss(_ chip: SuggestionChipView) {
-        // Reset SecureFix gate when advice is dismissed
         secureFixManager.resetAdviceGate()
         quickFixButton?.alpha = 0.5
+        suggestionsArmed = false  // require re-tap
     }
 
     // MARK: - SpaceHandlerDelegate
@@ -1095,7 +1107,7 @@ final class KeyboardController: UIView,
             button.alpha = 1.0
         }
         
-        // Force layout pass to ensure gradient frame is correct  
+        // Force layout pass to ensure gradient frame is correct
         DispatchQueue.main.async { [weak self] in
             // Removed redundant setToneStatus call - already set on line 796
             
@@ -1208,7 +1220,7 @@ final class KeyboardController: UIView,
         }
         
         // Skip redundant work if tone is same and visuals are synchronized
-        let visualOutOfSync = (toneGradient == nil) || 
+        let visualOutOfSync = (toneGradient == nil) ||
                              (toneGradient?.colors == nil) ||
                              (bg.layer.animation(forKey: "alertPulse") == nil && tone == .alert) ||
                              bg.alpha < 0.99
@@ -1491,43 +1503,55 @@ final class KeyboardController: UIView,
         stack.spacing = horizontalSpacing
         stack.distribution = .fill
 
-        // Shift (caps) on the left
-        let shift = KeyButtonFactory.makeShiftButton()
-        shift.addTarget(self, action: #selector(handleShiftPressed), for: .touchUpInside)
-        shift.addTarget(self, action: #selector(specialButtonTouchDown(_:)), for: .touchDown)
-        shift.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
-        shiftButton = shift
+        // LEFT: in letters -> Shift; in numbers/symbols -> mode toggle
+        let leftButton: UIButton
+        if currentMode == .letters {
+            let shift = KeyButtonFactory.makeShiftButton()
+            shift.addTarget(self, action: #selector(handleShiftPressed), for: .touchUpInside)
+            shift.addTarget(self, action: #selector(specialButtonTouchDown(_:)), for: .touchDown)
+            shift.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+            shiftButton = shift
+            leftButton = shift
+            // width hint
+            leftButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        } else {
+            // Numbers/Symbols: show toggle ("#+=" on Numbers -> Symbols, "123" on Symbols -> Numbers)
+            let title = (currentMode == .numbers) ? "#+=" : "123"
+            let toggle = KeyButtonFactory.makeModeButton(title: title)
+            toggle.addTarget(self, action: #selector(handleThirdRowToggle), for: .touchUpInside)
+            // reuse shiftButton slot so the rest of the class doesn't break
+            shiftButton = toggle
+            leftButton = toggle
+            leftButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        }
 
-        // Letter keys
+        // MIDDLE: the letters/symbol row
         let lettersRow = UIStackView()
         lettersRow.axis = .horizontal
         lettersRow.spacing = horizontalSpacing
         lettersRow.distribution = .fillEqually
         for title in titles {
             let b = KeyButtonFactory.makeKeyButton(title: shouldCapitalizeKey(title) ? title.uppercased() : title)
-            b.addTarget(self, action: #selector(keyTapped(_:)), for: UIControl.Event.touchUpInside)
-            b.addTarget(self, action: #selector(buttonTouchDown(_:)), for: UIControl.Event.touchDown)
-            b.addTarget(self, action: #selector(buttonTouchUp(_:)), for: [UIControl.Event.touchUpInside, UIControl.Event.touchUpOutside, UIControl.Event.touchCancel])
+            b.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
+            b.addTarget(self, action: #selector(buttonTouchDown(_:)), for: .touchDown)
+            b.addTarget(self, action: #selector(buttonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
             lettersRow.addArrangedSubview(b)
         }
 
-        // Delete on the right
+        // RIGHT: Delete
         let delete = KeyButtonFactory.makeDeleteButton()
-        delete.addTarget(self, action: #selector(deleteTouchDown), for: UIControl.Event.touchDown)
-        delete.addTarget(self, action: #selector(deleteTouchUp), for: [UIControl.Event.touchUpInside, UIControl.Event.touchUpOutside, UIControl.Event.touchCancel])
+        delete.addTarget(self, action: #selector(deleteTouchDown), for: .touchDown)
+        delete.addTarget(self, action: #selector(deleteTouchUp), for: [.touchUpInside, .touchUpOutside, .touchCancel])
         deleteButton = delete
-
-        // Width hints (like iOS: wider modifiers, equal letters)
-        shift.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         delete.widthAnchor.constraint(greaterThanOrEqualToConstant: 52).isActive = true
 
-        stack.addArrangedSubview(shift)
+        stack.addArrangedSubview(leftButton)
         stack.addArrangedSubview(lettersRow)
         stack.addArrangedSubview(delete)
 
-        // Let letters expand; keep shift/delete compact
-        shift.setContentHuggingPriority(UILayoutPriority.required, for: NSLayoutConstraint.Axis.horizontal)
-        delete.setContentHuggingPriority(UILayoutPriority.required, for: NSLayoutConstraint.Axis.horizontal)
+        // let letters expand; keep edges compact
+        leftButton.setContentHuggingPriority(.required, for: .horizontal)
+        delete.setContentHuggingPriority(.required, for: .horizontal)
         lettersRow.setContentHuggingPriority(.defaultLow, for: .horizontal)
         lettersRow.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
@@ -1541,7 +1565,7 @@ final class KeyboardController: UIView,
         stack.distribution = .fill
         stack.alignment = .center
 
-        // ABC button (only in symbols mode) 
+        // ABC button (only in symbols mode)
         var abcButton: UIButton?
         if currentMode == .symbols {
             let abc = KeyButtonFactory.makeModeButton(title: "ABC")
@@ -1560,7 +1584,7 @@ final class KeyboardController: UIView,
         modeButton = mode
 
         // Globe (smaller)
-        let globe = KeyButtonFactory.makeGlobeButton()     
+        let globe = KeyButtonFactory.makeGlobeButton()
         globe.addTarget(self, action: #selector(handleGlobeKey), for: .touchUpInside)
         globe.addTarget(self, action: #selector(specialButtonTouchDown(_:)), for: .touchDown)
         globe.addTarget(self, action: #selector(specialButtonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
@@ -1688,15 +1712,14 @@ final class KeyboardController: UIView,
         // This ensures Return-as-Send behavior works in the most common messaging scenario
         
         // Check if there are any textual clues in the input context
-        if let textDocumentProxy = inputVC.textDocumentProxy {
-            // Messages app typically has specific keyboard traits
-            let keyboardType = textDocumentProxy.keyboardType
-            let returnKeyType = textDocumentProxy.returnKeyType
-            
-            // Messages often uses .send return key type
-            if returnKeyType == .send {
-                return true
-            }
+        let textDocumentProxy = inputVC.textDocumentProxy
+        // Messages app typically has specific keyboard traits
+        let keyboardType = textDocumentProxy.keyboardType
+        let returnKeyType = textDocumentProxy.returnKeyType
+        
+        // Messages often uses .send return key type
+        if returnKeyType == .send {
+            return true
         }
         
         // Conservative fallback: assume Messages context for safety
@@ -1764,18 +1787,22 @@ final class KeyboardController: UIView,
         performHapticFeedback()
     }
 
+    @objc private func handleThirdRowToggle() {
+        // Numbers <-> Symbols
+        let next: KeyboardMode = (currentMode == .numbers) ? .symbols : .numbers
+        setKeyboardMode(next)
+        performHapticFeedback()
+    }
+
     @objc private func handleModeSwitch() {
-        // iOS-style 3-mode cycling: letters → numbers → symbols → letters
-        let nextMode: KeyboardMode
+        let next: KeyboardMode
         switch currentMode {
         case .letters:
-            nextMode = .numbers
-        case .numbers:
-            nextMode = .symbols
-        case .symbols:
-            nextMode = .letters
+            next = .numbers          // 123 -> Numbers
+        case .numbers, .symbols:
+            next = .letters          // ABC -> Letters
         }
-        setKeyboardMode(nextMode)
+        setKeyboardMode(next)
         performHapticFeedback()
     }
     
@@ -1877,15 +1904,13 @@ final class KeyboardController: UIView,
         keyboardStackView?.removeFromSuperview()
         setupKeyboardLayout()
         
-        // iOS-style mode button titles
+        // iOS-style titles
         let modeTitle: String
         switch currentMode {
         case .letters:
-            modeTitle = "123"
-        case .numbers:
-            modeTitle = "#+="  // Indicates symbols available via mode button
-        case .symbols:
-            modeTitle = "123"  // Returns to numbers from symbols
+            modeTitle = "123"   // go to Numbers
+        case .numbers, .symbols:
+            modeTitle = "ABC"   // go back to Letters
         }
         modeButton?.setTitle(modeTitle, for: .normal)
         
@@ -1893,8 +1918,8 @@ final class KeyboardController: UIView,
         updateKeycaps()
         
         // Apply stagger on next runloop so frames are valid
-        DispatchQueue.main.async { [weak self] in 
-            self?.applyQwertyStaggerIfNeeded() 
+        DispatchQueue.main.async { [weak self] in
+            self?.applyQwertyStaggerIfNeeded()
         }
     }
     
@@ -2012,7 +2037,7 @@ final class KeyboardController: UIView,
         case "alert":   setToneStatus(.alert)
         case "caution": setToneStatus(.caution)
         case "clear":   setToneStatus(.clear)
-        default:        
+        default:
             // Don't force neutral on unknown status - retain last tone
             KBDLog("[tone_debug] Unknown status '\(status)' - retaining current tone", .warn, "KeyboardController")
         }
@@ -2028,21 +2053,25 @@ final class KeyboardController: UIView,
 
     // MARK: - ToneSuggestionDelegate
     func didUpdateSuggestions(_ suggestions: [String]) {
-        logger.info("💡 suggestions.count=\(suggestions.count)")
-        guard let first = suggestions.first, !first.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            logger.info("💡 No suggestions to show")
+        logger.info("💡 didUpdateSuggestions called with \(suggestions.count) suggestions")
+
+        // Only show if the user explicitly armed by tapping the tone button
+        guard suggestionsArmed else {
+            logger.info("💡 Suggestions suppressed (not armed)")
             return
         }
-        
-        // Record suggestion interaction for analytics
-        SafeKeyboardDataStorage.shared.recordSuggestionInteraction(
-            suggestion: first,
-            accepted: false,          // flip to true if user taps to accept later
-            context: "keyboard"
-        )
-        
+
+        guard let first = suggestions.first?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !first.isEmpty else {
+            logger.info("💡 No valid suggestions to show")
+            return
+        }
+
+        // Consume the arm so we require another tap next time
+        suggestionsArmed = false
+
         DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+            guard let self else { return }
             self.suggestionChipManager.showSuggestion(text: first, tone: self.currentUITone)
             self.secureFixManager.markAdviceShown(toneString: self.currentUITone.rawValue)
             self.quickFixButton?.alpha = 1.0
@@ -2238,18 +2267,27 @@ final class KeyboardController: UIView,
     
     @objc private func toneButtonPressed(_ sender: UIButton) {
         pressPop()
-        routeIfChanged(lastInserted: nil, isDeletion: false, urgent: true)
 
-        if currentTone == .alert || currentTone == .caution {
-            // throttle
-            let now = CFAbsoluteTimeGetCurrent()
-            if now - lastSuggestionFetchTime < 0.8 { return }
-            activeSuggestionTask?.cancel()
-            lastSuggestionFetchTime = now
+        // Prevent accidental double taps
+        let now = CACurrentMediaTime()
+        guard now >= suggestionCooldownUntil else { return }
+        suggestionCooldownUntil = now + suggestionCooldown
 
-            // NEW: ask coordinator to use its stored snapshot + tone (canonical v1)
-            coordinator?.requestSuggestions() // Let coordinator handle suggestions with its stored data
+        // Arm suggestions explicitly on each tap
+        suggestionsArmed = true
+
+        // If there's no text yet, show a tiny helper and stay armed
+        let text = snapshotFullText().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            suggestionChipManager.showSuggestion(
+                text: "Type a message, then tap the tone icon to see suggestions.",
+                tone: .neutral
+            )
+            return
         }
+
+        // Ask the coordinator for suggestions immediately for the current text
+        coordinator?.requestSuggestionsForButtonTap() // Use existing method that bypasses rate limits
     }
     
     // MARK: - Debug Methods
@@ -2296,7 +2334,7 @@ final class KeyboardController: UIView,
         }
     }
     
-    /// Debug method to test tone color functionality  
+    /// Debug method to test tone color functionality
     func debugToneColors() {
         logger.info("🎨 Testing tone color functionality...")
         

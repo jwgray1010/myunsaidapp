@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -110,14 +110,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		D0AAA7CD2E7AF9A400990696 /* Exceptions for "UnsaidKeyboard" folder in "UnsaidKeyboard" target */ = {
+		D0AAA7CD2E7AF9A400990696 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = D0AAA7C42E7AF9A300990696 /* UnsaidKeyboard */;
 		};
-		D0AAAA2E2E7B9DD200990696 /* Exceptions for "UnsaidKeyboard" folder in "Runner" target */ = {
+		D0AAAA2E2E7B9DD200990696 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				AppGroups.swift,
@@ -127,19 +127,7 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		D0AAA7C62E7AF9A300990696 /* UnsaidKeyboard */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				D0AAAA2E2E7B9DD200990696 /* Exceptions for "UnsaidKeyboard" folder in "Runner" target */,
-				D0AAA7CD2E7AF9A400990696 /* Exceptions for "UnsaidKeyboard" folder in "UnsaidKeyboard" target */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = UnsaidKeyboard;
-			sourceTree = "<group>";
-		};
+		D0AAA7C62E7AF9A300990696 /* UnsaidKeyboard */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (D0AAAA2E2E7B9DD200990696 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, D0AAA7CD2E7AF9A400990696 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = UnsaidKeyboard; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -406,9 +394,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
