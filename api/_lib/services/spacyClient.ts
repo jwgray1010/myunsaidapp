@@ -998,7 +998,7 @@ export class SpacyService {
       const transformers = await import('@xenova/transformers');
       this._zshot = await transformers.pipeline('zero-shot-classification', 'Xenova/bart-large-mnli');
     } catch (error) {
-      logger.warn('[SpacyService] Failed to load @xenova/transformers, P-code zero-shot disabled:', error.message);
+      logger.warn('[SpacyService] Failed to load @xenova/transformers, P-code zero-shot disabled:', error instanceof Error ? error.message : String(error));
       this._pZeroShot = false;
     }
   }

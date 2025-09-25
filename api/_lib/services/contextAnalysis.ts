@@ -18,7 +18,7 @@ const DEF = {
 } as const;
 
 function cfg<K extends keyof typeof DEF>(k: K) {
-  return (CTX_CONFIG?.[k] ?? DEF[k]) as (typeof DEF)[K];
+  return (CTX_CONFIG?.[k] ?? DEF[k]) as unknown as (typeof DEF)[K];
 }
 
 function sanitizeScores(ctxScores: ContextScores = {}): ContextScores {
