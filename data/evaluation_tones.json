@@ -6,7 +6,7 @@
   "rawTones": [
     "neutral","positive","supportive","anxious","angry","frustrated","sad","assertive","safety_concern",
     "withdrawn","apologetic","curious","dismissive","defensive","jealous_insecure","catastrophizing",
-    "minimization","playful","reflective","logistical","confused_ambivalent"
+    "minimization","playful","reflective","logistical","confused_ambivalent","insecure", "risk", "excited"
   ],
 
   "platt": {
@@ -34,7 +34,7 @@
       "safety_concern": 0.01, "withdrawn": 0.02, "apologetic": 0.02, "curious": 0.02,
       "dismissive": 0.01, "defensive": 0.01, "jealous_insecure": 0.01, "catastrophizing": 0.005,
       "minimization": 0.005, "playful": 0.01, "reflective": 0.01, "logistical": 0.005,
-      "confused_ambivalent": 0.005
+      "confused_ambivalent": 0.005, "insecure": 0.3
     },
     "conflict": {
       "angry": 0.30, "frustrated": 0.20, "anxious": 0.12, "neutral": 0.08, "supportive": 0.08, "sad": 0.05, "positive": 0.03,
@@ -51,11 +51,11 @@
     },
     "escalation": {
       "angry": 0.38, "frustrated": 0.25, "anxious": 0.11, "neutral": 0.06, "supportive": 0.04, "positive": 0.02, "sad": 0.03,
-      "catastrophizing": 0.05, "defensive": 0.03, "withdrawn": 0.02, "dismissive": 0.01
+      "catastrophizing": 0.05, "defensive": 0.03, "withdrawn": 0.02, "dismissive": 0.01, "excited": 0.01
     },
     "safety": {
       "safety_concern": 0.58, "anxious": 0.16, "sad": 0.10, "neutral": 0.07, "supportive": 0.04, "angry": 0.01,
-      "withdrawn": 0.03, "apologetic": 0.01
+      "withdrawn": 0.03, "apologetic": 0.01, "risk": 0.30
     }
   },
 
