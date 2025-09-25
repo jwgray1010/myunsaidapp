@@ -1421,6 +1421,17 @@ final class ToneSuggestionCoordinator {
     private func resolvedAttachmentStyle() -> (style: String?, provisional: Bool, source: String) { ("secure", false, "default") }
     private func getAttachmentStyle() -> String { "secure" }
     private func getEmotionalState() -> String { "neutral" }
+    
+    /// Simple helper to detect emotional language for testing purposes
+    private func containsEmotionalLanguage(_ text: String) -> Bool {
+        let emotionalWords = [
+            "hate", "fucking", "damn", "shit", "angry", "frustrated", "furious",
+            "annoying", "stupid", "idiot", "never", "always", "worst", "terrible"
+        ]
+        
+        let lowercaseText = text.lowercased()
+        return emotionalWords.contains { lowercaseText.contains($0) }
+    }
     private func getUserId() -> String {
         let userIdKey = "unsaid_user_id"
         let appGroupId = "group.com.example.unsaid"  // AppGroups.id
