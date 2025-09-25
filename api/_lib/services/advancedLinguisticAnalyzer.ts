@@ -131,22 +131,21 @@ export class AdvancedLinguisticAnalyzer {
   }
 
   private loadConfig(configPath?: string): AnalysisConfig {
-    // 1) Try dataLoader first
-    const dl = dataLoader.getAttachmentLearningEnhanced();
-    if (dl) {
-      try {
-        return dl as unknown as AnalysisConfig;
-      } catch (e) {
-        logger.warn('attachment_learning_enhanced via dataLoader not matching schema, falling back');
-      }
+    try {
+      const fromDL =
+        (typeof (dataLoader as any).get === 'function' && (dataLoader as any).get('attachment_learning_enhanced')) ??
+        (typeof (dataLoader as any).getAttachmentLearningEnhanced === 'function' && (dataLoader as any).getAttachmentLearningEnhanced());
+
+      if (fromDL) return fromDL as AnalysisConfig;
+    } catch (e) {
+      logger.warn('attachment_learning_enhanced not available via dataLoader; falling back', { err: String(e) });
     }
 
-    // 2) Optional filesystem fallback (best-effort)
     try {
       const defaultPath = join(__dirname, '..', '..', '..', 'data', 'attachment_learning_enhanced.json');
       const filePath = configPath || defaultPath;
       return JSON.parse(readFileSync(filePath, 'utf8'));
-    } catch (error) {
+    } catch {
       logger.warn('Could not load enhanced config, using basic config');
       return this.getBasicConfig();
     }
@@ -209,8 +208,18 @@ export class AdvancedLinguisticAnalyzer {
       this.applyFeatureWeights(analysis, analysis.features.discourse, 'discourseMarkerAnalysis');
 
       // 5. Micro-expression pattern detection
-      analysis.features.microPatterns = this.microPatternDetector.analyze(text, context);
-      this.applyMicroPatternWeights(analysis, analysis.features.microPatterns);
+      const micro = this.microPatternDetector.analyze(text, context);
+      analysis.features.microPatterns = micro;
+      this.applyMicroPatternWeights(analysis, micro);
+
+      // 🔧 also project into analysis.microPatterns so confidence uses it
+      analysis.microPatterns = micro.detectedPatterns.map(p => ({
+        type: p.type,
+        pattern: p.pattern,
+        // aggregate weight so it has a single numeric weight for the interface
+        weight: Object.values(p.weights).reduce((a, b) => a + Math.abs(b), 0),
+        confidence: p.confidence
+      }));
 
       // 6. Calculate overall confidence
       analysis.confidence = this.calculateConfidence(analysis);
@@ -219,8 +228,16 @@ export class AdvancedLinguisticAnalyzer {
       this.applyContextualModifiers(analysis, context);
 
       // 8. Normalize attachment scores after all features
-      const total = Object.values(analysis.attachmentScores).reduce((s, v) => s + v, 0);
-      if (total > 0) {
+      // 🔧 Clamp per-style first to avoid negatives prior to normalization
+      (['anxious','avoidant','secure','disorganized'] as (keyof AttachmentScores)[])
+        .forEach(k => { analysis.attachmentScores[k] = Math.max(0, analysis.attachmentScores[k]); });
+
+      let total = Object.values(analysis.attachmentScores).reduce((s, v) => s + v, 0);
+
+      // 🔧 Avoid zero-division / all-zero case
+      if (total <= 0) {
+        analysis.attachmentScores = { anxious: 0, avoidant: 0, secure: 1, disorganized: 0 };
+      } else {
         (Object.keys(analysis.attachmentScores) as (keyof AttachmentScores)[])
           .forEach(k => { analysis.attachmentScores[k] = analysis.attachmentScores[k] / total; });
       }
@@ -327,6 +344,10 @@ export class AdvancedLinguisticAnalyzer {
         });
       }
     }
+
+    // keep scores non-negative post-modifiers
+    (['anxious','avoidant','secure','disorganized'] as (keyof AttachmentScores)[])
+      .forEach(k => { analysis.attachmentScores[k] = Math.max(0, analysis.attachmentScores[k]); });
   }
 
   private getFallbackAnalysis(text: string): LinguisticAnalysisResult {
@@ -459,11 +480,12 @@ export class HesitationPatternDetector {
       /that is/gi
     ];
 
-    let correctionCount = 0;
+    // Deduplicate correction matches to avoid double-counting with fillers
+    const correctionsSet = new Set<string>();
     correctionPatterns.forEach(pattern => {
-      const matches = text.match(pattern) || [];
-      correctionCount += matches.length;
+      (text.match(pattern) || []).forEach(m => correctionsSet.add(m.toLowerCase()));
     });
+    const correctionCount = correctionsSet.size;
 
     if (correctionCount > 0) {
       const correctionEff = HesitationPatternDetector.sat(correctionCount, 3);

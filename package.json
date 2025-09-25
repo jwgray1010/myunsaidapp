@@ -33,8 +33,9 @@
     "rate-limit-redis": "^4.2.2",
     "rate-limiter-flexible": "^7.2.0",
     "serverless-http": "^3.2.0",
+    "undici-types": "^7.16.0",
     "winston": "^3.10.0",
-    "zod": "^3.22.4"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^20.19.11",

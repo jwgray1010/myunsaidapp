@@ -46,6 +46,17 @@ function extractSecondPersonTokenSpans(tokens: SpacyToken[]) {
 // -----------------------------
 // Public types (kept for compatibility)
 // -----------------------------
+
+// ---- P taxonomy / classifier types ----
+export type PScoreMap = Record<string, number>;
+
+export interface PClassification {
+  p_scores: PScoreMap;          // e.g., { P031: 0.72, P044: 0.55 }
+  ruleScores: PScoreMap;        // rule-only scores
+  mlScores?: PScoreMap;         // zero-shot scores (if enabled)
+  topP: string[];               // sorted P ids by merged score
+}
+
 export interface SpacyToken {
   text: string;
   lemma: string;
@@ -142,6 +153,10 @@ export interface SpacyProcessResult {
   sents?: Array<{ start: number; end: number }>;
   deps?: Array<{ rel: string; head: number; token: number; start: number; end: number }>;
   subtreeSpan?: Record<number, { start: number; end: number }>; // by head index
+
+  // P-code classification results
+  pScores?: PScoreMap;         // merged scores above threshold
+  pTop?: string[];             // ranked P ids
 }
 
 export interface SpacyFullAnalysis {
@@ -203,9 +218,21 @@ export class SpacyService {
   private intensityModifiers: any = { modifiers: [] };
   private phraseEdges: any = { edges: [] };
 
+  // P taxonomy & rule seeds
+  private pTaxonomy: { P_MAP: Record<string,string>; RULE_SEEDS: Record<string,string[]> } = { P_MAP: {}, RULE_SEEDS: {} };
+
+  // Precompiled P rule patterns
+  private pRulePatterns: Record<string, RegExp[]> = {};
+
+  // Optional zero-shot (lazy)
+  private _zshot: any = null;
+  private _pEnabled: boolean = String(env.SPACY_P_ENABLE || '1') === '1';
+  private _pZeroShot: boolean = String(env.SPACY_P_ZSHOT || '0') === '1'; // opt-in
+  private _pThreshold: number = parseFloat(env.SPACY_P_THRESHOLD || '0.45');
+
   // simple entity + token regexes
   private entityPatterns = {
-    PERSON: /\b(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b/g,
+    PERSON: /\b(?!(?:The|Next|Last|First)\b)([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b/g, // avoid common title words
     DATE: /\b(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}|today|tomorrow|yesterday|next\s+(?:week|month|year)|last\s+(?:week|month|year))\b/gi,
     ORG: /\b(?:[A-Z][a-z]*(?:\s+[A-Z][a-z]*)*\s+(?:Inc|Corp|LLC|Ltd|Company|Co|Organization|Foundation|Institute|University|College|School|Hospital|Bank|Group|Team|Department|Agency|Bureau|Office)\.?)\b/g,
     MONEY: /\b(?:\$\d{1,3}(?:,\d{3})*(?:\.\d{2})?|\d+\s*(?:dollars?|cents?|bucks?|grand)|(?:hundred|thousand|million|billion)\s*(?:dollars?|bucks?))\b/gi,
@@ -276,11 +303,14 @@ export class SpacyService {
     this.sarcasmIndicators   = this._readJsonSafe('sarcasm_indicators.json', { patterns: [] });
     this.intensityModifiers  = this._readJsonSafe('intensity_modifiers.json', { modifiers: [] });
     this.phraseEdges         = this._readJsonSafe('phrase_edges.json', { edges: [] });
+
+    // NEW: p taxonomy
+    this.pTaxonomy           = this._readJsonSafe('p_taxonomy.json', { P_MAP: {}, RULE_SEEDS: {} });
   }
 
   private _precompile(): void {
     // Negation
-    const neg = (this.negationIndicators?.negation_indicators || this.negationIndicators?.patterns || []) as any[];
+    const neg = (this.negationIndicators?.indicators || this.negationIndicators?.negation_indicators || this.negationIndicators?.patterns || []) as any[];
     this.negationPatterns = neg.map((p) => {
       try { return new RegExp(p.pattern || p, 'i'); } catch { return null; }
     }).filter(Boolean) as RegExp[];
@@ -320,8 +350,25 @@ export class SpacyService {
       });
     }
 
+    // ---- P rule precompile ----
+    this.pRulePatterns = {};
+    const { RULE_SEEDS } = this.pTaxonomy || { RULE_SEEDS: {} };
+    Object.entries(RULE_SEEDS || {}).forEach(([pid, phrases]: [string, any]) => {
+      const arr = Array.isArray(phrases) ? phrases : [];
+      this.pRulePatterns[pid] = arr
+        .map((p) => {
+          try {
+            // token-ish match: \bphrase\b unless phrase already looks like a regex
+            const isRegex = /[\\^$.*+?()[\]{}|]/.test(p);
+            return new RegExp(isRegex ? p : `\\b${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+          } catch { return null; }
+        })
+        .filter(Boolean) as RegExp[];
+    });
+
     // One-line startup summary
     logger.info('SpaCy client initialized', this.getProcessingSummary());
+    logger.info(`[SpaCy] mode=${this.mode} LRU=${this._LRU_MAX} budgets=${JSON.stringify(this.budgets)} P-enabled=${this._pEnabled}`);
   }
 
   // ---------- tiny NLP helpers ----------
@@ -340,10 +387,12 @@ export class SpacyService {
   }
 
   private basicLemmatize(word: string): string {
-    let w = word.toLowerCase();
-    w = w.replace(/'/g,"'"); // normalize curly apostrophe
-    if (w.endsWith("n't")) return w.replace("n't",' not');
-    if (/(?:'re|'ve|'ll|'d)$/.test(w)) w = w.replace(/'(re|ve|ll|d)$/,'');
+    let w = word.toLowerCase()
+      .replace(/[\u2018\u2019]/g, "'")  // normalize curly apostrophes
+      .replace(/\u00A0/g, ' ');         // normalize NBSP if needed
+
+    if (w.endsWith("n't")) return w.replace(/n't$/, " not"); // expand contractions
+    if (/(?:'re|'ve|'ll|'d)$/.test(w)) w = w.replace(/'(re|ve|ll|d)$/, '');
     if (w.endsWith('ing') && w.length > 4) return w.slice(0,-3);
     if (w.endsWith('ed') && w.length > 3)  return w.slice(0,-2);
     if (w.endsWith('s')  && w.length > 3)  return w.slice(0,-1);
@@ -464,10 +513,13 @@ export class SpacyService {
       if (head === -1) for (let j = i-1; j >= Math.max(0, i-6); j--) { const p = pref(j); if (p > best) { best = p; head = j; if (p===3) break; } }
       if (head === -1) head = i;
 
-      // Scope: head's sentence, but shrink to head's local phrase when possible
+      // Scope: tighten around head token with a small window when possible
       const sent = findSentByChar(toks[head].start ?? 0);
-      const localStart = Math.min(toks[head].start ?? sent.start, sent.start);
-      const localEnd   = Math.max(toks[head].end   ?? sent.end,   sent.end);
+      const tokenStart = toks[head].start ?? sent.start;
+      const tokenEnd   = toks[head].end   ?? sent.end;
+      const pad = 40; // chars around head
+      const localStart = Math.max(sent.start, tokenStart - pad);
+      const localEnd   = Math.min(sent.end,   tokenEnd + pad);
       deps.push({ rel: 'neg', head, token: i, start: localStart, end: localEnd });
       if (!subtreeSpan[head]) subtreeSpan[head] = { start: localStart, end: localEnd };
     }
@@ -924,6 +976,74 @@ export class SpacyService {
     return m?.[1] || '';
   }
 
+  // ---- P: rule-only scorer ----
+  private _pRuleScore(text: string): PScoreMap {
+    const scores: PScoreMap = {};
+    for (const pid of Object.keys(this.pRulePatterns)) {
+      let s = 0;
+      for (const rx of this.pRulePatterns[pid]) {
+        rx.lastIndex = 0;
+        if (rx.test(text)) s += 0.25; // tweak via env later if needed
+      }
+      if (s > 0) scores[pid] = s;
+    }
+    return scores;
+  }
+
+  // ---- P: optional zero-shot scorer (lazy import; no network) ----
+  private async _ensureZeroShot(): Promise<void> {
+    if (this._zshot || !this._pZeroShot) return;
+    try {
+      // dynamic import to avoid bundlers unless enabled
+      const transformers = await import('@xenova/transformers');
+      this._zshot = await transformers.pipeline('zero-shot-classification', 'Xenova/bart-large-mnli');
+    } catch (error) {
+      logger.warn('[SpacyService] Failed to load @xenova/transformers, P-code zero-shot disabled:', error.message);
+      this._pZeroShot = false;
+    }
+  }
+
+  private async _pZeroShotScore(text: string): Promise<PScoreMap> {
+    await this._ensureZeroShot();
+    if (!this._zshot) return {};
+    const P_MAP = this.pTaxonomy?.P_MAP || {};
+    const labels = Object.values(P_MAP).map((v: string) => v.replace(/_/g, ' '));
+    const res = await this._zshot(text, labels, { multi_label: true });
+    const ml: PScoreMap = {};
+    // map verbalization -> P id
+    const labelToPid = new Map<string,string>();
+    Object.entries(P_MAP).forEach(([pid, name]) => labelToPid.set(name.replace(/_/g,' '), pid));
+    for (let i = 0; i < res.labels.length; i++) {
+      const pid = labelToPid.get(res.labels[i]);
+      if (pid) ml[pid] = res.scores[i];
+    }
+    return ml;
+  }
+
+  // ---- P: merge + threshold ----
+  private _mergePScores(a: PScoreMap, b: PScoreMap): PScoreMap {
+    const out: PScoreMap = {};
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    keys.forEach(k => out[k] = (a[k] || 0) + (b[k] || 0));
+    return out;
+  }
+
+  // Public P classifier
+  async classifyP(text: string, threshold = this._pThreshold): Promise<PClassification> {
+    if (!this._pEnabled) return { p_scores: {}, ruleScores: {}, mlScores: {}, topP: [] };
+
+    const ruleScores = this._pRuleScore(text);
+    const mlScores   = this._pZeroShot ? await this._pZeroShotScore(text) : {};
+    const merged     = this._mergePScores(ruleScores, mlScores);
+
+    // keep ≥ threshold
+    const p_scores: PScoreMap = {};
+    Object.entries(merged).forEach(([k, v]) => { if (v >= threshold) p_scores[k] = v; });
+
+    const topP = Object.keys(p_scores).sort((a, b) => p_scores[b] - p_scores[a]);
+    return { p_scores, ruleScores, mlScores, topP };
+  }
+
   // -----------------------------
   // Public API
   // -----------------------------
@@ -934,7 +1054,7 @@ export class SpacyService {
    */
   process(text: string, opts: any = {}): SpacyProcessResult {
     const start = now();
-    const original = this.clamp(text || '');
+    const original = this.clamp((text || '').replace(/\r\n?/g, '\n')); // normalize whitespace for stable char offsets
     const attachmentStyle = opts.attachmentStyle || opts.attachment_style; // Support both formats
 
     // LRU (by version + mode + text + attachment)
@@ -985,6 +1105,19 @@ export class SpacyService {
       subtreeSpan
     };
 
+    // Attach P classification (non-blocking, best-effort)
+    if (this._pEnabled) {
+      try {
+        // run rule-only synchronously (cheap)
+        const ruleOnly = this._pRuleScore(original);
+        (full as any)._p_rule = ruleOnly;
+        // kick off zero-shot if enabled; don't await in hot path
+        if (this._pZeroShot) this._pZeroShotScore(original).then((ml) => {
+          (full as any)._p_ml = ml;
+        }).catch(()=>{});
+      } catch {}
+    }
+
     this._lruSet(this._analysisLRU, key, full);
     return this._toProcessResult(full);
   }
@@ -1003,12 +1136,23 @@ export class SpacyService {
       })();
       return Math.max(0, Math.min(1,
         (diag.intensityAnalysis.intensityCount || 0) * 0.08 +
-        capsRatio * 0.8
+        Math.min(capsRatio, 0.35) * 0.6   // lower weight + cap to prevent ALL-CAPS domination
       ));
     })();
 
     // Extract second-person spans for PRON_2P entities
     const secondPerson = extractSecondPersonTokenSpans(diag.tokens);
+
+    // Combine P scores (rule + ML if available)
+    const pRule: PScoreMap = (diag as any)._p_rule || {};
+    const pML:   PScoreMap = (diag as any)._p_ml   || {};
+    const pMerged = Object.fromEntries(
+      Array.from(new Set([...Object.keys(pRule), ...Object.keys(pML)])).map(k => [k, (pRule[k]||0)+(pML[k]||0)])
+    ) as PScoreMap;
+    const pScores: PScoreMap = {};
+    const pThresh = this._pThreshold;
+    Object.entries(pMerged).forEach(([k,v]) => { if (v >= pThresh) pScores[k]=v; });
+    const pTop = Object.keys(pScores).sort((a,b)=>pScores[b]-pScores[a]);
 
     return {
       context,
@@ -1031,7 +1175,11 @@ export class SpacyService {
       tokens: diag.tokens,
       sents: diag.sents,
       deps: diag.deps,
-      subtreeSpan: diag.subtreeSpan
+      subtreeSpan: diag.subtreeSpan,
+
+      // NEW: P-code classification results
+      pScores,
+      pTop
     };
   }
 
@@ -1233,4 +1381,5 @@ export class SpacyService {
 // Singleton instance
 export const spacyClient = new SpacyService();
 export { SpacyService as SpacyClient };
+export { CLIENT_VERSION };
 export default spacyClient;

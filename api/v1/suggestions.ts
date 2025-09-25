@@ -1,8 +1,8 @@
 // api/v1/suggestions.ts
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { withCors, withMethods, withValidation, withErrorHandling, withLogging, withResponseNormalization } from '../_lib/wrappers';
+import { withCors, withMethods, withErrorHandling, withLogging, withResponseNormalization } from '../_lib/wrappers';
 import { suggestionsRateLimit } from '../_lib/rateLimit';
-import { suggestionRequestSchema, suggestionResponseSchema } from '../_lib/schemas/suggestionRequest';
+import { suggestionResponseSchema } from '../_lib/schemas/suggestionRequest';
 import { normalizeSuggestionResponse } from '../_lib/schemas/normalize';
 import { suggestionsService } from '../_lib/services/suggestions';
 import { dataLoader } from '../_lib/services/dataLoader';
@@ -11,63 +11,94 @@ import { adjustToneByAttachment, applyThresholdShift } from '../_lib/services/ut
 import { CommunicatorProfile } from '../_lib/services/communicatorProfile';
 import { logger } from '../_lib/logger';
 import { ensureBoot } from '../_lib/bootstrap';
-import * as path from 'path';
+import crypto from 'crypto';
 
 const bootPromise = ensureBoot();
 
-function getUserId(req: VercelRequest): string {
-  return req.headers['x-user-id'] as string || 'anonymous';
+// ✅ LOCAL V1 CONTRACT VALIDATION - Define inline since schema exports missing
+interface SuggestionInputV1 {
+  text: string;
+  text_sha256: string;
+  client_seq: number;
+  compose_id: string;
+  toneAnalysis: {
+    classification: string;
+    confidence: number;
+    ui_distribution: { clear: number; caution: number; alert: number };
+    intensity?: number;
+  };
+  context: string;
+  attachmentStyle: string;
+  rich?: any;
+  meta?: any;
 }
 
-// Helper: ABSOLUTE EMERGENCY fallbacks - only for complete system failures
-function ensureAtLeastOneSuggestion(items: any[], originalWasEmpty: boolean = false): any[] {
-  // STRICT: Only provide fallback if the original suggestions service returned completely empty
-  // AND this is explicitly marked as an emergency situation
-  if (Array.isArray(items) && items.length > 0) return items;
-  if (!originalWasEmpty) return []; // NEVER override if main service had any content
+// Local validation functions
+function validateTextSHA256(text: string, expectedHash: string): boolean {
+  const actualHash = crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+  return actualHash === expectedHash;
+}
+
+function validateUIDistribution(distribution: { clear: number; caution: number; alert: number }): boolean {
+  const sum = distribution.clear + distribution.caution + distribution.alert;
+  return Math.abs(sum - 1.0) < 0.01; // Allow small floating point variance
+}
+
+function isValidSuggestionInputV1(body: any): { success: boolean; data?: SuggestionInputV1; error?: any } {
+  if (!body || typeof body !== 'object') {
+    return { success: false, error: { message: 'Request body must be an object' } };
+  }
   
-  // Log this critical situation
-  console.error('CRITICAL FALLBACK: Main suggestions service completely failed to return content');
+  const required = ['text', 'text_sha256', 'client_seq', 'compose_id', 'toneAnalysis', 'context', 'attachmentStyle'];
+  const missing = required.filter(field => !(field in body));
+  if (missing.length > 0) {
+    return { success: false, error: { message: `Missing required fields: ${missing.join(', ')}` } };
+  }
   
-  // Absolute emergency fallbacks - normalized format matching main response structure
-  const emergencyFallbacks = [
-    {
-      id: 'critical-emergency-1',
-      text: 'System temporarily unavailable. Please try again in a moment.',
-      advice: 'System temporarily unavailable. Please try again in a moment.', // Alias for backward compatibility
-      type: 'advice',
-      category: 'emotional', // ✅ Valid schema enum value
-      categories: ['emotional'],
-      confidence: 0.05, // Extremely low score
-      priority: 999, // Lowest priority
-      reason: 'Critical system fallback - main suggestions service failed',
-      context_specific: false,
-      attachment_informed: false,
-      triggerTone: 'neutral', // Legacy field
-      contexts: ['general'], // Legacy field
-      ltrScore: 0.05, // Legacy field
-    },
-    {
-      id: 'critical-emergency-2', 
-      text: 'Unable to provide suggestions right now. Please check your connection.',
-      advice: 'Unable to provide suggestions right now. Please check your connection.', // Alias for backward compatibility
-      type: 'advice',
-      category: 'emotional', // ✅ Valid schema enum value
-      categories: ['emotional'],
-      confidence: 0.05,
-      priority: 999, // Lowest priority
-      reason: 'Critical system fallback - main suggestions service failed',
-      context_specific: false,
-      attachment_informed: false,
-      triggerTone: 'neutral', // Legacy field
-      contexts: ['general'], // Legacy field
-      ltrScore: 0.05, // Legacy field
+  if (!body.toneAnalysis?.ui_distribution) {
+    return { success: false, error: { message: 'Missing toneAnalysis.ui_distribution' } };
+  }
+  
+  return { success: true, data: body as SuggestionInputV1 };
+}
+
+// Request deduplication and ordering cache (in-memory for now)
+interface RequestCacheEntry {
+  compose_id: string;
+  client_seq: number;
+  text_sha256: string;
+  response: any;
+  timestamp: number;
+}
+
+const requestCache = new Map<string, RequestCacheEntry>();
+const MAX_CACHE_SIZE = 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function cleanupCache() {
+  const now = Date.now();
+  for (const [key, entry] of requestCache.entries()) {
+    if (now - entry.timestamp > CACHE_TTL_MS) {
+      requestCache.delete(key);
     }
-  ];
-  
-  // Return only ONE fallback to minimize interference
-  const randomIndex = Math.floor(Math.random() * emergencyFallbacks.length);
-  return [emergencyFallbacks[randomIndex]];
+  }
+  // If still too large, remove oldest entries
+  if (requestCache.size > MAX_CACHE_SIZE) {
+    const entries = Array.from(requestCache.entries())
+      .sort((a, b) => a[1].timestamp - b[1].timestamp);
+    const toRemove = entries.slice(0, requestCache.size - MAX_CACHE_SIZE);
+    for (const [key] of toRemove) {
+      requestCache.delete(key);
+    }
+  }
+}
+
+function getCacheKey(compose_id: string, client_seq: number, text_sha256: string): string {
+  return `${compose_id}:${client_seq}:${text_sha256}`;
+}
+
+function getUserId(req: VercelRequest): string {
+  return req.headers['x-user-id'] as string || 'anonymous';
 }
 
 // Helper: Post-shift bucket normalization (no NaN/negatives)
@@ -79,21 +110,124 @@ function normalizeBuckets(b: any) {
   return { clear: c.clear/sum, caution: c.caution/sum, alert: c.alert/sum };
 }
 
-const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
+const handler = async (req: VercelRequest, res: VercelResponse) => {
   await bootPromise;
   const startTime = Date.now();
   const userId = getUserId(req);
   
-  // ✅ Extract context from meta if not at top level (iOS coordinator pattern)
-  const contextLabel = data.context || data.meta?.context || 'general';
+  // STEP 1: Validate the canonical v1 contract
+  const validation = isValidSuggestionInputV1(req.body);
+  if (!validation.success) {
+    logger.error('Invalid request format - missing required v1 contract fields', {
+      userId,
+      errors: validation.error,
+      timestamp: new Date().toISOString()
+    });
+    
+    res.status(400).json({
+      success: false,
+      error: 'Invalid request format. Required: text, text_sha256, client_seq, compose_id, toneAnalysis, context, attachmentStyle',
+      details: validation.error,
+      contract_version: 'v1'
+    });
+    return;
+  }
   
-  logger.info('Processing advanced suggestions request', { 
+  const data: SuggestionInputV1 = validation.data!;
+  
+  // STEP 2: Validate text SHA256 matches content
+  if (!validateTextSHA256(data.text, data.text_sha256)) {
+    logger.error('Text SHA256 mismatch - security violation', {
+      userId,
+      compose_id: data.compose_id,
+      client_seq: data.client_seq,
+      expected_length: data.text.length,
+      timestamp: new Date().toISOString()
+    });
+    
+    res.status(400).json({
+      success: false,
+      error: 'Text SHA256 mismatch. Provided hash does not match text content.',
+      contract_version: 'v1'
+    });
+    return;
+  }
+  
+  // STEP 3: Validate UI distribution sums correctly
+  if (!validateUIDistribution(data.toneAnalysis.ui_distribution)) {
+    logger.error('Invalid UI distribution - does not sum to 1', {
+      userId,
+      compose_id: data.compose_id,
+      client_seq: data.client_seq,
+      distribution: data.toneAnalysis.ui_distribution,
+      timestamp: new Date().toISOString()
+    });
+    
+    res.status(400).json({
+      success: false,
+      error: 'Invalid UI distribution. clear + caution + alert must sum to ~1',
+      contract_version: 'v1'
+    });
+    return;
+  }
+  
+  // STEP 4: Check for duplicate requests (idempotency)
+  cleanupCache(); // Clean up old entries
+  const cacheKey = getCacheKey(data.compose_id, data.client_seq, data.text_sha256);
+  const existing = requestCache.get(cacheKey);
+  
+  if (existing) {
+    logger.info('Returning cached response for duplicate request', {
+      userId,
+      compose_id: data.compose_id,
+      client_seq: data.client_seq,
+      cache_age_ms: Date.now() - existing.timestamp
+    });
+    
+    res.status(208).json({
+      ...existing.response,
+      cached: true,
+      cache_hit_timestamp: new Date().toISOString()
+    });
+    return;
+  }
+  
+  // STEP 5: Check client_seq ordering (prevent out-of-order requests)
+  // Find the highest client_seq for this compose_id
+  let maxSeqForCompose = -1;
+  for (const entry of requestCache.values()) {
+    if (entry.compose_id === data.compose_id && entry.client_seq > maxSeqForCompose) {
+      maxSeqForCompose = entry.client_seq;
+    }
+  }
+  
+  if (data.client_seq <= maxSeqForCompose) {
+    logger.error('Out-of-order request rejected', {
+      userId,
+      compose_id: data.compose_id,
+      client_seq: data.client_seq,
+      max_seen_seq: maxSeqForCompose,
+      timestamp: new Date().toISOString()
+    });
+    
+    res.status(409).json({
+      success: false,
+      error: `Out-of-order request. client_seq ${data.client_seq} <= last seen ${maxSeqForCompose}`,
+      max_seen_seq: maxSeqForCompose,
+      contract_version: 'v1'
+    });
+    return;
+  }
+  
+  logger.info('Processing canonical v1 suggestion request', { 
     userId,
-    textLength: data.text.length,
-    context: contextLabel,
-    toneOverride: data.toneOverride,
-    attachment: data.attachmentStyle,
-    clientSeq: data.client_seq || data.clientSeq
+    compose_id: data.compose_id,
+    client_seq: data.client_seq,
+    text_length: data.text.length,
+    context: data.context,
+    tone_classification: data.toneAnalysis.classification,
+    attachment_style: data.attachmentStyle,
+    has_rich_analysis: !!data.rich
   });
   
   try {
@@ -103,138 +237,138 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     });
     await profile.init();
     
-    // Get attachment estimate
+    // Get attachment estimate (use canonical contract override if provided)
     const attachmentEstimate = profile.getAttachmentEstimate();
     const isNewUser = !attachmentEstimate.primary || attachmentEstimate.confidence < 0.3;
+    const finalAttachmentStyle = data.attachmentStyle === 'unknown' ? 
+      (attachmentEstimate.primary || 'secure') : 
+      data.attachmentStyle;
     
-    // FIRST: Get tone analysis - priority: toneAnalysis > toneOverride > run analysis
-    logger.info('Determining tone for suggestions...', { 
-      hasToneAnalysis: !!data.toneAnalysis, 
-      hasToneOverride: !!data.toneOverride 
+    // Extract tone analysis from canonical contract (no fallbacks needed)
+    const toneResult = {
+      classification: data.toneAnalysis.classification,
+      confidence: data.toneAnalysis.confidence
+    };
+    
+    // ✅ BUILD FULLTONEANALYSIS MIRRORING TONE.TS STRUCTURE
+    // Consolidate analysis fields under analysis{...} subtree for consistency with tone.ts
+    const fullToneAnalysis = {
+      // Required ToneResponse fields
+      ok: true,
+      userId,
+      tone: data.toneAnalysis.classification,      // for convenience
+      confidence: data.toneAnalysis.confidence,
+      
+      // UI fields from canonical contract - these are authoritative from coordinator
+      ui_tone: data.toneAnalysis.classification as 'clear' | 'caution' | 'alert' | 'neutral' | 'insufficient',
+      ui_distribution: data.toneAnalysis.ui_distribution,
+      
+      // Optional top-level fields from tone.ts
+      intensity: data.toneAnalysis.intensity ?? 0.5,
+      categories: data.rich?.categories ?? [],
+      timestamp: data.rich?.timestamp,
+      attachmentEstimate: data.rich?.attachmentEstimate,
+      isNewUser: data.rich?.isNewUser,
+      
+      // Keep raw_tone if coordinator included it in rich (optional)
+      raw_tone: data.rich?.raw_tone,
+      
+      // ✅ ANALYSIS SUBTREE - mirrors tone.ts structure for downstream service consistency
+      analysis: {
+        primary_tone: data.toneAnalysis.classification, // aligns with tone.ts analysis.primary_tone semantics
+        emotions: data.rich?.emotions ?? {},
+        intensity: data.toneAnalysis.intensity ?? 0.5,
+        sentiment_score: data.rich?.sentiment_score ?? 0,
+        linguistic_features: data.rich?.linguistic_features ?? {},
+        context_analysis: data.rich?.context_analysis ?? {},
+        attachment_insights: data.rich?.attachment_insights ?? []
+      },
+      
+      // Metadata with rich data preserved
+      metadata: {
+        ...(data.rich?.metadata ?? {}),
+        model_version: 'v1.0.0-canonical',
+        processingTimeMs: 0 // Will be updated at end
+      },
+      
+      // Version field
+      version: 'v1.0.0-canonical'
+    };
+    
+    logger.info('Built fullToneAnalysis with tone.ts-compatible structure', { 
+      tone: toneResult.classification,
+      confidence: toneResult.confidence,
+      intensity: fullToneAnalysis.intensity,
+      ui_distribution: data.toneAnalysis.ui_distribution,
+      has_analysis_emotions: Object.keys(fullToneAnalysis.analysis.emotions).length > 0,
+      has_analysis_linguistic_features: Object.keys(fullToneAnalysis.analysis.linguistic_features).length > 0,
+      has_analysis_context_analysis: Object.keys(fullToneAnalysis.analysis.context_analysis).length > 0,
+      has_analysis_attachment_insights: fullToneAnalysis.analysis.attachment_insights.length > 0,
+      source: 'canonical_v1_contract'
     });
-    
-    let toneResult: { classification: string; confidence: number } | null = null;
-    let fullToneAnalysis: any = null;
-    
-    // Priority 1: Full tone analysis provided (best option - no duplicate computation)
-    if (data.toneAnalysis) {
-      fullToneAnalysis = {
-        // Core tone fields that suggestions service expects
-        tone: data.toneAnalysis.tone || data.toneAnalysis.classification || 'neutral',
-        confidence: data.toneAnalysis.confidence || 0.5,
-        
-        // UI consistency fields
-        ui_tone: data.toneAnalysis.ui_tone || 'clear',
-        ui_distribution: data.toneAnalysis.ui_distribution || {},
-        
-        // Rich emotional and linguistic data for optimal therapy advice
-        emotions: data.toneAnalysis.emotions || {},
-        sentiment_score: data.toneAnalysis.sentiment_score,
-        linguistic_features: data.toneAnalysis.linguistic_features || {},
-        context_analysis: data.toneAnalysis.context_analysis || {},
-        attachmentInsights: data.toneAnalysis.attachment_insights || [],
-        
-        // Metadata for comprehensive analysis
-        metadata: data.toneAnalysis.metadata || { analysis_depth: data.toneAnalysis.intensity || 0.5 },
-        
-        // Additional fields for completeness
-        intensity: data.toneAnalysis.intensity,
-        evidence: data.toneAnalysis.evidence,
-        suggestions: data.toneAnalysis.suggestions
-      };
-      
-      toneResult = {
-        classification: data.toneAnalysis.classification || data.toneAnalysis.tone || 'neutral',
-        confidence: data.toneAnalysis.confidence || 0.5
-      };
-      
-      logger.info('Using provided COMPLETE tone analysis from coordinator', { 
-        tone: toneResult.classification, 
-        ui_tone: fullToneAnalysis.ui_tone,
-        confidence: toneResult.confidence,
-        emotions: Object.keys(fullToneAnalysis.emotions || {}).length,
-        hasLinguisticFeatures: !!fullToneAnalysis.linguistic_features,
-        hasContextAnalysis: !!fullToneAnalysis.context_analysis,
-        hasAttachmentInsights: Array.isArray(fullToneAnalysis.attachmentInsights) && fullToneAnalysis.attachmentInsights.length > 0,
-        source: 'coordinator_cache',
-        // 🎯 ENHANCED: Log what complete data we received for therapy advice
-        dataCompleteness: {
-          emotions: Object.keys(fullToneAnalysis.emotions || {}).join(','),
-          sentimentScore: fullToneAnalysis.sentiment_score,
-          linguisticFeatures: fullToneAnalysis.linguistic_features ? 'present' : 'missing',
-          contextAnalysis: fullToneAnalysis.context_analysis ? 'present' : 'missing',
-          attachmentInsights: fullToneAnalysis.attachmentInsights?.length || 0
-        }
-      });
-    }
-    // Priority 2: Simple tone override (for testing/manual control)
-    else if (data.toneOverride) {
-      toneResult = {
-        classification: data.toneOverride, // This will be 'alert', 'caution', or 'clear'
-        confidence: 0.9 // High confidence for manual override
-      };
-      logger.info('Using tone override from request', toneResult);
-    } 
-    // Priority 3: Coordinator is required - no local analysis fallback
-    else {
-      logger.error('Missing tone analysis from Coordinator', {
-        userId,
-        textLength: data.text.length,
-        context: contextLabel,
-        hasToneAnalysis: !!data.toneAnalysis,
-        hasToneOverride: !!data.toneOverride
-      });
-      
-      return {
-        success: false,
-        error: 'Tone analysis required from Coordinator. Please provide toneAnalysis or toneOverride.',
-        suggestions: [],
-        metadata: {
-          suggestion_count: 0,
-          processingTimeMs: Date.now() - startTime,
-          model_version: '1.0.0',
-          tone_analysis_source: 'missing',
-          status: 'missing_coordinator_analysis'
-        },
-        ui_tone: 'neutral',
-        client_seq: data.client_seq || data.clientSeq
-      };
-    }
 
-    // Normalize tone to clear/caution/alert (not raw emotion)
-    const toneKeyNorm: 'clear' | 'caution' | 'alert' = 
-      (toneResult?.classification === 'alert' || toneResult?.classification === 'angry' || toneResult?.classification === 'hostile') ? 'alert' :
-      (toneResult?.classification === 'caution' || toneResult?.classification === 'frustrated' || toneResult?.classification === 'sad') ? 'caution' : 'clear';
+    // Pass raw tone classification directly to suggestions service
+    // The service will handle both UI tones (clear/caution/alert) and raw tones (assertive, etc.)
+    const rawToneClassification = data.toneAnalysis.classification;
+    const toneKeyNorm = rawToneClassification; // Keep original raw tone for therapy advice matching
     
-    // Generate suggestions using the dedicated service with tone analysis
-    // Pass context hint (if provided) but let the system auto-detect from text
+    // Only normalize for UI bucketing purposes later, but use raw tone for suggestions matching
+    const uiToneForBucketing = (() => {
+      switch (rawToneClassification) {
+        case 'clear':
+        case 'caution': 
+        case 'alert':
+          return rawToneClassification;
+        case 'neutral':
+        case 'assertive':
+        case 'supportive':
+        case 'positive':
+          return 'clear'; // These raw tones map to clear UI bucket
+        case 'frustrated':
+        case 'anxious':
+        case 'sad':
+          return 'caution'; // These raw tones map to caution UI bucket
+        case 'angry':
+        case 'hostile':
+        case 'safety_concern':
+          return 'alert'; // These raw tones map to alert UI bucket
+        case 'insufficient':
+          return 'clear'; // Insufficient data maps to clear (safe default)
+        default:
+          logger.info('Using raw tone classification for therapy advice matching', { 
+            classification: rawToneClassification,
+            compose_id: data.compose_id,
+            ui_bucket_fallback: 'clear'
+          });
+          return 'clear' as const;
+      }
+    })();
+    
+    // Generate suggestions using the dedicated service with canonical tone analysis
     logger.info('About to call suggestionsService.generateAdvancedSuggestions', {
       textLength: data.text.length,
-      context: data.context || 'general',
+      context: data.context,
       userId,
-      attachmentStyle: data.attachmentStyle || attachmentEstimate.primary || 'secure',
-      toneOverride: data.toneOverride,
+      attachmentStyle: finalAttachmentStyle,
+      tone_classification: data.toneAnalysis.classification,
       isNewUser
     });
 
     let suggestionAnalysis;
     try {
-      // 1) Analyze tone (override or ML)
-      const detectedToneResult = toneResult;
-
-      // 2) Generate suggestions -> returns analysis with flags + context
+      // Generate suggestions with canonical contract data
       suggestionAnalysis = await suggestionsService.generateAdvancedSuggestions(
         data.text,
-        contextLabel, // Use extracted context (could be from meta.context)
+        data.context,
         {
           id: userId,
-          attachment: data.attachmentStyle || attachmentEstimate.primary || 'secure',
+          attachment: finalAttachmentStyle,
           secondary: attachmentEstimate.secondary,
           windowComplete: attachmentEstimate.windowComplete
         },
         {
           maxSuggestions: 3,
-          attachmentStyle: data.attachmentStyle || attachmentEstimate.primary || 'secure',
+          attachmentStyle: finalAttachmentStyle,
           relationshipStage: data.meta?.relationshipStage,
           conflictLevel: data.meta?.conflictLevel || 'low',
           isNewUser,
@@ -247,41 +381,40 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
         error: suggestionError,
         message: suggestionError instanceof Error ? suggestionError.message : String(suggestionError),
         stack: suggestionError instanceof Error ? suggestionError.stack : undefined,
-        name: suggestionError instanceof Error ? suggestionError.name : 'UnknownError'
+        name: suggestionError instanceof Error ? suggestionError.name : 'UnknownError',
+        compose_id: data.compose_id,
+        client_seq: data.client_seq
       });
       throw suggestionError;
     }
         // Session-based processing - no server-side storage for mass users
     
     // Make the noticings & matches visible for UX / analytics (simulated for session)
-    suggestionAnalysis.analysis.flags.phraseEdgeHits = [
-      ...(suggestionAnalysis.analysis.flags.phraseEdgeHits || [])
-    ];
-    (suggestionAnalysis as any).analysis.flags.featureNoticings = [];
+    if (suggestionAnalysis?.analysis?.flags) {
+      suggestionAnalysis.analysis.flags.phraseEdgeHits = [
+        ...(suggestionAnalysis.analysis.flags.phraseEdgeHits || [])
+      ];
+      (suggestionAnalysis as any).analysis.flags.featureNoticings = [];
+    }
 
     // Session-only processing - no persistent dialogue state for mass users
 
-    // 3) Use detected context for history
-    const detectedContext = suggestionAnalysis.analysis?.context?.label || data.context || 'general';
+    // 3) Use canonical context for history tracking
+    const detectedContext = suggestionAnalysis.analysis?.context?.label || data.context;
     profile.addCommunication(data.text, detectedContext, toneKeyNorm);
 
-    // 4) Buckets for UI: start from suggestionAnalysis (already normalized) but use normalized tone  
-    const baseBuckets = suggestionAnalysis.analysis.toneBuckets?.dist ?? 
-      mapToneToBuckets(
-        { classification: toneKeyNorm, confidence: toneResult?.confidence || 0.5 },
-        'secure',
-        detectedContext
-      )?.buckets ?? { clear: 1/3, caution: 1/3, alert: 1/3 };
+    // ✅ USE CANONICAL UI DISTRIBUTION AS BASELINE - Do not mutate the original
+    const baseBuckets = data.toneAnalysis.ui_distribution;
 
-    // 5) Apply attachment adjustments and threshold shifts
-    const attachmentStyle = data.attachmentStyle || attachmentEstimate.primary || 'secure';
+    // 5) Apply attachment adjustments and threshold shifts using canonical data
+    // Create normalized copy without mutating original distribution
     const contextKey =
-      detectedContext === 'conflict'   ? 'CTX_CONFLICT'  :
-      detectedContext === 'planning'   ? 'CTX_PLANNING'  :
-      detectedContext === 'boundary'   ? 'CTX_BOUNDARY'  :
-      detectedContext === 'repair'     ? 'CTX_REPAIR'    : 'CTX_GENERAL';
+      data.context === 'conflict'   ? 'CTX_CONFLICT'  :
+      data.context === 'planning'   ? 'CTX_PLANNING'  :
+      data.context === 'boundary'   ? 'CTX_BOUNDARY'  :
+      data.context === 'repair'     ? 'CTX_REPAIR'    : 'CTX_GENERAL';
 
-    const intensityScore = suggestionAnalysis.analysis?.flags?.intensityScore ?? 0.5;
+    const intensityScore = data.toneAnalysis.intensity ?? 0.5;
 
     // Session-only tone bucket processing (no server-side feature hints for mass users)
     const baseBucketsWithFS = {
@@ -296,9 +429,9 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     baseBucketsWithFS.alert /= fsSum;
 
     const adjustedBuckets = adjustToneByAttachment(
-      { classification: toneResult?.classification || 'neutral', confidence: toneResult?.confidence || 0.33 },
+      { classification: toneResult.classification, confidence: toneResult.confidence },
       baseBucketsWithFS, // Use FS-adjusted buckets instead of original baseBuckets
-      attachmentStyle as any,
+      finalAttachmentStyle as any,
       contextKey,
       intensityScore,
       dataLoader.getAttachmentToneWeights()
@@ -306,7 +439,7 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
 
     const { primary: finalPrimary, distribution: rawBuckets } = applyThresholdShift(
       adjustedBuckets,
-      attachmentStyle as any,
+      finalAttachmentStyle as any,
       dataLoader.getAttachmentToneWeights()
     );
 
@@ -332,36 +465,64 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
     // Don't apply emergency fallback here - wait until after response mapping
     let picked = suggestionAnalysis.suggestions || [];
     
+    // Cache the successful response
     const response = {
-      text: suggestionAnalysis.original_text,
-      original_text: suggestionAnalysis.original_text,
-      context: suggestionAnalysis.context,
+      text: data.text,
+      original_text: data.text,
+      context: data.context,
       ui_tone,
       ui_distribution: uiBuckets,
-      client_seq: data.client_seq || data.clientSeq,
+      
+      // Canonical v1 correlation fields
+      client_seq: data.client_seq,
+      compose_id: data.compose_id,
+      text_sha256: data.text_sha256,
+      
       original_analysis: {
-        tone: toneResult?.classification || ui_tone,
-        confidence: toneResult?.confidence || 0.5,
-        sentiment: fullToneAnalysis?.sentiment_score || 0,
-        sentiment_score: fullToneAnalysis?.sentiment_score || 0,
-        intensity: fullToneAnalysis?.intensity || 0.5,
+        tone: toneResult.classification as any, // Cast to match Bucket type  
+        confidence: toneResult.confidence,
+        
+        // ✅ PRESERVE ORIGINAL vs ADJUSTED - use analysis subtree for consistency
+        sentiment: fullToneAnalysis.analysis.sentiment_score,
+        sentiment_score: fullToneAnalysis.analysis.sentiment_score,
+        intensity: fullToneAnalysis.analysis.intensity,
         clarity_score: 0.5, // Default clarity (could be enhanced)
         empathy_score: 0.5, // Default empathy (could be enhanced)
         
-        // 🎯 COMPLETE: Include all rich analysis data in response
-        linguistic_features: fullToneAnalysis?.linguistic_features,
-        context_analysis: fullToneAnalysis?.context_analysis,
-        attachment_indicators: fullToneAnalysis?.attachmentInsights || [],
-        attachmentInsights: fullToneAnalysis?.attachmentInsights || [],
-        communication_patterns: fullToneAnalysis?.communicationPatterns || [],
+        // ✅ ADD MISSING REQUIRED FIELDS for schema compatibility
+        emotions: fullToneAnalysis.analysis.emotions || {},
+        evidence: [], // Empty for now - could be populated with tone evidence
+        communication_patterns: [], // Empty for now - could be populated from analysis
+        metadata: fullToneAnalysis.metadata || {},
+        complete_analysis_available: true,
+        tone_analysis_source: 'coordinator_cache' as const,
         
-        // UI consistency fields
-        ui_tone: fullToneAnalysis?.ui_tone || ui_tone,
-        ui_distribution: fullToneAnalysis?.ui_distribution || uiBuckets
+        // Rich analysis data from canonical contract - use analysis subtree
+        linguistic_features: fullToneAnalysis.analysis.linguistic_features,
+        context_analysis: fullToneAnalysis.analysis.context_analysis,
+        attachment_indicators: fullToneAnalysis.analysis.attachment_insights,
+        attachmentInsights: fullToneAnalysis.analysis.attachment_insights,
+        
+        // ✅ PRESERVE ORIGINAL vs ADJUSTED DISTRIBUTIONS for observability
+        ui_tone_original: data.toneAnalysis.classification,          // what tone.ts said
+        ui_distribution_original: data.toneAnalysis.ui_distribution, // what tone.ts said
+        ui_tone: ui_tone,                                           // adjusted for suggestions
+        ui_distribution: uiBuckets,                                 // adjusted & normalized
+        
+        // ✅ ADD REQUIRED LEARNING SIGNALS FIELD from suggestionAnalysis
+        learning_signals: (suggestionAnalysis?.analysis as any)?.learningSignals || {
+          patterns_detected: [],
+          communication_buckets: [],
+          attachment_hints: {},
+          tone_adjustments: {},
+          therapeutic_noticings: [],
+          total_patterns_count: 0,
+          buckets_detected_count: 0
+        }
       },
       ok: true,
       success: true,
-      version: 'v1.0.0-advanced',
+      version: 'v1.0.0-canonical',
       userId,
       attachmentEstimate,
       isNewUser,
@@ -386,96 +547,42 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
         status: 'active', // Always active - learning happens in background
         feature_noticings: [], // Session-only processing for mass users
         
-        // 🎯 ENHANCED: Track complete analysis data usage for optimization
+        // 🎯 ENHANCED: Track complete analysis data usage for optimization - use analysis subtree
         tone_analysis_source: (fullToneAnalysis ? 'coordinator_cache' : 'fresh_analysis') as 'coordinator_cache' | 'fresh_analysis' | 'override',
         complete_analysis_available: !!fullToneAnalysis,
-        linguistic_features_used: !!(fullToneAnalysis?.linguistic_features && Object.keys(fullToneAnalysis.linguistic_features).length > 0),
-        context_analysis_used: !!(fullToneAnalysis?.context_analysis && Object.keys(fullToneAnalysis.context_analysis).length > 0),
-        attachment_insights_count: fullToneAnalysis?.attachmentInsights?.length || 0
+        linguistic_features_used: !!(fullToneAnalysis?.analysis.linguistic_features && Object.keys(fullToneAnalysis.analysis.linguistic_features).length > 0),
+        context_analysis_used: !!(fullToneAnalysis?.analysis.context_analysis && Object.keys(fullToneAnalysis.analysis.context_analysis).length > 0),
+        attachment_insights_count: fullToneAnalysis?.analysis.attachment_insights?.length || 0
       }
     };
     
-    // Apply emergency fallback ONLY for true system failures (not guardrail filtering)
-    // Check if the service found suggestions initially before any filtering
-    const serviceFoundSuggestions = suggestionAnalysis.suggestions && suggestionAnalysis.suggestions.length > 0;
-    const wasMainServiceEmpty = !serviceFoundSuggestions;
-    const wasMainServiceSuccessful = suggestionAnalysis.success !== false;
+    // Emergency fallback for true system failures
     const responseHasSuggestions = Array.isArray(response.suggestions) && response.suggestions.length > 0;
     
-    // Only trigger emergency fallback if:
-    // 1. Main service found NO suggestions at all (not just filtered them all)
-    // 2. Service reported success (not an error)
-    // 3. Response has no suggestions after mapping
-    const isTrueEmergency = wasMainServiceEmpty && 
-                           !responseHasSuggestions &&
-                           wasMainServiceSuccessful;
-                           
-    if (isTrueEmergency) {
-      // True emergency: main service found no content at all (not filtering issue)
-      logger.error('CRITICAL: Emergency fallback triggered - main service found no suggestions', { 
-        userId, 
-        text: data.text,
+    if (!responseHasSuggestions) {
+      logger.error('CRITICAL: No suggestions returned - applying emergency fallback', { 
+        userId,
+        compose_id: data.compose_id,
+        client_seq: data.client_seq,
         context: data.context,
-        serviceFoundSuggestions,
-        responseHasSuggestions,
-        serviceSuccess: suggestionAnalysis.success,
+        suggestionServiceLength: suggestionAnalysis?.suggestions?.length || 0,
         timestamp: new Date().toISOString()
       });
       
-      const emergencyFallbacks = ensureAtLeastOneSuggestion([], true);
-      response.suggestions = emergencyFallbacks.map((s: any, index: number) => ({
-        id: s.id ?? `critical-emergency-${index + 1}`,
-        text: s.advice ?? s.text,
-        type: 'advice', // ✅ Valid schema enum value instead of 'system_message'
-        confidence: 0.05, // Extremely low confidence
-        reason: 'Critical system fallback - main suggestions service failed',
-        category: 'emotional', // ✅ Valid schema enum value instead of 'system'
-        categories: ['emotional'], // ✅ Valid schema enum value
-        priority: 999, // Lowest priority
-        context_specific: false,
-        attachment_informed: false
-      }));
-      response.metadata.suggestion_count = response.suggestions.length;
-      response.metadata.status = 'emergency_fallback'; // Flag for monitoring via existing field
-    }
-    
-    // Log when all suggestions were filtered out (for debugging guardrails)
-    else if (serviceFoundSuggestions && !responseHasSuggestions) {
-      logger.warn('All suggestions filtered by guardrails', {
-        userId,
-        text: data.text,
-        context: data.context,
-        originalSuggestionsCount: suggestionAnalysis.suggestions?.length || 0,
-        finalSuggestionsCount: response.suggestions?.length || 0,
-        filteringReason: 'guardrails_filtered_all'
-      });
-    }
-    
-    // Final response boundary check - should not be needed due to emergency fallback above
-    if (!Array.isArray(response.suggestions) || response.suggestions.length === 0) {
-      logger.error('Critical: No suggestions at response boundary despite emergency fallback', {
-        userId,
-        originalText: data.text,
-        context: data.context,
-        suggestionsServiceLength: suggestionAnalysis?.suggestions?.length || 0,
-        timestamp: new Date().toISOString()
-      });
-      
-      // This should never happen if emergency fallback worked correctly
-      // Use normalized structure matching main response format
       response.suggestions = [{
-        id: 'critical-fallback-1',
+        id: 'emergency-fallback-1',
         text: 'System temporarily unavailable. Please try again.',
-        type: 'advice', // ✅ Valid schema enum value
+        type: 'advice',
         confidence: 0.05,
-        reason: 'Critical system fallback',
-        category: 'emotional', // ✅ Valid schema enum value
-        categories: ['emotional'], // ✅ Valid schema enum value
-        priority: 999, // Lowest priority
+        reason: 'Emergency system fallback - suggestions service failed',
+        category: 'emotional',
+        categories: ['emotional'],
+        priority: 999,
         context_specific: false,
         attachment_informed: false
       }];
       response.metadata.suggestion_count = 1;
+      response.metadata.status = 'emergency_fallback';
     }
 
     const b = response.ui_distribution;
@@ -484,49 +591,60 @@ const handler = async (req: VercelRequest, res: VercelResponse, data: any) => {
       response.ui_distribution = normalizeBuckets(b || { clear: 1, caution: 0, alert: 0 });
     }
     
+    // Cache successful response for idempotency
+    requestCache.set(cacheKey, {
+      compose_id: data.compose_id,
+      client_seq: data.client_seq,
+      text_sha256: data.text_sha256,
+      response: response,
+      timestamp: Date.now()
+    });
+    
     return response;
   } catch (error) {
-    logger.error('Advanced suggestions generation failed:', error);
+    logger.error('Canonical v1 suggestions generation failed:', {
+      error: error,
+      message: error instanceof Error ? error.message : String(error),
+      compose_id: data.compose_id,
+      client_seq: data.client_seq,
+      stack: error instanceof Error ? error.stack : undefined
+    });
     throw error;
   }
-};
-
-const responseHandler = async (req: VercelRequest, res: VercelResponse) => {
-  const data = req.body; // Should be already validated by withValidation
-  return handler(req, res, data);
 };
 
 const wrappedHandler = withErrorHandling(
   withLogging(
     withCors(
       withMethods(['POST'], 
-        withValidation(suggestionRequestSchema, 
-          withResponseNormalization(normalizeSuggestionResponse, 
-            // Enhanced validation: log schema validation results for monitoring
-            async (req: VercelRequest, res: VercelResponse) => {
-              const response = await responseHandler(req, res);
-              
-              // Additional validation logging for critical production monitoring
+        withResponseNormalization(normalizeSuggestionResponse, 
+          // Direct handler - validation done inside handler function
+          async (req: VercelRequest, res: VercelResponse) => {
+            const response = await handler(req, res);
+            
+            // Additional validation logging for monitoring
+            if (response) {
               const validation = suggestionResponseSchema.safeParse(response);
               if (!validation.success) {
                 logger.error('Suggestions response schema validation failed', {
                   endpoint: '/api/v1/suggestions',
                   userId: req.headers['x-user-id'] || 'anonymous',
                   errors: validation.error.errors,
-                  text_length: req.body?.text?.length || 0,
-                  suggestions_count: Array.isArray(response?.suggestions) ? response.suggestions.length : 0,
+                  compose_id: req.body?.compose_id,
+                  client_seq: req.body?.client_seq,
                   timestamp: new Date().toISOString()
                 });
               } else {
                 logger.debug('Suggestions response validation passed', {
                   userId: req.headers['x-user-id'] || 'anonymous',
+                  compose_id: req.body?.compose_id,
                   suggestions_count: validation.data.suggestions?.length || 0
                 });
               }
-              
-              return response;
             }
-          )
+            
+            return response;
+          }
         )
       )
     )

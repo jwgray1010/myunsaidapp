@@ -959,8 +959,11 @@ final class ToneSuggestionCoordinator {
         }
         throttledLog("suggestions features: \((safePayload["features"] as? [String])?.joined(separator: ",") ?? "<none>")", category: "api")
         
+        // Transform to canonical v1 contract before sending
+        let canonicalPayload = transformToCanonicalV1(payload: safePayload)
+        
         // Use retry wrapper for suggestions to handle transient network errors
-        callEndpointWithRetry(path: "api/v1/suggestions", payload: safePayload) { [weak self] data in
+        callEndpointWithRetry(path: "api/v1/suggestions", payload: canonicalPayload) { [weak self] data in
             guard let self else { completion(nil); return }
             guard requestID == self.latestRequestID else { completion(nil); return }
             
@@ -991,6 +994,70 @@ final class ToneSuggestionCoordinator {
         }
         if let s = dict["data"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
         return nil
+    }
+    
+    // MARK: - Canonical V1 Contract Transformation
+    private func transformToCanonicalV1(payload: [String: Any]) -> [String: Any] {
+        guard let lastToneAnalysis = lastToneAnalysis,
+              let text = lastToneAnalysis["text"] as? String,
+              let toneData = lastToneAnalysis["toneAnalysis"] as? [String: Any] else {
+            // Fallback if no tone data available - this shouldn't happen in normal flow
+            return payload
+        }
+        
+        // Generate text_sha256
+        let textSHA256 = sha256(text)
+        
+        // Generate compose_id (session-based unique identifier)
+        let composeId = "compose-\(Date().timeIntervalSince1970)-\(UUID().uuidString.prefix(8))"
+        
+        // Get attachment style from personality payload
+        let personalityData = personalityPayload()
+        let attachmentStyle = personalityData["attachmentStyle"] as? String ?? "secure"
+        
+        // Build canonical toneAnalysis object from stored tone endpoint response
+        let toneAnalysis: [String: Any] = [
+            "classification": toneData["ui_tone"] ?? "clear",
+            "confidence": toneData["confidence"] ?? 0.5,
+            "ui_distribution": toneData["ui_distribution"] ?? [
+                "clear": 0.33,
+                "caution": 0.33,
+                "alert": 0.34
+            ],
+            "intensity": toneData["intensity"] ?? 0.5
+        ]
+        
+        // Build rich analysis object with all the data from tone endpoint
+        var rich: [String: Any] = [:]
+        
+        // Core analysis fields from tone endpoint response
+        if let analysis = toneData["analysis"] as? [String: Any] {
+            rich["emotions"] = analysis["emotions"] ?? [:]
+            rich["linguistic_features"] = analysis["linguistic_features"] ?? [:]
+            rich["context_analysis"] = analysis["context_analysis"] ?? [:]
+            rich["attachment_insights"] = analysis["attachment_insights"] ?? []
+        }
+        
+        // Additional rich fields directly from tone endpoint
+        rich["raw_tone"] = toneData["primary_tone"] ?? ""
+        rich["categories"] = toneData["categories"] ?? []
+        rich["sentiment_score"] = toneData["sentiment_score"] ?? 0.0
+        rich["timestamp"] = toneData["timestamp"] ?? ISO8601DateFormatter().string(from: Date())
+        rich["metadata"] = toneData["metadata"] ?? [:]
+        rich["attachmentEstimate"] = toneData["attachmentEstimate"] ?? [:]
+        rich["isNewUser"] = toneData["isNewUser"] ?? false
+        
+        // Build canonical v1 payload
+        return [
+            "text": text,
+            "text_sha256": textSHA256,
+            "client_seq": toneData["client_seq"] ?? 1,
+            "compose_id": composeId,
+            "toneAnalysis": toneAnalysis,
+            "context": payload["context"] ?? "general",
+            "attachmentStyle": attachmentStyle,
+            "rich": rich
+        ]
     }
     
     // MARK: - Core networking for suggestions/observe
@@ -1710,53 +1777,27 @@ extension ToneSuggestionCoordinator {
         
         do {
             let toneOut = try await postTone(base: apiBase, text: trimmed, token: cachedAPIKey.nilIfEmpty, fullTextMode: false)
-            let newBuckets = (
+            // ✅ Trust server tone decision - use resolvedTone to get server's ui_tone or fallback
+            let (resolvedToneString, _) = resolvedTone(from: toneOut)
+            let serverBucket = Bucket.fromString(resolvedToneString) // Convert server tone to local enum
+            
+            // Log server decision for debugging 
+            print("🔎 ANALYZED text='\(trimmed.prefix(50))' serverTone=\(resolvedToneString) serverBucket=\(serverBucket.rawValue)")
+            
+            // Always trust the server's tone decision - no local overrides
+            let newTone = serverBucket
+            
+            // Get server's distribution for smoothing (optional - could skip smoothing entirely)
+            let serverDistribution = (
                 clear: toneOut.finalDistribution["clear"] ?? 0.33,
-                caution: toneOut.finalDistribution["caution"] ?? 0.33,
+                caution: toneOut.finalDistribution["caution"] ?? 0.33,  
                 alert: toneOut.finalDistribution["alert"] ?? 0.34
             )
             
-            // 🔎 ANALYZED - Log buckets before any processing
-            print("🔎 ANALYZED text='\(trimmed.prefix(50))' buckets: clear=\(String(format: "%.3f", newBuckets.clear)) caution=\(String(format: "%.3f", newBuckets.caution)) alert=\(String(format: "%.3f", newBuckets.alert))")
-            
-            // Smart tone detection prioritizing emotional content
-            let newTone: Bucket
-            let hasEmotionalContent = containsEmotionalLanguage(trimmed)
-            
-            if hasEmotionalContent {
-                // For emotional content, prioritize alert/caution even if clear has higher percentage
-                if newBuckets.alert >= 0.25 || newBuckets.caution >= 0.25 {
-                    // Choose between alert and caution based on which is higher
-                    newTone = newBuckets.alert > newBuckets.caution ? .alert : .caution
-                    #if DEBUG
-                    coordLog.info("🎯 Emotional content detected, overriding to \(newTone.rawValue) (alert=\(String(format: "%.1f", newBuckets.alert * 100))%%, caution=\(String(format: "%.1f", newBuckets.caution * 100))%%)")
-                    #endif
-                } else {
-                    // Fallback to normal logic for edge cases
-                    newTone = pickUiTone(newBuckets, current: lastUiTone, threshold: 0.30)
-                    print("🎯 BUCKETS clear=\(String(format: "%.3f", newBuckets.clear)) caution=\(String(format: "%.3f", newBuckets.caution)) alert=\(String(format: "%.3f", newBuckets.alert)) threshold=0.30 -> uiTone=\(newTone.rawValue)")
-                    #if DEBUG
-                    coordLog.info("🎯 Emotional content with low confidence, using threshold logic: \(newTone.rawValue)")
-                    #endif
-                }
-            } else if let apiTone = toneOut.apiTone, apiTone != Bucket.clear {
-                // Trust API when it's not "clear" and content isn't emotional
-                newTone = apiTone
-                #if DEBUG
-                coordLog.info("🎯 Using API tone decision: \(apiTone.rawValue)")
-                #endif
-            } else {
-                // Use standard threshold logic for non-emotional content
-                newTone = pickUiTone(newBuckets, current: lastUiTone, threshold: 0.40)
-                print("🎯 BUCKETS clear=\(String(format: "%.3f", newBuckets.clear)) caution=\(String(format: "%.3f", newBuckets.caution)) alert=\(String(format: "%.3f", newBuckets.alert)) threshold=0.40 -> uiTone=\(newTone.rawValue)")
-                #if DEBUG
-                coordLog.info("🎯 Standard threshold logic: \(newTone.rawValue) (clear=\(String(format: "%.1f", newBuckets.clear * 100))%%, caution=\(String(format: "%.1f", newBuckets.caution * 100))%%, alert=\(String(format: "%.1f", newBuckets.alert * 100))%%)")
-                #endif
-            }
-            
+            // Light smoothing for UI stability - but don't use for tone decision
             let isSeverityDrop = severityRank(for: newTone) < severityRank(for: lastUiTone)
             let alpha = isSeverityDrop ? 0.50 : 0.30
-            smoothedBuckets = smoothBuckets(prev: smoothedBuckets, curr: newBuckets, alpha: alpha)
+            smoothedBuckets = smoothBuckets(prev: smoothedBuckets, curr: serverDistribution, alpha: alpha)
             
             let finalTone = newTone
             
@@ -1790,55 +1831,24 @@ extension ToneSuggestionCoordinator {
                 }
             }
             
-            // 🎯 STORE COMPLETE ANALYSIS - Store the full analysis for optimal therapy advice
+            // ✅ STORE COMPLETE SERVER RESPONSE - Store the raw server data as-is to prevent field drift
             lastAnalyzedText = trimmed
-            // Store complete analysis payload that suggestions API needs for best therapy advice
             
-            // Build core tone analysis data
-            let coreData: [String: Any] = [
-                "tone": toneOut.primary_tone ?? "neutral",
-                "classification": toneOut.primary_tone ?? "neutral",
-                "confidence": toneOut.confidence ?? 0.5
-            ]
-            
-            // Build UI data - use the server's intended ui_distribution
-            let uiData: [String: Any] = [
-                "ui_tone": toneOut.ui_tone ?? "clear",
-                "ui_distribution": toneOut.finalDistribution  // Use canonical ui_distribution field
-            ]
-            
-            // Build emotional data
-            let emotionalData: [String: Any] = [
-                "emotions": toneOut.emotions ?? [:],
-                "intensity": toneOut.intensity ?? 0.5
-            ]
-            
-            // Build advanced analysis data
-            let advancedData: [String: Any] = [
-                "sentiment_score": toneOut.analysis?.sentimentScore ?? 0.5,
-                "linguistic_features": (toneOut.analysis?.linguisticFeatures as? AnyCodable)?.value ?? [:],
-                "context_analysis": (toneOut.analysis?.contextAnalysis as? AnyCodable)?.value ?? [:],
-                "attachment_insights": (toneOut.analysis?.attachmentInsights as? AnyCodable)?.value ?? [],
-                "categories": toneOut.categories ?? []  // Categories from tone pattern matching for therapy advice boost
-            ]
-            
-            // Build metadata
-            let metadataData: [String: Any] = [
-                "analysis_depth": toneOut.intensity ?? 0.5,
-                "model_version": "v1.0.0-advanced",
-                "feature_noticings": toneOut.metadata?.feature_noticings?.map { ["pattern": $0.pattern, "message": $0.message] } ?? []
-            ]
-            
-            // Combine all data into tone analysis
-            var toneAnalysisData = coreData
-            toneAnalysisData.merge(uiData) { _, new in new }
-            toneAnalysisData.merge(emotionalData) { _, new in new }
-            toneAnalysisData.merge(advancedData) { _, new in new }
-            toneAnalysisData["metadata"] = metadataData
-            
+            // Store minimal but complete tone analysis for suggestions API
+            // Use direct field access to preserve server contract
             lastToneAnalysis = [
                 "text": trimmed,
-                "toneAnalysis": toneAnalysisData
+                "toneAnalysis": [
+                    "ui_tone": toneOut.ui_tone ?? "clear",
+                    "ui_distribution": toneOut.finalDistribution,
+                    "confidence": toneOut.confidence ?? 0.5,
+                    "primary_tone": toneOut.primary_tone ?? "neutral",
+                    "analysis": [
+                        "primary_tone": toneOut.primary_tone ?? "neutral",
+                        "confidence": toneOut.confidence ?? 0.5,
+                        "sentiment_score": toneOut.analysis?.sentimentScore ?? 0.5
+                    ]
+                ]
             ]
             
             #if DEBUG
@@ -1852,35 +1862,7 @@ extension ToneSuggestionCoordinator {
     }
     
     // Helper to detect emotional language that should trigger alerts/cautions
-    private func containsEmotionalLanguage(_ text: String) -> Bool {
-        let lowercased = text.lowercased()
-        
-        // Strong anger/hostility indicators (should be alert)
-        let angerWords = [
-            "angry", "mad", "furious", "pissed", "rage", "livid",
-            "fucking", "damn", "shit", "asshole", "bitch", "hate",
-            "disgusting", "stupid", "idiot", "moron", "pathetic"
-        ]
-        
-        // Frustration/negative patterns (should be caution/alert)
-        let frustrationPatterns = [
-            "never listen", "don't listen", "always", "you never",
-            "frustrated", "annoyed", "irritated", "fed up",
-            "can't stand", "sick of", "tired of", "enough",
-            "disappointed", "upset", "hurt", "terrible", "awful", "horrible"
-        ]
-        
-        // Emotional intensity phrases
-        let intensityPhrases = [
-            "really angry", "so angry", "extremely", "absolutely",
-            "completely", "totally", "seriously", "literally"
-        ]
-        
-        // Check for any emotional indicators
-        return angerWords.contains { lowercased.contains($0) } ||
-               frustrationPatterns.contains { lowercased.contains($0) } ||
-               intensityPhrases.contains { lowercased.contains($0) }
-    }
+    // MARK: - Tone Processing Utilities
     
     private func smoothBuckets(
         prev: (clear: Double, caution: Double, alert: Double),
@@ -1902,24 +1884,6 @@ extension ToneSuggestionCoordinator {
         case .neutral: return -1
         case .insufficient: return -2
         }
-    }
-    
-    private func pickUiTone(
-        _ buckets: (clear: Double, caution: Double, alert: Double),
-        current: Bucket? = nil,
-        threshold: Double = 0.45,
-        flipMarginUp: Double = 0.05,
-        flipMarginDown: Double = 0.0
-    ) -> Bucket {
-        let current = current ?? lastUiTone
-        let scores: [(Bucket, Double)] = [(.clear, buckets.clear), (.caution, buckets.caution), (.alert, buckets.alert)]
-        let (topTone, topValue) = scores.max(by: { $0.1 < $1.1 })!
-        if topValue < threshold { return .neutral }
-        guard current != .neutral, let currentValue = scores.first(where: { $0.0 == current })?.1 else { return topTone }
-        let order: [Bucket] = [.clear, .caution, .alert]
-        let isUpgrade = (order.firstIndex(of: topTone) ?? 0) > (order.firstIndex(of: current) ?? 0)
-        let marginNeeded = isUpgrade ? flipMarginUp : flipMarginDown
-        return (topValue - currentValue) >= marginNeeded ? topTone : current
     }
     
     private func maybeUpdateIndicator(to newTone: Bucket) {
@@ -2021,22 +1985,22 @@ extension ToneSuggestionCoordinator {
     }
     
     // MARK: - Tone Resolution Helpers
-    private func pickUiTone(_ buckets: Buckets) -> String {
-        // Same rule as server: neutral only if all within 0.05
-        let vals = [buckets.clear, buckets.caution, buckets.alert].sorted(by: >)
-        let (top, mid, low) = (vals[0], vals[1], vals[2])
-        if abs(top - mid) <= 0.05 && abs(top - low) <= 0.05 { return "neutral" }
-        if buckets.alert >= buckets.caution && buckets.alert >= buckets.clear { return "alert" }
-        if buckets.caution >= buckets.clear { return "caution" }
-        return "clear"
-    }
     
+    // ✅ TRUST SERVER TONE - Use server-provided ui_tone without local overrides
     private func resolvedTone(from toneOut: ToneOut) -> (tone: String, buckets: Buckets?) {
-        if let t = toneOut.uiTone { return (t, toneOut.uiDistribution ?? toneOut.buckets) }
-        if let t = toneOut.docTone { return (t, toneOut.uiDistribution ?? toneOut.buckets) }
-        if let d = toneOut.uiDistribution ?? toneOut.buckets { return (pickUiTone(d), d) }
-        // last resort: keep current
-        return ("", nil)
+        // Always trust server's ui_tone first (canonical contract)
+        if let uiTone = toneOut.ui_tone {
+            return (uiTone, toneOut.uiDistribution ?? toneOut.buckets)
+        }
+        
+        // Fallback to docTone if ui_tone missing (shouldn't happen with tone.ts)
+        if let docTone = toneOut.docTone {
+            return (docTone, toneOut.uiDistribution ?? toneOut.buckets)
+        }
+        
+        // Last resort: use "clear" default if server response corrupted
+        let defaultBuckets = Buckets(clear: 1.0, caution: 0.0, alert: 0.0)
+        return ("clear", defaultBuckets)
     }
     
     private struct DocumentAnalysis: Decodable {

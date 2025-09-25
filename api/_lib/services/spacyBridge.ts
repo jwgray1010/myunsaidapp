@@ -3,7 +3,9 @@
 // expected by toneAnalysis.ts (spacyLite). Fully serverless and fast.
 
 import { logger } from '../logger';
-import { spacyClient } from './spacyClient';
+import { spacyClient, CLIENT_VERSION } from './spacyClient';
+
+const MAX_CHARS = 8000;
 
 // Helper functions for serverless-safe processing
 function clamp01(x: number): number {
@@ -248,8 +250,13 @@ function computeNegScopes(
     }
   }
 
-  const merged = mergeTokenSpans(spans);
-  // Apply saturation to prevent excessive negation scopes
+  const merged = mergeTokenSpans(spans).map(span => {
+    const width = span.end - span.start + 1;
+    if (width > MAX_NEG_TOKENS) {
+      return { start: span.start, end: span.start + MAX_NEG_TOKENS - 1 };
+    }
+    return span;
+  });
   const saturatedCount = sat(merged.length, 8);
   return merged.slice(0, Math.floor(saturatedCount));
 }
@@ -315,12 +322,15 @@ function toCompact(text: string, result: SpacyResult): CompactDoc {
   }));
 
   const textLength = (text || '').length;
+  const rawSents = Array.isArray(result.sents) ? result.sents : [];
   const sentsChar: Array<{ start: number; end: number }> =
-    (Array.isArray(result.sents) && result.sents.length)
-      ? result.sents.map(s => ({
-          start: Math.max(0, safeNumber(s?.start)),
-          end: Math.min(textLength, safeNumber(s?.end, textLength))
-        }))
+    rawSents.length
+      ? rawSents.map(s => {
+          const start = Math.max(0, safeNumber(s?.start));
+          const endRaw = safeNumber(s?.end, textLength);
+          const end = Math.min(textLength, endRaw);
+          return start < end ? { start, end } : null;
+        }).filter((x): x is {start:number; end:number} => !!x)
       : [{ start: 0, end: textLength }];
 
   const deps = (Array.isArray(result.deps) ? result.deps : []).map((d: any) => ({ 
@@ -335,7 +345,7 @@ function toCompact(text: string, result: SpacyResult): CompactDoc {
   const entities = extractSecondPersonEntities(tokens);
 
   const compact: CompactDoc = {
-    version: '1.2.0',
+    version: CLIENT_VERSION,
     tokens,
     sents: sentsChar,
     deps,
@@ -359,7 +369,7 @@ function toCompact(text: string, result: SpacyResult): CompactDoc {
 
 function createFallbackDoc(text: string): CompactDoc {
   return {
-    version: '1.2.0',
+    version: CLIENT_VERSION,
     tokens: [],
     sents: [{ start: 0, end: (text || '').length }],
     deps: [],
@@ -381,7 +391,7 @@ export async function processWithSpacy(text: string, _mode?: string): Promise<Co
     }
 
     // Apply text length limits for serverless performance
-    const safeText = text.length > 10000 ? text.slice(0, 10000) : text;
+    const safeText = text.length > MAX_CHARS ? text.slice(0, MAX_CHARS) : text;
     
     const t0 = Date.now();
     const r = spacyClient.process(safeText);
@@ -408,7 +418,7 @@ export function processWithSpacySync(text: string, _mode?: string): CompactDoc {
     }
 
     // Apply text length limits for serverless performance
-    const safeText = text.length > 8000 ? text.slice(0, 8000) : text;
+    const safeText = text.length > MAX_CHARS ? text.slice(0, MAX_CHARS) : text;
     
     const r = spacyClient.process(safeText);
     return toCompact(safeText, r);

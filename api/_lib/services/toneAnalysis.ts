@@ -144,7 +144,8 @@ function applySemanticBackboneNudges(
   const hits: Array<{id: string; score: number; contexts: string[]}> = [];
   const lower = text.toLowerCase();
 
-  for (const c of (sb.clusters ?? [])) {
+  const clustersToIterate = Array.isArray(sb.clusters) ? sb.clusters : Object.values(sb.clusters ?? {});
+  for (const c of clustersToIterate) {
     let s = 0;
     
     // Check regex patterns

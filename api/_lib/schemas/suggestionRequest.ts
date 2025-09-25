@@ -44,22 +44,57 @@ export const metaSchema = z.object({
   attachment_source: z.string().optional().describe('Source of attachment style determination'),
 }).passthrough().describe('Optional metadata for tracing and UX decisions');
 
-// Main SuggestionRequest schema (matching JSON schema structure)
+// Main SuggestionRequest schema (matching JSON schema structure + canonical v1 contract)
 export const suggestionRequestSchema = z.object({
   text: z.string()
     .min(1, 'A valid message text (1–5000 characters) is required')
     .max(5000, 'A valid message text (1–5000 characters) is required')
     .describe('The message to analyze and provide therapy advice for'),
-  context: z.string().optional().describe('Optional hint about conversation context - system auto-detects from text if not provided'),
+  
+  // ✅ CANONICAL V1 CONTRACT FIELDS - Required for coordinator integration
+  text_sha256: z.string().optional().describe('SHA256 hash of the text for integrity validation'),
+  client_seq: z.number().optional().describe('Client sequence number for last-writer-wins and request ordering'),
+  compose_id: z.string().optional().describe('Unique compose session identifier for request deduplication'),
+  
+  // Enhanced toneAnalysis to match SuggestionInputV1 interface
+  toneAnalysis: z.object({
+    classification: z.string().describe('Tone classification from tone.ts (e.g., clear, caution, alert, neutral)'),
+    confidence: z.number().min(0).max(1).describe('Confidence score for the tone classification'),
+    ui_distribution: z.object({
+      clear: z.number().min(0).max(1).describe('Clear tone probability'),
+      caution: z.number().min(0).max(1).describe('Caution tone probability'),
+      alert: z.number().min(0).max(1).describe('Alert tone probability'),
+    }).describe('UI distribution buckets that sum to ~1.0'),
+    intensity: z.number().min(0).max(1).optional().describe('Emotional intensity score'),
+  }).optional().describe('Pre-computed tone analysis result from coordinator - when provided, eliminates duplicate tone analysis computation'),
+  
+  context: z.string().optional().describe('Communication context - auto-detected from text if not provided'),
+  attachmentStyle: z.string().optional().describe('User attachment style (secure, anxious, avoidant, disorganized)'),
+  
+  // Rich analysis data from tone.ts 
+  rich: z.object({
+    emotions: z.record(z.number()).optional().describe('Emotion scores from tone analysis'),
+    sentiment_score: z.number().optional().describe('Sentiment score from tone analysis'),
+    linguistic_features: z.record(z.any()).optional().describe('Linguistic features from tone analysis'),
+    context_analysis: z.record(z.any()).optional().describe('Context analysis from tone analysis'),
+    attachment_insights: z.array(z.any()).optional().describe('Attachment insights from tone analysis'),
+    categories: z.array(z.string()).optional().describe('Categories from tone pattern matching'),
+    timestamp: z.string().optional().describe('Analysis timestamp'),
+    raw_tone: z.string().optional().describe('Raw tone classification'),
+    metadata: z.record(z.any()).optional().describe('Additional metadata from tone analysis'),
+    attachmentEstimate: z.record(z.any()).optional().describe('Attachment estimate from analysis'),
+    isNewUser: z.boolean().optional().describe('Whether user is new'),
+  }).optional().describe('Rich analysis data from tone endpoint'),
+  
+  // Legacy fields for backward compatibility
   toneOverride: toneOverrideSchema.optional().describe('Optional override for detected tone. Useful for testing or manual control'),
-  toneAnalysis: toneResponseSchema.optional().describe('Optional pre-computed tone analysis result - when provided, eliminates duplicate tone analysis computation'),
-  attachmentStyle: attachmentStyleSchema.optional().describe('Optional user attachment-style override, if already known'),
   features: featuresSchema.optional().describe('Feature flags to include in the response. Common values: advice, quick_fixes, evidence, emotional_support'),
   meta: metaSchema.optional().describe('Optional metadata for tracing and UX decisions'),
-  // Client sequencing fields (used by coordinators)
-  client_seq: z.number().optional().describe('Client sequence number for last-writer-wins'),
+  
+  // Client sequencing fields (alternative names for compatibility)
   clientSeq: z.number().optional().describe('Alternative client sequence number field'),
   requestId: z.string().optional().describe('Unique request identifier for tracing'),
+  
   // iOS Coordinator fields
   userId: z.string().optional().describe('User identifier from iOS coordinator'),
   userEmail: z.union([z.string().email(), z.null()]).optional().describe('User email from iOS coordinator'),
@@ -114,6 +149,14 @@ export const originalAnalysisSchema = z.object({
   clarity_score: z.number().min(0).max(1).describe('Clarity score (0 to 1)'),
   empathy_score: z.number().min(0).max(1).describe('Empathy score (0 to 1)'),
   
+  // ✅ ADD MISSING REQUIRED FIELDS for canonical v1 contract compatibility
+  emotions: z.record(z.any()).optional().describe('Emotion analysis from tone endpoint'),
+  evidence: z.array(z.string()).optional().describe('Evidence for tone classification'),
+  communication_patterns: z.array(z.string()).optional().describe('Identified communication patterns'),
+  metadata: z.record(z.any()).optional().describe('Analysis metadata'),
+  complete_analysis_available: z.boolean().optional().describe('Whether complete analysis data is available'),
+  tone_analysis_source: z.enum(['coordinator_cache', 'fresh_analysis', 'override']).optional().describe('Source of tone analysis'),
+  
   // Enhanced linguistic and contextual analysis
   linguistic_features: z.object({
     formality_level: z.number().min(0).max(1).optional(),
@@ -134,15 +177,22 @@ export const originalAnalysisSchema = z.object({
   
   attachment_indicators: z.array(z.string()).optional().describe('Detected attachment style indicators'),
   attachmentInsights: z.array(z.string()).optional().describe('Attachment-specific insights'),
-  communication_patterns: z.array(z.string()).optional().describe('Identified communication patterns'),
   
-  // UI consistency fields
-  ui_tone: z.enum(['clear','caution','alert','neutral']).optional().describe('UI bucket for the pill color'),
+  // ✅ PRESERVE ORIGINAL vs ADJUSTED DISTRIBUTIONS for observability
+  ui_tone_original: z.string().optional().describe('Original tone from server before adjustments'),
+  ui_distribution_original: z.object({
+    clear: z.number().min(0).max(1).optional(),
+    caution: z.number().min(0).max(1).optional(),
+    alert: z.number().min(0).max(1).optional(),
+  }).optional().describe('Original distribution from server before adjustments'),
+  
+  // UI consistency fields (adjusted for suggestions context)
+  ui_tone: z.enum(['clear','caution','alert','neutral']).optional().describe('UI bucket for the pill color (adjusted)'),
   ui_distribution: z.object({
     clear: z.number().min(0).max(1).optional(),
     caution: z.number().min(0).max(1).optional(),
     alert: z.number().min(0).max(1).optional(),
-  }).optional().describe('Bucket probabilities used to derive ui_tone'),
+  }).optional().describe('Bucket probabilities used to derive ui_tone (adjusted)'),
 });
 
 export type OriginalAnalysis = z.infer<typeof originalAnalysisSchema>;

@@ -55,6 +55,133 @@ export interface AttachmentLearningConfig {
   adaptiveThresholds: Record<string, any>;
 }
 
+// === File Wrappers that mirror actual JSON structures ===
+export interface TherapyAdviceFile {
+  version: string;
+  items: TherapyAdvice[];
+}
+
+export interface ContextClassifierFile {
+  version?: string;
+  // Some parts of the code expect .contexts and sometimes an engine block
+  contexts: any[];           // keep wide; spaCy client treats these as config blobs
+  engine?: Record<string, any>;
+}
+
+export interface ToneTriggerWordsFile {
+  version?: string;
+  engine?: any;
+  weights?: any;
+  triggerwords?: any[];
+  triggers?: any[]; // Legacy alias support
+  alert?: { triggerwords?: any[] };
+  caution?: { triggerwords?: any[] };
+  clear?: { triggerwords?: any[] };
+}
+
+export interface IntensityModifiersFile {
+  version?: string;
+  modifiers: any[]; // JSON-driven patterns of varying shapes
+}
+
+export interface SarcasmIndicatorsFile {
+  version?: string;
+  sarcasm_indicators?: any[];
+  patterns?: any[]; // some code reads .patterns
+}
+
+export interface NegationIndicatorsFile {
+  version?: string;
+  negation_indicators?: any[];
+  patterns?: any[]; // some code reads .patterns
+}
+
+export interface PhraseEdgesFile {
+  version?: string;
+  edges: Array<{ pattern: string; category?: string } & Record<string, any>>;
+}
+
+export interface EvaluationTonesFile {
+  version?: string;
+  tones: EvaluationTone[];
+}
+
+export interface TonePatternsFile {
+  version?: string;
+  patterns: TonePattern[];
+}
+
+export interface LearningSignalsFile {
+  version?: string;
+  signals: LearningSignal[];
+}
+
+export interface ProfanityLexiconsFile {
+  version?: string;
+  categories: Array<{
+    id: string;
+    severity: 'mild'|'moderate'|'strong'|'severe'|'extreme'; // keep wide
+    triggerWords: string[];
+  }>;
+}
+
+export interface NegationPatternsFile {
+  version?: string;
+  patterns: string[];
+}
+
+export interface WeightModifiersFile {
+  version?: string;
+  modifiers: WeightModifier[];
+}
+
+export interface AttachmentOverridesFile {
+  version?: string;
+  overrides: AttachmentOverride[];
+}
+
+export interface OnboardingPlaybookFile {
+  version?: string;
+  steps: OnboardingPlaybook[];
+}
+
+export interface SeverityCollaborationFile {
+  alert:   { base: number };
+  caution: { base: number };
+  clear:   { base: number };
+}
+
+export interface SemanticThesaurusFile {
+  version?: string;
+  settings?: {
+    normalize?: any;
+    languages?: any;
+    thresholds?: any;
+    reverseRegisterRule?: any;
+    ironySarcasm?: any;
+  };
+  clusters?: any[] | Record<string, any>;
+  contexts?: any[];
+  routing_matrix?: any;
+  attachment_overrides?: any;
+}
+
+export interface ToneBucketMappingFile {
+  version?: string;
+  buckets?: ToneBucketMapping[];
+  // some deployments provide a flat array; keep a union:
+  // OR: ToneBucketMapping[]
+}
+
+export interface UserPreferenceFile {
+  categories: Record<string, any>;
+}
+
+export interface AttachmentToneWeightsFile {
+  version?: string;
+  overrides: Record<string, any>;
+}
+
 export interface TherapyAdvice {
   id: string;
   advice: string;                 // micro-therapy tip, not a script
@@ -262,29 +389,39 @@ export interface SeverityCollaboration {
 
 // Data loading utilities
 export interface DataCache {
-  attachmentLearning?: AttachmentLearningConfig;
-  attachmentLearningEnhanced?: AttachmentLearningConfig;
-  therapyAdvice?: TherapyAdvice[];
-  tonePatterns?: TonePattern[];
-  evaluationTones?: EvaluationTone[];
-  semanticThesaurus?: SemanticThesaurus[];
-  userPreferences?: UserPreference[];
-  contextClassifier?: ContextClassifier[];
-  intensityModifiers?: IntensityModifier[];
-  learningSignals?: LearningSignal[];
-  guardrailConfig?: GuardrailConfig[];
-  onboardingPlaybook?: OnboardingPlaybook[];
-  toneBucketMapping?: ToneBucketMapping[];
-  negationIndicators?: NegationIndicator[];
-  negationPatterns?: NegationPattern[];
-  profanityLexicons?: ProfanityLexicon[];
-  sarcasmIndicators?: SarcasmIndicator[];
-  weightModifiers?: WeightModifier[];
-  attachmentOverrides?: AttachmentOverride[];
-  attachmentToneWeights?: any;
-  phraseEdges?: PhraseEdge[];
-  toneTriggerWords?: ToneTriggerWord[];
-  severityCollaboration?: SeverityCollaboration[];
-  severityCollab?: any; // From tone-analysis-endpoint.js
-  weightProfiles?: any; // From tone-analysis-endpoint.js
+  attachmentLearning?: AttachmentLearningConfig | null;
+
+  // ✅ Analyzer expects AnalysisConfig here, NOT AttachmentLearningConfig
+  attachmentLearningEnhanced?: import('../services/advancedLinguisticAnalyzer').AnalysisConfig | null;
+
+  therapyAdvice?: TherapyAdviceFile;
+  tonePatterns?: TonePatternsFile;
+  evaluationTones?: EvaluationTonesFile;
+  semanticThesaurus?: SemanticThesaurusFile | null;
+
+  userPreferences?: UserPreferenceFile;
+  contextClassifier?: ContextClassifierFile;
+  intensityModifiers?: IntensityModifiersFile;
+  learningSignals?: LearningSignalsFile;
+  guardrailConfig?: GuardrailConfig[] | { blockedPatterns: string[] }; // keep wide for current use
+  onboardingPlaybook?: OnboardingPlaybookFile;
+
+  toneBucketMapping?: ToneBucketMappingFile | ToneBucketMapping[] | null;
+
+  negationIndicators?: NegationIndicatorsFile;
+  negationPatterns?: NegationPatternsFile;
+  profanityLexicons?: ProfanityLexiconsFile;
+  sarcasmIndicators?: SarcasmIndicatorsFile;
+  weightModifiers?: WeightModifiersFile;
+
+  attachmentOverrides?: AttachmentOverridesFile;
+  attachmentToneWeights?: AttachmentToneWeightsFile;
+
+  phraseEdges?: PhraseEdgesFile;
+  toneTriggerWords?: ToneTriggerWordsFile;
+
+  severityCollaboration?: SeverityCollaborationFile;
+  severityCollab?: SeverityCollaborationFile; // kept as alias because loader sets both
+
+  weightProfiles?: { version?: string; profiles: Record<string, any> };
 }

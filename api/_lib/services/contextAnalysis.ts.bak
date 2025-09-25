@@ -18,6 +18,7 @@ const DEF = {
 } as const;
 
 function cfg<K extends keyof typeof DEF>(k: K) {
+  // @ts-expect-error tolerant read from possibly-partial CTX_CONFIG
   return (CTX_CONFIG?.[k] ?? DEF[k]) as (typeof DEF)[K];
 }
 
@@ -84,8 +85,8 @@ export function isContextAppropriate(
   const top = tops[0]; // tops is never empty (topContexts returns at least one or [])
   if (top && top[1] >= MIN) {
     const topCtx = normalizeContextKey(top[0]);
-    const suggestionIsConflictish = Array.from(suggContexts).some(c => conflictSet.has(c));
-    const linksAreConflictish = Array.from(links).some(c => conflictSet.has(c));
+    const suggestionIsConflictish = [...suggContexts].some(c => conflictSet.has(c));
+    const linksAreConflictish = [...links].some(c => conflictSet.has(c));
     const topIsConflictish = conflictSet.has(topCtx) || topCtx === 'emotional';
 
     if (topIsConflictish && (suggestionIsConflictish || linksAreConflictish)) {
@@ -137,7 +138,7 @@ export function getContextLinkBonus(
   const linkSet = new Set(links);
   const topSet = new Set(topContexts.map(normalizeContextKey));
   let overlap = 0;
-  for (const l of Array.from(linkSet)) if (topSet.has(l)) overlap++;
+  for (const l of linkSet) if (topSet.has(l)) overlap++;
 
   if (overlap === 0) return 0;
 

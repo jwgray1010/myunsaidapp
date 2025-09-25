@@ -36,7 +36,10 @@ async function pLimit<T>(limit: number, tasks: (() => Promise<T>)[]): Promise<T[
       results[idx] = Promise.reject(e);
     }
     
-    const done = results[idx].then(() => void 0, () => void 0);
+    const done = results[idx].then(
+      () => { const i = executing.indexOf(done); if (i >= 0) executing.splice(i, 1); },
+      () => { const i = executing.indexOf(done); if (i >= 0) executing.splice(i, 1); }
+    );
     executing.push(done);
     
     if (executing.length >= limit) {
@@ -115,15 +118,18 @@ export async function initAdviceSearch(): Promise<void> {
 
   logger.info(`Building search index for ${cleaned.length}/${items.length} valid advice items`);
 
+  // Helper function to dedupe arrays
+  const uniq = <T,>(arr: T[] = []) => Array.from(new Set(arr));
+
   // Build plain-text field for each item (include keywords to improve recall)
   const docs = cleaned.map((it) => ({
     id: it.id,
     text: [
       it.advice,
-      ...(it.contexts || []),
-      ...(it.attachmentStyles || []),
-      ...(it.boostSources || []),
-      ...(Array.isArray((it as any).keywords) ? (it as any).keywords : [])
+      ...uniq(it.contexts || []),
+      ...uniq(it.attachmentStyles || []),
+      ...uniq(it.boostSources || []),
+      ...uniq((it as any).keywords || [])
     ].filter(Boolean).join(' ')
   }));
 
@@ -169,47 +175,39 @@ function deDupeById<T extends { id: string }>(arr: T[]): T[] {
 
 function attachIndexHandles(items: TherapyAdvice[], vecCache: Map<string, Float32Array>, bm25: BM25 | null) {
   (dataLoader as any).adviceBM25 = bm25;
-  (dataLoader as any).adviceIndexItems = items;
+  (dataLoader as any).adviceIndexItems = Array.isArray(items) ? items : []; // Ensure array
 
-  // Expose a safe, cached embedding getter (warm or compute on-demand)
-  (dataLoader as any).adviceGetVector = async (id: string): Promise<Float32Array | null> => {
-    if (!id || typeof id !== 'string') {
-      logger.debug('Invalid advice ID provided for vector lookup');
-      return null;
-    }
+  // Sync getter used by suggestions.ts (cache only)
+  const syncVectorGetter = (id: string): Float32Array | null => {
+    const v = vecCache.get(id);
+    return v ? v.slice() : null;
+  };
+  
+  (dataLoader as any).adviceGetVector = syncVectorGetter;
 
-    const cached = vecCache.get(id);
-    if (cached) return cached.slice();
-
+  // Optional async warmer for callers that want to fill the cache
+  (dataLoader as any).adviceWarmVector = async (id: string): Promise<boolean> => {
+    if (vecCache.has(id)) return true;
+    
     const item = items.find(i => i?.id === id);
-    if (!item) {
-      logger.debug(`Advice item not found: ${id}`);
-      return null;
-    }
-
-    const text = item.advice ||
-      [...(item.contexts || []), ...(item.attachmentStyles || [])].filter(Boolean).join(' ') ||
-      '';
-    if (!text.trim()) {
-      logger.debug(`No text content for advice item: ${id}`);
-      return null;
-    }
-
+    if (!item?.advice?.trim()) return false;
+    
     try {
-      const v = await spacyClient.embed(text);
-      if (!Array.isArray(v) || v.length === 0) {
-        logger.debug(`Invalid embedding result for ${id}`);
-        return null;
-      }
-      
-      const fv = new Float32Array(v);
-      vecCache.set(id, fv);
-      return fv.slice();
-    } catch (err) {
-      logger.debug(`On-demand embed failed for ${id}:`, err);
-      return null;
+      const v = await spacyClient.embed(item.advice.trim());
+      if (!Array.isArray(v) || !v.length) return false;
+      vecCache.set(id, new Float32Array(v));
+      return true;
+    } catch {
+      return false;
     }
   };
+
+  // Defensive dual-register for loaders that use .set()
+  if (typeof (dataLoader as any).set === 'function') {
+    (dataLoader as any).set('adviceBM25', bm25);
+    (dataLoader as any).set('adviceIndexItems', items);
+    (dataLoader as any).set('adviceGetVector', syncVectorGetter);
+  }
 }
 
 async function warmAdviceVectors(
@@ -218,7 +216,7 @@ async function warmAdviceVectors(
   max = 200,
   concurrency = 4
 ): Promise<void> {
-  const safeMax = clamp01(max / 1000) * 1000; // Clamp to reasonable range
+  const safeMax = Math.floor(clamp01(max / 1000) * 1000); // Fix: prevent fractional slice
   const safeConcurrency = Math.min(Math.max(1, concurrency), 10); // Limit concurrency
   const subset = items.slice(0, Math.max(0, safeMax));
   
@@ -229,9 +227,8 @@ async function warmAdviceVectors(
       return { id: it?.id || 'unknown', ok: false, reason: 'missing_data' };
     }
 
-    const text = it.advice.trim() ||
-      [...(it.contexts || []), ...(it.attachmentStyles || [])].filter(Boolean).join(' ').trim() ||
-      '';
+    const text = (it.advice || '').trim()
+      || [...(it.contexts || []), ...(it.attachmentStyles || [])].filter(Boolean).join(' ').trim();
       
     if (!text) {
       return { id: it.id, ok: false, reason: 'no_text' };
@@ -285,40 +282,41 @@ export async function getAdviceCandidates(opts: {
   const bm25 = (dataLoader as any).adviceBM25 as BM25 | null;
 
   // 1) filter by tone + context (reuse isContextAppropriate)
-  const scored = items
-    .filter(it => {
-      if (it.triggerTone && it.triggerTone !== triggerTone) return false;
-      return isContextAppropriate(it as any, requestCtx, ctxScores);
-    })
+  const filtered = items.filter(it => {
+    // Fix: normalize tone matching to handle arrays and exact match
+    const toneOk = (() => {
+      if (!it.triggerTone) return true;
+      const tones = Array.isArray(it.triggerTone) ? it.triggerTone : [it.triggerTone];
+      return tones.includes(triggerTone);
+    })();
+    if (!toneOk) return false;
+    
+    return isContextAppropriate(it as any, requestCtx, ctxScores);
+  });
+
+  // 2) Build single BM25 query from request context + top signals (with weighting)
+  const topCtx = Object.entries(ctxScores).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k])=>k);
+  const query = [requestCtx, requestCtx, triggerTone, ...topCtx].filter(Boolean).join(' '); // Repeat requestCtx for better ranking
+  
+  const bmHits = bm25 ? bm25.search(query, { limit: 1000 }) : [];
+  const bmScoreById = bm25 ? new Map(bmHits.map(h => [h.id, h.score])) : new Map<string, number>();
+
+  // 3) Score each filtered item efficiently
+  const scored = filtered
     .map(it => {
-      // 2) score blend: bm25(text) + context link + pattern alignment + style tuning
       let score = 0;
 
-      if (bm25) {
-        const q = [
-          requestCtx,
-          triggerTone,
-          ...(it.contexts || []),
-          ...(it.patterns || []),
-          ...(it.attachmentStyles || []),
-          ...(it.tags || [])
-        ].join(' ');
-        const results = bm25.search(q, { limit: 100 }); // search all, we'll filter later
-        const matchingResult = results.find(r => r.id === it.id);
-        if (matchingResult) {
-          score += matchingResult.score * 0.55;
-        }
-      }
+      // BM25 score (single lookup instead of per-item query)
+      score += (bmScoreById.get(it.id) ?? 0) * 0.55;
 
       // context link bonus
-      const topCtx = Object.entries(ctxScores).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k])=>k);
       score += getContextLinkBonus(it as any, topCtx); // +0.05 max
 
-      // pattern alignment bonus (up to +0.15)
-      const patBonus = (it.patterns || []).reduce((acc, p) => {
-        const v = ctxScores[p] || 0;
-        return acc + Math.min(v, 0.15/ (it.patterns?.length || 1));
-      }, 0);
+      // pattern alignment bonus (up to +0.15) - safer division
+      const patterns = Array.isArray(it.patterns) ? it.patterns : [];
+      const patBonus = patterns.length
+        ? patterns.reduce((acc, p) => acc + Math.min(ctxScores[p] || 0, 0.15 / patterns.length), 0)
+        : 0;
       score += patBonus;
 
       // style tuning (if we have an attachment primary with decent confidence)
@@ -327,16 +325,16 @@ export async function getAdviceCandidates(opts: {
         score += (it.styleTuning[est.primary] || 0);
       }
 
-      // severity gate
-      if (it.severityThreshold?.[triggerTone] != null) {
-        const thr = Number(it.severityThreshold[triggerTone]);
-        const toneScore = (ctxScores[`${triggerTone}`] || 0); // optional if you track per-bucket
-        if (toneScore < thr) score -= 0.1;                     // soft gate, not hard filter
+      // severity gate - clearer threshold check
+      const thr = it.severityThreshold?.[triggerTone];
+      if (typeof thr === 'number') {
+        const toneScore = ctxScores[triggerTone] || 0;
+        if (toneScore < thr) score -= 0.1; // soft gate as intended
       }
 
       return { item: it, score };
     })
-    .sort((a,b)=> b.score - a.score)
+    .sort((a, b) => (b.score - a.score) || (a.item.id > b.item.id ? 1 : -1)) // Stable sorting with tie-break
     .slice(0, limit);
 
   return scored.map(s => s.item);

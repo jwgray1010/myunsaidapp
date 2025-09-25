@@ -119,7 +119,7 @@ class AhoCorasickAutomaton {
       node = node[char];
     }
     if (!node.output) node.output = [];
-    node.output.push(category);
+    node.output.push({ category, pattern });
   }
 
   private buildFailures() {
@@ -170,12 +170,15 @@ class AhoCorasickAutomaton {
         
         // Check for matches with deduplication
         if (node.output) {
-          for (const category of node.output) {
+          for (const output of node.output) {
+            const { category, pattern } = output;
             if (seen.has(category)) continue; // Skip already found categories
             seen.add(category);
+            const patternLength = pattern.length;
+            const matchText = lowerText.slice(i - patternLength + 1, i + 1);
             results.push({
               category,
-              match: '', // Empty since we don't track spans reliably
+              match: matchText,
               position: i
             });
           }
@@ -204,6 +207,30 @@ function getOrCreateAutomaton(): AhoCorasickAutomaton {
           globalAutomaton!.addPatterns(`phrase_${category}`, patterns);
         }
       });
+      
+      // ✅ LOAD LEARNING SIGNALS PATTERNS for communication pattern detection
+      const learningSignals = dataLoader.get('learningSignals') || {};
+      if (learningSignals.features && Array.isArray(learningSignals.features)) {
+        for (const feature of learningSignals.features) {
+          if (feature.patterns && Array.isArray(feature.patterns) && feature.buckets) {
+            const patterns = feature.patterns.map((p: string) => {
+              // Convert regex patterns to simple strings for Aho-Corasick
+              return p.replace(/\\b/g, '').replace(/\([^)]*\)/g, '').replace(/[|]/g, ' ').split(' ').filter(s => s.length > 2);
+            }).flat();
+            
+            // Add patterns for each bucket this feature maps to
+            for (const bucket of feature.buckets) {
+              globalAutomaton!.addPatterns(`ls_${bucket}`, patterns);
+            }
+            
+            // Also add under the feature ID for direct lookup
+            globalAutomaton!.addPatterns(`ls_feature_${feature.id}`, patterns);
+          }
+        }
+        logger.info('Learning signals patterns loaded into automaton', { 
+          featureCount: learningSignals.features.length 
+        });
+      }
       
       // Load guardrail patterns
       const guardrails = dataLoader.get('guardrailConfig') || {};
@@ -279,6 +306,94 @@ function acHasCategory(text: string, category: string): boolean {
   } catch { 
     return false; 
   }
+}
+
+// ✅ LEARNING SIGNALS COMMUNICATION PATTERN DETECTION - mirrors normalize.ts
+function detectCommunicationPatterns(text: string): {
+  patterns: string[];
+  buckets: string[];
+  scores: Record<string, number>;
+  attachment_hints: Record<string, number>;
+  noticings: string[];
+} {
+  if (!text || typeof text !== 'string') {
+    return { patterns: [], buckets: [], scores: {}, attachment_hints: {}, noticings: [] };
+  }
+  
+  const detectedPatterns: string[] = [];
+  const detectedBuckets: Set<string> = new Set();
+  const scores: Record<string, number> = {};
+  const attachmentHints: Record<string, number> = {};
+  const noticings: string[] = [];
+  
+  const learningSignals = dataLoader.get('learningSignals');
+  if (!learningSignals?.features) {
+    return { patterns: [], buckets: [], scores: {}, attachment_hints: {}, noticings: [] };
+  }
+  
+  // Process each learning signal feature
+  for (const feature of learningSignals.features) {
+    if (!feature.patterns || !Array.isArray(feature.patterns)) continue;
+    
+    let hasMatch = false;
+    for (const patternStr of feature.patterns) {
+      try {
+        const regex = new RegExp(patternStr, 'gi');
+        if (text.match(regex)) {
+          hasMatch = true;
+          break;
+        }
+      } catch (err) {
+        // Skip invalid patterns
+        continue;
+      }
+    }
+    
+    if (hasMatch) {
+      detectedPatterns.push(feature.id);
+      
+      // Add buckets
+      if (feature.buckets && Array.isArray(feature.buckets)) {
+        for (const bucket of feature.buckets) {
+          detectedBuckets.add(bucket);
+        }
+      }
+      
+      // Add tone weight scores  
+      if (feature.weights) {
+        for (const [tone, weight] of Object.entries(feature.weights)) {
+          if (typeof weight === 'number') {
+            scores[tone] = (scores[tone] || 0) + weight;
+          }
+        }
+      }
+      
+      // Add attachment hints
+      if (feature.attachmentHints) {
+        for (const [style, hint] of Object.entries(feature.attachmentHints)) {
+          if (typeof hint === 'number') {
+            attachmentHints[style] = (attachmentHints[style] || 0) + hint;
+          }
+        }
+      }
+    }
+  }
+  
+  // Add noticings from noticingsMap
+  const noticingsMap = learningSignals.noticingsMap || {};
+  for (const bucket of detectedBuckets) {
+    if (noticingsMap[bucket] && typeof noticingsMap[bucket] === 'string') {
+      noticings.push(noticingsMap[bucket]);
+    }
+  }
+  
+  return {
+    patterns: detectedPatterns,
+    buckets: Array.from(detectedBuckets),
+    scores,
+    attachment_hints: attachmentHints,
+    noticings: noticings.slice(0, 3) // Max 3 noticings per message per learning_signals.json
+  };
 }
 
 // ============================
@@ -661,8 +776,8 @@ function getMemoizedHypothesis(advice: any): string {
 
 function getMemoizedVector(id: string): Float32Array | null {
   if (!vectorCache.has(id)) {
-    // Use existing vector retrieval logic (placeholder for now)
-    const vector = null; // TODO: Replace with actual vector function
+    // Use existing vector retrieval logic
+    const vector = getVecById(id);
     vectorCache.set(id, vector);
     
     // Environment-controlled LRU: keep cache under control
@@ -686,6 +801,147 @@ function getMemoizedToneBucket(toneKey: string, contextLabel: string, intensityS
     }
   }
   return toneBucketCache.get(key);
+}
+
+// Enhanced tone matching: supports both exact raw tone matches and UI tone fallbacks
+function matchesToneClassification(item: any, toneKey: string): boolean {
+  const itemTone = item.triggerTone;
+  if (!itemTone) return false;
+  
+  // Direct match (preferred)
+  if (itemTone === toneKey) return true;
+  
+  // Fallback matching: check if toneKey maps to the same UI bucket as itemTone
+  const toneToUIBucket = (tone: string): string => {
+    switch (tone) {
+      case 'clear':
+      case 'caution': 
+      case 'alert':
+        return tone; // UI tones map to themselves
+      
+      // Based on highest probability in tone_bucket_mapping.json
+      // Positive/Supportive Communication (Clear-leaning)
+      case 'supportive':      // 0.90 clear (highest)
+      case 'positive':        // 0.88 clear (highest)
+      case 'playful':         // 0.85 clear (highest)
+      case 'curious':         // 0.82 clear (highest)
+      case 'confident':       // 0.80 clear (highest)
+      case 'logistical':      // 0.78 clear (highest)
+      case 'reflective':      // 0.75 clear (highest)
+      case 'neutral':         // 0.62 clear (highest)
+        return 'clear';
+      
+      // Emotional Distress & Tentative Communication (Caution-leaning)
+      case 'overwhelmed':     // 0.68 caution (highest)
+      case 'withdrawn':       // 0.65 caution (highest)
+      case 'catastrophizing': // 0.65 caution (highest)
+      case 'anxious':         // 0.64 caution (highest)
+      case 'sad':             // 0.62 caution (highest)
+      case 'jealous_insecure': // 0.60 caution (highest)
+      case 'frustrated':      // 0.58 caution (highest)
+      case 'confused_ambivalent': // 0.58 caution (highest)
+      case 'tentative':       // 0.56 caution (highest)
+      case 'minimization':    // 0.55 caution (highest)
+      case 'negative':        // 0.54 caution (highest)
+      case 'defensive':       // 0.55 caution (highest)
+      case 'dismissive':      // 0.50 caution (highest)
+      case 'apologetic':      // 0.48 caution (highest)
+      case 'assertive':       // 0.32 caution (updated for controlling language)
+        return 'caution';
+      
+      // High-Risk Communication (Alert-leaning)
+      case 'contempt':        // 0.80 alert (highest)
+      case 'aggressive':      // 0.75 alert (highest)
+      case 'safety_concern':  // 0.72 alert (highest)
+      case 'hostile':         // 0.67 alert (highest)
+      case 'angry':           // 0.50 alert (highest)
+      case 'critical':        // 0.40 alert (highest)
+        return 'alert';
+      
+      default:
+        return 'clear';
+    }
+  };
+  
+  const userUIBucket = toneToUIBucket(toneKey);
+  const itemUIBucket = toneToUIBucket(itemTone);
+  
+  // Allow cross-matching within the same UI bucket
+  // e.g., "assertive" user tone can match "clear" therapy advice
+  return userUIBucket === itemUIBucket;
+}
+
+// Attachment-aware tone matching: considers attachment styles when determining UI bucket mappings
+function matchesToneClassificationWithAttachment(item: any, toneKey: string, attachmentStyle: string | null = null): boolean {
+  const itemTone = item.triggerTone;
+  if (!itemTone) return false;
+  
+  // Direct match (preferred)
+  if (itemTone === toneKey) return true;
+  
+  // Get attachment-aware UI bucket mapping
+  const getAttachmentAwareUIBucket = (tone: string, attachment: string | null): string => {
+    // Start with base mapping
+    let baseMapping = 'clear';
+    
+    // Base tone to UI bucket mapping (same as above but with attachment overrides)
+    switch (tone) {
+      case 'clear': case 'caution': case 'alert':
+        return tone;
+      
+      // Apply base mappings first
+      case 'supportive': case 'positive': case 'playful': case 'curious': 
+      case 'confident': case 'logistical': case 'reflective': case 'neutral':
+        baseMapping = 'clear'; break;
+      
+      case 'overwhelmed': case 'withdrawn': case 'catastrophizing': case 'anxious':
+      case 'sad': case 'jealous_insecure': case 'frustrated': case 'confused_ambivalent':
+      case 'tentative': case 'minimization': case 'negative': case 'defensive':
+      case 'dismissive': case 'apologetic': case 'assertive':
+        baseMapping = 'caution'; break;
+        
+      case 'contempt': case 'aggressive': case 'safety_concern': case 'hostile':
+      case 'angry': case 'critical':
+        baseMapping = 'alert'; break;
+        
+      default:
+        baseMapping = 'clear'; break;
+    }
+    
+    // Apply attachment-specific overrides
+    if (!attachment) return baseMapping;
+    
+    // Avoidant attachment overrides
+    if (attachment === 'avoidant') {
+      if (['withdrawn', 'sad', 'anxious'].includes(tone)) return 'alert';
+      if (['apologetic'].includes(tone)) return 'clear';
+    }
+    
+    // Anxious attachment overrides  
+    if (attachment === 'anxious') {
+      if (tone === 'withdrawn') return 'caution'; // Stay caution, not alert
+      if (['apologetic', 'jealous_insecure', 'catastrophizing', 'minimization'].includes(tone)) return 'caution';
+    }
+    
+    // Disorganized attachment overrides
+    if (attachment === 'disorganized') {
+      if (['angry', 'frustrated', 'defensive', 'dismissive', 'withdrawn', 'catastrophizing', 'confused_ambivalent'].includes(tone)) {
+        return baseMapping === 'alert' ? 'alert' : 'alert'; // Escalate to alert
+      }
+    }
+    
+    // Secure attachment (slight improvements)
+    if (attachment === 'secure') {
+      if (['assertive', 'supportive', 'reflective', 'curious'].includes(tone)) return 'clear';
+    }
+    
+    return baseMapping;
+  };
+  
+  const userUIBucket = getAttachmentAwareUIBucket(toneKey, attachmentStyle);
+  const itemUIBucket = getAttachmentAwareUIBucket(itemTone, null); // Items don't have attachment context
+  
+  return userUIBucket === itemUIBucket;
 }
 
 async function hybridRetrieve(text: string, contextLabel: string, toneKey: string, analysis?: any, k=ENV_CONTROLS.RETRIEVAL_POOL_SIZE) {
@@ -717,16 +973,19 @@ async function hybridRetrieve(text: string, contextLabel: string, toneKey: strin
   const vecCache = new Map<string, Float32Array>();
   const getV = (id:string)=> vecCache.get(id) || (()=>{ const v=getVecById(id); if (v) vecCache.set(id,v); return v; })();
 
-  const hasVecs = !!getVecById(corpus[0]?.id || '');
-  logger.info('Vector check', { hasVecs, firstItemId: corpus[0]?.id });
+  // Check if any items have vectors (not just the first one)
+  const sampleWithVector = corpus.find(item => getVecById(item?.id || ''));
+  const hasVecs = !!sampleWithVector;
+  logger.info('Vector check', { hasVecs, sampleItemId: sampleWithVector?.id });
   
   if (hasVecs && typeof (spacyClient.embed) === 'function') {
     try {
       const qArr = await spacyClient.embed(query);
-      if (Array.isArray(qArr) && getVecById(corpus[0]?.id || '')?.length === qArr.length) {
+      const expectedDim = getVecById(sampleWithVector?.id || '')?.length;
+      if (Array.isArray(qArr) && expectedDim && qArr.length === expectedDim) {
         qVec = new Float32Array(qArr);
       } else {
-        logger.warn('Embed dim mismatch; using sparse-only');
+        logger.warn('Embed dim mismatch; using sparse-only', { queryDim: qArr?.length, expectedDim });
       }
     } catch (e) {
       logger.warn('Dense embed failed; using sparse-only', { error: String(e) });
@@ -950,6 +1209,15 @@ class AnalysisOrchestrator {
 
     const secondPerson = this.enhancedSecondPersonDetection(text, spacyResult, fullParsing);
 
+    // ✅ DETECT COMMUNICATION PATTERNS from learning signals
+    const learningSignals = detectCommunicationPatterns(text);
+    logger.debug('Learning signals detected', { 
+      patterns: learningSignals.patterns,
+      buckets: learningSignals.buckets,
+      attachment_hints: learningSignals.attachment_hints,
+      noticings_count: learningSignals.noticings.length
+    });
+
     // Rich data straight from Coordinator (don't synthesize if present)
     const richToneData = {
       emotions: fullToneAnalysis.emotions,
@@ -959,7 +1227,16 @@ class AnalysisOrchestrator {
       ui_tone: fullToneAnalysis.ui_tone,
       ui_distribution: fullToneAnalysis.ui_distribution,
       evidence: fullToneAnalysis.evidence,
-      attachmentInsights: fullToneAnalysis.attachmentInsights
+      attachmentInsights: fullToneAnalysis.attachmentInsights,
+      
+      // ✅ ADD LEARNING SIGNALS DATA to rich tone data
+      learning_signals: {
+        patterns_detected: learningSignals.patterns,
+        communication_buckets: learningSignals.buckets,
+        attachment_hints: learningSignals.attachment_hints,
+        tone_adjustments: learningSignals.scores,
+        therapeutic_noticings: learningSignals.noticings,
+      }
     };
 
     // Apply semantic backbone analysis
@@ -984,7 +1261,18 @@ class AnalysisOrchestrator {
       features: fullParsing.features || {},
       mlGenerated: false,           // no local ML tone
       semanticBackbone: semanticResult,
-      richToneData
+      richToneData,
+      
+      // ✅ ADD LEARNING SIGNALS to analysis return for downstream processing
+      learningSignals: {
+        patterns_detected: learningSignals.patterns,
+        communication_buckets: learningSignals.buckets,
+        attachment_hints: learningSignals.attachment_hints,
+        tone_adjustments: learningSignals.scores,
+        therapeutic_noticings: learningSignals.noticings,
+        total_patterns_count: learningSignals.patterns.length,
+        buckets_detected_count: learningSignals.buckets.length
+      }
     };
   }
 }
@@ -1070,7 +1358,8 @@ class AdviceEngine {
     const clearVal = Number(dist.clear) || 0;
     const cautionVal = Number(dist.caution) || 0;
     const alertVal = Number(dist.alert) || 0;
-    dist = { clear: clearVal/sum, caution: cautionVal/sum, alert: alertVal/sum };
+    const numSum = Number(sum);
+    dist = { clear: clearVal/numSum, caution: cautionVal/numSum, alert: alertVal/numSum };
 
     // Apply intensity shifts
     const thr = map.intensityShifts?.thresholds || { low: 0.15, med: 0.35, high: 0.60 };
@@ -1088,12 +1377,85 @@ class AdviceEngine {
     const clearNum = Number(dist.clear) ?? 0;
     const cautionNum = Number(dist.caution) ?? 0;
     const alertNum = Number(dist.alert) ?? 0;
-    dist.clear = clearNum / sum;
-    dist.caution = cautionNum / sum;
-    dist.alert = alertNum / sum;
+    const finalSum = Number(sum);
+    dist.clear = clearNum / finalSum;
+    dist.caution = cautionNum / finalSum;
+    dist.alert = alertNum / finalSum;
 
     const primary = (Object.entries(dist).sort((a, b) => (b[1] as number) - (a[1] as number))[0][0]) as string;
     return { primary, dist: dist as ToneBucketDistribution };
+  }
+
+  // Helper method to get UI bucket for a given tone
+  getUIBucketForTone(toneKey: string): string | null {
+    const map = this.loader.get('toneBucketMapping') || this.loader.get('toneBucketMap') || {};
+    const entry = map?.toneBuckets?.[toneKey];
+    if (!entry || !entry.base) return null;
+    
+    // Return the bucket with highest probability from base distribution
+    const buckets = ['clear', 'caution', 'alert'];
+    let maxBucket = 'clear';
+    let maxValue = 0;
+    
+    for (const bucket of buckets) {
+      const value = Number(entry.base[bucket]) || 0;
+      if (value > maxValue) {
+        maxValue = value;
+        maxBucket = bucket;
+      }
+    }
+    
+    return maxBucket;
+  }
+
+  // Helper method to get attachment-aware UI bucket for a given tone
+  getUIBucketForToneWithAttachment(toneKey: string, attachmentStyle: string | null): string | null {
+    const map = this.loader.get('toneBucketMapping') || this.loader.get('toneBucketMap') || {};
+    const entry = map?.toneBuckets?.[toneKey];
+    if (!entry || !entry.base) return null;
+    
+    // Start with base distribution
+    let dist = { ...entry.base };
+    
+    // Apply attachment-specific overrides (these are DELTAS, not absolute values)
+    if (attachmentStyle && map.attachmentOverrides?.[attachmentStyle]) {
+      const overrides = map.attachmentOverrides[attachmentStyle];
+      if (overrides[toneKey]) {
+        // Apply the specific override deltas for this tone and attachment style
+        const override = overrides[toneKey];
+        Object.keys(override).forEach(bucket => {
+          if (['clear', 'caution', 'alert'].includes(bucket)) {
+            // Add the delta to the base value
+            dist[bucket] = (dist[bucket] || 0) + Number(override[bucket]);
+            // Ensure no negative probabilities
+            dist[bucket] = Math.max(0, dist[bucket]);
+          }
+        });
+        
+        // Renormalize after applying deltas
+        const total = (dist.clear || 0) + (dist.caution || 0) + (dist.alert || 0);
+        if (total > 0) {
+          dist.clear = (dist.clear || 0) / total;
+          dist.caution = (dist.caution || 0) / total;
+          dist.alert = (dist.alert || 0) / total;
+        }
+      }
+    }
+    
+    // Return the bucket with highest probability
+    const buckets = ['clear', 'caution', 'alert'];
+    let maxBucket = 'clear';
+    let maxValue = 0;
+    
+    for (const bucket of buckets) {
+      const value = Number(dist[bucket]) || 0;
+      if (value > maxValue) {
+        maxValue = value;
+        maxBucket = bucket;
+      }
+    }
+    
+    return maxBucket;
   }
 
   severityBaselineFor(toneKey: string, contextLabel: string): number {
@@ -1160,6 +1522,15 @@ class AdviceEngine {
     contextScores?: Record<string, number>;
     categories?: string[];
     userIntents?: string[]; // ✅ NEW: Detected user intents
+    learningSignals?: {     // ✅ NEW: Learning signals from communication pattern detection
+      patterns_detected: string[];
+      communication_buckets: string[];
+      attachment_hints: Record<string, number>;
+      tone_adjustments: Record<string, number>;
+      therapeutic_noticings: string[];
+      total_patterns_count: number;
+      buckets_detected_count: number;
+    };
   }): any[] {
     const W = this.currentWeights(signals.contextLabel);
 
@@ -1169,8 +1540,29 @@ class AdviceEngine {
 
       // Tone match mass
       const { dist } = this.resolveToneBucket(signals.toneKey, signals.contextLabel, signals.intensityScore);
-      const toneBucket = it.triggerTone || 'clear';
-      const toneMatchMass = (dist as any)[toneBucket] ?? 0.33;
+      
+      // Use enhanced tone matching - check both exact raw tone and UI bucket fallback
+      const exactToneMatch = it.triggerTone === signals.toneKey;
+      let toneBucket = it.triggerTone || 'clear';
+      let toneMatchMass = (dist as any)[toneBucket] ?? 0.33;
+      
+      // If no exact match, try enhanced matching to get the appropriate UI bucket
+      // Use attachment-aware matching when attachment style is available
+      const hasEnhancedMatch = signals.attachmentStyle 
+        ? matchesToneClassificationWithAttachment(it, signals.toneKey, signals.attachmentStyle)
+        : matchesToneClassification(it, signals.toneKey);
+        
+      if (!exactToneMatch && hasEnhancedMatch) {
+        // Get UI bucket for the raw tone and use that for scoring
+        // Use attachment-aware bucket determination when available
+        const uiBucket = signals.attachmentStyle
+          ? this.getUIBucketForToneWithAttachment(signals.toneKey, signals.attachmentStyle)
+          : this.getUIBucketForTone(signals.toneKey);
+        if (uiBucket && it.triggerTone === uiBucket) {
+          toneMatchMass = (dist as any)[uiBucket] ?? 0.33;
+        }
+      }
+      
       s += W.toneMatch * toneMatchMass;
 
       // Context
@@ -1262,26 +1654,75 @@ class AdviceEngine {
         
         // Check for exact category matches between tone patterns and therapy advice
         const categoryOverlap = Array.from(therapyCategories).filter(tc => adviceCategories.has(tc));
-        
+
         if (categoryOverlap.length > 0) {
-          // Strong boost for category matches - improves relevance significantly
-          const categoryMatchBoost = 0.4 * categoryOverlap.length; // 0.4 per match
+          const categoryMatchBoost = Math.min(0.15, categoryOverlap.length * 0.05); // max +0.15
           s += categoryMatchBoost;
+        }
+      }
+
+      // ✅ LEARNING SIGNALS SCORING - Communication pattern bonus
+      if (signals.learningSignals) {
+        const ls = signals.learningSignals;
+        
+        // Boost suggestions that match detected communication buckets
+        if (ls.communication_buckets && ls.communication_buckets.length > 0) {
+          const bucketSet = new Set(ls.communication_buckets);
           
-          // Log category boost for observability
-          if (categoryMatchBoost > 0) {
-            logger.info('Category boost applied', {
-              adviceId: it.id,
-              matchedCategories: categoryOverlap,
-              boost: categoryMatchBoost,
-              toneCategories: Array.from(therapyCategories),
-              adviceCategories: Array.from(adviceCategories)
-            });
+          // Check if this suggestion's context/categories match the detected patterns
+          const suggestionContexts = new Set([
+            ...(it.contexts || []),
+            ...(Array.isArray(it.categories) ? it.categories : []),
+            it.category,
+            it.triggerTone
+          ].filter(Boolean).map(c => String(c).toLowerCase()));
+          
+          // Reward matches between detected patterns and relevant suggestions
+          let patternMatchBonus = 0;
+          for (const bucket of ls.communication_buckets) {
+            const bucketKey = bucket.toLowerCase();
+            
+            // Direct bucket match (e.g., "repair_language" -> repair context)
+            if (suggestionContexts.has(bucketKey) || 
+                suggestionContexts.has(bucketKey.replace('_language', '')) ||
+                suggestionContexts.has(bucketKey.split('_')[0])) {
+              patternMatchBonus += 0.08; // +0.08 per matching pattern bucket
+            }
+            
+            // Special semantic matches
+            if ((bucket === 'validation_language' || bucket === 'repair_language') && 
+                (suggestionContexts.has('emotional') || suggestionContexts.has('relationship'))) {
+              patternMatchBonus += 0.05;
+            }
+            
+            if ((bucket === 'escalation_language' || bucket === 'threats_ultimatums') && 
+                (suggestionContexts.has('conflict_resolution') || suggestionContexts.has('boundary'))) {
+              patternMatchBonus += 0.06;
+            }
+          }
+          
+          s += Math.min(patternMatchBonus, 0.25); // Cap at +0.25
+        }
+        
+        // Apply tone adjustments from learning signals
+        if (ls.tone_adjustments && Object.keys(ls.tone_adjustments).length > 0) {
+          const toneKey = signals.toneKey.toLowerCase();
+          const adjustment = ls.tone_adjustments[`tone.${toneKey}`] || ls.tone_adjustments[toneKey] || 0;
+          s += adjustment * 0.5; // Scale down the direct tone adjustment
+        }
+        
+        // Bonus for suggestions that complement detected attachment patterns
+        if (ls.attachment_hints && Object.keys(ls.attachment_hints).length > 0) {
+          const primaryHintStyle = Object.entries(ls.attachment_hints)
+            .sort(([,a], [,b]) => b - a)[0]?.[0]; // Get the highest attachment hint
+            
+          if (primaryHintStyle && attachMatch > 0 && primaryHintStyle === signals.attachmentStyle) {
+            s += 0.1; // +0.1 for attachment pattern consistency
           }
         }
       }
 
-      // Actionability and brevity rewards
+      // Enhanced actionability scoring
       const advice = String(it.advice || '');
       const adviceWords = advice.split(/\s+/).filter(w => w.length > 0);
       
@@ -2118,7 +2559,10 @@ class SuggestionsService {
       logger.info('Hybrid retrieval returned 0 results, trying direct fallback');
       const corpus = getAdviceCorpus();
       const directMatches = corpus.filter((item: any) => {
-        const matchesTone = item.triggerTone === toneKeyNorm;
+        // Use attachment-aware tone matching when attachment data is available
+        const matchesTone = attachmentStyle 
+          ? matchesToneClassificationWithAttachment(item, toneKeyNorm, attachmentStyle)
+          : matchesToneClassification(item, toneKeyNorm);
         const matchesContext = item.contexts && item.contexts.includes(contextLabel);
         const matchesAttachment = item.attachmentStyles && item.attachmentStyles.includes(attachmentStyle);
         return matchesTone || matchesContext || matchesAttachment;
@@ -2127,7 +2571,8 @@ class SuggestionsService {
       logger.info('Direct fallback completed', { 
         directMatchesFound: directMatches.length, 
         corpusSize: corpus.length,
-        searchCriteria: { toneKeyNorm, contextLabel, attachmentStyle }
+        searchCriteria: { toneKeyNorm, contextLabel, attachmentStyle, 
+                          attachmentAware: !!attachmentStyle }
       });
       
       // Use direct matches if found
@@ -2169,7 +2614,7 @@ class SuggestionsService {
       intentCount: userIntents.length 
     });
 
-    // 6) Rank (JSON-weighted) - now with intent-based scoring
+    // 6) Rank (JSON-weighted) - now with intent-based scoring and learning signals
     const ranked = this.adviceEngine.rank(personalized, {
       baseConfidence: analysis.tone.confidence,
       toneKey: toneKeyNorm,
@@ -2184,7 +2629,8 @@ class SuggestionsService {
       secondPerson: analysis.secondPerson,
       contextScores: (analysis.richToneData?.context_analysis?.scores as Record<string,number> | undefined) ?? (analysis.context?.scores || {}),
       categories: fullToneAnalysis?.categories || [],
-      userIntents // ✅ NEW: Pass detected user intents for intent-based scoring
+      userIntents, // ✅ NEW: Pass detected user intents for intent-based scoring
+      learningSignals: analysis.learningSignals // ✅ NEW: Pass learning signals for communication pattern bonus scoring
     });
     
     // ✅ NEW: Apply NLI signals to ranking scores (not just gating)
@@ -2298,11 +2744,11 @@ class SuggestionsService {
     const { primary, dist } = (analysis as any).toneBuckets;
 
     // 10) Assemble response (no fallbacks)
-    const finalSuggestions: DetailedSuggestionResult[] = finalPicked.map(({ advice, categories, id, __calib, ltrScore }) => ({
+    const finalSuggestions: DetailedSuggestionResult[] = finalPicked.map(({ advice, categories, id, type, __calib, ltrScore }) => ({
       id,
       text: advice, // Direct therapy advice text from therapy_advice.json
       categories,
-      type: 'advice' as const, // This is therapy advice, not a rewrite
+      type: type || 'advice', // Preserve original type (micro_advice, etc.) or default to 'advice'
       confidence: __calib ?? ltrScore ?? 0.5,
       reason: 'Tone+context+attachment (NLI if enabled)',
       category: 'emotional' as const, // Match schema enum
@@ -2387,10 +2833,10 @@ class SuggestionsService {
         reasoning: item.reason,
         confidence: item.confidence
       })),
-      evidence: result.analysis.flags.phraseEdgeHits,
+      evidence: result.analysis?.flags?.phraseEdgeHits || [],
       extras: {
-        tone: result.analysis.tone,
-        context: result.analysis.context,
+        tone: result.analysis?.tone,
+        context: result.analysis?.context,
         tier: result.tier
       }
     };
@@ -2440,7 +2886,19 @@ class SuggestionsService {
       c === 'attachment_triggers' || c === 'codependency_patterns' || c === 'independence_patterns'
     ) as Array<'attachment_triggers'|'codependency_patterns'|'independence_patterns'>;
     
-    const ctxScores = foldAttachmentPatterns(classifierCtxScores, est, edgeHints);
+    const ctxScores = foldAttachmentPatterns(
+      classifierCtxScores,
+      {
+        confidence: est.confidence ?? 0,
+        scores: {
+          anxious: est.scores?.anxious ?? 0,
+          avoidant: est.scores?.avoidant ?? 0,
+          disorganized: est.scores?.disorganized ?? 0,
+          secure: est.scores?.secure ?? 0,
+        }
+      },
+      edgeHints
+    );
 
     // (2) micro-advice from adviceIndex
     let adviceItems: any[] = [];

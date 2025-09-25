@@ -208,7 +208,7 @@ export function isFeatureEnabled(feature: string): boolean {
 export function requireEnvVar(name: keyof Env): string {
   const value = env[name];
   if (value === undefined || value === null || value === '') {
-    throw new Error(`Required environment variable ${name} is not set`);
+    throw new Error(`Required environment variable ${String(name)} is not set`);
   }
   return String(value);
 }

@@ -15,7 +15,8 @@ export function tokenize(text: string): string[] {
   return (text
     .normalize('NFKC')
     .toLowerCase()
-    .match(/(\p{L}[\p{L}\p{Mn}\p{Pd}']*|\p{N}+|[\p{Extended_Pictographic}])/gu) || []);
+    .split(/\s+/)
+    .filter(word => word.length > 0 && /[a-zA-ZÀ-ÿĀ-žА-я\u4e00-\u9fff\d]/.test(word)));
 }
 
 /**
@@ -53,5 +54,5 @@ export function tokenizeAndFilter(text: string, stopwords?: Set<string>): string
  * @returns Text with diacritics removed
  */
 export function foldAccents(text: string): string {
-  return text.normalize('NFD').replace(/\p{Mn}+/gu, '');
+  return text.normalize('NFD').replace(/[\u0300-\u036f]+/g, '');
 }

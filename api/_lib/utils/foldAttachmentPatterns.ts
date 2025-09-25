@@ -1,7 +1,7 @@
 // api/_lib/utils/foldAttachmentPatterns.ts
 export function foldAttachmentPatterns(
   base: Record<string, number>,
-  est: { confidence: number; scores: { anxious:number; avoidant:number; disorganized:number; secure:number } },
+  est: { confidence?: number; scores?: { anxious?: number; avoidant?: number; disorganized?: number; secure?: number } },
   phraseEdgeHints?: Array<'attachment_triggers'|'codependency_patterns'|'independence_patterns'> // optional
 ) {
   const out = { ...base };

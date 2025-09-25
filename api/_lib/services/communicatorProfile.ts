@@ -2,21 +2,7 @@
 import { logger } from '../logger';
 import { dataLoader } from './dataLoader';
 import { normalizeScores, defaultPriorWeight } from '../utils/priors';
-
-export interface AttachmentEstimate {
-  primary: 'anxious' | 'avoidant' | 'disorganized' | 'secure' | null;
-  secondary: string | null;
-  windowComplete: boolean;
-  confidence: number;
-  scores: {
-    anxious: number;
-    avoidant: number;
-    disorganized: number;
-    secure: number;
-  };
-  daysObserved: number;
-  totalSignals: number;
-}
+import type { AttachmentEstimate } from '../schemas/communicatorProfile';
 
 export interface ProfileData {
   userId: string;

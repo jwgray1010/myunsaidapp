@@ -5,7 +5,27 @@ import { z } from 'zod';
 import { logger } from '../logger';
 import type {
   AttachmentLearningConfig,
-  DataCache
+  DataCache,
+  TherapyAdviceFile,
+  ContextClassifierFile,
+  ToneTriggerWordsFile,
+  IntensityModifiersFile,
+  SarcasmIndicatorsFile,
+  NegationIndicatorsFile,
+  NegationPatternsFile,
+  PhraseEdgesFile,
+  EvaluationTonesFile,
+  TonePatternsFile,
+  LearningSignalsFile,
+  ProfanityLexiconsFile,
+  WeightModifiersFile,
+  AttachmentOverridesFile,
+  OnboardingPlaybookFile,
+  SeverityCollaborationFile,
+  SemanticThesaurusFile,
+  ToneBucketMappingFile,
+  UserPreferenceFile,
+  AttachmentToneWeightsFile
 } from '../types/dataTypes';
 
 class DataLoaderService {
@@ -57,12 +77,12 @@ class DataLoaderService {
   private readJsonSafe<T>(filename: string, fallback: T): T {
     try {
       const filepath = path.join(this.dataPath, filename);
-      logger.info(`Attempting to read: ${filepath}`);
+      logger.debug(`Attempting to read: ${filepath}`);
       
       if (fs.existsSync(filepath)) {
         const content = fs.readFileSync(filepath, 'utf-8');
         const parsed = JSON.parse(content);
-        logger.info(`Successfully loaded ${filename} (${content.length} chars)`);
+        logger.debug(`Successfully loaded ${filename} (${content.length} chars)`);
         return parsed;
       } else {
         logger.warn(`File not found: ${filepath}`);
@@ -84,316 +104,83 @@ class DataLoaderService {
     }
   }
 
+  private loadAllIntoCache(): void {
+    // Critical configs
+    this.cache.attachmentLearning = this.readJsonSafe<AttachmentLearningConfig>(
+      'attachment_learning.json',
+      null as any
+    );
+
+    // ✅ Enhanced config now loaded in both sync & async paths
+    this.cache.attachmentLearningEnhanced = this.readJsonSafe<any>(
+      'attachment_learning_enhanced.json',
+      null as any
+    );
+
+    // Standard data
+    this.cache.therapyAdvice       = this.readJsonSafe<any>('therapy_advice.json',       { version: '0', items: [] });
+    this.cache.contextClassifier   = this.readJsonSafe<any>('context_classifier.json',   { version: '0', contexts: [] });
+    this.cache.toneTriggerWords    = this.readJsonSafe<any>('tone_triggerwords.json',    {
+      version: '0',
+      clear:   { triggerwords: [] },
+      caution: { triggerwords: [] },
+      alert:   { triggerwords: [] },
+      engine:  { genericTokens: {}, bucketGuards: {}, contextScopes: {} },
+      weights: { contextMultipliers: {} }
+    });
+    this.cache.intensityModifiers  = this.readJsonSafe<any>('intensity_modifiers.json',  { version: '0', modifiers: [] });
+    this.cache.sarcasmIndicators   = this.readJsonSafe<any>('sarcasm_indicators.json',   { version: '0', sarcasm_indicators: [] });
+    this.cache.negationIndicators  = this.readJsonSafe<any>('negation_indicators.json',  { version: '0', negation_indicators: [] });
+    this.cache.phraseEdges         = this.readJsonSafe<any>('phrase_edges.json',         { version: '0', edges: [] });
+    this.cache.evaluationTones     = this.readJsonSafe<any>('evaluation_tones.json',     { version: '0', tones: [] });
+    this.cache.tonePatterns        = this.readJsonSafe<any>('tone_patterns.json',        { version: '0', patterns: [] });
+    this.cache.learningSignals     = this.readJsonSafe<any>('learning_signals.json',     { version: '0', signals: [] });
+    this.cache.negationPatterns    = this.readJsonSafe<any>('negation_patterns.json',    { version: '0', patterns: [] });
+    this.cache.profanityLexicons   = this.readJsonSafe<any>('profanity_lexicons.json',   {
+      version: '0',
+      categories: [
+        { id: 'mild',     severity: 'mild',     triggerWords: [] },
+        { id: 'moderate', severity: 'moderate', triggerWords: [] },
+        { id: 'strong',   severity: 'strong',   triggerWords: [] }
+      ]
+    });
+    this.cache.weightModifiers     = this.readJsonSafe<any>('weight_modifiers.json',     { version: '0', modifiers: [] });
+    this.cache.attachmentOverrides = this.readJsonSafe<any>('attachment_overrides.json', { version: '0', overrides: [] });
+    this.cache.onboardingPlaybook  = this.readJsonSafe<any>('onboarding_playbook.json',  { version: '0', steps: [] });
+
+    // Special/aliases
+    this.cache.severityCollaboration = this.readJsonSafe<any>('severity_collaboration.json', { alert: { base: 0.55 }, caution: { base: 0.4 }, clear: { base: 0.35 } });
+    this.cache.severityCollab        = this.cache.severityCollaboration; // keep alias
+    this.cache.semanticThesaurus     = this.readJsonSafe<any>('semantic_thesaurus.json', null);
+
+    this.cache.userPreferences       = this.readJsonSafe<any>('user_preference.json', { categories: {} });
+    this.cache.guardrailConfig       = this.readJsonSafe<any>('guardrail_config.json', { blockedPatterns: [] });
+
+    // No fallback on purpose
+    this.cache.toneBucketMapping     = this.readJsonSafe<any>('tone_bucket_mapping.json', null);
+
+    this.cache.attachmentToneWeights = this.readJsonSafe<any>('attachment_tone_weights.json', { version: '0', overrides: {} });
+  }
+
   public initializeSync(): void {
-    if (this.initialized) {
-      return;
-    }
-
+    if (this.initialized) return;
     try {
-      logger.info('Initializing data cache synchronously...');
-
-      // Load all JSON data files - using exact fallbacks from original JS (suggestions.js pattern)
-      
-      // Critical config files that should fail fast (use null)
-      this.cache.attachmentLearning = this.readJsonSafe<AttachmentLearningConfig>(
-        'attachment_learning.json',
-        null as any // Match original JS behavior - fail fast, don't use elaborate fallbacks
-      );
-
-      this.cache.attachmentLearningEnhanced = this.readJsonSafe<AttachmentLearningConfig>(
-        'attachment_learning_enhanced.json',
-        null as any
-      );
-
-      // Standard data files with version + array pattern (from original suggestions.js)
-      this.cache.therapyAdvice = this.readJsonSafe<any>(
-        'therapy_advice.json',
-        { version: '0', items: [] }
-      );
-
-      this.cache.contextClassifier = this.readJsonSafe<any>(
-        'context_classifier.json',
-        { version: '0', contexts: [] }
-      );
-
-      this.cache.toneTriggerWords = this.readJsonSafe<any>(
-        'tone_triggerwords.json',
-        {
-          version: '0',
-          clear:   { triggerwords: [] },
-          caution: { triggerwords: [] },
-          alert:   { triggerwords: [] },
-          engine:  { genericTokens: {}, bucketGuards: {}, contextScopes: {} },
-          weights: { contextMultipliers: {} }
-        }
-      );
-
-      this.cache.intensityModifiers = this.readJsonSafe<any>(
-        'intensity_modifiers.json',
-        { version: '0', modifiers: [] }
-      );
-
-      this.cache.sarcasmIndicators = this.readJsonSafe<any>(
-        'sarcasm_indicators.json',
-        { version: '0', sarcasm_indicators: [] }
-      );
-
-      this.cache.negationIndicators = this.readJsonSafe<any>(
-        'negation_indicators.json',
-        { version: '0', negation_indicators: [] }
-      );
-
-      this.cache.phraseEdges = this.readJsonSafe<any>(
-        'phrase_edges.json',
-        { version: '0', edges: [] }
-      );
-
-      this.cache.evaluationTones = this.readJsonSafe<any>(
-        'evaluation_tones.json',
-        { version: '0', tones: [] }
-      );
-
-      this.cache.tonePatterns = this.readJsonSafe<any>(
-        'tone_patterns.json',
-        { version: '0', patterns: [] }
-      );
-
-      this.cache.learningSignals = this.readJsonSafe<any>(
-        'learning_signals.json',
-        { version: '0', signals: [] }
-      );
-
-      this.cache.negationPatterns = this.readJsonSafe<any>(
-        'negation_patterns.json',
-        { version: '0', patterns: [] }
-      );
-
-      this.cache.profanityLexicons = this.readJsonSafe<any>(
-        'profanity_lexicons.json',
-        {
-          version: '0',
-          categories: [
-            { id: 'mild',     severity: 'mild',     triggerWords: [] },
-            { id: 'moderate', severity: 'moderate', triggerWords: [] },
-            { id: 'strong',   severity: 'strong',   triggerWords: [] }
-          ]
-        }
-      );
-
-      this.cache.weightModifiers = this.readJsonSafe<any>(
-        'weight_modifiers.json',
-        { version: '0', modifiers: [] }
-      );
-
-      this.cache.attachmentOverrides = this.readJsonSafe<any>(
-        'attachment_overrides.json',
-        { version: '0', overrides: [] }
-      );
-
-      this.cache.onboardingPlaybook = this.readJsonSafe<any>(
-        'onboarding_playbook.json',
-        { version: '0', steps: [] }
-      );
-
-      // Special structure files (from original suggestions.js)
-      this.cache.severityCollaboration = this.readJsonSafe<any>(
-        'severity_collaboration.json',
-        { alert: { base: 0.55 }, caution: { base: 0.4 }, clear: { base: 0.35 } }
-      );
-
-      this.cache.semanticThesaurus = this.readJsonSafe<any>(
-        'semantic_thesaurus.json',
-        null // Optional file - if missing, skip semantic backbone features
-      );
-
-      // Missing files found in tone-analysis-endpoint.js
-      this.cache.severityCollab = this.readJsonSafe<any>(
-        'severity_collaboration.json',
-        { alert: { base: 0.55 }, caution: { base: 0.40 }, clear: { base: 0.35 } }
-      );
-
-      this.cache.weightProfiles = this.readJsonSafe<any>(
-        'weightMultiplierProfiles.json',
-        { version: '1.0', profiles: {} }
-      );
-
-      this.cache.userPreferences = this.readJsonSafe<any>(
-        'user_preference.json',
-        { categories: {} }
-      );
-
-      this.cache.guardrailConfig = this.readJsonSafe<any>(
-        'guardrail_config.json',
-        { blockedPatterns: [] }
-      );
-
-      // Tone bucket mapping - load with no fallback
-      this.cache.toneBucketMapping = this.readJsonSafe<any>(
-        'tone_bucket_mapping.json',
-        null // Keep null if missing - no fallback
-      );
-
-      // Add attachment tone weights for style-specific tone adjustments
-      this.cache.attachmentToneWeights = this.readJsonSafe<any>(
-        'attachment_tone_weights.json',
-        { version: '0', overrides: {} }
-      );
-
+      logger.info('Initializing data cache (sync)…');
+      this.loadAllIntoCache();
       this.initialized = true;
       logger.info('Data cache initialized successfully (sync)');
       logger.info(`[tone-buckets] loaded=${!!this.getToneBucketMapping()}`);
     } catch (error) {
       logger.error('Failed to initialize data cache synchronously:', error);
-      // Don't throw error in sync initialization - just log and continue with empty cache
-      this.initialized = true; // Mark as initialized even on failure to prevent re-init attempts
+      this.initialized = true; // avoid loops
     }
   }
 
   public async initialize(): Promise<void> {
-    if (this.initialized) {
-      return;
-    }
-
+    if (this.initialized) return;
     try {
-      logger.info('Initializing data cache...');
-
-      // Load all JSON data files - using exact fallbacks from original JS (suggestions.js pattern)
-      
-      // Critical config files that should fail fast (use null)
-      this.cache.attachmentLearning = this.readJsonSafe<AttachmentLearningConfig>(
-        'attachment_learning.json',
-        null as any // Match original JS behavior - fail fast, don't use elaborate fallbacks
-      );
-
-      // Standard data files with version + array pattern (from original suggestions.js)
-      this.cache.therapyAdvice = this.readJsonSafe<any>(
-        'therapy_advice.json',
-        { version: '0', items: [] }
-      );
-
-      this.cache.contextClassifier = this.readJsonSafe<any>(
-        'context_classifier.json',
-        { version: '0', contexts: [] }
-      );
-
-      this.cache.toneTriggerWords = this.readJsonSafe<any>(
-        'tone_triggerwords.json',
-        {
-          version: '0',
-          clear:   { triggerwords: [] },
-          caution: { triggerwords: [] },
-          alert:   { triggerwords: [] },
-          engine:  { genericTokens: {}, bucketGuards: {}, contextScopes: {} },
-          weights: { contextMultipliers: {} }
-        }
-      );
-
-      this.cache.intensityModifiers = this.readJsonSafe<any>(
-        'intensity_modifiers.json',
-        { version: '0', modifiers: [] }
-      );
-
-      this.cache.sarcasmIndicators = this.readJsonSafe<any>(
-        'sarcasm_indicators.json',
-        { version: '0', sarcasm_indicators: [] }
-      );
-
-      this.cache.negationIndicators = this.readJsonSafe<any>(
-        'negation_indicators.json',
-        { version: '0', negation_indicators: [] }
-      );
-
-      this.cache.phraseEdges = this.readJsonSafe<any>(
-        'phrase_edges.json',
-        { version: '0', edges: [] }
-      );
-
-      this.cache.evaluationTones = this.readJsonSafe<any>(
-        'evaluation_tones.json',
-        { version: '0', tones: [] }
-      );
-
-      this.cache.tonePatterns = this.readJsonSafe<any>(
-        'tone_patterns.json',
-        { version: '0', patterns: [] }
-      );
-
-      this.cache.learningSignals = this.readJsonSafe<any>(
-        'learning_signals.json',
-        { version: '0', signals: [] }
-      );
-
-      this.cache.negationPatterns = this.readJsonSafe<any>(
-        'negation_patterns.json',
-        { version: '0', patterns: [] }
-      );
-
-      this.cache.profanityLexicons = this.readJsonSafe<any>(
-        'profanity_lexicons.json',
-        {
-          version: '0',
-          categories: [
-            { id: 'mild',     severity: 'mild',     triggerWords: [] },
-            { id: 'moderate', severity: 'moderate', triggerWords: [] },
-            { id: 'strong',   severity: 'strong',   triggerWords: [] }
-          ]
-        }
-      );
-
-      this.cache.weightModifiers = this.readJsonSafe<any>(
-        'weight_modifiers.json',
-        { version: '0', modifiers: [] }
-      );
-
-      this.cache.attachmentOverrides = this.readJsonSafe<any>(
-        'attachment_overrides.json',
-        { version: '0', overrides: [] }
-      );
-
-      this.cache.onboardingPlaybook = this.readJsonSafe<any>(
-        'onboarding_playbook.json',
-        { version: '0', steps: [] }
-      );
-
-      // Special structure files (from original suggestions.js)
-      this.cache.severityCollaboration = this.readJsonSafe<any>(
-        'severity_collaboration.json',
-        { alert: { base: 0.55 }, caution: { base: 0.4 }, clear: { base: 0.35 } }
-      );
-
-      this.cache.semanticThesaurus = this.readJsonSafe<any>(
-        'semantic_thesaurus.json',
-        null // Optional file - if missing, skip semantic backbone features
-      );
-
-      // Missing files found in tone-analysis-endpoint.js
-      this.cache.severityCollab = this.readJsonSafe<any>(
-        'severity_collaboration.json',
-        { alert: { base: 0.55 }, caution: { base: 0.40 }, clear: { base: 0.35 } }
-      );
-
-      this.cache.userPreferences = this.readJsonSafe<any>(
-        'user_preference.json',
-        { categories: {} }
-      );
-
-      this.cache.guardrailConfig = this.readJsonSafe<any>(
-        'guardrail_config.json',
-        { blockedPatterns: [] }
-      );
-
-      // Tone bucket mapping - load with no fallback
-      this.cache.toneBucketMapping = this.readJsonSafe<any>(
-        'tone_bucket_mapping.json',
-        null // Keep null if missing - no fallback
-      );
-
-      // Add attachment tone weights for style-specific tone adjustments
-      this.cache.attachmentToneWeights = this.readJsonSafe<any>(
-        'attachment_tone_weights.json',
-        { version: '0', overrides: {} }
-      );
-
+      logger.info('Initializing data cache (async)…');
+      this.loadAllIntoCache(); // same loader
       this.initialized = true;
       logger.info('Data cache initialized successfully');
       logger.info(`[tone-buckets] loaded=${!!this.getToneBucketMapping()}`);
@@ -412,19 +199,19 @@ class DataLoaderService {
     return this.cache.attachmentLearning || null;
   }
 
-  public getAttachmentLearningEnhanced(): AttachmentLearningConfig | null {
+  public getAttachmentLearningEnhanced(): import('../types/dataTypes').DataCache['attachmentLearningEnhanced'] {
     return this.cache.attachmentLearningEnhanced || null;
   }
 
-  public getTherapyAdvice(): any {
+  public getTherapyAdvice(): TherapyAdviceFile {
     return this.cache.therapyAdvice || { version: '0', items: [] };
   }
 
-  public getContextClassifier(): any {
+  public getContextClassifier(): ContextClassifierFile {
     return this.cache.contextClassifier || { version: '0', contexts: [] };
   }
 
-  public getToneTriggerWords(): any {
+  public getToneTriggerWords(): ToneTriggerWordsFile {
     return this.cache.toneTriggerWords || {
       version: '0',
       clear:   { triggerwords: [] },
@@ -435,39 +222,39 @@ class DataLoaderService {
     };
   }
 
-  public getIntensityModifiers(): any {
+  public getIntensityModifiers(): IntensityModifiersFile {
     return this.cache.intensityModifiers || { version: '0', modifiers: [] };
   }
 
-  public getSarcasmIndicators(): any {
+  public getSarcasmIndicators(): SarcasmIndicatorsFile {
     return this.cache.sarcasmIndicators || { version: '0', sarcasm_indicators: [] };
   }
 
-  public getNegationIndicators(): any {
+  public getNegationIndicators(): NegationIndicatorsFile {
     return this.cache.negationIndicators || { version: '0', negation_indicators: [] };
   }
 
-  public getPhraseEdges(): any {
+  public getPhraseEdges(): PhraseEdgesFile {
     return this.cache.phraseEdges || { version: '0', edges: [] };
   }
 
-  public getEvaluationTones(): any {
+  public getEvaluationTones(): EvaluationTonesFile {
     return this.cache.evaluationTones || { version: '0', tones: [] };
   }
 
-  public getTonePatterns(): any {
+  public getTonePatterns(): TonePatternsFile {
     return this.cache.tonePatterns || { version: '0', patterns: [] };
   }
 
-  public getLearningSignals(): any {
+  public getLearningSignals(): LearningSignalsFile {
     return this.cache.learningSignals || { version: '0', signals: [] };
   }
 
-  public getNegationPatterns(): any {
-    return this.cache.negationPatterns || { version: '0', patterns: [] };
+  public getNegationPatterns(): NegationPatternsFile {
+    return this.cache.negationPatterns!;
   }
 
-  public getProfanityLexicons(): any {
+  public getProfanityLexicons(): ProfanityLexiconsFile {
     return this.cache.profanityLexicons || { 
       version: '0', 
       categories: [
@@ -478,51 +265,48 @@ class DataLoaderService {
     };
   }
 
-  public getWeightModifiers(): any {
+  public getWeightModifiers(): WeightModifiersFile {
     return this.cache.weightModifiers || { version: '0', modifiers: [] };
   }
 
-  public getAttachmentOverrides(): any {
+  public getAttachmentOverrides(): AttachmentOverridesFile {
     return this.cache.attachmentOverrides || { version: '0', overrides: [] };
   }
 
-  public getOnboardingPlaybook(): any {
+  public getOnboardingPlaybook(): OnboardingPlaybookFile {
     return this.cache.onboardingPlaybook || { version: '0', steps: [] };
   }
 
-  public getSeverityCollaboration(): any {
+  public getSeverityCollaboration(): SeverityCollaborationFile {
     return this.cache.severityCollaboration || { alert: { base: 0.55 }, caution: { base: 0.4 }, clear: { base: 0.35 } };
   }
 
-  public getSemanticThesaurus(): any {
-    return this.cache.semanticThesaurus; // Return null if not loaded - enables optional feature
+  public getSemanticThesaurus(): SemanticThesaurusFile | null {
+    return this.cache.semanticThesaurus || null; // Return null if not loaded - enables optional feature
   }
 
-  public getUserPreferences(): any {
+  public getUserPreferences(): UserPreferenceFile {
     return this.cache.userPreferences || { categories: {} };
   }
 
-  public getGuardrailConfig(): any {
+  public getGuardrailConfig(): import('../types/dataTypes').DataCache['guardrailConfig'] {
     return this.cache.guardrailConfig || { blockedPatterns: [] };
   }
 
-  public getToneBucketMapping(): any {
+  public getToneBucketMapping(): import('../types/dataTypes').DataCache['toneBucketMapping'] {
     // Return exactly what's loaded. If the file is missing, this is null.
     return this.cache.toneBucketMapping ?? null;
   }
 
-  public getAttachmentToneWeights(): any {
+  public getAttachmentToneWeights(): AttachmentToneWeightsFile {
     return this.cache.attachmentToneWeights || { version: '0', overrides: {} };
   }
 
   // Utility methods for common access patterns
   public get(key: string): any {
-    // Handle aliases for backward compatibility
-    if (key === 'toneBucketMap') {
-      return this.cache.toneBucketMapping ?? null;
-    }
-    
-    return this.cache[key as keyof DataCache] || null;
+    if (key === 'toneBucketMap') return this.cache.toneBucketMapping ?? null;
+    if (key === 'severityCollab') return this.cache.severityCollaboration ?? null;
+    return (this.cache as any)[key] ?? null;
   }
 
   // Refresh data cache
@@ -607,6 +391,8 @@ export type AdviceItem = z.infer<typeof AdviceItem>;
 // ============================
 // Normalization Functions
 // ============================
+const toArr = (v: any) => Array.isArray(v) ? v : (v == null ? [] : [v]);
+
 export function normalizeAdvice(db: any): AdviceItem[] {
   // Handle both direct array format and object with items property
   const rawItems = Array.isArray(db) ? db : (db?.items ?? []);
@@ -615,10 +401,10 @@ export function normalizeAdvice(db: any): AdviceItem[] {
     const merged = {
       ...raw,
       keywords: [
-        ...(raw.keywords ?? []), 
-        ...(raw.matchKeywords ?? []), 
-        ...(raw.boostSources ?? [])
-      ]
+        ...toArr(raw.keywords),
+        ...toArr(raw.matchKeywords),
+        ...toArr(raw.boostSources),
+      ],
     };
     try {
       return AdviceItem.parse(merged);

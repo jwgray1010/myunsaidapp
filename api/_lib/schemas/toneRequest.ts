@@ -100,7 +100,7 @@ export const toneResponseSchema = z.object({
   rewritability: z.number().min(0).max(1).optional().describe('How much the message could benefit from rewriting'),
   categories: z.array(z.string()).optional().describe('Detected tone pattern categories (e.g., extreme-hostility, blame, repair)'),
     // ➕ UI fields used by the keyboard pill:
-  ui_tone: z.enum(['clear','caution','alert','neutral']).optional().describe('UI bucket for the pill color'),
+  ui_tone: z.enum(['clear','caution','alert','neutral','insufficient']).optional().describe('UI bucket for the pill color'),
   ui_distribution: z.object({
     clear: z.number().min(0).max(1),
     caution: z.number().min(0).max(1),
@@ -111,7 +111,7 @@ export const toneResponseSchema = z.object({
   mode: z.enum(['full', 'legacy']).optional().describe('Analysis mode used'),
   doc_seq: z.number().optional().describe('Echoed document sequence number'),
   text_hash: z.string().optional().describe('Echoed text hash'),
-  doc_tone: z.enum(['clear','caution','alert','neutral']).optional().describe('Document-level tone for full-text mode'),
+  doc_tone: z.enum(['clear','caution','alert','neutral','insufficient']).optional().describe('Document-level tone for full-text mode'),
   // Enhanced response fields
   emotions: emotionAnalysisSchema.optional().describe('Emotion analysis results'),
   intensity: z.number().min(0).max(1).optional().describe('Emotional intensity score'),

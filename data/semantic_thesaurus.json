@@ -212,7 +212,16 @@
     { "id": "CTX_MICRO_APOLOGY", "signals": ["sorry","my mistake"], "bias": { "clear": 0.06 } },
     { "id": "CTX_INSECURITY", "signals": ["comparisons","triangulation"], "bias": { "caution": 0.05 } },
     { "id": "CTX_BOUNDARY", "signals": ["limit_setting","request_stop"], "bias": { "clear": 0.08 } },
-    { "id": "CTX_DISCLOSURE", "signals": ["self_disclosure"], "bias": { "caution": 0.04 } }
+    { "id": "CTX_DISCLOSURE", "signals": ["self_disclosure"], "bias": { "caution": 0.04 } },
+    { "id": "CTX_DEFENSIVE", "signals": ["deflection","counter_blame","justification"], "bias": { "caution": 0.06 } },
+    { "id": "CTX_DISMISSIVE", "signals": ["minimizing_language","topic_change","eye_roll_tone"], "bias": { "alert": 0.05 } },
+    { "id": "CTX_CURIOSITY", "signals": ["open_questions","explore_language","tell_me_more"], "bias": { "clear": 0.09 } },
+    { "id": "CTX_PLAYFUL", "signals": ["humor","teasing","lighthearted"], "bias": { "clear": 0.07 } },
+    { "id": "CTX_REFLECTIVE", "signals": ["past_tense","learning_language","realization"], "bias": { "clear": 0.06 } },
+    { "id": "CTX_LOGISTICS", "signals": ["scheduling","coordination","practical_details"], "bias": { "neutral": 0.05 } },
+    { "id": "CTX_CATASTROPHIZING", "signals": ["worst_case","disaster_language","everything_ruined"], "bias": { "alert": 0.10 } },
+    { "id": "CTX_MINIMIZATION", "signals": ["not_big_deal","downplay","whatever"], "bias": { "caution": 0.04 } },
+    { "id": "CTX_CONFUSION", "signals": ["mixed_signals","unclear","both_and_language"], "bias": { "caution": 0.05 } }
   ],
 
   "clusters": [
@@ -628,6 +637,249 @@
         "intensityModifierHints": []
       },
       "weights": { "base": 0.9, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_DEFENSIVE",
+      "key": "defensive",
+      "category": "conflict",
+      "description": "Deflection and counter-blame patterns.",
+      "toneAffinities": { "alert": 0.15, "caution": 0.20, "clear": -0.10 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.04, "avoidant": 0.05, "disorganized": 0.06 },
+      "contextLinks": ["CTX_DEFENSIVE","CTX_CONFLICT"],
+      "match": {
+        "lexical": ["that's not true","you always","what about you","I never said that","you're the one who"],
+        "regex": ["\\bthat'?s\\s+not\\s+true\\b","\\byou\\s+always\\b","\\bwhat\\s+about\\s+you\\b"],
+        "spacyPatterns": [[{ "LOWER":"you're"},{ "LOWER":"the"},{ "LOWER":"one"},{ "LOWER":"who"}]],
+        "semanticTags": ["deflection","counter_blame"],
+        "embeddingHints": ["turning it around","defensive pushback"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["counter-accusation"],
+      "rewriteCues": { "secureFix": ["Own your part first, then share your experience."],
+        "examples": ["\"I hear that hurt you. I also felt confused when...\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["defensive","deflection"],
+        "therapyAdviceTags": ["ownership-first","validation"],
+        "intensityModifierHints": ["absolutizer"]
+      },
+      "weights": { "base": 1.0, "multiplierProfile": "high_sensitivity" }
+    },
+
+    {
+      "id": "SEM_DISMISSIVE",
+      "key": "dismissive",
+      "category": "conflict",
+      "description": "Minimizing or brushing off concerns.",
+      "toneAffinities": { "alert": 0.25, "caution": 0.05, "clear": -0.08 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.03, "avoidant": 0.06, "disorganized": 0.04 },
+      "contextLinks": ["CTX_DISMISSIVE","CTX_CONFLICT"],
+      "match": {
+        "lexical": ["whatever","not a big deal","you're overreacting","calm down","it's fine","move on"],
+        "regex": ["\\bnot\\s+a\\s+big\\s+deal\\b","\\byou'?re\\s+overreacting\\b","\\bcalm\\s+down\\b"],
+        "spacyPatterns": [[{ "LOWER":"move"},{ "LOWER":"on"}]],
+        "semanticTags": ["minimizing_language","topic_change"],
+        "embeddingHints": ["brushing it off","not important"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["eye_roll_tone"],
+      "rewriteCues": { "secureFix": ["Acknowledge the importance before offering perspective."],
+        "examples": ["\"I can see this matters to you. Help me understand what's at stake.\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["dismissive","minimizing"],
+        "therapyAdviceTags": ["validation-first","curiosity"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 1.02, "multiplierProfile": "high_sensitivity" }
+    },
+
+    {
+      "id": "SEM_CURIOUS",
+      "key": "curious",
+      "category": "empathy_builders",
+      "description": "Genuine exploration and question asking.",
+      "toneAffinities": { "alert": -0.15, "caution": 0.05, "clear": 0.25 },
+      "attachmentAdjustments": { "secure": 0.05, "anxious": 0.03, "avoidant": 0.02, "disorganized": 0.03 },
+      "contextLinks": ["CTX_CURIOSITY","CTX_REPAIR"],
+      "match": {
+        "lexical": ["tell me more","I'm curious","help me understand","what's that like","can you explain"],
+        "regex": ["\\btell\\s+me\\s+more\\b","\\bi'?m\\s+curious\\b","\\bhelp\\s+me\\s+understand\\b"],
+        "spacyPatterns": [[{ "LOWER":"what's"},{ "LOWER":"that"},{ "LOWER":"like"}]],
+        "semanticTags": ["open_questions","explore_language"],
+        "embeddingHints": ["genuine interest","wanting to learn"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["follow-up questions"],
+      "rewriteCues": { "secureFix": ["Ask one specific question and pause for the answer."],
+        "examples": ["\"I'm curious about the timing part—what felt off about that?\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["curiosity","exploration"],
+        "therapyAdviceTags": ["open-ended-questions","active-listening"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.9, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_PLAYFUL",
+      "key": "playful",
+      "category": "empathy_builders",
+      "description": "Light humor and connection building.",
+      "toneAffinities": { "alert": -0.20, "caution": -0.05, "clear": 0.30 },
+      "attachmentAdjustments": { "secure": 0.06, "anxious": 0.02, "avoidant": 0.03, "disorganized": 0.01 },
+      "contextLinks": ["CTX_PLAYFUL","CTX_REPAIR"],
+      "match": {
+        "lexical": ["haha","that's funny","you crack me up","silly","adorable","cute chaos"],
+        "regex": ["\\bthat'?s\\s+funny\\b","\\byou\\s+crack\\s+me\\s+up\\b"],
+        "spacyPatterns": [[{ "LOWER":"cute"},{ "LOWER":"chaos"}]],
+        "semanticTags": ["humor","lighthearted"],
+        "embeddingHints": ["affectionate teasing","shared laughter"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["emoji_softeners"],
+      "rewriteCues": { "secureFix": ["Keep lightness appropriate to the conversation stakes."],
+        "examples": ["\"You're adorable when you're organizing the fridge 😊\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["playful","humor"],
+        "therapyAdviceTags": ["connection-building","lightness"],
+        "intensityModifierHints": ["emoji_softener"]
+      },
+      "weights": { "base": 0.85, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_REFLECTIVE",
+      "key": "reflective",
+      "category": "empathy_builders",
+      "description": "Processing and learning language.",
+      "toneAffinities": { "alert": -0.10, "caution": 0.05, "clear": 0.20 },
+      "attachmentAdjustments": { "secure": 0.04, "anxious": 0.02, "avoidant": 0.01, "disorganized": 0.03 },
+      "contextLinks": ["CTX_REFLECTIVE","CTX_REPAIR"],
+      "match": {
+        "lexical": ["I learned","looking back","I realize now","that taught me","I see the pattern"],
+        "regex": ["\\blooking\\s+back\\b","\\bi\\s+realize\\s+now\\b","\\bthat\\s+taught\\s+me\\b"],
+        "spacyPatterns": [[{ "LOWER":"i"},{ "LOWER":"see"},{ "LOWER":"the"},{ "LOWER":"pattern"}]],
+        "semanticTags": ["past_tense","learning_language"],
+        "embeddingHints": ["insight moment","growth awareness"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["realization"],
+      "rewriteCues": { "secureFix": ["Connect the learning to a future behavior."],
+        "examples": ["\"I see now that I shut down when stressed. Next time I'll say I need 5 minutes.\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["reflection","insight"],
+        "therapyAdviceTags": ["growth-mindset","self-awareness"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.9, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_LOGISTICS",
+      "key": "logistics",
+      "category": "plan",
+      "description": "Practical coordination and scheduling.",
+      "toneAffinities": { "alert": -0.05, "caution": 0.00, "clear": 0.15 },
+      "attachmentAdjustments": { "secure": 0.02, "anxious": 0.01, "avoidant": 0.02, "disorganized": 0.01 },
+      "contextLinks": ["CTX_LOGISTICS","CTX_PLANNING"],
+      "match": {
+        "lexical": ["what time","when works","calendar","schedule","coordinate","meeting link"],
+        "regex": ["\\bwhat\\s+time\\b","\\bwhen\\s+works\\b","\\bmeeting\\s+link\\b"],
+        "spacyPatterns": [[{ "LOWER":"calendar"}]],
+        "semanticTags": ["scheduling","coordination"],
+        "embeddingHints": ["calendar planning","practical details"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["numbers","dates"],
+      "rewriteCues": { "secureFix": ["Offer two options with clear timezones."],
+        "examples": ["\"Tuesday 3pm or Wednesday 5pm EST? Let me know what works.\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["logistics","scheduling"],
+        "therapyAdviceTags": ["coordination","clear-options"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.9, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_CATASTROPHIZING",
+      "key": "catastrophizing",
+      "category": "risk",
+      "description": "Worst-case scenario thinking.",
+      "toneAffinities": { "alert": 0.30, "caution": 0.15, "clear": -0.10 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.08, "avoidant": 0.02, "disorganized": 0.10 },
+      "contextLinks": ["CTX_CATASTROPHIZING","CTX_RISK"],
+      "match": {
+        "lexical": ["everything is ruined","this is a disaster","we're doomed","it's hopeless","worst case"],
+        "regex": ["\\beverything\\s+is\\s+ruined\\b","\\bthis\\s+is\\s+a\\s+disaster\\b","\\bwe'?re\\s+doomed\\b"],
+        "spacyPatterns": [[{ "LOWER":"worst"},{ "LOWER":"case"}]],
+        "semanticTags": ["worst_case","disaster_language"],
+        "embeddingHints": ["catastrophic thinking","all-or-nothing"]
+      },
+      "negationSensitive": true,
+      "intensityHooks": ["absolutizer","exclamation"],
+      "rewriteCues": { "secureFix": ["Scale it down: name one specific concern and one small step."],
+        "examples": ["\"I'm worried about the timing. Can we make a backup plan for Saturday?\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["catastrophizing","anxiety"],
+        "therapyAdviceTags": ["scale-down","specific-concerns"],
+        "intensityModifierHints": ["absolutizer"]
+      },
+      "weights": { "base": 1.05, "multiplierProfile": "high_sensitivity" }
+    },
+
+    {
+      "id": "SEM_MINIMIZATION",
+      "key": "minimization",
+      "category": "distancing",
+      "description": "Downplaying significance or impact.",
+      "toneAffinities": { "alert": 0.05, "caution": 0.15, "clear": 0.00 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.02, "avoidant": 0.04, "disorganized": 0.03 },
+      "contextLinks": ["CTX_MINIMIZATION","CTX_DISCLOSURE"],
+      "match": {
+        "lexical": ["it's nothing","not a big deal","don't worry about it","no problem","it's fine"],
+        "regex": ["\\bit'?s\\s+nothing\\b","\\bdon'?t\\s+worry\\s+about\\s+it\\b","\\bno\\s+problem\\b"],
+        "spacyPatterns": [[{ "LOWER":"it's"},{ "LOWER":"fine"}]],
+        "semanticTags": ["not_big_deal","downplay"],
+        "embeddingHints": ["brushing off","no big deal"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["deflection"],
+      "rewriteCues": { "secureFix": ["Acknowledge the impact even if you're okay with it."],
+        "examples": ["\"It stung a bit, but I understand you were stressed. All good.\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["minimizing","deflection"],
+        "therapyAdviceTags": ["acknowledge-impact","validation"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.95, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_CONFUSION",
+      "key": "confusion",
+      "category": "distancing",
+      "description": "Ambivalent and mixed-signal language.",
+      "toneAffinities": { "alert": 0.05, "caution": 0.20, "clear": -0.05 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.05, "avoidant": 0.03, "disorganized": 0.08 },
+      "contextLinks": ["CTX_CONFUSION","CTX_DISCLOSURE"],
+      "match": {
+        "lexical": ["I don't know","maybe yes maybe no","both and neither","I'm torn","mixed feelings"],
+        "regex": ["\\bi\\s+don'?t\\s+know\\b","\\bmixed\\s+feelings\\b","\\bi'?m\\s+torn\\b"],
+        "spacyPatterns": [[{ "LOWER":"both"},{ "LOWER":"and"},{ "LOWER":"neither"}]],
+        "semanticTags": ["mixed_signals","both_and_language"],
+        "embeddingHints": ["ambivalent feelings","unclear direction"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["contradiction"],
+      "rewriteCues": { "secureFix": ["Name both parts separately, then pick one small step."],
+        "examples": ["\"Part of me wants space, part wants connection. Can we start with a short call?\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["confusion","ambivalence"],
+        "therapyAdviceTags": ["dialectical-thinking","small-steps"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.95, "multiplierProfile": "low_reactivity" }
     }
   ],
 

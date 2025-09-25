@@ -1,0 +1,3025 @@
+{
+  "timestamp": "2025-09-24T12:19:57.843Z",
+  "totalEntries": 1110,
+  "availableUIBuckets": [
+    "clear",
+    "caution",
+    "alert"
+  ],
+  "availableRawTones": [
+    "neutral",
+    "positive",
+    "supportive",
+    "anxious",
+    "angry",
+    "frustrated",
+    "sad",
+    "assertive",
+    "safety_concern",
+    "withdrawn",
+    "apologetic",
+    "curious",
+    "dismissive",
+    "defensive",
+    "jealous_insecure",
+    "catastrophizing",
+    "minimization",
+    "playful",
+    "reflective",
+    "logistical",
+    "confused_ambivalent"
+  ],
+  "statistics": {
+    "noCurrentTone": 0,
+    "withDualSuggestions": 707,
+    "topUIBuckets": {
+      "clear": 733,
+      "caution": 272,
+      "alert": 105
+    },
+    "topRawTones": {
+      "supportive": 153,
+      "logistical": 117,
+      "assertive": 112,
+      "anxious": 83,
+      "positive": 49,
+      "sad": 29,
+      "safety_concern": 26,
+      "reflective": 25,
+      "minimization": 19,
+      "curious": 15,
+      "jealous_insecure": 14,
+      "apologetic": 12,
+      "withdrawn": 11,
+      "neutral": 11,
+      "angry": 7,
+      "playful": 7,
+      "frustrated": 7,
+      "defensive": 6,
+      "confused_ambivalent": 3,
+      "catastrophizing": 1
+    },
+    "currentToneDistribution": {
+      "alert": 290,
+      "caution": 368,
+      "clear": 432,
+      "assertive": 6,
+      "neutral": 2,
+      "positive": 2,
+      "supportive": 2,
+      "angry": 2,
+      "frustrated": 2,
+      "sad": 2,
+      "safety_concern": 2
+    },
+    "confidenceDistribution": {
+      "high": 14,
+      "medium": 693,
+      "low": 403
+    }
+  },
+  "results": [
+    {
+      "id": "TA001",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": "angry",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 2
+          }
+        },
+        "rawTone": {
+          "tone": "angry",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "alert"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "angry",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "alert"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 70,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA002",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": "apologetic",
+      "confidence": {
+        "uiBucket": 0.4,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.4,
+          "scores": {
+            "clear": 0,
+            "caution": 4,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "apologetic",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "apologetic",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        },
+        {
+          "tone": "frustrated",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        },
+        {
+          "tone": "defensive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 90,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA003",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": "sad",
+      "confidence": {
+        "uiBucket": 0.4,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.4,
+          "scores": {
+            "clear": 0,
+            "caution": 4,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "sad",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "sad",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 59,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA004",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 1,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 54,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA005",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 64,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA006",
+      "currentTone": "caution",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 52,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA007",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 42,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA008",
+      "currentTone": "caution",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 72,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA009",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": "sad",
+      "confidence": {
+        "uiBucket": 0.4,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.4,
+          "scores": {
+            "clear": 0,
+            "caution": 4,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "sad",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "sad",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 55,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA010",
+      "currentTone": "alert",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "assertive",
+      "confidence": {
+        "uiBucket": 0.3,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.3,
+          "scores": {
+            "clear": 3,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "assertive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "assertive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 70,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA011",
+      "currentTone": "caution",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "supportive",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 2,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 70,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA012",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": "withdrawn",
+      "confidence": {
+        "uiBucket": 0.4,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.4,
+          "scores": {
+            "clear": 0,
+            "caution": 4,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "withdrawn",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "withdrawn",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        },
+        {
+          "tone": "catastrophizing",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 44,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": true
+      }
+    },
+    {
+      "id": "TA013",
+      "currentTone": "alert",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "assertive",
+      "confidence": {
+        "uiBucket": 0.3,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.3,
+          "scores": {
+            "clear": 3,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "assertive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "assertive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        },
+        {
+          "tone": "logistical",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 72,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": true,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA014",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 61,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA015",
+      "currentTone": "caution",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 1,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 52,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA016",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": "apologetic",
+      "confidence": {
+        "uiBucket": 0.4,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.4,
+          "scores": {
+            "clear": 0,
+            "caution": 4,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "apologetic",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "apologetic",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        },
+        {
+          "tone": "defensive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 62,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA017",
+      "currentTone": "alert",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "logistical",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 2,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "logistical",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "logistical",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 57,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA018",
+      "currentTone": "caution",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 1,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 48,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA019",
+      "currentTone": "caution",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 54,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA020",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 71,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA021",
+      "currentTone": "alert",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "logistical",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 2,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "logistical",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "logistical",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 31,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": true,
+        "hasBoundaryKeywords": true,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA022",
+      "currentTone": "caution",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "supportive",
+      "confidence": {
+        "uiBucket": 0.6,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.6,
+          "scores": {
+            "clear": 6,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        },
+        {
+          "tone": "jealous_insecure",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        },
+        {
+          "tone": "safety_concern",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "alert"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 77,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA023",
+      "currentTone": "alert",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "supportive",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 2,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 60,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA024",
+      "currentTone": "alert",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "logistical",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 2,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "logistical",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "logistical",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 58,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": true
+      }
+    },
+    {
+      "id": "TA025",
+      "currentTone": "alert",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "playful",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 2,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "playful",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "playful",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 63,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA026",
+      "currentTone": "caution",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "supportive",
+      "confidence": {
+        "uiBucket": 0.3,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.3,
+          "scores": {
+            "clear": 3,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        },
+        {
+          "tone": "assertive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 62,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA027",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 64,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA028",
+      "currentTone": "caution",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 52,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA029",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 52,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA030",
+      "currentTone": "caution",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "neutral",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 2,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "neutral",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "neutral",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 44,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA031",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 46,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA032",
+      "currentTone": "alert",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "assertive",
+      "confidence": {
+        "uiBucket": 0.3,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.3,
+          "scores": {
+            "clear": 3,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "assertive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "assertive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 53,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA033",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 1,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 58,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA034",
+      "currentTone": "caution",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 64,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": true,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA035",
+      "currentTone": "caution",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "supportive",
+      "confidence": {
+        "uiBucket": 0.6,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.6,
+          "scores": {
+            "clear": 6,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        },
+        {
+          "tone": "safety_concern",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "alert"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 48,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA036",
+      "currentTone": "alert",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "curious",
+      "confidence": {
+        "uiBucket": 0.3,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.3,
+          "scores": {
+            "clear": 3,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "curious",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "curious",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 46,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA037",
+      "currentTone": "caution",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "curious",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 2,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "curious",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "curious",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 66,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA038",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 1,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 41,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA039",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": "sad",
+      "confidence": {
+        "uiBucket": 0.4,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.4,
+          "scores": {
+            "clear": 0,
+            "caution": 4,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "sad",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "sad",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "caution"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 50,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA040",
+      "currentTone": "alert",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "assertive",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 2,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "assertive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "assertive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        },
+        {
+          "tone": "neutral",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 56,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA041",
+      "currentTone": "caution",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 43,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA042",
+      "currentTone": "alert",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "supportive",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 2,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 67,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA043",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 1,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 56,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA044",
+      "currentTone": "alert",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "supportive",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 2,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "supportive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        },
+        {
+          "tone": "assertive",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 77,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": true,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA045",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 1,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 62,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA046",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "avoidant attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "withdrawn",
+            "dismissive",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 49,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA047",
+      "currentTone": "caution",
+      "suggestedUIBucket": "clear",
+      "suggestedRawTone": "curious",
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0.6
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "clear",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 2,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": {
+          "tone": "curious",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      },
+      "topRawTones": [
+        {
+          "tone": "curious",
+          "score": 2,
+          "confidence": 0.6,
+          "uiBucket": "clear"
+        }
+      ],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 45,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA048",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 1,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 48,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA049",
+      "currentTone": "caution",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 1,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 50,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": false,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    },
+    {
+      "id": "TA050",
+      "currentTone": "alert",
+      "suggestedUIBucket": "caution",
+      "suggestedRawTone": null,
+      "confidence": {
+        "uiBucket": 0.2,
+        "rawTone": 0
+      },
+      "dualToneSuggestions": {
+        "uiBucket": {
+          "bucket": "caution",
+          "confidence": 0.2,
+          "scores": {
+            "clear": 0,
+            "caution": 2,
+            "alert": 0
+          }
+        },
+        "rawTone": null
+      },
+      "topRawTones": [],
+      "contextualSuggestions": [
+        {
+          "reason": "conflict context",
+          "uiBucket": "caution",
+          "rawTones": [
+            "angry",
+            "frustrated",
+            "defensive"
+          ]
+        },
+        {
+          "reason": "anxious attachment style",
+          "uiBucket": "caution",
+          "rawTones": [
+            "anxious",
+            "jealous_insecure",
+            "catastrophizing"
+          ]
+        }
+      ],
+      "analysis": {
+        "textLength": 46,
+        "hasEmotionalKeywords": false,
+        "hasActionKeywords": false,
+        "hasBoundaryKeywords": false,
+        "hasConflictKeywords": true,
+        "hasSafetyKeywords": false,
+        "hasIntensityKeywords": false
+      }
+    }
+  ]
+}

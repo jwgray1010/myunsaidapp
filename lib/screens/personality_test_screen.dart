@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../data/attachment_assessment.dart';
 import '../data/assessment_integration.dart';
-import '../data/attachment_scenarios.dart';
 import '../data/adaptive_flow.dart';
 
 class PersonalityTestScreen extends StatefulWidget {
