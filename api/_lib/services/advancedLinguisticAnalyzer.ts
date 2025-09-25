@@ -529,7 +529,7 @@ export class HesitationPatternDetector {
 export class SentenceComplexityAnalyzer {
   private safeSentenceSplit(text: string): string[] {
     const raw = text.split(/(?<=[.!?])\s+/).filter(s => s.trim());
-    const sentences = [];
+    const sentences: string[] = [];
     
     for (let i = 0; i < raw.length; i++) {
       const s = raw[i];
