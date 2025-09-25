@@ -371,7 +371,10 @@ class DataLoaderService {
 const AdviceItem = z.object({
   id: z.string(),
   advice: z.string().min(1),
-  triggerTone: z.enum(['clear','caution','alert']).default('clear'),
+  triggerTone: z.union([
+    z.enum(['clear','caution','alert']),
+    z.array(z.enum(['clear','caution','alert']))
+  ]).default('clear'),
   contexts: z.array(z.string()).default([]),
   attachmentStyles: z.array(z.enum(['secure','anxious','avoidant','disorganized'])).default([]),
   severityThreshold: z.record(z.enum(['clear','caution','alert']), z.number().min(0).max(1)).optional(),

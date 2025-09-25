@@ -155,8 +155,13 @@ export function withResponseNormalization<T>(
   return async (req: VercelRequest, res: VercelResponse) => {
     try {
       const result = await handler(req, res);
-      const normalized = normalizer(result);
       
+      // Check if response has already been sent by the handler
+      if (res.headersSent) {
+        return;
+      }
+      
+      const normalized = normalizer(result);
       res.status(200).json(normalized);
     } catch (err) {
       logger.error('Response normalization error:', err);

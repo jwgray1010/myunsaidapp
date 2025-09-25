@@ -153,6 +153,17 @@ export function createRateLimit(config: RateLimitConfig) {
     if (entry.count >= maxRequests) {
       const timeUntilReset = Math.ceil((entry.resetTime - now) / 1000);
       
+      // Check if headers already sent to prevent duplicate responses
+      if (res.headersSent) {
+        logger.warn('Rate limit exceeded but headers already sent', { 
+          key, 
+          count: entry.count, 
+          limit: maxRequests,
+          route: req.url 
+        });
+        return;
+      }
+      
       // Set standard rate limit headers (RateLimit-*)
       if (standardHeaders) {
         res.setHeader('RateLimit-Limit', maxRequests);
@@ -205,8 +216,13 @@ export function createRateLimit(config: RateLimitConfig) {
     };
 
     res.json = (body: any) => { 
-      maybeDecrement(); 
-      return originalJson(body); 
+      maybeDecrement();
+      // Check if headers already sent before calling original json method
+      if (!res.headersSent) {
+        return originalJson(body);
+      }
+      // Return the response object to maintain the correct return type
+      return res;
     };
     res.end = (chunk?: any, encoding?: any, cb?: any) => { 
       maybeDecrement(); 

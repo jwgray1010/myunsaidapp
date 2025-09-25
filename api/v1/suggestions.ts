@@ -39,6 +39,10 @@ function validateTextSHA256(text: string, expectedHash: string): boolean {
   return actualHash === expectedHash;
 }
 
+function generateTextSHA256(text: string): string {
+  return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
 function validateUIDistribution(distribution: { clear: number; caution: number; alert: number }): boolean {
   const sum = distribution.clear + distribution.caution + distribution.alert;
   return Math.abs(sum - 1.0) < 0.01; // Allow small floating point variance
@@ -49,17 +53,27 @@ function isValidSuggestionInputV1(body: any): { success: boolean; data?: Suggest
     return { success: false, error: { message: 'Request body must be an object' } };
   }
   
-  const required = ['text', 'text_sha256', 'client_seq', 'compose_id', 'toneAnalysis', 'context', 'attachmentStyle'];
+  // Essential required fields for core functionality
+  const required = ['text', 'context', 'attachmentStyle'];
   const missing = required.filter(field => !(field in body));
   if (missing.length > 0) {
     return { success: false, error: { message: `Missing required fields: ${missing.join(', ')}` } };
   }
+
+  // Generate missing optional fields with defaults
+  const normalizedBody = {
+    ...body,
+    text_sha256: body.text_sha256 || generateTextSHA256(body.text || ''),
+    compose_id: body.compose_id || `compose-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    client_seq: body.client_seq || 1,
+    toneAnalysis: body.toneAnalysis || {
+      ui_tone: 'neutral',
+      ui_distribution: { clear: 0.33, caution: 0.33, alert: 0.34 },
+      analysis: { primary_tone: 'neutral', confidence: 0.5 }
+    }
+  };
   
-  if (!body.toneAnalysis?.ui_distribution) {
-    return { success: false, error: { message: 'Missing toneAnalysis.ui_distribution' } };
-  }
-  
-  return { success: true, data: body as SuggestionInputV1 };
+  return { success: true, data: normalizedBody as SuggestionInputV1 };
 }
 
 // Request deduplication and ordering cache (in-memory for now)

@@ -169,6 +169,16 @@ export function handleError(err: any, req: VercelRequest, res: VercelResponse): 
   else if (statusCode >= 400) logger.warn('Client error occurred', logContext);
   else logger.info('Handled error', logContext);
 
+  // Check if headers have already been sent to prevent "Cannot set headers after they are sent" error
+  if (res.headersSent) {
+    logger.error('Error after headers sent', {
+      url: req.url,
+      method: req.method,
+      err: serializeError(err)
+    });
+    return;
+  }
+
   res.status(statusCode).json(responsePayload);
 }
 
