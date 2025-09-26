@@ -1,14 +1,12 @@
 {
   "version": 2,
   "functions": {
-    "vercel-api/v1/*.ts": {
-      "runtime": "@vercel/node@3.0.21",
-      "includeFiles": "vercel-api/**/*",
-      "excludeFiles": "node_modules/**/*.map,**/test*/**,**/*.test.*,**/*.spec.*"
+    "vercel-api/v1/**/*.ts": {
+      "runtime": "@vercel/node@3.0.21"
     }
   },
-  "routes": [
-    { "src": "^/api/v1/(.*)$", "dest": "/vercel-api/v1/$1" },
-    { "src": "^/(.*)$", "dest": "/vercel-api/v1/health" }
+  "rewrites": [
+    { "source": "/api/v1/(.*)", "destination": "/vercel-api/v1/$1" },
+    { "source": "/(.*)", "destination": "/vercel-api/v1/health" }
   ]
 }
