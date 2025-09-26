@@ -1,0 +1,32 @@
+# Flutter/Dart files
+lib/
+ios/
+android/
+build/
+assets/
+backup_assets/
+.dart_tool/
+.flutter-plugins*
+*.dart
+pubspec.*
+analysis_options.*
+devtools_options.*
+
+# Documentation
+docs/
+README.md
+*.md
+
+# Other services
+services/
+public/
+
+# Test files
+test/
+integration_test/
+**/test*/**
+**/*.test.*
+**/*.spec.*
+
+# Only include API and data folders for Vercel
+# Everything else should be ignored

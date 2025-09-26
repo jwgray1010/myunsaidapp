@@ -13,5 +13,29 @@
     { "src": "^/api/v1/(.*)$", "dest": "/api/v1/$1" },
     { "src": "^/api/(.*)$",    "dest": "/api/v1/$1" },
     { "src": "^/(.*)$",        "dest": "/api/v1/index" }
+  ],
+  "ignoreCommand": "npx vercel-ignore",
+  "ignore": [
+    "lib/**",
+    "ios/**", 
+    "android/**",
+    "build/**",
+    "assets/**",
+    "backup_assets/**",
+    "docs/**",
+    "services/**",
+    "public/**",
+    "*.dart",
+    "*.yaml",
+    "*.lock",
+    "*.md",
+    "README.md",
+    "pubspec.*",
+    "analysis_options.*",
+    "devtools_options.*",
+    ".flutter-plugins*",
+    ".dart_tool/**",
+    "test/**",
+    "integration_test/**"
   ]
 }
