@@ -2353,6 +2353,9 @@ final class KeyboardController: UIView,
             return
         }
 
+        // Arm suggestions for this explicit request
+        suggestionsArmed = true
+        
         // Request tone suggestions through dispatcher
         toneSuggestionDispatcher?.requestToneSuggestions(text: text, threadID: currentThreadID)
     }
