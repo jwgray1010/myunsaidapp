@@ -1043,8 +1043,10 @@ function getMemoizedToneBucket(toneKey: string, contextLabel: string, intensityS
 // Enhanced tone matching: supports both exact raw tone matches and UI tone fallbacks
 function matchesToneClassification(item: any, toneKey: string): boolean {
   // Check for exact raw tone match first (highest precision)
-  if (item.rawTone && Array.isArray(item.rawTone)) {
-    if (item.rawTone.includes(toneKey)) return true;
+  if (item.rawTone) {
+    // Handle both string and array rawTone formats
+    const rawTones = Array.isArray(item.rawTone) ? item.rawTone : [item.rawTone];
+    if (rawTones.includes(toneKey)) return true;
   }
   
   // Check triggerTone for UI bucket matches
@@ -1873,6 +1875,20 @@ class AdviceEngine {
       }
       
       s += W.toneMatch * toneMatchMass;
+
+      // Soft compatibility boost for uiCompat field when no exact match
+      if (!exactToneMatch && it.uiCompat && Array.isArray(it.uiCompat)) {
+        // Check if the current tone's UI bucket is in the compatibility list
+        const currentToneUIBucket = signals.attachmentStyle
+          ? this.getUIBucketForToneWithAttachment(signals.toneKey, signals.attachmentStyle)
+          : this.getUIBucketForTone(signals.toneKey);
+          
+        if (currentToneUIBucket && it.uiCompat.includes(currentToneUIBucket)) {
+          // Apply soft boost (lower than exact match but still meaningful)
+          const compatibilityBoost = 0.15 * ((dist as any)[currentToneUIBucket] ?? 0.33);
+          s += W.toneMatch * compatibilityBoost;
+        }
+      }
 
       // Context
       const ctxMatch = !it.contexts || it.contexts.length === 0 || it.contexts.includes(signals.contextLabel) ? 1 : 0;

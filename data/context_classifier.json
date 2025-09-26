@@ -5,354 +5,170 @@
     "collapse_whitespace": true,
     "strip_punct_except_emojis": true
   },
+
   "sentenceSegmentation": {
     "primary": "spacy",
     "fallbackRegex": "(?<=[.!?])\\s+(?=[A-Z0-9\\\"“(])"
   },
+
   "formatCues": {
-    "allCaps": {
-      "alert": 0.06,
-      "clear": -0.02
-    },
-    "exclamationsPerSentence": {
-      "alert": 0.02
-    }
+    "allCaps": { "alert": 0.06, "clear": -0.02 },
+    "exclamationsPerSentence": { "alert": 0.02 }
   },
+
   "windowing": {
     "defaultWindowTokens": 24,
     "localNegationWindowTokens": 8,
     "localSarcasmWindowTokens": 8
   },
+
   "cohesion": {
     "windowTokens": 10,
-    "clauseBoundaryPunct": [
-      ".",
-      "!",
-      "?",
-      ";",
-      "—",
-      "–"
-    ]
+    "clauseBoundaryPunct": [".","!","?",";","—","–"]
   },
+
   "negation": {
-    "patterns": [
-      "\\bnot\\b",
-      "\\bnever\\b",
-      "\\bno\\b",
-      "\\bisn[’']?t\\b",
-      "\\baren[’']?t\\b"
-    ],
+    "patterns": ["\\bnot\\b","\\bnever\\b","\\bno\\b","\\bisn[’']?t\\b","\\baren[’']?t\\b"],
     "scopeTokens": 6,
-    "effectInsideScope": {
-      "clear": 1,
-      "caution": 0.94,
-      "alert": 0.94
-    }
+    "effectInsideScope": { "clear": 1.0, "caution": 0.94, "alert": 0.94 }
   },
+
   "adapters": {
     "sarcasm": {
       "source": "sarcasm_indicators.json",
       "classMap": {
-        "marker": {
-          "weight": 0.25,
-          "scopeTokens": 8
-        },
-        "verbal_irony": {
-          "weight": 0.35,
-          "scopeTokens": 8
-        },
-        "hyperbole": {
-          "weight": 0.2,
-          "scopeTokens": 8
-        }
+        "marker":       { "weight": 0.25, "scopeTokens": 8 },
+        "verbal_irony": { "weight": 0.35, "scopeTokens": 8 },
+        "hyperbole":    { "weight": 0.20, "scopeTokens": 8 }
       },
       "effects": {
-        "insideScope": {
-          "alert": 0.8,
-          "caution": 0.9,
-          "clearBlocks": true
-        },
+        "insideScope":  { "alert": 0.80, "caution": 0.90, "clearBlocks": true },
         "sentenceRadius": 1
       }
     },
     "profanity": {
       "source": "profanity_lexicon.json",
       "levelMap": {
-        "mild": {
-          "alertWeight": 0.08
-        },
-        "medium": {
-          "alertWeight": 0.14
-        },
-        "strong": {
-          "alertWeight": 0.22
-        },
-        "directed": {
-          "alertWeight": 0.3,
-          "needsSecondPerson": true
-        }
+        "mild":     { "alertWeight": 0.08 },
+        "medium":   { "alertWeight": 0.14 },
+        "strong":   { "alertWeight": 0.22 },
+        "directed": { "alertWeight": 0.30, "needsSecondPerson": true }
       },
-      "directedAbuse": {
-        "windowTokens": 8,
-        "multiplier": 1.25,
-        "youLike": [
-          "you",
-          "you're",
-          "u",
-          "your"
-        ]
-      },
-      "accumulation": {
-        "mode": "nonlinear_cap",
-        "cap": 0.42,
-        "gamma": 0.65
-      }
+      "directedAbuse": { "windowTokens": 8, "multiplier": 1.25, "youLike": ["you","you're","u","your"] },
+      "accumulation": { "mode": "nonlinear_cap", "cap": 0.42, "gamma": 0.65 }
     }
   },
+
   "precisionRules": {
-    "absolutizerYouGate": {
-      "windowTokens": 8,
-      "requireYouLike": [
-        "you",
-        "you're",
-        "u",
-        "your"
-      ]
-    },
-    "contrastiveBut": {
-      "tokens": [
-        "but",
-        "however",
-        "still",
-        "except",
-        "though"
-      ],
-      "windowTokens": 6,
-      "clearWeightMultiplier": 0.4
-    }
+    "absolutizerYouGate": { "windowTokens": 8, "requireYouLike": ["you","you're","u","your"] },
+    "contrastiveBut": { "tokens": ["but","however","still","except","though"], "windowTokens": 6, "clearWeightMultiplier": 0.40 }
   },
+
   "genericTokens": {
-    "globalStop": [
-      "ok",
-      "okay"
-    ],
-    "pronouns": [
-      "i",
-      "me",
-      "my",
-      "mine",
-      "we",
-      "us",
-      "our",
-      "ours",
-      "im",
-      "i’m",
-      "i‘m",
-      "i am"
-    ],
-    "policy": {
-      "ignoreForBuckets": {
-        "clear": true,
-        "caution": false,
-        "alert": false
-      },
-      "maxPointsPerGenericToken": 0
-    }
+    "globalStop": ["ok","okay"],
+    "pronouns": ["i","me","my","mine","we","us","our","ours","im","i’m","i‘m","i am"],
+    "policy": { "ignoreForBuckets": { "clear": true, "caution": false, "alert": false }, "maxPointsPerGenericToken": 0 }
   },
+
   "bucketGuards": {
-    "minEvidenceTokensByBucket": {
-      "clear": 2,
-      "caution": 1,
-      "alert": 1
-    },
+    "minEvidenceTokensByBucket": { "clear": 2, "caution": 1, "alert": 1 },
+
     "crossBucket": {
       "cooldownCrossBucketFlipMs": 350,
       "requireTwoSentenceAgreementForFlip": true,
-      "sentenceWinDelta": 0.1
+      "sentenceWinDelta": 0.10
     },
+
     "clear": {
       "requireDeescalatoryContext": true,
       "eligibleContexts": [
-        "CTX_REPAIR",
-        "CTX_HUMOR",
-        "CTX_EMPATHY",
-        "CTX_GRATITUDE",
-        "CTX_SUPPORT",
-        "CTX_PRAISE",
-        "CTX_NEGOTIATION",
-        "CTX_PLANNING",
-        "CTX_WORK",
-        "CTX_INTIMACY",
-        "CTX_ACCOUNTABILITY",
-        "CTX_ATTACHMENT_ATTUNEMENT",
-        "CTX_VALIDATION",
-        "CTX_EMOTION_REGULATION",
-        "CTX_RELATIONSHIP_NURTURE",
-        "CTX_TRUST_BUILDING",
-        "CTX_TONE_GUARDRAILS",
-        "CTX_TONE_MANAGEMENT",
-        "CTX_CLARITY",
-        "CTX_BREVITY",
-        "CTX_ROUTINE",
-        "CTX_CO_PARENTING"
+        "CTX_REPAIR","CTX_HUMOR","CTX_EMPATHY","CTX_GRATITUDE","CTX_SUPPORT","CTX_PRAISE",
+        "CTX_NEGOTIATION","CTX_PLANNING","CTX_WORK","CTX_INTIMACY","CTX_ACCOUNTABILITY",
+        "CTX_ATTACHMENT_ATTUNEMENT","CTX_VALIDATION","CTX_EMOTION_REGULATION",
+        "CTX_RELATIONSHIP_NURTURE","CTX_TRUST_BUILDING","CTX_TONE_GUARDRAILS",
+        "CTX_TONE_MANAGEMENT","CTX_CLARITY","CTX_BREVITY","CTX_ROUTINE","CTX_CO_PARENTING"
       ],
       "evidenceModel": {
         "minDistinctSignals": 2,
-        "minTotalWeight": 0.4,
+        "minTotalWeight": 0.40,
         "requireSameSpan": true,
         "categories": {
-          "repair_like": {
-            "contexts": [
-              "CTX_REPAIR",
-              "CTX_ACCOUNTABILITY",
-              "CTX_TRUST_BUILDING"
-            ],
-            "minHits": 1,
-            "weightBonus": 0.08
-          },
-          "validation_like": {
-            "contexts": [
-              "CTX_VALIDATION",
-              "CTX_EMPATHY",
-              "CTX_ATTACHMENT_ATTUNEMENT"
-            ],
-            "minHits": 1,
-            "weightBonus": 0.06
-          },
-          "logistics_like": {
-            "contexts": [
-              "CTX_PLANNING",
-              "CTX_CO_PARENTING",
-              "CTX_WORK",
-              "CTX_PRACTICAL"
-            ],
-            "minHits": 1,
-            "weightBonus": 0.04
-          },
-          "lighteners": {
-            "contexts": [
-              "CTX_HUMOR",
-              "CTX_GRATITUDE",
-              "CTX_SUPPORT",
-              "CTX_INTIMACY"
-            ],
-            "minHits": 1,
-            "weightBonus": 0.05,
-            "maxBonus": 0.07
-          }
+          "repair_like":         { "contexts": ["CTX_REPAIR","CTX_ACCOUNTABILITY","CTX_TRUST_BUILDING"], "minHits": 1, "weightBonus": 0.08 },
+          "validation_like":     { "contexts": ["CTX_VALIDATION","CTX_EMPATHY","CTX_ATTACHMENT_ATTUNEMENT"], "minHits": 1, "weightBonus": 0.06 },
+          "logistics_like":      { "contexts": ["CTX_PLANNING","CTX_CO_PARENTING","CTX_WORK","CTX_PRACTICAL"], "minHits": 1, "weightBonus": 0.04 },
+          "lighteners":          { "contexts": ["CTX_HUMOR","CTX_GRATITUDE","CTX_SUPPORT","CTX_INTIMACY"], "minHits": 1, "weightBonus": 0.05, "maxBonus": 0.07 }
         }
       },
       "sentenceLevelGates": {
         "minCleanSentences": 1,
         "cleanSentenceRules": {
-          "noEscalatoryContexts": [
-            "CTX_CONFLICT",
-            "CTX_ESCALATION",
-            "CTX_BLAME",
-            "CTX_CRITIQUE",
-            "CTX_DEFENSE",
-            "CTX_WITHDRAWAL",
-            "CTX_RUPTURE",
-            "CTX_SAFETY",
-            "CTX_JEALOUSY"
-          ],
+          "noEscalatoryContexts": ["CTX_CONFLICT","CTX_ESCALATION","CTX_BLAME","CTX_CRITIQUE","CTX_DEFENSE","CTX_WITHDRAWAL","CTX_RUPTURE","CTX_SAFETY","CTX_JEALOUSY"],
           "maxAlertScoreInSentence": 0.14,
-          "maxCautionScoreInSentence": 0.2,
+          "maxCautionScoreInSentence": 0.20,
           "requireCohesiveHits": 2
         },
         "requireMajorityCleanForFlip": false
       },
       "genericTokenPolicy": {
-        "discountPronouns": 0,
-        "discountList": [
-          "ok",
-          "okay"
-        ],
+        "discountPronouns": 0.0,
+        "discountList": ["ok","okay"],
         "maxPointsPerGenericToken": 0
       },
       "cancelIfLocalNegation": true,
       "cancelIfLocalSarcasm": true,
-      "dampenIfEscalatoryContextsActive": 0.4,
+      "dampenIfEscalatoryContextsActive": 0.40,
       "overshadowedBy": {
         "bucket": "alert",
         "curve": {
           "ratioAt": [
-            {
-              "alert": 0.18,
-              "requiredClearRatio": 1.9
-            },
-            {
-              "alert": 0.22,
-              "requiredClearRatio": 2.1
-            },
-            {
-              "alert": 0.28,
-              "requiredClearRatio": 2.4
-            }
+            { "alert": 0.18, "requiredClearRatio": 1.90 },
+            { "alert": 0.22, "requiredClearRatio": 2.10 },
+            { "alert": 0.28, "requiredClearRatio": 2.40 }
           ],
           "interpolate": "linear"
         },
         "floorClearAfterDampen": 0.12
       },
-      "positionBonuses": {
-        "start": 0.02,
-        "end": 0.02,
-        "allCaps": -0.02
-      }
+      "positionBonuses": { "start": 0.02, "end": 0.02, "allCaps": -0.02 }
     },
+
     "caution": {
       "preferIfClearAndAlertBoth": 0.18,
-      "sentenceGuard": {
-        "minEvidenceWeight": 0.18,
-        "blockIfAlertInSameSentenceAbove": 0.22
-      },
+      "sentenceGuard": { "minEvidenceWeight": 0.18, "blockIfAlertInSameSentenceAbove": 0.22 },
       "coexistWithPlanning": true
     },
+
     "alert": {
-      "allCapsMultiplier": 1.1,
+      "allCapsMultiplier": 1.10,
       "exclamationMultiplier": 1.05,
-      "sentenceStickiness": {
-        "minAlertToStick": 0.22,
-        "decayPerSubsequentSentence": 0.85,
-        "maxStickySentences": 2
-      },
-      "negationAndSarcasmDampen": {
-        "negation": 0.9,
-        "sarcasm": 0.8
-      }
+      "sentenceStickiness": { "minAlertToStick": 0.22, "decayPerSubsequentSentence": 0.85, "maxStickySentences": 2 },
+      "negationAndSarcasmDampen": { "negation": 0.90, "sarcasm": 0.80 }
     }
   },
+
   "conflictResolution": {
     "priorityWins": true,
-    "polarityBias": {
-      "escalatory": 0.06,
-      "deescalatory": 0.04
-    },
+    "polarityBias": { "escalatory": 0.06, "deescalatory": 0.04 },
     "maxContextsPerSentence": 3,
     "repeatDecayDefault": 0.75,
     "cooldownSentenceMs": 300
   },
+
   "calibration": {
     "method": "temperature",
-    "buckets": {
-      "clear": 0.95,
-      "caution": 1,
-      "alert": 1.05
-    }
+    "buckets": { "clear": 0.95, "caution": 1.00, "alert": 1.05 }
   },
+
   "uiSelection": {
     "method": "bucket-max-with-guards",
-    "tieBreak": [
-      "caution",
-      "clear",
-      "alert"
-    ],
+    "tieBreak": ["caution","clear","alert"],
     "stability": {
       "minChangeDelta": 0.08,
       "requireTwoSentencesForFlip": true,
       "wilsonMarginMin": 0.06
     }
   },
+
   "contexts": [
     {
       "id": "CTX_CONFLICT",
@@ -367,23 +183,10 @@
         "strength": 0.65
       },
       "toneCues": [
-        "argue",
-        "fight",
-        "mad",
-        "blame",
-        "yell",
-        "accuse",
-        "shout",
-        "threaten",
-        "disrespect",
-        "disrespectful",
-        "raise your voice",
-        "talking over me",
-        "name-calling",
-        "gaslighting",
-        "stop twisting my words",
-        "that's unfair",
-        "not fair"
+        "argue", "fight", "mad", "blame", "yell",
+        "accuse", "shout", "threaten", "disrespect", "disrespectful",
+        "raise your voice", "talking over me", "name-calling", "gaslighting", "stop twisting my words",
+        "that's unfair", "not fair"
       ],
       "toneCuesWeighted": [
         {
@@ -497,23 +300,10 @@
         "strength": 0.7
       },
       "toneCues": [
-        "spiral",
-        "escalate",
-        "getting worse",
-        "blow up",
-        "losing it",
-        "can't take this",
-        "done with this",
-        "getting heated",
-        "this is ridiculous",
-        "enough is enough",
-        "I'm done",
-        "fed up",
-        "breaking point",
-        "out of control",
-        "making it worse",
-        "can't handle",
-        "losing my mind"
+        "spiral", "escalate", "getting worse", "blow up", "losing it",
+        "can't take this", "done with this", "getting heated", "this is ridiculous", "enough is enough",
+        "I'm done", "fed up", "breaking point", "out of control", "making it worse",
+        "can't handle", "losing my mind"
       ],
       "toneCuesWeighted": [
         {
@@ -593,20 +383,9 @@
         "strength": 1.2
       },
       "toneCues": [
-        "before this gets",
-        "let's avoid",
-        "prevent this from",
-        "don't want to fight",
-        "keep things calm",
-        "stay peaceful",
-        "avoid drama",
-        "nip this in the bud",
-        "before we argue",
-        "let's not go there",
-        "keep it civil",
-        "maintain respect",
-        "stay constructive",
-        "before tensions rise"
+        "before this gets", "let's avoid", "prevent this from", "don't want to fight", "keep things calm",
+        "stay peaceful", "avoid drama", "nip this in the bud", "before we argue", "let's not go there",
+        "keep it civil", "maintain respect", "stay constructive", "before tensions rise"
       ],
       "toneCuesWeighted": [
         {
@@ -666,21 +445,9 @@
         "strength": 1.15
       },
       "toneCues": [
-        "my fault",
-        "I was wrong",
-        "take responsibility",
-        "I messed up",
-        "I'm accountable",
-        "own my part",
-        "I should have",
-        "my mistake",
-        "I need to do better",
-        "that's on me",
-        "I was out of line",
-        "accept responsibility",
-        "I'm sorry for my role",
-        "I contributed to this",
-        "my bad"
+        "my fault", "I was wrong", "take responsibility", "I messed up", "I'm accountable",
+        "own my part", "I should have", "my mistake", "I need to do better", "that's on me",
+        "I was out of line", "accept responsibility", "I'm sorry for my role", "I contributed to this", "my bad"
       ],
       "toneCuesWeighted": [
         {
@@ -745,20 +512,9 @@
         "strength": 0.6
       },
       "toneCues": [
-        "I didn't mean",
-        "that's not what I said",
-        "you're twisting my words",
-        "I was just",
-        "but I was only",
-        "that's not fair",
-        "you don't understand",
-        "I had to",
-        "I was trying to help",
-        "excuse me",
-        "how was I supposed to",
-        "I can't help it",
-        "it's not my fault",
-        "you're being too sensitive"
+        "I didn't mean", "that's not what I said", "you're twisting my words", "I was just", "but I was only",
+        "that's not fair", "you don't understand", "I had to", "I was trying to help", "excuse me",
+        "how was I supposed to", "I can't help it", "it's not my fault", "you're being too sensitive"
       ],
       "toneCuesWeighted": [
         {
@@ -826,24 +582,10 @@
         "strength": 1
       },
       "toneCues": [
-        "schedule",
-        "plan",
-        "calendar",
-        "reschedule",
-        "availability",
-        "deadline",
-        "what time",
-        "which day",
-        "what date",
-        "meeting time",
-        "put it on the calendar",
-        "send an invite",
-        "rsvp",
-        "eta",
-        "book",
-        "confirm",
-        "time slot",
-        "availability window"
+        "schedule", "plan", "calendar", "reschedule", "availability",
+        "deadline", "what time", "which day", "what date", "meeting time",
+        "put it on the calendar", "send an invite", "rsvp", "eta", "book",
+        "confirm", "time slot", "availability window"
       ],
       "confidenceBoosts": {
         "clear": 0.2
@@ -910,18 +652,9 @@
         "strength": 1
       },
       "toneCues": [
-        "sorry",
-        "apologize",
-        "my fault",
-        "own up",
-        "forgive",
-        "make up",
-        "my bad",
-        "i apologize",
-        "owning it",
-        "i was wrong",
-        "make things right",
-        "make amends"
+        "sorry", "apologize", "my fault", "own up", "forgive",
+        "make up", "my bad", "i apologize", "owning it", "i was wrong",
+        "make things right", "make amends"
       ],
       "toneCuesWeighted": [
         {
@@ -1015,18 +748,9 @@
         "strength": 1
       },
       "toneCues": [
-        "proud",
-        "cheer",
-        "encourage",
-        "you can",
-        "believe in you",
-        "back you up",
-        "got you",
-        "here for you",
-        "you’ve got this",
-        "you've got this",
-        "rooting for you",
-        "proud of you"
+        "proud", "cheer", "encourage", "you can", "believe in you",
+        "back you up", "got you", "here for you", "you’ve got this", "you've got this",
+        "rooting for you", "proud of you"
       ],
       "confidenceBoosts": {
         "clear": 0.25
@@ -1091,20 +815,9 @@
         "strength": 1.2
       },
       "toneCues": [
-        "I can see",
-        "I notice",
-        "sounds like",
-        "seems like you",
-        "it feels like",
-        "I hear that you",
-        "I'm sensing",
-        "picking up on",
-        "you sound",
-        "you seem",
-        "reading between the lines",
-        "what I'm hearing",
-        "if I understand",
-        "let me see if I get this"
+        "I can see", "I notice", "sounds like", "seems like you", "it feels like",
+        "I hear that you", "I'm sensing", "picking up on", "you sound", "you seem",
+        "reading between the lines", "what I'm hearing", "if I understand", "let me see if I get this"
       ],
       "toneCuesWeighted": [
         {
@@ -1164,20 +877,9 @@
         "strength": 1.25
       },
       "toneCues": [
-        "that makes sense",
-        "totally understand",
-        "I get it",
-        "valid",
-        "you're right",
-        "fair point",
-        "I can understand why",
-        "makes complete sense",
-        "absolutely",
-        "that's legitimate",
-        "your feelings are valid",
-        "I hear you",
-        "that's understandable",
-        "I see your point"
+        "that makes sense", "totally understand", "I get it", "valid", "you're right",
+        "fair point", "I can understand why", "makes complete sense", "absolutely", "that's legitimate",
+        "your feelings are valid", "I hear you", "that's understandable", "I see your point"
       ],
       "toneCuesWeighted": [
         {
@@ -1242,21 +944,9 @@
         "strength": 1
       },
       "toneCues": [
-        "are we okay",
-        "do you still",
-        "am I",
-        "are you mad",
-        "did I do something wrong",
-        "do you love me",
-        "are you upset",
-        "everything alright",
-        "still care",
-        "still want",
-        "am I overthinking",
-        "do you think",
-        "are you sure",
-        "promise me",
-        "tell me we're okay",
+        "are we okay", "do you still", "am I", "are you mad", "did I do something wrong",
+        "do you love me", "are you upset", "everything alright", "still care", "still want",
+        "am I overthinking", "do you think", "are you sure", "promise me", "tell me we're okay",
         "reassure me"
       ],
       "toneCuesWeighted": [
@@ -1322,21 +1012,9 @@
         "strength": 1.1
       },
       "toneCues": [
-        "deep breath",
-        "calm down",
-        "taking a moment",
-        "need to process",
-        "step back",
-        "cooling off",
-        "regain composure",
-        "collecting myself",
-        "take a pause",
-        "slow down",
-        "breathe",
-        "center myself",
-        "need space to think",
-        "processing this",
-        "working through",
+        "deep breath", "calm down", "taking a moment", "need to process", "step back",
+        "cooling off", "regain composure", "collecting myself", "take a pause", "slow down",
+        "breathe", "center myself", "need space to think", "processing this", "working through",
         "managing my emotions"
       ],
       "toneCuesWeighted": [
@@ -1400,18 +1078,9 @@
         "strength": 1
       },
       "toneCues": [
-        "secret",
-        "share",
-        "honest",
-        "truth",
-        "confess",
-        "admit",
-        "be honest",
-        "open up",
-        "come clean",
-        "to tell you the truth",
-        "tell you the truth",
-        "come out with"
+        "secret", "share", "honest", "truth", "confess",
+        "admit", "be honest", "open up", "come clean", "to tell you the truth",
+        "tell you the truth", "come out with"
       ],
       "confidenceBoosts": {
         "caution": 0.2,
@@ -1478,24 +1147,10 @@
         "strength": 0.8
       },
       "toneCues": [
-        "lol",
-        "haha",
-        "funny",
-        "joke",
-        "tease",
-        "banter",
-        "jk",
-        "kidding",
-        "just teasing",
-        "lolol",
-        "lmao",
-        "lmfao",
-        "rofl",
-        "😂",
-        "🤣",
-        "😅",
-        "😜",
-        "😉"
+        "lol", "haha", "funny", "joke", "tease",
+        "banter", "jk", "kidding", "just teasing", "lolol",
+        "lmao", "lmfao", "rofl", "😂", "🤣",
+        "😅", "😜", "😉"
       ],
       "toneCuesWeighted": [
         {
@@ -1569,21 +1224,9 @@
         "strength": 0.8
       },
       "toneCues": [
-        "love",
-        "miss you",
-        "hug",
-        "kiss",
-        "affection",
-        "sweet",
-        "babe",
-        "baby",
-        "miss u",
-        "xoxo",
-        "mwah",
-        "cuddle",
-        "snuggle",
-        "❤️",
-        "😘"
+        "love", "miss you", "hug", "kiss", "affection",
+        "sweet", "babe", "baby", "miss u", "xoxo",
+        "mwah", "cuddle", "snuggle", "❤️", "😘"
       ],
       "confidenceBoosts": {
         "clear": 0.25
@@ -1645,16 +1288,8 @@
         "strength": 0.6
       },
       "toneCues": [
-        "compromise",
-        "deal",
-        "agree",
-        "meet halfway",
-        "terms",
-        "middle ground",
-        "meet in the middle",
-        "tradeoff",
-        "terms we can agree",
-        "deal we both"
+        "compromise", "deal", "agree", "meet halfway", "terms",
+        "middle ground", "meet in the middle", "tradeoff", "terms we can agree", "deal we both"
       ],
       "confidenceBoosts": {
         "caution": 0.15,
@@ -1717,23 +1352,10 @@
         "strength": 1
       },
       "toneCues": [
-        "assignment",
-        "project",
-        "school",
-        "due",
-        "grades",
-        "meeting",
-        "shift",
-        "deadline",
-        "deliverable",
-        "report",
-        "sprint",
-        "quarter",
-        "exam",
-        "midterm",
-        "grade",
-        "syllabus",
-        "project brief"
+        "assignment", "project", "school", "due", "grades",
+        "meeting", "shift", "deadline", "deliverable", "report",
+        "sprint", "quarter", "exam", "midterm", "grade",
+        "syllabus", "project brief"
       ],
       "confidenceBoosts": {
         "clear": 0.2
@@ -1795,18 +1417,9 @@
         "strength": 0.8
       },
       "toneCues": [
-        "misunderstood",
-        "mixed up",
-        "wrong impression",
-        "didn't mean",
-        "didnt mean",
-        "didn’t mean",
-        "confuse",
-        "that's not what i meant",
-        "that’s not what i meant",
-        "you took it the wrong way",
-        "miscommunication",
-        "mixed signals"
+        "misunderstood", "mixed up", "wrong impression", "didn't mean", "didnt mean",
+        "didn’t mean", "confuse", "that's not what i meant", "that’s not what i meant", "you took it the wrong way",
+        "miscommunication", "mixed signals"
       ],
       "confidenceBoosts": {
         "caution": 0.25
@@ -1870,19 +1483,9 @@
         "strength": 0.8
       },
       "toneCues": [
-        "can you",
-        "please",
-        "favor",
-        "help",
-        "would you",
-        "could you",
-        "do you mind",
-        "could you please",
-        "would you mind",
-        "help me out",
-        "any chance you could",
-        "pls",
-        "plz"
+        "can you", "please", "favor", "help", "would you",
+        "could you", "do you mind", "could you please", "would you mind", "help me out",
+        "any chance you could", "pls", "plz"
       ],
       "confidenceBoosts": {
         "caution": 0.15,
@@ -1940,20 +1543,9 @@
         "strength": 0.6
       },
       "toneCues": [
-        "feedback",
-        "improve",
-        "should have",
-        "should’ve",
-        "would’ve",
-        "mistake",
-        "issue",
-        "constructive feedback",
-        "suggestion",
-        "could improve",
-        "room for improvement",
-        "that didn’t work",
-        "this came out wrong",
-        "this part is wrong"
+        "feedback", "improve", "should have", "should’ve", "would’ve",
+        "mistake", "issue", "constructive feedback", "suggestion", "could improve",
+        "room for improvement", "that didn’t work", "this came out wrong", "this part is wrong"
       ],
       "confidenceBoosts": {
         "alert": 0.2,
@@ -2012,24 +1604,10 @@
         "strength": 1
       },
       "toneCues": [
-        "thank you",
-        "thanks",
-        "thx",
-        "ty",
-        "tysm",
-        "appreciate",
-        "appreciate it",
-        "appreciate you",
-        "grateful",
-        "grateful for you",
-        "means a lot",
-        "means so much",
-        "that meant a lot",
-        "big help",
-        "so helpful",
-        "🙏",
-        "❤️",
-        "🤝"
+        "thank you", "thanks", "thx", "ty", "tysm",
+        "appreciate", "appreciate it", "appreciate you", "grateful", "grateful for you",
+        "means a lot", "means so much", "that meant a lot", "big help", "so helpful",
+        "🙏", "❤️", "🤝"
       ],
       "toneCuesWeighted": [
         {
@@ -2090,18 +1668,9 @@
         "strength": 0.8
       },
       "toneCues": [
-        "decide",
-        "choice",
-        "option",
-        "pick",
-        "resolve",
-        "final",
-        "decide together",
-        "pick one",
-        "make the call",
-        "pros and cons",
-        "finalize",
-        "locked in"
+        "decide", "choice", "option", "pick", "resolve",
+        "final", "decide together", "pick one", "make the call", "pros and cons",
+        "finalize", "locked in"
       ],
       "confidenceBoosts": {
         "caution": 0.2,
@@ -2168,24 +1737,10 @@
         "strength": 0.75
       },
       "toneCues": [
-        "always",
-        "never",
-        "done with this",
-        "fed up",
-        "sick of",
-        "can't stand",
-        "cant stand",
-        "every time",
-        "as usual",
-        "i'm done",
-        "i’m done",
-        "im done",
-        "over this",
-        "can't deal",
-        "cant deal",
-        "so sick of this",
-        "i can't stand this",
-        "i cant stand this"
+        "always", "never", "done with this", "fed up", "sick of",
+        "can't stand", "cant stand", "every time", "as usual", "i'm done",
+        "i’m done", "im done", "over this", "can't deal", "cant deal",
+        "so sick of this", "i can't stand this", "i cant stand this"
       ],
       "toneCuesWeighted": [
         {
@@ -2264,15 +1819,8 @@
         "strength": 0.8
       },
       "toneCues": [
-        "remember",
-        "back then",
-        "used to",
-        "last time",
-        "nostalgic",
-        "throwback",
-        "remember when",
-        "back in the day",
-        "last time we"
+        "remember", "back then", "used to", "last time", "nostalgic",
+        "throwback", "remember when", "back in the day", "last time we"
       ],
       "confidenceBoosts": {
         "clear": 0.15,
@@ -2335,16 +1883,8 @@
         "strength": 1
       },
       "toneCues": [
-        "great job",
-        "amazing",
-        "so proud",
-        "awesome",
-        "impressed",
-        "so impressed",
-        "you crushed it",
-        "nailed it",
-        "well done",
-        "👏"
+        "great job", "amazing", "so proud", "awesome", "impressed",
+        "so impressed", "you crushed it", "nailed it", "well done", "👏"
       ],
       "confidenceBoosts": {
         "clear": 0.25
@@ -2401,21 +1941,9 @@
         "strength": 0.8
       },
       "toneCues": [
-        "over",
-        "ending",
-        "space",
-        "leave me alone",
-        "don’t care",
-        "don't care",
-        "done",
-        "i'm done",
-        "im done",
-        "we're over",
-        "were over",
-        "don't care anymore",
-        "i’m out",
-        "i'm out",
-        "done talking",
+        "over", "ending", "space", "leave me alone", "don’t care",
+        "don't care", "done", "i'm done", "im done", "we're over",
+        "were over", "don't care anymore", "i’m out", "i'm out", "done talking",
         "whatever"
       ],
       "confidenceBoosts": {
@@ -2480,19 +2008,9 @@
         "strength": 0.6
       },
       "toneCues": [
-        "okay?",
-        "still love",
-        "with me",
-        "right?",
-        "promise",
-        "safe",
-        "still with me?",
-        "are we okay?",
-        "promise me",
-        "we’re good?",
-        "we're good?",
-        "need to know i’m safe with you",
-        "still love me?"
+        "okay?", "still love", "with me", "right?", "promise",
+        "safe", "still with me?", "are we okay?", "promise me", "we’re good?",
+        "we're good?", "need to know i’m safe with you", "still love me?"
       ],
       "confidenceBoosts": {
         "caution": 0.15,
@@ -2555,21 +2073,9 @@
         "strength": 0.7
       },
       "toneCues": [
-        "not true",
-        "that’s unfair",
-        "that's unfair",
-        "you’re wrong",
-        "you're wrong",
-        "defend",
-        "justify",
-        "that’s not true",
-        "that's not true",
-        "you’re twisting it",
-        "you're twisting it",
-        "justify myself",
-        "explain myself",
-        "you’ve got it wrong",
-        "you've got it wrong"
+        "not true", "that’s unfair", "that's unfair", "you’re wrong", "you're wrong",
+        "defend", "justify", "that’s not true", "that's not true", "you’re twisting it",
+        "you're twisting it", "justify myself", "explain myself", "you’ve got it wrong", "you've got it wrong"
       ],
       "confidenceBoosts": {
         "alert": 0.2,
@@ -2628,20 +2134,9 @@
         "strength": 0.8
       },
       "toneCues": [
-        "leave me",
-        "don’t talk",
-        "don't talk",
-        "alone",
-        "space",
-        "done talking",
-        "not now",
-        "need space right now",
-        "i need space right now",
-        "don’t talk to me",
-        "don't talk to me",
-        "leave me alone",
-        "idc",
-        "going offline"
+        "leave me", "don’t talk", "don't talk", "alone", "space",
+        "done talking", "not now", "need space right now", "i need space right now", "don’t talk to me",
+        "don't talk to me", "leave me alone", "idc", "going offline"
       ],
       "confidenceBoosts": {
         "alert": 0.25,
@@ -2700,21 +2195,9 @@
         "strength": 0.6
       },
       "toneCues": [
-        "date",
-        "dinner",
-        "go out",
-        "crush",
-        "flirt",
-        "romantic",
-        "ask out",
-        "see you",
-        "date night",
-        "grab dinner",
-        "go out with you",
-        "ask you out",
-        "see you again",
-        "coffee date",
-        "romantic plan"
+        "date", "dinner", "go out", "crush", "flirt",
+        "romantic", "ask out", "see you", "date night", "grab dinner",
+        "go out with you", "ask you out", "see you again", "coffee date", "romantic plan"
       ],
       "confidenceBoosts": {
         "clear": 0.2
@@ -2777,25 +2260,10 @@
         "strength": 0.8
       },
       "toneCues": [
-        "bill",
-        "money",
-        "budget",
-        "pay",
-        "rent",
-        "cost",
-        "spend",
-        "save",
-        "rent is due",
-        "utilities",
-        "electric bill",
-        "insurance",
-        "budgeting",
-        "expense",
-        "credit card",
-        "bank",
-        "loan",
-        "split the bill",
-        "pay back"
+        "bill", "money", "budget", "pay", "rent",
+        "cost", "spend", "save", "rent is due", "utilities",
+        "electric bill", "insurance", "budgeting", "expense", "credit card",
+        "bank", "loan", "split the bill", "pay back"
       ],
       "confidenceBoosts": {
         "caution": 0.2
@@ -2859,16 +2327,8 @@
         "strength": 0.8
       },
       "toneCues": [
-        "party",
-        "friends",
-        "hang out",
-        "social",
-        "invite",
-        "group",
-        "night out",
-        "friends over",
-        "group chat",
-        "rsvp"
+        "party", "friends", "hang out", "social", "invite",
+        "group", "night out", "friends over", "group chat", "rsvp"
       ],
       "confidenceBoosts": {
         "clear": 0.15,
@@ -2931,16 +2391,8 @@
         "strength": 0.6
       },
       "toneCues": [
-        "scared",
-        "worried",
-        "ashamed",
-        "embarrassed",
-        "lonely",
-        "guilty",
-        "afraid",
-        "insecure",
-        "anxious",
-        "feels scary"
+        "scared", "worried", "ashamed", "embarrassed", "lonely",
+        "guilty", "afraid", "insecure", "anxious", "feels scary"
       ],
       "confidenceBoosts": {
         "caution": 0.25,
@@ -3005,16 +2457,8 @@
         "strength": 0.7
       },
       "toneCues": [
-        "listening",
-        "pay attention",
-        "with me",
-        "focused",
-        "ignore",
-        "distracted",
-        "put the phone down",
-        "be present",
-        "listening to me",
-        "you're not here with me",
+        "listening", "pay attention", "with me", "focused", "ignore",
+        "distracted", "put the phone down", "be present", "listening to me", "you're not here with me",
         "you’re not here with me"
       ],
       "confidenceBoosts": {
@@ -3079,21 +2523,9 @@
         "strength": 0.7
       },
       "toneCues": [
-        "jealous",
-        "other guy",
-        "other girl",
-        "better than me",
-        "attention",
-        "flirt with",
-        "competition",
-        "dms",
-        "ig likes",
-        "instagram likes",
-        "snap",
-        "ex",
-        "talking to her",
-        "talking to him",
-        "flirting",
+        "jealous", "other guy", "other girl", "better than me", "attention",
+        "flirt with", "competition", "dms", "ig likes", "instagram likes",
+        "snap", "ex", "talking to her", "talking to him", "flirting",
         "attention on them"
       ],
       "confidenceBoosts": {
@@ -3158,16 +2590,8 @@
         "strength": 0.9
       },
       "toneCues": [
-        "our relationship",
-        "we need to talk",
-        "us",
-        "how we are",
-        "between us",
-        "where we stand",
-        "check in about us",
-        "define the relationship",
-        "dtr",
-        "how we’re doing",
+        "our relationship", "we need to talk", "us", "how we are", "between us",
+        "where we stand", "check in about us", "define the relationship", "dtr", "how we’re doing",
         "how we're doing"
       ],
       "confidenceBoosts": {
@@ -3231,18 +2655,9 @@
         "strength": 0.5
       },
       "toneCues": [
-        "morning",
-        "night",
-        "breakfast",
-        "home",
-        "heading out",
-        "daily",
-        "routine",
-        "morning update",
-        "headed home",
-        "on my way",
-        "goodnight",
-        "daily check-in"
+        "morning", "night", "breakfast", "home", "heading out",
+        "daily", "routine", "morning update", "headed home", "on my way",
+        "goodnight", "daily check-in"
       ],
       "confidenceBoosts": {
         "clear": 0.2
@@ -3304,21 +2719,9 @@
         "strength": 0.8
       },
       "toneCues": [
-        "safe",
-        "danger",
-        "scared",
-        "threat",
-        "afraid",
-        "not okay",
-        "protect",
-        "unsafe",
-        "panic",
-        "in danger",
-        "threatening",
-        "creepy",
-        "not okay being alone",
-        "protect me",
-        "feel threatened"
+        "safe", "danger", "scared", "threat", "afraid",
+        "not okay", "protect", "unsafe", "panic", "in danger",
+        "threatening", "creepy", "not okay being alone", "protect me", "feel threatened"
       ],
       "confidenceBoosts": {
         "alert": 0.3,
@@ -3383,16 +2786,8 @@
         "strength": 1
       },
       "toneCues": [
-        "i understand",
-        "that must feel",
-        "sorry you feel",
-        "i get it",
-        "empathize",
-        "i hear you",
-        "i get how that feels",
-        "that must be hard",
-        "makes sense you’d feel",
-        "i see your point"
+        "i understand", "that must feel", "sorry you feel", "i get it", "empathize",
+        "i hear you", "i get how that feels", "that must be hard", "makes sense you’d feel", "i see your point"
       ],
       "confidenceBoosts": {
         "clear": 0.25
@@ -3449,14 +2844,8 @@
         "strength": 0.8
       },
       "toneCues": [
-        "your fault",
-        "because of you",
-        "blame",
-        "caused this",
-        "responsible for",
-        "this is on you",
-        "on you",
-        "you caused this"
+        "your fault", "because of you", "blame", "caused this", "responsible for",
+        "this is on you", "on you", "you caused this"
       ],
       "confidenceBoosts": {
         "alert": 0.25,
@@ -3515,20 +2904,9 @@
         "strength": 1
       },
       "toneCues": [
-        "groceries",
-        "laundry",
-        "clean",
-        "dishes",
-        "fix",
-        "house",
-        "chores",
-        "take out the trash",
-        "load the dishwasher",
-        "vacuum",
-        "clean up",
-        "fix the sink",
-        "chores list",
-        "grocery run"
+        "groceries", "laundry", "clean", "dishes", "fix",
+        "house", "chores", "take out the trash", "load the dishwasher", "vacuum",
+        "clean up", "fix the sink", "chores list", "grocery run"
       ],
       "confidenceBoosts": {
         "clear": 0.2
@@ -3594,20 +2972,9 @@
         "strength": 0.7
       },
       "toneCues": [
-        "read my message",
-        "saw my text",
-        "why haven't you",
-        "still waiting",
-        "did you get",
-        "are you mad",
-        "did i do something",
-        "ignoring me",
-        "check your phone",
-        "respond faster",
-        "need to know",
-        "reassurance",
-        "validation",
-        "double text"
+        "read my message", "saw my text", "why haven't you", "still waiting", "did you get",
+        "are you mad", "did i do something", "ignoring me", "check your phone", "respond faster",
+        "need to know", "reassurance", "validation", "double text"
       ],
       "toneCuesWeighted": [
         {
@@ -3666,20 +3033,9 @@
         "strength": 0.8
       },
       "toneCues": [
-        "need space",
-        "too much",
-        "overwhelmed",
-        "step back",
-        "alone time",
-        "processing",
-        "not now",
-        "later",
-        "busy",
-        "fine",
-        "whatever",
-        "doesn't matter",
-        "independence",
-        "boundaries"
+        "need space", "too much", "overwhelmed", "step back", "alone time",
+        "processing", "not now", "later", "busy", "fine",
+        "whatever", "doesn't matter", "independence", "boundaries"
       ],
       "toneCuesWeighted": [
         {
@@ -3737,18 +3093,9 @@
         "strength": 0.6
       },
       "toneCues": [
-        "don't know",
-        "confused",
-        "mixed signals",
-        "contradictory",
-        "push and pull",
-        "come here go away",
-        "unstable",
-        "chaotic",
-        "unpredictable",
-        "inconsistent",
-        "hot and cold",
-        "flip flop"
+        "don't know", "confused", "mixed signals", "contradictory", "push and pull",
+        "come here go away", "unstable", "chaotic", "unpredictable", "inconsistent",
+        "hot and cold", "flip flop"
       ],
       "toneCuesWeighted": [
         {
@@ -3806,18 +3153,9 @@
         "strength": 1
       },
       "toneCues": [
-        "i feel",
-        "can we talk",
-        "i understand",
-        "let's work",
-        "together",
-        "compromise",
-        "both sides",
-        "your perspective",
-        "i hear you",
-        "healthy communication",
-        "direct",
-        "honest"
+        "i feel", "can we talk", "i understand", "let's work", "together",
+        "compromise", "both sides", "your perspective", "i hear you", "healthy communication",
+        "direct", "honest"
       ],
       "toneCuesWeighted": [
         {
@@ -3874,26 +3212,10 @@
         "strength": 1
       },
       "toneCues": [
-        "the kids",
-        "our child",
-        "pickup",
-        "drop off",
-        "school",
-        "custody",
-        "visitation",
-        "childcare",
-        "parenting time",
-        "our son",
-        "our daughter",
-        "bedtime",
-        "homework",
-        "activities",
-        "sports",
-        "doctor appointment",
-        "school event",
-        "babysitter",
-        "nanny",
-        "daycare",
+        "the kids", "our child", "pickup", "drop off", "school",
+        "custody", "visitation", "childcare", "parenting time", "our son",
+        "our daughter", "bedtime", "homework", "activities", "sports",
+        "doctor appointment", "school event", "babysitter", "nanny", "daycare",
         "after school"
       ],
       "toneCuesWeighted": [
@@ -3954,39 +3276,13 @@
         "strength": 1
       },
       "toneCues": [
-        "my boundaries",
-        "our boundaries",
-        "respect boundaries",
-        "healthy boundaries",
-        "set boundaries",
-        "boundary issues",
-        "cross boundaries",
-        "honor boundaries",
-        "clear boundaries",
-        "establish limits",
-        "mutual respect",
-        "personal limits",
-        "comfort zones",
-        "what's acceptable",
-        "ground rules",
-        "need space",
-        "stop",
-        "can’t",
-        "can't",
-        "cant",
-        "not okay",
-        "limit",
-        "boundary",
-        "respect",
-        "not acceptable",
-        "crossed the line",
-        "this is my limit",
-        "respect my boundary",
-        "respect my space",
-        "stop texting me",
-        "do not contact",
-        "that's not okay",
-        "that’s not okay"
+        "my boundaries", "our boundaries", "respect boundaries", "healthy boundaries", "set boundaries",
+        "boundary issues", "cross boundaries", "honor boundaries", "clear boundaries", "establish limits",
+        "mutual respect", "personal limits", "comfort zones", "what's acceptable", "ground rules",
+        "need space", "stop", "can’t", "can't", "cant",
+        "not okay", "limit", "boundary", "respect", "not acceptable",
+        "crossed the line", "this is my limit", "respect my boundary", "respect my space", "stop texting me",
+        "do not contact", "that's not okay", "that’s not okay"
       ],
       "toneCuesWeighted": [
         {
@@ -4046,21 +3342,9 @@
         "strength": 1.15
       },
       "toneCues": [
-        "our relationship",
-        "work on us",
-        "strengthen our bond",
-        "invest in us",
-        "nurture this",
-        "build together",
-        "grow together",
-        "relationship goals",
-        "us first",
-        "prioritize us",
-        "quality time",
-        "connection",
-        "intimacy",
-        "closeness",
-        "deepen our relationship"
+        "our relationship", "work on us", "strengthen our bond", "invest in us", "nurture this",
+        "build together", "grow together", "relationship goals", "us first", "prioritize us",
+        "quality time", "connection", "intimacy", "closeness", "deepen our relationship"
       ],
       "toneCuesWeighted": [
         {
@@ -4120,21 +3404,9 @@
         "strength": 1.2
       },
       "toneCues": [
-        "rebuild trust",
-        "earn back",
-        "regain trust",
-        "trust process",
-        "be transparent",
-        "honest with you",
-        "open book",
-        "nothing to hide",
-        "prove myself",
-        "show you",
-        "consistent",
-        "reliability",
-        "dependable",
-        "trustworthy",
-        "faith in us"
+        "rebuild trust", "earn back", "regain trust", "trust process", "be transparent",
+        "honest with you", "open book", "nothing to hide", "prove myself", "show you",
+        "consistent", "reliability", "dependable", "trustworthy", "faith in us"
       ],
       "toneCuesWeighted": [
         {
@@ -4194,21 +3466,9 @@
         "strength": 1.15
       },
       "toneCues": [
-        "stop myself",
-        "hold back",
-        "resist saying",
-        "bite my tongue",
-        "count to ten",
-        "pause first",
-        "think before",
-        "catch myself",
-        "hold my tongue",
-        "resist the urge",
-        "wait before",
-        "not gonna react",
-        "choosing not to",
-        "restraining myself",
-        "self-control",
+        "stop myself", "hold back", "resist saying", "bite my tongue", "count to ten",
+        "pause first", "think before", "catch myself", "hold my tongue", "resist the urge",
+        "wait before", "not gonna react", "choosing not to", "restraining myself", "self-control",
         "impulse check"
       ],
       "toneCuesWeighted": [
@@ -4269,23 +3529,10 @@
         "strength": 1
       },
       "toneCues": [
-        "shut down",
-        "pull away",
-        "want to hide",
-        "close off",
-        "retreat",
-        "withdraw",
-        "go silent",
-        "stop talking",
-        "done talking",
-        "can't do this",
-        "need space",
-        "walking away",
-        "shutting off",
-        "going quiet",
-        "disconnect",
-        "turtle up",
-        "stone wall"
+        "shut down", "pull away", "want to hide", "close off", "retreat",
+        "withdraw", "go silent", "stop talking", "done talking", "can't do this",
+        "need space", "walking away", "shutting off", "going quiet", "disconnect",
+        "turtle up", "stone wall"
       ],
       "toneCuesWeighted": [
         {
@@ -4347,21 +3594,9 @@
         "strength": 1.1
       },
       "toneCues": [
-        "too much",
-        "overwhelmed",
-        "can't process",
-        "brain fog",
-        "overloaded",
-        "capacity",
-        "maxed out",
-        "at my limit",
-        "flooded",
-        "information overload",
-        "cognitive load",
-        "mental bandwidth",
-        "need to slow down",
-        "processing speed",
-        "bandwidth issue",
+        "too much", "overwhelmed", "can't process", "brain fog", "overloaded",
+        "capacity", "maxed out", "at my limit", "flooded", "information overload",
+        "cognitive load", "mental bandwidth", "need to slow down", "processing speed", "bandwidth issue",
         "system overload"
       ],
       "toneCuesWeighted": [
@@ -4429,21 +3664,9 @@
         "strength": 1.2
       },
       "toneCues": [
-        "tone check",
-        "watch my tone",
-        "sound harsh",
-        "come across wrong",
-        "didn't mean it that way",
-        "soften my approach",
-        "rephrase that",
-        "tone down",
-        "gentler way",
-        "sound better",
-        "harsh tone",
-        "aggressive tone",
-        "defensive tone",
-        "check my delivery",
-        "communication style"
+        "tone check", "watch my tone", "sound harsh", "come across wrong", "didn't mean it that way",
+        "soften my approach", "rephrase that", "tone down", "gentler way", "sound better",
+        "harsh tone", "aggressive tone", "defensive tone", "check my delivery", "communication style"
       ],
       "toneCuesWeighted": [
         {
@@ -4508,21 +3731,9 @@
         "strength": 1.1
       },
       "toneCues": [
-        "to be clear",
-        "let me clarify",
-        "make sure I understand",
-        "crystal clear",
-        "clear this up",
-        "want to be precise",
-        "exactly what I mean",
-        "no confusion",
-        "perfectly clear",
-        "disambiguation",
-        "spell it out",
-        "break it down",
-        "simplify",
-        "make it plain",
-        "clear as day"
+        "to be clear", "let me clarify", "make sure I understand", "crystal clear", "clear this up",
+        "want to be precise", "exactly what I mean", "no confusion", "perfectly clear", "disambiguation",
+        "spell it out", "break it down", "simplify", "make it plain", "clear as day"
       ],
       "toneCuesWeighted": [
         {
@@ -4587,20 +3798,9 @@
         "strength": 1
       },
       "toneCues": [
-        "keep it short",
-        "bottom line",
-        "in brief",
-        "long story short",
-        "to summarize",
-        "tldr",
-        "quick question",
-        "briefly",
-        "short version",
-        "cliff notes",
-        "executive summary",
-        "cut to the chase",
-        "get to the point",
-        "main thing"
+        "keep it short", "bottom line", "in brief", "long story short", "to summarize",
+        "tldr", "quick question", "briefly", "short version", "cliff notes",
+        "executive summary", "cut to the chase", "get to the point", "main thing"
       ],
       "toneCuesWeighted": [
         {
@@ -4654,21 +3854,9 @@
         "strength": 1
       },
       "toneCues": [
-        "good time",
-        "bad time",
-        "right time",
-        "wrong time",
-        "timing",
-        "when you're free",
-        "better time",
-        "convenient time",
-        "later when",
-        "not now",
-        "right moment",
-        "good moment",
-        "appropriate time",
-        "timing is off",
-        "when works",
+        "good time", "bad time", "right time", "wrong time", "timing",
+        "when you're free", "better time", "convenient time", "later when", "not now",
+        "right moment", "good moment", "appropriate time", "timing is off", "when works",
         "time sensitive"
       ],
       "toneCuesWeighted": [
@@ -4725,21 +3913,9 @@
         "strength": 1
       },
       "toneCues": [
-        "format",
-        "structure",
-        "organize",
-        "bullet points",
-        "numbered list",
-        "easier to read",
-        "clean this up",
-        "reformat",
-        "layout",
-        "presentation",
-        "readability",
-        "digest",
-        "wall of text",
-        "break this up",
-        "paragraph",
+        "format", "structure", "organize", "bullet points", "numbered list",
+        "easier to read", "clean this up", "reformat", "layout", "presentation",
+        "readability", "digest", "wall of text", "break this up", "paragraph",
         "section"
       ],
       "toneCuesWeighted": [
@@ -4794,20 +3970,9 @@
         "strength": 1.2
       },
       "toneCues": [
-        "adjust my tone",
-        "manage my delivery",
-        "communication style",
-        "how I'm saying",
-        "way I'm coming across",
-        "tone of voice",
-        "delivery method",
-        "approach adjustment",
-        "style check",
-        "message tone",
-        "sound different",
-        "phrase this better",
-        "word choice",
-        "communication approach"
+        "adjust my tone", "manage my delivery", "communication style", "how I'm saying", "way I'm coming across",
+        "tone of voice", "delivery method", "approach adjustment", "style check", "message tone",
+        "sound different", "phrase this better", "word choice", "communication approach"
       ],
       "toneCuesWeighted": [
         {

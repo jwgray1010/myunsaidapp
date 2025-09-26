@@ -325,7 +325,6 @@ class DataLoaderService {
   public getDataStatus(): Record<string, boolean> {
     const files = [
       'attachment_learning.json',
-      'attachment_learning_enhanced.json', 
       'therapy_advice.json',
       'context_classifier.json',
       'tone_triggerwords.json',
@@ -371,10 +370,7 @@ class DataLoaderService {
 const AdviceItem = z.object({
   id: z.string(),
   advice: z.string().min(1),
-  triggerTone: z.union([
-    z.enum(['clear','caution','alert']),
-    z.array(z.enum(['clear','caution','alert']))
-  ]).default('clear'),
+  triggerTone: z.enum(['clear','caution','alert']).default('clear'), // Now strict single UI value
   contexts: z.array(z.string()).default([]),
   attachmentStyles: z.array(z.enum(['secure','anxious','avoidant','disorganized'])).default([]),
   severityThreshold: z.record(z.enum(['clear','caution','alert']), z.number().min(0).max(1)).optional(),
@@ -386,7 +382,10 @@ const AdviceItem = z.object({
   __tokens: z.array(z.string()).optional(),
   __vector: z.array(z.number()).optional(),
   // allow your merged "keywords"
-  keywords: z.array(z.string()).optional()
+  keywords: z.array(z.string()).optional(),
+  // New fields for tone compatibility
+  rawTone: z.array(z.string()).default([]), // Preserves original tone labels (angry, curious, etc.)
+  uiCompat: z.array(z.enum(['clear','caution','alert'])).default([]) // UI bucket compatibility list
 }).passthrough();
 
 export type AdviceItem = z.infer<typeof AdviceItem>;
@@ -396,28 +395,94 @@ export type AdviceItem = z.infer<typeof AdviceItem>;
 // ============================
 const toArr = (v: any) => Array.isArray(v) ? v : (v == null ? [] : [v]);
 
+// Tone bucket mapping for legacy tone values
+const TONE_TO_UI_BUCKET: Record<string, 'clear' | 'caution' | 'alert'> = {
+  // Alert tones (urgent/negative)
+  'angry': 'alert',
+  'hostile': 'alert', 
+  'toxic': 'alert',
+  'aggressive': 'alert',
+  'threatening': 'alert',
+  // Caution tones (concerning but not urgent)
+  'frustrated': 'caution',
+  'anxious': 'caution',
+  'sad': 'caution',
+  'worried': 'caution',
+  'upset': 'caution',
+  'disappointed': 'caution',
+  // Clear tones (neutral/positive)
+  'clear': 'clear',
+  'neutral': 'clear',
+  'calm': 'clear',
+  'happy': 'clear',
+  'curious': 'clear',
+  'supportive': 'clear',
+  'understanding': 'clear',
+  'love': 'clear',
+  'appreciative': 'clear'
+};
+
+function coerceToneFields(item: any) {
+  // Handle legacy triggerTone that might be array or non-UI values
+  const legacyTriggerTone = item.triggerTone;
+  const legacyList = Array.isArray(legacyTriggerTone) 
+    ? legacyTriggerTone.map((t: any) => String(t).toLowerCase())
+    : (legacyTriggerTone ? [String(legacyTriggerTone).toLowerCase()] : []);
+  
+  // Map legacy tones to UI buckets
+  const uiCompat: ('clear' | 'caution' | 'alert')[] = [];
+  const rawTone: string[] = [];
+  
+  for (const tone of legacyList) {
+    rawTone.push(tone);
+    const uiBucket = TONE_TO_UI_BUCKET[tone] || 'caution'; // Default to caution for unknown tones
+    if (!uiCompat.includes(uiBucket)) {
+      uiCompat.push(uiBucket);
+    }
+  }
+  
+  // If no tones found, use clear as default
+  const triggerTone = uiCompat[0] || 'clear';
+  const finalUiCompat = uiCompat.length > 0 ? uiCompat : ['clear'];
+  const finalRawTone = rawTone.length > 0 ? rawTone : [];
+  
+  return {
+    ...item,
+    triggerTone,
+    rawTone: finalRawTone,
+    uiCompat: finalUiCompat
+  };
+}
+
 export function normalizeAdvice(db: any): AdviceItem[] {
   // Handle both direct array format and object with items property
   const rawItems = Array.isArray(db) ? db : (db?.items ?? []);
   
   const items = rawItems.map((raw: any) => {
+    // First apply tone coercion to handle legacy data
+    const coerced = coerceToneFields(raw);
+    
     const merged = {
-      ...raw,
+      ...coerced,
       keywords: [
         ...toArr(raw.keywords),
         ...toArr(raw.matchKeywords),
         ...toArr(raw.boostSources),
       ],
     };
+    
     try {
       return AdviceItem.parse(merged);
     } catch (error) {
       logger.warn(`Failed to validate advice item ${raw.id}:`, error);
-      // Return a safe fallback
-      return AdviceItem.parse({
+      // Return a safe fallback with coerced tone fields
+      const fallbackCoerced = coerceToneFields({
         id: raw.id || 'unknown',
         advice: raw.advice || 'No advice available',
-        triggerTone: 'clear',
+        triggerTone: raw.triggerTone || 'clear'
+      });
+      return AdviceItem.parse({
+        ...fallbackCoerced,
         contexts: [],
         attachmentStyles: [],
         keywords: []
@@ -425,7 +490,7 @@ export function normalizeAdvice(db: any): AdviceItem[] {
     }
   });
   
-  logger.info(`Normalized ${items.length} advice items`);
+  logger.info(`Normalized ${items.length} advice items with tone coercion`);
   return items;
 }
 
