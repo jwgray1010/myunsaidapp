@@ -647,6 +647,3 @@ export default (req: VercelRequest, res: VercelResponse) => {
     return wrappedHandler(req, res);
   });
 };
-
-// Pin to iad1 region for reduced latency
-export const config = { regions: ['iad1'] };

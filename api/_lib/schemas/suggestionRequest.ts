@@ -2,6 +2,10 @@
 import { z } from 'zod';
 import { toneResponseSchema } from './toneRequest';
 
+// Helper to normalize string or string array inputs to arrays
+const strOrStrArray = z.union([z.string(), z.array(z.string())])
+  .transform(v => Array.isArray(v) ? v : [v]);
+
 /**
  * Enhanced SuggestionRequest schema matching the JSON schema structure
  * Schema for generating therapy advice and communication guidance
@@ -79,7 +83,7 @@ export const suggestionRequestSchema = z.object({
     linguistic_features: z.record(z.any()).optional().describe('Linguistic features from tone analysis'),
     context_analysis: z.record(z.any()).optional().describe('Context analysis from tone analysis'),
     attachment_insights: z.array(z.any()).optional().describe('Attachment insights from tone analysis'),
-    categories: z.array(z.string()).optional().describe('Categories from tone pattern matching'),
+    categories: strOrStrArray.optional().describe('Categories from tone pattern matching'),
     timestamp: z.string().optional().describe('Analysis timestamp'),
     raw_tone: z.string().optional().describe('Raw tone classification'),
     metadata: z.record(z.any()).optional().describe('Additional metadata from tone analysis'),
@@ -129,18 +133,18 @@ export const suggestionItemSchema = z.object({
   
   // micro_advice specific fields
   meta: z.object({
-    contexts: z.array(z.string()).optional(),
-    contextLink: z.array(z.string()).optional(),
+    contexts: strOrStrArray.optional(),
+    contextLink: strOrStrArray.optional(),
     triggerTone: z.union([
       z.enum(['clear','caution','alert']),
       z.string(),
       z.array(z.string())
     ]).optional(),
-    rawTone: z.array(z.string()).optional(), // Raw emotion labels (21-tone classification)
-    attachmentStyles: z.array(z.string()).optional(),
-    intent: z.array(z.string()).optional(),
-    tags: z.array(z.string()).optional(),
-    patterns: z.array(z.string()).optional().describe('Pattern IDs/labels for matching, not raw regex expressions'),
+    rawTone: strOrStrArray.optional(),          // was array only
+    attachmentStyles: strOrStrArray.optional(), // was array only
+    intent: strOrStrArray.optional(),           // was array only
+    tags: strOrStrArray.optional(),             // was array only
+    patterns: strOrStrArray.optional(),         // was array only
     source: z.string().optional()
   }).optional(),
   score: z.number().optional()
@@ -160,8 +164,8 @@ export const originalAnalysisSchema = z.object({
   
   // ✅ ADD MISSING REQUIRED FIELDS for canonical v1 contract compatibility
   emotions: z.record(z.any()).optional().describe('Emotion analysis from tone endpoint'),
-  evidence: z.array(z.string()).optional().describe('Evidence for tone classification'),
-  communication_patterns: z.array(z.string()).optional().describe('Identified communication patterns'),
+  evidence: strOrStrArray.optional().describe('Evidence for tone classification'),
+  communication_patterns: strOrStrArray.optional().describe('Identified communication patterns'),
   metadata: z.record(z.any()).optional().describe('Analysis metadata'),
   complete_analysis_available: z.boolean().optional().describe('Whether complete analysis data is available'),
   tone_analysis_source: z.enum(['coordinator_cache', 'fresh_analysis', 'override']).optional().describe('Source of tone analysis'),
@@ -184,8 +188,8 @@ export const originalAnalysisSchema = z.object({
     escalation_risk: z.enum(['low', 'medium', 'high']).optional(),
   }).optional().describe('Contextual relationship analysis'),
   
-  attachment_indicators: z.array(z.string()).optional().describe('Detected attachment style indicators'),
-  attachmentInsights: z.array(z.string()).optional().describe('Attachment-specific insights'),
+  attachment_indicators: strOrStrArray.optional().describe('Detected attachment style indicators'),
+  attachmentInsights: strOrStrArray.optional().describe('Attachment-specific insights'),
   
   // ✅ PRESERVE ORIGINAL vs ADJUSTED DISTRIBUTIONS for observability
   ui_tone_original: z.string().optional().describe('Original tone from server before adjustments'),
@@ -200,8 +204,8 @@ export const originalAnalysisSchema = z.object({
     z.enum(['clear','caution','alert']),
     z.string()
   ]).optional().describe('Legacy single trigger tone value (level fallback)'),
-  rawTone: z.array(z.string()).optional().describe('Array of raw emotion labels (21-tone classification)'),
-  trigger_tone_tags: z.array(z.string()).optional().describe('Array of raw tone tags (21-label set) for search matching'),
+  rawTone: strOrStrArray.optional().describe('Array of raw emotion labels (21-tone classification)'),
+  trigger_tone_tags: strOrStrArray.optional().describe('Array of raw tone tags (21-label set) for search matching'),
   
   // UI consistency fields (adjusted for suggestions context)
   ui_tone: z.enum(['clear','caution','alert','neutral']).optional().describe('UI bucket for the pill color (adjusted)'),

@@ -1,6 +1,6 @@
 {
-  "version": "2.1.2-accurate",
-  "notes": "Categories normalized to snake_case. Added contextOverrides for gratitude.",
+  "version": "2.1.3-therapy-categories",
+  "notes": "Categories normalized to snake_case. Added contextOverrides for gratitude. Added therapy advice categories for positive communication patterns.",
   "patterns": [
     {
       "id": "A001",
@@ -8,10 +8,10 @@
       "category": "profanity_direct",
       "matchMode": "hybrid",
       "canonical": "fuck you",
-      "variants": ["screw you", "to hell with you"],
+      "variants": ["screw you","to hell with you"],
       "regex": "\\bf(?:u|\\*)+ck\\s+you\\b",
       "threshold": 0.98,
-      "styleWeight": { "avoidant": 1.00, "anxious": 1.00, "disorganized": 1.00, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.95}
     },
     {
       "id": "A002",
@@ -19,10 +19,10 @@
       "category": "profanity_direct",
       "matchMode": "hybrid",
       "canonical": "stfu / shut the f up",
-      "variants": ["stfu", "shut the f up", "shut the fuck up", "shut up now", "zip it", "stop talking now"],
+      "variants": ["stfu","shut the f up","shut the fuck up","shut up now","zip it","stop talking now"],
       "regex": "\\b(?:stfu|shut\\s+the\\s+f+\\s*up|shut\\s+the\\s+f(?:u|\\*)+ck\\s+up)\\b",
       "threshold": 0.97,
-      "styleWeight": { "avoidant": 1.00, "anxious": 0.95, "disorganized": 0.95, "secure": 0.85 }
+      "styleWeight": {"avoidant":1,"anxious":0.95,"disorganized":0.95,"secure":0.85}
     },
     {
       "id": "A003",
@@ -30,10 +30,10 @@
       "category": "profanity_direct",
       "matchMode": "hybrid",
       "canonical": "bastard / son of a bitch",
-      "variants": ["bastard", "son of a bitch", "son-of-a-bitch", "scumbag", "low-life"],
+      "variants": ["bastard","son of a bitch","son-of-a-bitch","scumbag","low-life"],
       "regex": "\\b(?:bastard|son\\s+of\\s+a\\s+b[i!\\*]tch)\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 0.90, "anxious": 1.00, "disorganized": 1.00, "secure": 0.80 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A004",
@@ -41,10 +41,10 @@
       "category": "profanity_direct",
       "matchMode": "hybrid",
       "canonical": "go to hell",
-      "variants": ["burn in hell", "rot in hell"],
+      "variants": ["burn in hell","rot in hell"],
       "regex": "\\bgo\\s+to\\s+hell\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 0.95, "anxious": 0.95, "disorganized": 0.95, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 0.95,"disorganized": 0.95,"secure": 0.85}
     },
     {
       "id": "A005",
@@ -52,10 +52,10 @@
       "category": "profanity_insult",
       "matchMode": "hybrid",
       "canonical": "asshole / dumbass / jackass",
-      "variants": ["asshole", "dumbass", "jackass", "jerk", "tool", "clown"],
+      "variants": ["asshole","dumbass","jackass","jerk","tool","clown"],
       "regex": "\\b(?:a\\**shole|dumbass|jackass)\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 0.85, "anxious": 1.00, "disorganized": 1.00, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.85,"anxious": 1,"disorganized": 1,"secure": 0.75}
     },
     {
       "id": "A011",
@@ -63,10 +63,10 @@
       "category": "insult_intellect",
       "matchMode": "hybrid",
       "canonical": "idiot",
-      "variants": ["moron", "imbecile", "dummy", "airhead", "simpleton"],
+      "variants": ["moron","imbecile","dummy","airhead","simpleton"],
       "regex": "\\bidiot\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 0.85, "anxious": 1.00, "disorganized": 0.95, "secure": 0.70 }
+      "styleWeight": {"avoidant": 0.85,"anxious": 1,"disorganized": 0.95,"secure": 0.7}
     },
     {
       "id": "A012",
@@ -74,10 +74,10 @@
       "category": "insult_intellect",
       "matchMode": "regex",
       "canonical": "moron",
-      "variants": ["blockhead", "meathead", "halfwit"],
+      "variants": ["blockhead","meathead","halfwit"],
       "regex": "\\bmoron\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 0.85, "anxious": 1.00, "disorganized": 0.95, "secure": 0.70 }
+      "styleWeight": {"avoidant": 0.85,"anxious": 1,"disorganized": 0.95,"secure": 0.7}
     },
     {
       "id": "A013",
@@ -85,10 +85,10 @@
       "category": "insult_intellect",
       "matchMode": "hybrid",
       "canonical": "you're stupid",
-      "variants": ["you have no brains", "you’re not smart"],
+      "variants": ["you have no brains","you’re not smart"],
       "regex": "\\byou\\s*(?:'re|\\s+are)?\\s+stupid\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 0.80, "anxious": 1.00, "disorganized": 0.95, "secure": 0.70 }
+      "styleWeight": {"avoidant": 0.8,"anxious": 1,"disorganized": 0.95,"secure": 0.7}
     },
     {
       "id": "A021",
@@ -96,10 +96,10 @@
       "category": "blame",
       "matchMode": "hybrid",
       "canonical": "you never listen",
-      "variants": ["you don’t listen", "you do not listen", "you fail to hear me", "you ignore what I say"],
+      "variants": ["you don’t listen","you do not listen","you fail to hear me","you ignore what I say"],
       "regex": "\\byou\\s+(?:never|don'?t|do\\s+not)\\s+listen\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.70, "anxious": 1.00, "disorganized": 0.95, "secure": 0.60 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.7,"anxious": 1,"disorganized": 0.95,"secure": 0.6}
     },
     {
       "id": "A022",
@@ -107,10 +107,10 @@
       "category": "blame",
       "matchMode": "hybrid",
       "canonical": "you always ...",
-      "variants": ["you keep doing this", "you constantly"],
+      "variants": ["you keep doing this","you constantly"],
       "regex": "\\byou\\s+always\\b",
       "threshold": 0.88,
-      "styleWeight": { "avoidant": 0.70, "anxious": 1.00, "disorganized": 0.90, "secure": 0.60 }
+      "styleWeight": {"avoidant": 0.7,"anxious": 1,"disorganized": 0.9,"secure": 0.6}
     },
     {
       "id": "A023",
@@ -118,10 +118,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "this is your fault",
-      "variants": ["you caused this", "this is because of you"],
+      "variants": ["you caused this","this is because of you"],
       "regex": "\\bthis\\s+is\\s+your\\s+fault\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.75, "anxious": 1.00, "disorganized": 0.95, "secure": 0.65 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.75,"anxious": 1,"disorganized": 0.95,"secure": 0.65}
     },
     {
       "id": "A024",
@@ -129,10 +129,10 @@
       "category": "insult_intellect",
       "matchMode": "regex",
       "canonical": "dumb",
-      "variants": ["slow", "dim", "dense", "not bright", "lamebrain"],
+      "variants": ["slow","dim","dense","not bright","lamebrain"],
       "regex": "\\bdumb\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.85, "anxious": 1.00, "disorganized": 0.95, "secure": 0.70 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.85,"anxious": 1,"disorganized": 0.95,"secure": 0.7}
     },
     {
       "id": "A025",
@@ -140,10 +140,10 @@
       "category": "insult_intellect",
       "matchMode": "regex",
       "canonical": "brainless",
-      "variants": ["mindless", "witless", "vacant", "empty-headed", "no-brain"],
+      "variants": ["mindless","witless","vacant","empty-headed","no-brain"],
       "regex": "\\bbrainless\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.85, "anxious": 1.00, "disorganized": 0.95, "secure": 0.70 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.85,"anxious": 1,"disorganized": 0.95,"secure": 0.7}
     },
     {
       "id": "A026",
@@ -151,10 +151,10 @@
       "category": "insult_intellect",
       "matchMode": "hybrid",
       "canonical": "pea brain",
-      "variants": ["small brain", "tiny brain", "micro brain", "puny brain", "little brain"],
+      "variants": ["small brain","tiny brain","micro brain","puny brain","little brain"],
       "regex": "\\bpea\\s+brain\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.85, "anxious": 1.00, "disorganized": 0.95, "secure": 0.70 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.85,"anxious": 1,"disorganized": 0.95,"secure": 0.7}
     },
     {
       "id": "A027",
@@ -162,10 +162,10 @@
       "category": "insult_intellect",
       "matchMode": "regex",
       "canonical": "blockhead",
-      "variants": ["bonehead", "numbskull", "thickhead", "meathead", "chowderhead"],
+      "variants": ["bonehead","numbskull","thickhead","meathead","chowderhead"],
       "regex": "\\bblockhead\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.85, "anxious": 1.00, "disorganized": 0.95, "secure": 0.70 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.85,"anxious": 1,"disorganized": 0.95,"secure": 0.7}
     },
     {
       "id": "A028",
@@ -173,10 +173,10 @@
       "category": "insult_intellect",
       "matchMode": "regex",
       "canonical": "clueless",
-      "variants": ["unaware", "ignorant", "oblivious", "blind", "in the dark"],
+      "variants": ["unaware","ignorant","oblivious","blind","in the dark"],
       "regex": "\\bclueless\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.85, "anxious": 1.00, "disorganized": 0.95, "secure": 0.70 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.85,"anxious": 1,"disorganized": 0.95,"secure": 0.7}
     },
     {
       "id": "A029",
@@ -184,10 +184,10 @@
       "category": "insult_intellect",
       "matchMode": "hybrid",
       "canonical": "thick-skull",
-      "variants": ["thick skull", "dense", "hard-headed", "stone head", "rock head", "wooden head"],
+      "variants": ["thick skull","dense","hard-headed","stone head","rock head","wooden head"],
       "regex": "\\bthick(?:-|\\s)skull\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.85, "anxious": 1.00, "disorganized": 0.95, "secure": 0.70 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.85,"anxious": 1,"disorganized": 0.95,"secure": 0.7}
     },
     {
       "id": "A030",
@@ -195,10 +195,10 @@
       "category": "insult_intellect",
       "matchMode": "regex",
       "canonical": "simpleton",
-      "variants": ["nincompoop", "dunderhead", "oaf", "blockhead", "fool"],
+      "variants": ["nincompoop","dunderhead","oaf","blockhead","fool"],
       "regex": "\\bsimpleton\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.85, "anxious": 1.00, "disorganized": 0.95, "secure": 0.70 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.85,"anxious": 1,"disorganized": 0.95,"secure": 0.7}
     },
     {
       "id": "A031",
@@ -206,10 +206,10 @@
       "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a liar",
-      "variants": ["dishonest", "fibber", "deceiver", "con artist", "untruthful"],
+      "variants": ["dishonest","fibber","deceiver","con artist","untruthful"],
       "regex": "\\byou\\s*(?:'re|\\s+are)?\\s*(?:a\\s+)?liar\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 0.80, "anxious": 1.00, "disorganized": 1.00, "secure": 0.65 }
+      "styleWeight": {"avoidant": 0.8,"anxious": 1,"disorganized": 1,"secure": 0.65}
     },
     {
       "id": "A032",
@@ -217,10 +217,10 @@
       "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a cheater",
-      "variants": ["unfaithful", "two-timer", "betrayer", "philanderer", "adulterer"],
+      "variants": ["unfaithful","two-timer","betrayer","philanderer","adulterer"],
       "regex": "\\byou\\s*(?:'re|\\s+are)?\\s*(?:a\\s+)?cheater\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 0.80, "anxious": 1.00, "disorganized": 1.00, "secure": 0.65 }
+      "styleWeight": {"avoidant": 0.8,"anxious": 1,"disorganized": 1,"secure": 0.65}
     },
     {
       "id": "A033",
@@ -228,10 +228,10 @@
       "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a fake",
-      "variants": ["phony", "fraud", "poser", "pretender", "sham"],
+      "variants": ["phony","fraud","poser","pretender","sham"],
       "regex": "\\byou\\s*(?:'re|\\s+are)?\\s*(?:a\\s+)?fake\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.8, "anxious": 1.0, "disorganized": 1.0, "secure": 0.65 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.8,"anxious": 1,"disorganized": 1,"secure": 0.65}
     },
     {
       "id": "A034",
@@ -239,10 +239,10 @@
       "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a hypocrite",
-      "variants": ["two-faced", "double standard", "says one thing does another", "phony moralist"],
+      "variants": ["two-faced","double standard","says one thing does another","phony moralist"],
       "regex": "\\byou\\s*(?:'re|\\s+are)?\\s*(?:a\\s+)?hypocrite\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.8, "anxious": 1.0, "disorganized": 1.0, "secure": 0.65 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.8,"anxious": 1,"disorganized": 1,"secure": 0.65}
     },
     {
       "id": "A035",
@@ -250,10 +250,10 @@
       "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a coward",
-      "variants": ["spineless", "gutless", "no backbone", "scaredy-cat"],
+      "variants": ["spineless","gutless","no backbone","scaredy-cat"],
       "regex": "\\byou\\s*(?:'re|\\s+are)?\\s*(?:a\\s+)?coward\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.8, "anxious": 1.0, "disorganized": 1.0, "secure": 0.65 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.8,"anxious": 1,"disorganized": 1,"secure": 0.65}
     },
     {
       "id": "A036",
@@ -261,10 +261,10 @@
       "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a loser",
-      "variants": ["failure", "deadbeat", "good for nothing", "washout"],
+      "variants": ["failure","deadbeat","good for nothing","washout"],
       "regex": "\\byou\\s*(?:'re|\\s+are)?\\s*(?:a\\s+)?loser\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.8, "anxious": 1.0, "disorganized": 1.0, "secure": 0.65 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.8,"anxious": 1,"disorganized": 1,"secure": 0.65}
     },
     {
       "id": "A037",
@@ -272,10 +272,10 @@
       "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're pathetic",
-      "variants": ["pitiful", "sad", "sorry excuse", "lamentable"],
+      "variants": ["pitiful","sad","sorry excuse","lamentable"],
       "regex": "\\byou\\s*(?:'re|\\s+are)?\\s*(?:so\\s+)?pathetic\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 0.85, "anxious": 1.0, "disorganized": 1.0, "secure": 0.7 }
+      "styleWeight": {"avoidant": 0.85,"anxious": 1,"disorganized": 1,"secure": 0.7}
     },
     {
       "id": "A038",
@@ -283,10 +283,10 @@
       "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're worthless",
-      "variants": ["useless", "no value", "good for nothing", "waste of space"],
+      "variants": ["useless","no value","good for nothing","waste of space"],
       "regex": "\\byou\\s*(?:'re|\\s+are)?\\s*(?:so\\s+)?worthless\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 0.85, "anxious": 1.0, "disorganized": 1.0, "secure": 0.7 }
+      "styleWeight": {"avoidant": 0.85,"anxious": 1,"disorganized": 1,"secure": 0.7}
     },
     {
       "id": "A039",
@@ -294,10 +294,10 @@
       "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're a creep",
-      "variants": ["weirdo", "creepy", "sketchy", "gross person"],
+      "variants": ["weirdo","creepy","sketchy","gross person"],
       "regex": "\\byou\\s*(?:'re|\\s+are)?\\s*(?:a\\s+)?creep\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 0.8, "anxious": 1.0, "disorganized": 1.0, "secure": 0.65 }
+      "styleWeight": {"avoidant": 0.8,"anxious": 1,"disorganized": 1,"secure": 0.65}
     },
     {
       "id": "A040",
@@ -305,10 +305,10 @@
       "category": "character_attack",
       "matchMode": "hybrid",
       "canonical": "you're disgusting",
-      "variants": ["gross", "repulsive", "nasty", "sickening"],
+      "variants": ["gross","repulsive","nasty","sickening"],
       "regex": "\\byou\\s*(?:'re|\\s+are)?\\s+disgusting\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 0.8, "anxious": 1.0, "disorganized": 1.0, "secure": 0.65 }
+      "styleWeight": {"avoidant": 0.8,"anxious": 1,"disorganized": 1,"secure": 0.65}
     },
     {
       "id": "A041",
@@ -318,7 +318,7 @@
       "category": "blame",
       "canonical": "you never listen",
       "note": "Deduped to A021; keep as alias for back-compat",
-      "styleWeight": { "avoidant": 0.7, "anxious": 1.0, "disorganized": 0.95, "secure": 0.6 }
+      "styleWeight": {"avoidant": 0.7,"anxious": 1,"disorganized": 0.95,"secure": 0.6}
     },
     {
       "id": "A042",
@@ -326,10 +326,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you always lie/cheat/mess up",
-      "variants": ["you constantly lie", "you’re always cheating", "you always screw up"],
+      "variants": ["you constantly lie","you’re always cheating","you always screw up"],
       "regex": "\\byou\\s+always\\s+(?:lie|cheat|mess\\s+up)\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.7, "anxious": 1.0, "disorganized": 0.95, "secure": 0.6 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.7,"anxious": 1,"disorganized": 0.95,"secure": 0.6}
     },
     {
       "id": "A043",
@@ -339,7 +339,7 @@
       "category": "blame",
       "canonical": "this is your fault",
       "note": "Deduped to A023; keep as alias for back-compat",
-      "styleWeight": { "avoidant": 0.75, "anxious": 1.0, "disorganized": 0.95, "secure": 0.65 }
+      "styleWeight": {"avoidant": 0.75,"anxious": 1,"disorganized": 0.95,"secure": 0.65}
     },
     {
       "id": "A044",
@@ -347,10 +347,10 @@
       "category": "blame",
       "matchMode": "hybrid",
       "canonical": "you ruined everything/this/us",
-      "variants": ["you broke us", "you messed this up", "you destroyed everything"],
+      "variants": ["you broke us","you messed this up","you destroyed everything"],
       "regex": "\\byou\\s+ruined\\s+(?:everything|this|us)\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.75, "anxious": 1.0, "disorganized": 0.95, "secure": 0.65 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.75,"anxious": 1,"disorganized": 0.95,"secure": 0.65}
     },
     {
       "id": "A045",
@@ -358,10 +358,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you made me (angry/mad/do this)",
-      "variants": ["this is because of you", "you pushed me to this", "you caused this reaction"],
+      "variants": ["this is because of you","you pushed me to this","you caused this reaction"],
       "regex": "\\byou\\s+made\\s+me\\s+(?:angry|mad|do\\s+this)\\b",
       "threshold": 0.86,
-      "styleWeight": { "avoidant": 0.72, "anxious": 1.0, "disorganized": 0.95, "secure": 0.62 }
+      "styleWeight": {"avoidant": 0.72,"anxious": 1,"disorganized": 0.95,"secure": 0.62}
     },
     {
       "id": "A046",
@@ -369,10 +369,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you started this",
-      "variants": ["this is on you", "you began this", "you kicked this off"],
+      "variants": ["this is on you","you began this","you kicked this off"],
       "regex": "\\byou\\s+started\\s+this\\b",
       "threshold": 0.85,
-      "styleWeight": { "avoidant": 0.72, "anxious": 1.0, "disorganized": 0.95, "secure": 0.62 }
+      "styleWeight": {"avoidant": 0.72,"anxious": 1,"disorganized": 0.95,"secure": 0.62}
     },
     {
       "id": "A047",
@@ -380,10 +380,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you bring this on me/us",
-      "variants": ["you did this to us", "you bring it on yourself", "this is your doing"],
+      "variants": ["you did this to us","you bring it on yourself","this is your doing"],
       "regex": "\\byou\\s+bring\\s+this\\s+on\\s+(?:me|us)\\b",
       "threshold": 0.85,
-      "styleWeight": { "avoidant": 0.72, "anxious": 1.0, "disorganized": 0.95, "secure": 0.62 }
+      "styleWeight": {"avoidant": 0.72,"anxious": 1,"disorganized": 0.95,"secure": 0.62}
     },
     {
       "id": "A048",
@@ -391,10 +391,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you never change",
-      "variants": ["you won’t change", "you’re always the same", "nothing about you changes"],
+      "variants": ["you won’t change","you’re always the same","nothing about you changes"],
       "regex": "\\byou\\s+never\\s+change\\b",
       "threshold": 0.86,
-      "styleWeight": { "avoidant": 0.74, "anxious": 1.0, "disorganized": 0.95, "secure": 0.64 }
+      "styleWeight": {"avoidant": 0.74,"anxious": 1,"disorganized": 0.95,"secure": 0.64}
     },
     {
       "id": "A049",
@@ -402,10 +402,10 @@
       "category": "blame",
       "matchMode": "hybrid",
       "canonical": "you can't do anything right",
-      "variants": ["you always get it wrong", "you never do it right", "you mess up everything"],
+      "variants": ["you always get it wrong","you never do it right","you mess up everything"],
       "regex": "\\byou\\s+(?:can'?t|cannot|can\\s+not)\\s+do\\s+anything\\s+right\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 0.75, "anxious": 1.0, "disorganized": 0.95, "secure": 0.65 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.75,"anxious": 1,"disorganized": 0.95,"secure": 0.65}
     },
     {
       "id": "A050",
@@ -413,10 +413,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you always make it about you",
-      "variants": ["you’re so selfish", "you center yourself", "it’s always about you"],
+      "variants": ["you’re so selfish","you center yourself","it’s always about you"],
       "regex": "\\byou\\s+always\\s+make\\s+it\\s+about\\s+you\\b",
       "threshold": 0.88,
-      "styleWeight": { "avoidant": 0.73, "anxious": 1.0, "disorganized": 0.95, "secure": 0.63 }
+      "styleWeight": {"avoidant": 0.73,"anxious": 1,"disorganized": 0.95,"secure": 0.63}
     },
     {
       "id": "A051",
@@ -424,10 +424,10 @@
       "category": "hostile_command",
       "matchMode": "hybrid",
       "canonical": "shut up",
-      "variants": ["be quiet", "zip it", "stop talking"],
+      "variants": ["be quiet","zip it","stop talking"],
       "regex": "\\bshut\\s+up\\b",
       "threshold": 0.98,
-      "styleWeight": { "avoidant": 1.0, "anxious": 0.95, "disorganized": 0.95, "secure": 0.80 }
+      "styleWeight": {"avoidant": 1,"anxious": 0.95,"disorganized": 0.95,"secure": 0.8}
     },
     {
       "id": "A052",
@@ -435,10 +435,10 @@
       "category": "hostile_command",
       "matchMode": "hybrid",
       "canonical": "leave me alone",
-      "variants": ["stop bothering me", "get away from me", "don’t interact with me"],
+      "variants": ["stop bothering me","get away from me","don’t interact with me"],
       "regex": "\\bleave\\s+me\\s+alone\\b",
-      "threshold": 0.90,
-      "styleWeight": { "avoidant": 1.0, "anxious": 0.95, "disorganized": 0.95, "secure": 0.80 }
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 1,"anxious": 0.95,"disorganized": 0.95,"secure": 0.8}
     },
     {
       "id": "A053",
@@ -446,10 +446,10 @@
       "category": "hostile_command",
       "matchMode": "hybrid",
       "canonical": "get lost",
-      "variants": ["beat it", "go away", "scram", "take a hike"],
+      "variants": ["beat it","go away","scram","take a hike"],
       "regex": "\\bget\\s+lost\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 0.95, "anxious": 0.95, "disorganized": 0.95, "secure": 0.80 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 0.95,"disorganized": 0.95,"secure": 0.8}
     },
     {
       "id": "A054",
@@ -457,10 +457,10 @@
       "category": "hostile_command",
       "matchMode": "regex",
       "canonical": "go away",
-      "variants": ["please go away", "go far away", "stay away from me"],
+      "variants": ["please go away","go far away","stay away from me"],
       "regex": "\\bgo\\s+away\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 0.95, "anxious": 0.95, "disorganized": 0.95, "secure": 0.80 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 0.95,"disorganized": 0.95,"secure": 0.8}
     },
     {
       "id": "A055",
@@ -468,10 +468,10 @@
       "category": "hostile_command",
       "matchMode": "hybrid",
       "canonical": "get out",
-      "variants": ["get out now", "get out of here", "leave now"],
+      "variants": ["get out now","get out of here","leave now"],
       "regex": "\\bget\\s+out\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 0.95, "anxious": 0.95, "disorganized": 0.95, "secure": 0.80 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 0.95,"disorganized": 0.95,"secure": 0.8}
     },
     {
       "id": "A056",
@@ -479,10 +479,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll kill you",
-      "variants": ["i am going to kill you", "i’ll murder you", "you’re dead"],
+      "variants": ["i am going to kill you","i’ll murder you","you’re dead"],
       "regex": "\\bi['’`]?ll\\s+kill\\s+you\\b",
       "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.1, "secure": 1.0 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1.1,"secure": 1}
     },
     {
       "id": "A057",
@@ -490,10 +490,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll hurt you",
-      "variants": ["i will hurt you", "i’ll harm you", "i’ll break you"],
+      "variants": ["i will hurt you","i’ll harm you","i’ll break you"],
       "regex": "\\bi['’`]?ll\\s+(?:hurt|harm|break)\\s+you\\b",
       "threshold": 0.98,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.1, "secure": 1.0 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1.1,"secure": 1}
     },
     {
       "id": "A058",
@@ -501,10 +501,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you're dead",
-      "variants": ["you are so dead", "you’re finished", "you’re done for"],
+      "variants": ["you are so dead","you’re finished","you’re done for"],
       "regex": "\\byou['’`]?re\\s+dead\\b",
       "threshold": 0.98,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.1, "secure": 1.0 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1.1,"secure": 1}
     },
     {
       "id": "A059",
@@ -512,10 +512,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "watch your back",
-      "variants": ["better watch your back", "you’d better watch it", "watch yourself"],
+      "variants": ["better watch your back","you’d better watch it","watch yourself"],
       "regex": "\\bwatch\\s+your\\s+back\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A060",
@@ -523,10 +523,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you'll regret it",
-      "variants": ["you’re going to regret it", "you’ll be sorry", "you’ll wish you hadn’t"],
+      "variants": ["you’re going to regret it","you’ll be sorry","you’ll wish you hadn’t"],
       "regex": "\\byou['’`]?ll\\s+regret\\s+it\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A061",
@@ -534,10 +534,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll make you pay",
-      "variants": ["you’ll pay for this", "i’ll get you back", "i’ll make sure you suffer"],
+      "variants": ["you’ll pay for this","i’ll get you back","i’ll make sure you suffer"],
       "regex": "\\bi['’`]?ll\\s+make\\s+you\\s+pay\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A062",
@@ -545,10 +545,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i swear i'll ...",
-      "variants": ["i swear i’ll get you", "i swear i’ll kill you", "i swear i’ll hurt you"],
+      "variants": ["i swear i’ll get you","i swear i’ll kill you","i swear i’ll hurt you"],
       "regex": "\\bi\\s+swear\\s+i['’`]?ll\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A063",
@@ -556,10 +556,10 @@
       "category": "threat",
       "matchMode": "hybrid",
       "canonical": "i'll beat you up",
-      "variants": ["i’ll smash you", "i’ll mess you up", "i’ll knock you out"],
+      "variants": ["i’ll smash you","i’ll mess you up","i’ll knock you out"],
       "regex": "\\bi['’`]?ll\\s+(?:beat|smash|mess)\\s+you\\s+up\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.1, "secure": 1.0 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1.1,"secure": 1}
     },
     {
       "id": "A064",
@@ -567,10 +567,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll smash your face",
-      "variants": ["i’ll break your face", "i’ll wreck your face"],
+      "variants": ["i’ll break your face","i’ll wreck your face"],
       "regex": "\\bi['’`]?ll\\s+smash\\s+your\\s+face\\b",
       "threshold": 0.97,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.1, "secure": 1.0 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1.1,"secure": 1}
     },
     {
       "id": "A065",
@@ -578,10 +578,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll kill myself (threat context)",
-      "variants": ["i’m going to kill myself", "i’ll end my life", "i’ll commit suicide"],
+      "variants": ["i’m going to kill myself","i’ll end my life","i’ll commit suicide"],
       "regex": "\\bi['’`]?ll\\s+kill\\s+myself\\b",
       "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.2, "anxious": 1.2, "disorganized": 1.2, "secure": 1.1 }
+      "styleWeight": {"avoidant": 1.2,"anxious": 1.2,"disorganized": 1.2,"secure": 1.1}
     },
     {
       "id": "A066",
@@ -589,10 +589,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'm going to kill you",
-      "variants": ["i am going to kill you", "i’m gonna kill you"],
+      "variants": ["i am going to kill you","i’m gonna kill you"],
       "regex": "\\bi['’`]?m\\s+going\\s+to\\s+kill\\s+you\\b",
       "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.2, "anxious": 1.2, "disorganized": 1.2, "secure": 1.1 }
+      "styleWeight": {"avoidant": 1.2,"anxious": 1.2,"disorganized": 1.2,"secure": 1.1}
     },
     {
       "id": "A067",
@@ -600,10 +600,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you're going to get it",
-      "variants": ["you’re asking for it", "you’re gonna get it"],
+      "variants": ["you’re asking for it","you’re gonna get it"],
       "regex": "\\byou['’`]?re\\s+going\\s+to\\s+get\\s+it\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A068",
@@ -611,10 +611,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you better watch out",
-      "variants": ["you’d better watch yourself", "better be careful"],
+      "variants": ["you’d better watch yourself","better be careful"],
       "regex": "\\byou\\s+better\\s+watch\\s+out\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A069",
@@ -622,10 +622,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll destroy you",
-      "variants": ["i’ll ruin you", "i’ll crush you", "i’ll obliterate you"],
+      "variants": ["i’ll ruin you","i’ll crush you","i’ll obliterate you"],
       "regex": "\\bi['’`]?ll\\s+(?:destroy|ruin|crush|obliterate)\\s+you\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.1, "secure": 1.0 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1.1,"secure": 1}
     },
     {
       "id": "A070",
@@ -633,10 +633,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll kill you if ...",
-      "variants": ["if you do that, i’ll kill you", "one more time and you’re dead"],
+      "variants": ["if you do that, i’ll kill you","one more time and you’re dead"],
       "regex": "\\bi['’`]?ll\\s+kill\\s+you\\s+if\\b",
       "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.2, "anxious": 1.2, "disorganized": 1.2, "secure": 1.1 }
+      "styleWeight": {"avoidant": 1.2,"anxious": 1.2,"disorganized": 1.2,"secure": 1.1}
     },
     {
       "id": "A071",
@@ -644,10 +644,10 @@
       "category": "threat",
       "matchMode": "hybrid",
       "canonical": "i'm gonna beat you",
-      "variants": ["i’m going to beat you", "i’m gonna hurt you", "i’m gonna smash you"],
+      "variants": ["i’m going to beat you","i’m gonna hurt you","i’m gonna smash you"],
       "regex": "\\bi['’`]?m\\s+gonna\\s+(?:beat|hurt|smash)\\s+you\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.1, "secure": 1.0 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1.1,"secure": 1}
     },
     {
       "id": "A072",
@@ -655,10 +655,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'm going to hurt you",
-      "variants": ["i’m gonna hurt you", "i will hurt you soon"],
+      "variants": ["i’m gonna hurt you","i will hurt you soon"],
       "regex": "\\bi['’`]?m\\s+going\\s+to\\s+hurt\\s+you\\b",
       "threshold": 0.97,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.1, "secure": 1.0 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1.1,"secure": 1}
     },
     {
       "id": "A073",
@@ -666,10 +666,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'm gonna kill you",
-      "variants": ["i’m gonna murder you", "i’m gonna end you"],
+      "variants": ["i’m gonna murder you","i’m gonna end you"],
       "regex": "\\bi['’`]?m\\s+gonna\\s+kill\\s+you\\b",
       "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.2, "anxious": 1.2, "disorganized": 1.2, "secure": 1.1 }
+      "styleWeight": {"avoidant": 1.2,"anxious": 1.2,"disorganized": 1.2,"secure": 1.1}
     },
     {
       "id": "A074",
@@ -677,10 +677,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you're dead meat",
-      "variants": ["you’re as good as dead", "you’re toast", "you’re finished"],
+      "variants": ["you’re as good as dead","you’re toast","you’re finished"],
       "regex": "\\byou['’`]?re\\s+dead\\s+meat\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.1, "secure": 1.0 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1.1,"secure": 1}
     },
     {
       "id": "A075",
@@ -688,10 +688,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll find you",
-      "variants": ["i will find you", "i’m gonna find you"],
+      "variants": ["i will find you","i’m gonna find you"],
       "regex": "\\bi['’`]?ll\\s+find\\s+you\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A076",
@@ -699,10 +699,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you won't survive",
-      "variants": ["you will not survive", "you can’t survive this"],
+      "variants": ["you will not survive","you can’t survive this"],
       "regex": "\\byou\\s+(?:won['’`]?t|will\\s+not)\\s+survive\\b",
       "threshold": 0.97,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.1, "secure": 1.0 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1.1,"secure": 1}
     },
     {
       "id": "A077",
@@ -710,10 +710,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll burn your house",
-      "variants": ["i’ll torch your house", "i’ll set your place on fire"],
+      "variants": ["i’ll torch your house","i’ll set your place on fire"],
       "regex": "\\bi['’`]?ll\\s+(?:burn|torch|set)\\s+your\\s+(?:house|place)\\b",
       "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.2, "anxious": 1.2, "disorganized": 1.2, "secure": 1.1 }
+      "styleWeight": {"avoidant": 1.2,"anxious": 1.2,"disorganized": 1.2,"secure": 1.1}
     },
     {
       "id": "A078",
@@ -721,10 +721,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you're next",
-      "variants": ["you’re the next one", "you’re the next target"],
+      "variants": ["you’re the next one","you’re the next target"],
       "regex": "\\byou['’`]?re\\s+next\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A079",
@@ -732,10 +732,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll kill everyone",
-      "variants": ["i’ll kill them all", "i’ll murder everyone"],
+      "variants": ["i’ll kill them all","i’ll murder everyone"],
       "regex": "\\bi['’`]?ll\\s+kill\\s+(?:everyone|all)\\b",
       "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.25, "anxious": 1.25, "disorganized": 1.25, "secure": 1.1 }
+      "styleWeight": {"avoidant": 1.25,"anxious": 1.25,"disorganized": 1.25,"secure": 1.1}
     },
     {
       "id": "A081",
@@ -743,10 +743,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll break your neck",
-      "variants": ["i’ll snap your neck", "i’ll break your bones"],
+      "variants": ["i’ll snap your neck","i’ll break your bones"],
       "regex": "\\bi['’`]?ll\\s+break\\s+your\\s+neck\\b",
       "threshold": 0.98,
-      "styleWeight": { "avoidant": 1.2, "anxious": 1.2, "disorganized": 1.2, "secure": 1.1 }
+      "styleWeight": {"avoidant": 1.2,"anxious": 1.2,"disorganized": 1.2,"secure": 1.1}
     },
     {
       "id": "A082",
@@ -754,10 +754,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll shoot you",
-      "variants": ["i’ll gun you down", "i’ll fire at you"],
+      "variants": ["i’ll gun you down","i’ll fire at you"],
       "regex": "\\bi['’`]?ll\\s+(?:shoot|gun)\\s+you\\b",
       "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.25, "anxious": 1.25, "disorganized": 1.25, "secure": 1.1 }
+      "styleWeight": {"avoidant": 1.25,"anxious": 1.25,"disorganized": 1.25,"secure": 1.1}
     },
     {
       "id": "A083",
@@ -765,10 +765,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll stab you",
-      "variants": ["i’ll knife you", "i’ll cut you"],
+      "variants": ["i’ll knife you","i’ll cut you"],
       "regex": "\\bi['’`]?ll\\s+(?:stab|knife|cut)\\s+you\\b",
       "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.25, "anxious": 1.25, "disorganized": 1.25, "secure": 1.1 }
+      "styleWeight": {"avoidant": 1.25,"anxious": 1.25,"disorganized": 1.25,"secure": 1.1}
     },
     {
       "id": "A084",
@@ -776,10 +776,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'm gonna smash you",
-      "variants": ["i’m going to smash you", "i’m gonna wreck you"],
+      "variants": ["i’m going to smash you","i’m gonna wreck you"],
       "regex": "\\bi['’`]?m\\s+gonna\\s+smash\\s+you\\b",
       "threshold": 0.97,
-      "styleWeight": { "avoidant": 1.2, "anxious": 1.2, "disorganized": 1.2, "secure": 1.1 }
+      "styleWeight": {"avoidant": 1.2,"anxious": 1.2,"disorganized": 1.2,"secure": 1.1}
     },
     {
       "id": "A085",
@@ -787,10 +787,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'm gonna wreck you",
-      "variants": ["i’m gonna ruin you", "i’m gonna crush you"],
+      "variants": ["i’m gonna ruin you","i’m gonna crush you"],
       "regex": "\\bi['’`]?m\\s+gonna\\s+(?:wreck|ruin|crush)\\s+you\\b",
       "threshold": 0.97,
-      "styleWeight": { "avoidant": 1.2, "anxious": 1.2, "disorganized": 1.2, "secure": 1.1 }
+      "styleWeight": {"avoidant": 1.2,"anxious": 1.2,"disorganized": 1.2,"secure": 1.1}
     },
     {
       "id": "A086",
@@ -798,10 +798,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you're done for",
-      "variants": ["you’re finished", "you’re toast", "you’re history"],
+      "variants": ["you’re finished","you’re toast","you’re history"],
       "regex": "\\byou['’`]?re\\s+done\\s+for\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A087",
@@ -809,10 +809,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you better run",
-      "variants": ["you’d better run", "run while you can"],
+      "variants": ["you’d better run","run while you can"],
       "regex": "\\byou\\s+better\\s+run\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A088",
@@ -820,10 +820,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you better pray",
-      "variants": ["you’d better pray hard", "pray you survive"],
+      "variants": ["you’d better pray hard","pray you survive"],
       "regex": "\\byou\\s+better\\s+pray\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A089",
@@ -831,10 +831,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you better be scared",
-      "variants": ["you’d better be afraid", "be scared", "be very afraid"],
+      "variants": ["you’d better be afraid","be scared","be very afraid"],
       "regex": "\\byou\\s+better\\s+(?:be\\s+)?(?:scared|afraid)\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A090",
@@ -842,10 +842,10 @@
       "category": "threat",
       "matchMode": "hybrid",
       "canonical": "don't sleep tonight",
-      "variants": ["don’t close your eyes tonight", "you better not sleep"],
+      "variants": ["don’t close your eyes tonight","you better not sleep"],
       "regex": "\\bdon['’`]?t\\s+sleep\\s+tonight\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.1, "secure": 1.0 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1.1,"secure": 1}
     },
     {
       "id": "A091",
@@ -853,10 +853,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll haunt you",
-      "variants": ["i’ll haunt your dreams", "i’ll haunt your life"],
+      "variants": ["i’ll haunt your dreams","i’ll haunt your life"],
       "regex": "\\bi['’`]?ll\\s+haunt\\s+you\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.05, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.05,"secure": 0.95}
     },
     {
       "id": "A092",
@@ -864,10 +864,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll end you",
-      "variants": ["i’ll finish you", "i’ll terminate you"],
+      "variants": ["i’ll finish you","i’ll terminate you"],
       "regex": "\\bi['’`]?ll\\s+end\\s+you\\b",
       "threshold": 0.98,
-      "styleWeight": { "avoidant": 1.2, "anxious": 1.2, "disorganized": 1.2, "secure": 1.1 }
+      "styleWeight": {"avoidant": 1.2,"anxious": 1.2,"disorganized": 1.2,"secure": 1.1}
     },
     {
       "id": "A093",
@@ -875,10 +875,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "i can't stand you",
-      "variants": ["i cant stand you", "i cannot stand you", "i can’t stand you"],
+      "variants": ["i cant stand you","i cannot stand you","i can’t stand you"],
       "regex": "\\bi\\s+(?:can['’`]?t|cannot)\\s+stand\\s+you\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A094",
@@ -886,10 +886,10 @@
       "category": "hostile_command",
       "matchMode": "regex",
       "canonical": "shut the hell up",
-      "variants": ["shut the heck up", "shut the hell up now"],
+      "variants": ["shut the heck up","shut the hell up now"],
       "regex": "\\bshut\\s+the\\s+hell\\s+up\\b",
       "threshold": 0.98,
-      "styleWeight": { "avoidant": 1.0, "anxious": 0.95, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 0.95,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A095",
@@ -897,10 +897,10 @@
       "category": "confrontation",
       "matchMode": "regex",
       "canonical": "who the hell do you think you are",
-      "variants": ["who do you think you are", "who the hell are you"],
+      "variants": ["who do you think you are","who the hell are you"],
       "regex": "\\bwho\\s+the\\s+hell\\s+do\\s+you\\s+think\\s+you\\s+are\\b",
       "threshold": 0.97,
-      "styleWeight": { "avoidant": 1.0, "anxious": 0.95, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 0.95,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A096",
@@ -908,10 +908,10 @@
       "category": "withdrawal_finality",
       "matchMode": "regex",
       "canonical": "i'll never forgive you",
-      "variants": ["i will never forgive you", "i can’t forgive you ever"],
+      "variants": ["i will never forgive you","i can’t forgive you ever"],
       "regex": "\\bi(?:['’`]ll)?\\s*\\b(?:will\\s+)?never\\s+forgive\\s+you\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A097",
@@ -919,10 +919,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a pathetic liar",
-      "variants": ["you’re pathetic liar", "you are a pathetic liar"],
+      "variants": ["you’re pathetic liar","you are a pathetic liar"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?pathetic\\s+liar\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A098",
@@ -930,10 +930,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you lie about everything",
-      "variants": ["everything you say is a lie", "you’re dishonest about everything"],
+      "variants": ["everything you say is a lie","you’re dishonest about everything"],
       "regex": "\\byou\\s+lie\\s+about\\s+everything\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A099",
@@ -941,10 +941,10 @@
       "category": "profanity_insult",
       "matchMode": "regex",
       "canonical": "you're so full of shit",
-      "variants": ["you’re so full of crap", "you are full of crap"],
+      "variants": ["you’re so full of crap","you are full of crap"],
       "regex": "\\byou(?:['’`]?re|\\s+are)?\\s+so\\s+full\\s+of\\s+(?:shit|crap)\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.0, "anxious": 0.95, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 0.95,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A100",
@@ -952,10 +952,10 @@
       "category": "profanity_direct",
       "matchMode": "regex",
       "canonical": "go fuck yourself",
-      "variants": ["go f*** yourself", "go f yourself", "go screw yourself"],
+      "variants": ["go f*** yourself","go f yourself","go screw yourself"],
       "regex": "\\bgo\\s+f(?:uck|\\*\\*\\*|\\*)?\\s*yourself\\b",
       "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.0, "anxious": 0.9, "disorganized": 1.0, "secure": 0.75 }
+      "styleWeight": {"avoidant": 1,"anxious": 0.9,"disorganized": 1,"secure": 0.75}
     },
     {
       "id": "A101",
@@ -963,10 +963,10 @@
       "category": "confrontation",
       "matchMode": "regex",
       "canonical": "what's your problem",
-      "variants": ["what is your problem", "what’s your issue"],
+      "variants": ["what is your problem","what’s your issue"],
       "regex": "\\bwhat['’`]?s\\s+your\\s+(?:problem|issue)\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.0, "disorganized": 0.95, "secure": 0.8 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1,"disorganized": 0.95,"secure": 0.8}
     },
     {
       "id": "A102",
@@ -974,10 +974,10 @@
       "category": "withdrawal",
       "matchMode": "regex",
       "canonical": "i don't care about you",
-      "variants": ["i dont care about you", "i do not care about you", "i don’t care about you"],
+      "variants": ["i dont care about you","i do not care about you","i don’t care about you"],
       "regex": "\\bi\\s+(?:don['’`]?t|do\\s+not)\\s+care\\s+about\\s+you\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 0.9, "anxious": 1.0, "disorganized": 0.95, "secure": 0.8 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 1,"disorganized": 0.95,"secure": 0.8}
     },
     {
       "id": "A103",
@@ -985,10 +985,10 @@
       "category": "social_rejection",
       "matchMode": "regex",
       "canonical": "nobody likes you",
-      "variants": ["no one likes you", "nobody cares about you"],
+      "variants": ["no one likes you","nobody cares about you"],
       "regex": "\\b(?:nobody|no\\s+one)\\s+likes\\s+you\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A104",
@@ -996,10 +996,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you make everything worse",
-      "variants": ["you make things worse", "you make it worse"],
+      "variants": ["you make things worse","you make it worse"],
       "regex": "\\byou\\s+make\\s+(?:everything|things|it)\\s+worse\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A105",
@@ -1007,10 +1007,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you ruined my life",
-      "variants": ["you ruin my life", "you destroyed my life", "you wrecked my life"],
+      "variants": ["you ruin my life","you destroyed my life","you wrecked my life"],
       "regex": "\\byou\\s+(?:ruined|ruin|destroyed|wrecked)\\s+my\\s+life\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A106",
@@ -1018,10 +1018,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a failure",
-      "variants": ["you are a failure", "you’re such a failure"],
+      "variants": ["you are a failure","you’re such a failure"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:such\\s+)?a\\s+failure\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 0.9, "anxious": 1.05, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 1.05,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A107",
@@ -1029,10 +1029,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're crazy",
-      "variants": ["you are crazy", "you’re insane"],
+      "variants": ["you are crazy","you’re insane"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:crazy|insane)\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 0.9, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A108",
@@ -1040,10 +1040,10 @@
       "category": "withdrawal_finality",
       "matchMode": "regex",
       "canonical": "i'm blocking you",
-      "variants": ["i am blocking you", "you’re blocked", "i’m going to block you"],
+      "variants": ["i am blocking you","you’re blocked","i’m going to block you"],
       "regex": "\\bi\\s*(?:am|['’`]?m)?\\s*blocking\\s+you\\b|\\byou['’`]?re\\s+blocked\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.0, "disorganized": 0.95, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1,"disorganized": 0.95,"secure": 0.85}
     },
     {
       "id": "A109",
@@ -1051,10 +1051,10 @@
       "category": "confrontation",
       "matchMode": "regex",
       "canonical": "keep my name out of your mouth",
-      "variants": ["keep my name out your mouth", "don’t say my name"],
+      "variants": ["keep my name out your mouth","don’t say my name"],
       "regex": "\\bkeep\\s+my\\s+name\\s+out\\s+of\\s+your\\s+mouth\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A110",
@@ -1062,10 +1062,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "touch me and see what happens",
-      "variants": ["try it and see what happens", "do it and see what happens"],
+      "variants": ["try it and see what happens","do it and see what happens"],
       "regex": "\\b(?:touch\\s+me|try\\s+it|do\\s+it)\\s+and\\s+see\\s+what\\s+happens\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.1, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.1,"secure": 0.95}
     },
     {
       "id": "A111",
@@ -1073,10 +1073,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll report you",
-      "variants": ["i will report you", "i’m reporting you"],
+      "variants": ["i will report you","i’m reporting you"],
       "regex": "\\bi(?:['’`]ll|\\s+will)?\\s+report\\s+you\\b|\\bi['’`]?m\\s+reporting\\s+you\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.0, "disorganized": 0.95, "secure": 0.9 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1,"disorganized": 0.95,"secure": 0.9}
     },
     {
       "id": "A112",
@@ -1084,10 +1084,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "try me",
-      "variants": ["go ahead, try me", "try me and see"],
+      "variants": ["go ahead, try me","try me and see"],
       "regex": "\\btry\\s+me\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.05, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1.05,"secure": 0.9}
     },
     {
       "id": "A113",
@@ -1095,10 +1095,10 @@
       "category": "confrontation",
       "matchMode": "regex",
       "canonical": "don't mess with me",
-      "variants": ["don’t mess with me", "don’t you dare mess with me"],
+      "variants": ["don’t mess with me","don’t you dare mess with me"],
       "regex": "\\bdon['’`]?t\\s+mess\\s+with\\s+me\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.1, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1.1,"secure": 0.9}
     },
     {
       "id": "A114",
@@ -1106,10 +1106,10 @@
       "category": "confrontation",
       "matchMode": "regex",
       "canonical": "don't push me",
-      "variants": ["don’t push me too far", "don’t test me"],
+      "variants": ["don’t push me too far","don’t test me"],
       "regex": "\\bdon['’`]?t\\s+push\\s+me\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.05, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1.05,"secure": 0.9}
     },
     {
       "id": "A115",
@@ -1117,10 +1117,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you're asking for it",
-      "variants": ["you’re asking for trouble", "you’re looking for it"],
+      "variants": ["you’re asking for trouble","you’re looking for it"],
       "regex": "\\byou['’`]?re\\s+asking\\s+for\\s+(?:it|trouble)\\b",
       "threshold": 0.91,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.05, "disorganized": 1.1, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.05,"disorganized": 1.1,"secure": 0.9}
     },
     {
       "id": "A116",
@@ -1128,10 +1128,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you're gonna regret this",
-      "variants": ["you’ll regret this", "you’re going to regret this"],
+      "variants": ["you’ll regret this","you’re going to regret this"],
       "regex": "\\byou['’`]?re\\s+(?:gonna|going\\s+to|will)\\s+regret\\s+this\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.1, "disorganized": 1.1, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.1,"disorganized": 1.1,"secure": 0.9}
     },
     {
       "id": "A117",
@@ -1139,10 +1139,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you won't get away with this",
-      "variants": ["you will not get away with this", "you can’t get away with this"],
+      "variants": ["you will not get away with this","you can’t get away with this"],
       "regex": "\\byou\\s+(?:won['’`]?t|will\\s+not|can['’`]?t)\\s+get\\s+away\\s+with\\s+this\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.1, "disorganized": 1.1, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.1,"disorganized": 1.1,"secure": 0.9}
     },
     {
       "id": "A118",
@@ -1150,10 +1150,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you'll pay for this",
-      "variants": ["you will pay for this", "you’ll pay dearly"],
+      "variants": ["you will pay for this","you’ll pay dearly"],
       "regex": "\\byou(?:['’`]ll|\\s+will)\\s+pay\\s+for\\s+this\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.1, "disorganized": 1.1, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.1,"disorganized": 1.1,"secure": 0.9}
     },
     {
       "id": "A119",
@@ -1161,10 +1161,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "you'll be sorry",
-      "variants": ["you will be sorry", "you’re gonna be sorry"],
+      "variants": ["you will be sorry","you’re gonna be sorry"],
       "regex": "\\byou(?:['’`]ll|\\s+will|\\s+are\\s+going\\s+to)\\s+be\\s+sorry\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.05, "disorganized": 1.05, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.05,"disorganized": 1.05,"secure": 0.9}
     },
     {
       "id": "A120",
@@ -1172,10 +1172,10 @@
       "category": "hostile_command",
       "matchMode": "regex",
       "canonical": "stay out of my life",
-      "variants": ["keep out of my life", "don’t be part of my life"],
+      "variants": ["keep out of my life","don’t be part of my life"],
       "regex": "\\bstay\\s+out\\s+of\\s+my\\s+life\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.0, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A121",
@@ -1183,10 +1183,10 @@
       "category": "contempt",
       "matchMode": "regex",
       "canonical": "you're not worth my time",
-      "variants": ["you’re not worth it", "you’re not worth anything to me"],
+      "variants": ["you’re not worth it","you’re not worth anything to me"],
       "regex": "\\byou['’`]?re\\s+not\\s+worth\\s+(?:my\\s+time|it|anything)\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A122",
@@ -1194,10 +1194,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic",
-      "variants": ["you’re pitiful", "you’re a sad excuse"],
+      "variants": ["you’re pitiful","you’re a sad excuse"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+pathetic\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.1, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.1,"secure": 0.85}
     },
     {
       "id": "A123",
@@ -1205,10 +1205,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're disgusting",
-      "variants": ["you’re gross", "you make me sick"],
+      "variants": ["you’re gross","you make me sick"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+disgusting\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.1, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.1,"secure": 0.85}
     },
     {
       "id": "A124",
@@ -1216,10 +1216,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse",
-      "variants": ["you’re a pathetic excuse", "you’re such a pathetic excuse"],
+      "variants": ["you’re a pathetic excuse","you’re such a pathetic excuse"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:such\\s+)?a\\s+pathetic\\s+excuse\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.1, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.1,"secure": 0.85}
     },
     {
       "id": "A125",
@@ -1227,10 +1227,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're an embarrassment",
-      "variants": ["you’re humiliating", "you disgrace yourself"],
+      "variants": ["you’re humiliating","you disgrace yourself"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+an\\s+embarrassment\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A126",
@@ -1238,10 +1238,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're trash",
-      "variants": ["you’re garbage", "you’re worthless", "you’re filth"],
+      "variants": ["you’re garbage","you’re worthless","you’re filth"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+trash\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A127",
@@ -1249,10 +1249,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're nothing",
-      "variants": ["you amount to nothing", "you’re a nobody"],
+      "variants": ["you amount to nothing","you’re a nobody"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+nothing\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A128",
@@ -1260,10 +1260,10 @@
       "category": "contempt",
       "matchMode": "regex",
       "canonical": "you deserve nothing",
-      "variants": ["you’re worthy of nothing", "you merit nothing"],
+      "variants": ["you’re worthy of nothing","you merit nothing"],
       "regex": "\\byou\\s+deserve\\s+nothing\\b",
       "threshold": 0.91,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A129",
@@ -1271,10 +1271,10 @@
       "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "i hate you",
-      "variants": ["i despise you", "i loathe you", "i can’t stand you"],
+      "variants": ["i despise you","i loathe you","i can’t stand you"],
       "regex": "\\bi\\s+hate\\s+you\\b",
       "threshold": 0.98,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A130",
@@ -1282,10 +1282,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you ruin everything",
-      "variants": ["you destroy everything", "you mess everything up"],
+      "variants": ["you destroy everything","you mess everything up"],
       "regex": "\\byou\\s+(?:ruin|ruins|ruined)\\s+everything\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A131",
@@ -1293,10 +1293,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you're the problem",
-      "variants": ["you are the problem", "you cause all the trouble"],
+      "variants": ["you are the problem","you cause all the trouble"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+the\\s+problem\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A132",
@@ -1304,10 +1304,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you always mess things up",
-      "variants": ["you screw things up every time", "you never get it right"],
+      "variants": ["you screw things up every time","you never get it right"],
       "regex": "\\byou\\s+always\\s+mess\\s+(?:things\\s+)?up\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A133",
@@ -1315,10 +1315,10 @@
       "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "i wish you were dead",
-      "variants": ["i hope you die", "you should be dead", "i’d rather you didn’t exist"],
+      "variants": ["i hope you die","you should be dead","i’d rather you didn’t exist"],
       "regex": "\\bi\\s+wish\\s+you\\s+were\\s+dead\\b",
       "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A134",
@@ -1326,10 +1326,10 @@
       "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "you're dead to me",
-      "variants": ["you no longer exist to me", "i’m done with you forever", "you’re out of my life"],
+      "variants": ["you no longer exist to me","i’m done with you forever","you’re out of my life"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+dead\\s+to\\s+me\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A135",
@@ -1337,10 +1337,10 @@
       "category": "profanity_direct",
       "matchMode": "regex",
       "canonical": "go to hell",
-      "variants": ["burn in hell", "rot in hell", "you belong in hell"],
+      "variants": ["burn in hell","rot in hell","you belong in hell"],
       "regex": "\\bgo\\s+to\\s+hell\\b",
       "threshold": 0.98,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A136",
@@ -1348,10 +1348,10 @@
       "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "drop dead",
-      "variants": ["fall down dead", "i wish you’d die", "perish now"],
+      "variants": ["fall down dead","i wish you’d die","perish now"],
       "regex": "\\bdrop\\s+dead\\b",
       "threshold": 0.98,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A137",
@@ -1359,10 +1359,10 @@
       "category": "hostile_command",
       "matchMode": "regex",
       "canonical": "shut your mouth",
-      "variants": ["close your mouth", "zip it", "keep quiet"],
+      "variants": ["close your mouth","zip it","keep quiet"],
       "regex": "\\bshut\\s+your\\s+mouth\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.0, "anxious": 0.95, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 0.95,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A138",
@@ -1370,10 +1370,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "i can't stand you",
-      "variants": ["i can’t bear you", "you irritate me endlessly", "i have no tolerance for you"],
+      "variants": ["i can’t bear you","you irritate me endlessly","i have no tolerance for you"],
       "regex": "\\bi\\s+(?:can['’`]?t|cannot)\\s+stand\\s+you\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A139",
@@ -1381,10 +1381,10 @@
       "category": "profanity_command",
       "matchMode": "regex",
       "canonical": "shut the hell up",
-      "variants": ["shut up now", "keep your mouth shut", "be quiet immediately"],
+      "variants": ["shut up now","keep your mouth shut","be quiet immediately"],
       "regex": "\\bshut\\s+the\\s+hell\\s+up\\b",
       "threshold": 0.98,
-      "styleWeight": { "avoidant": 1.0, "anxious": 0.95, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 0.95,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A140",
@@ -1392,10 +1392,10 @@
       "category": "confrontation",
       "matchMode": "regex",
       "canonical": "who the hell do you think you are",
-      "variants": ["who do you think you’re talking to", "who do you think you are", "what gives you the right"],
+      "variants": ["who do you think you’re talking to","who do you think you are","what gives you the right"],
       "regex": "\\bwho\\s+the\\s+hell\\s+do\\s+you\\s+think\\s+you\\s+are\\b",
       "threshold": 0.97,
-      "styleWeight": { "avoidant": 1.0, "anxious": 0.95, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 0.95,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A141",
@@ -1403,10 +1403,10 @@
       "category": "withdrawal_finality",
       "matchMode": "regex",
       "canonical": "i'll never forgive you",
-      "variants": ["i won’t forgive you", "you’ll never be forgiven", "i can’t forgive you"],
+      "variants": ["i won’t forgive you","you’ll never be forgiven","i can’t forgive you"],
       "regex": "\\bi(?:['’`]ll|\\s+will)?\\s+never\\s+forgive\\s+you\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A142",
@@ -1414,10 +1414,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a pathetic liar",
-      "variants": ["you’re a disgusting liar", "lying coward", "worthless liar"],
+      "variants": ["you’re a disgusting liar","lying coward","worthless liar"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?pathetic\\s+liar\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A143",
@@ -1425,10 +1425,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you lie about everything",
-      "variants": ["everything you say is a lie", "you’re dishonest about everything", "you never tell the truth"],
+      "variants": ["everything you say is a lie","you’re dishonest about everything","you never tell the truth"],
       "regex": "\\byou\\s+lie\\s+about\\s+everything\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A144",
@@ -1436,10 +1436,10 @@
       "category": "profanity_insult",
       "matchMode": "regex",
       "canonical": "you're so full of shit",
-      "variants": ["you’re so full of crap", "that’s nonsense coming from you"],
+      "variants": ["you’re so full of crap","that’s nonsense coming from you"],
       "regex": "\\byou(?:['’`]?re|\\s+are)?\\s+so\\s+full\\s+of\\s+(?:shit|crap)\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.0, "anxious": 0.95, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 0.95,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A145",
@@ -1447,10 +1447,10 @@
       "category": "profanity_direct",
       "matchMode": "regex",
       "canonical": "go fuck yourself",
-      "variants": ["go screw yourself", "go to hell", "get lost forever"],
+      "variants": ["go screw yourself","go to hell","get lost forever"],
       "regex": "\\bgo\\s+f(?:uck|\\*+)?\\s*yourself\\b",
       "threshold": 0.99,
-      "styleWeight": { "avoidant": 1.0, "anxious": 0.9, "disorganized": 1.0, "secure": 0.75 }
+      "styleWeight": {"avoidant": 1,"anxious": 0.9,"disorganized": 1,"secure": 0.75}
     },
     {
       "id": "A146",
@@ -1458,10 +1458,10 @@
       "category": "contempt",
       "matchMode": "regex",
       "canonical": "you're a joke",
-      "variants": ["you’re laughable", "you’re ridiculous", "you’re a clown"],
+      "variants": ["you’re laughable","you’re ridiculous","you’re a clown"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?joke\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A147",
@@ -1469,10 +1469,10 @@
       "category": "contempt",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse of a man",
-      "variants": ["you’re a sad excuse for a human", "worthless excuse of a man", "shame of a person"],
+      "variants": ["you’re a sad excuse for a human","worthless excuse of a man","shame of a person"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?pathetic\\s+excuse\\s+of\\s+(?:a\\s+)?(?:man|woman|person)\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A148",
@@ -1480,10 +1480,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're an embarrassment",
-      "variants": ["you’re shameful", "you’re humiliating", "you disgrace yourself"],
+      "variants": ["you’re shameful","you’re humiliating","you disgrace yourself"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+an\\s+embarrassment\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A149",
@@ -1491,10 +1491,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're trash",
-      "variants": ["you’re garbage", "you’re worthless"],
+      "variants": ["you’re garbage","you’re worthless"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+trash\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A150",
@@ -1502,10 +1502,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're nothing",
-      "variants": ["you amount to nothing", "you’re a nobody", "you’re insignificant"],
+      "variants": ["you amount to nothing","you’re a nobody","you’re insignificant"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+nothing\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A151",
@@ -1513,10 +1513,10 @@
       "category": "contempt",
       "matchMode": "regex",
       "canonical": "you deserve nothing",
-      "variants": ["you’re worthy of nothing", "you merit nothing", "you earn nothing"],
+      "variants": ["you’re worthy of nothing","you merit nothing","you earn nothing"],
       "regex": "\\byou\\s+deserve\\s+nothing\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A152",
@@ -1524,10 +1524,10 @@
       "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "i hate you",
-      "variants": ["i despise you", "i loathe you", "i can’t stand you"],
+      "variants": ["i despise you","i loathe you","i can’t stand you"],
       "regex": "\\bi\\s+hate\\s+you\\b",
       "threshold": 0.98,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A153",
@@ -1535,10 +1535,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you ruin everything",
-      "variants": ["you destroy everything", "you mess everything up"],
+      "variants": ["you destroy everything","you mess everything up"],
       "regex": "\\byou\\s+(?:ruin|ruined|destroy|destroyed|mess)\\s+(?:everything|all)\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A154",
@@ -1546,10 +1546,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you're the problem",
-      "variants": ["you are the problem", "you’re the issue", "you cause all the problems"],
+      "variants": ["you are the problem","you’re the issue","you cause all the problems"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+the\\s+(?:problem|issue)\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A155",
@@ -1557,10 +1557,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you always mess things up",
-      "variants": ["you screw things up every time", "you always ruin things"],
+      "variants": ["you screw things up every time","you always ruin things"],
       "regex": "\\byou\\s+always\\s+(?:mess|screw|ruin)\\s+(?:things|it)\\s+up\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A156",
@@ -1568,10 +1568,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "everything is your fault",
-      "variants": ["this is all your fault", "all of this is your fault"],
+      "variants": ["this is all your fault","all of this is your fault"],
       "regex": "\\b(?:everything|this|all(?:\\s+of\\s+this)?)\\s+is\\s+your\\s+fault\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.1, "disorganized": 1.05, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.1,"disorganized": 1.05,"secure": 0.9}
     },
     {
       "id": "A157",
@@ -1579,10 +1579,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you ruin my life",
-      "variants": ["you destroyed my life", "you wrecked my life"],
+      "variants": ["you destroyed my life","you wrecked my life"],
       "regex": "\\byou\\s+(?:ruin|ruined|destroyed|wrecked)\\s+my\\s+life\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.1, "disorganized": 1.05, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.1,"disorganized": 1.05,"secure": 0.9}
     },
     {
       "id": "A158",
@@ -1590,10 +1590,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're useless",
-      "variants": ["you’re worthless", "you’re good for nothing"],
+      "variants": ["you’re worthless","you’re good for nothing"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+useless\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A159",
@@ -1601,10 +1601,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic",
-      "variants": ["you’re pitiful", "you’re miserable"],
+      "variants": ["you’re pitiful","you’re miserable"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+pathetic\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A160",
@@ -1612,10 +1612,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're disgusting",
-      "variants": ["you make me sick", "you’re gross"],
+      "variants": ["you make me sick","you’re gross"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+disgusting\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A161",
@@ -1623,10 +1623,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse",
-      "variants": ["you’re a pathetic excuse for a human", "worthless excuse"],
+      "variants": ["you’re a pathetic excuse for a human","worthless excuse"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?pathetic\\s+excuse\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A162",
@@ -1634,10 +1634,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're an embarrassment",
-      "variants": ["you’re humiliating", "you disgrace me"],
+      "variants": ["you’re humiliating","you disgrace me"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+an\\s+embarrassment\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A163",
@@ -1645,10 +1645,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're trash",
-      "variants": ["you’re garbage", "you’re worthless"],
+      "variants": ["you’re garbage","you’re worthless"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+trash\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A164",
@@ -1656,10 +1656,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're nothing",
-      "variants": ["you amount to nothing", "you’re a nobody"],
+      "variants": ["you amount to nothing","you’re a nobody"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+nothing\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A165",
@@ -1667,10 +1667,10 @@
       "category": "contempt",
       "matchMode": "regex",
       "canonical": "you deserve nothing",
-      "variants": ["you’re worthy of nothing", "you merit nothing"],
+      "variants": ["you’re worthy of nothing","you merit nothing"],
       "regex": "\\byou\\s+deserve\\s+nothing\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A166",
@@ -1678,10 +1678,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a failure",
-      "variants": ["you’re such a failure", "you are a failure"],
+      "variants": ["you’re such a failure","you are a failure"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:such\\s+)?a\\s+failure\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 0.9, "anxious": 1.05, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 1.05,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A167",
@@ -1689,10 +1689,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're crazy",
-      "variants": ["you’re insane", "you’re out of your mind"],
+      "variants": ["you’re insane","you’re out of your mind"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:crazy|insane)\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 0.9, "anxious": 1.0, "disorganized": 1.0, "secure": 0.8 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 1,"disorganized": 1,"secure": 0.8}
     },
     {
       "id": "A168",
@@ -1700,10 +1700,10 @@
       "category": "withdrawal_finality",
       "matchMode": "regex",
       "canonical": "i'm blocking you",
-      "variants": ["you’re blocked", "i will block you"],
+      "variants": ["you’re blocked","i will block you"],
       "regex": "\\bi(?:['’`]?m|\\s*am)?\\s+blocking\\s+you\\b|\\byou['’`]?re\\s+blocked\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.0, "disorganized": 0.95, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1,"disorganized": 0.95,"secure": 0.85}
     },
     {
       "id": "A169",
@@ -1711,10 +1711,10 @@
       "category": "confrontation",
       "matchMode": "regex",
       "canonical": "keep my name out of your mouth",
-      "variants": ["don’t say my name", "don’t mention me"],
+      "variants": ["don’t say my name","don’t mention me"],
       "regex": "\\bkeep\\s+my\\s+name\\s+out\\s+of\\s+your\\s+mouth\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A170",
@@ -1722,10 +1722,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "touch me and see what happens",
-      "variants": ["try it and see what happens", "do it and find out"],
+      "variants": ["try it and see what happens","do it and find out"],
       "regex": "\\b(?:touch\\s+me|try\\s+it|do\\s+it)\\s+and\\s+see\\s+what\\s+happens\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.1, "secure": 0.95 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1.1,"secure": 0.95}
     },
     {
       "id": "A171",
@@ -1733,10 +1733,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "i'll report you",
-      "variants": ["i will report you", "i’m reporting you"],
+      "variants": ["i will report you","i’m reporting you"],
       "regex": "\\bi(?:['’`]ll|\\s+will)?\\s+report\\s+you\\b|\\bi['’`]?m\\s+reporting\\s+you\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.0, "disorganized": 0.95, "secure": 0.9 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1,"disorganized": 0.95,"secure": 0.9}
     },
     {
       "id": "A172",
@@ -1744,10 +1744,10 @@
       "category": "threat",
       "matchMode": "regex",
       "canonical": "try me",
-      "variants": ["go ahead, try me", "test me and see"],
+      "variants": ["go ahead, try me","test me and see"],
       "regex": "\\btry\\s+me\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.05, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1.05,"secure": 0.9}
     },
     {
       "id": "A173",
@@ -1755,10 +1755,10 @@
       "category": "blame",
       "matchMode": "regex",
       "canonical": "you're impossible",
-      "variants": ["you’re unbearable", "you’re hopeless"],
+      "variants": ["you’re unbearable","you’re hopeless"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+impossible\\b",
       "threshold": 0.9,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A174",
@@ -1766,10 +1766,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're worthless",
-      "variants": ["you’re good for nothing", "you have no value"],
+      "variants": ["you’re good for nothing","you have no value"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+worthless\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A175",
@@ -1777,10 +1777,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're hopeless",
-      "variants": ["you’ll never change", "you’re beyond help"],
+      "variants": ["you’ll never change","you’re beyond help"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+hopeless\\b",
       "threshold": 0.92,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A176",
@@ -1788,10 +1788,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a waste of space",
-      "variants": ["you’re wasting space", "you’re pointless"],
+      "variants": ["you’re wasting space","you’re pointless"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+a\\s+waste\\s+of\\s+space\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A177",
@@ -1799,10 +1799,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic human being",
-      "variants": ["you’re a sorry excuse of a person", "worthless human"],
+      "variants": ["you’re a sorry excuse of a person","worthless human"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?pathetic\\s+(?:human|person|being)\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A178",
@@ -1810,10 +1810,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a loser",
-      "variants": ["you’re such a loser", "you are a loser"],
+      "variants": ["you’re such a loser","you are a loser"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:such\\s+)?a\\s+loser\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 0.9, "anxious": 1.05, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 1.05,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A179",
@@ -1821,10 +1821,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're a clown",
-      "variants": ["you’re ridiculous", "you’re laughable"],
+      "variants": ["you’re ridiculous","you’re laughable"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?clown\\b",
       "threshold": 0.93,
-      "styleWeight": { "avoidant": 0.9, "anxious": 1.0, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A180",
@@ -1832,10 +1832,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse of a parent",
-      "variants": ["you’re a horrible parent", "you’re a disgraceful mother", "you’re a disgraceful father"],
+      "variants": ["you’re a horrible parent","you’re a disgraceful mother","you’re a disgraceful father"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?pathetic\\s+excuse\\s+of\\s+(?:a\\s+)?(?:parent|mother|father)\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A181",
@@ -1843,10 +1843,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse of a friend",
-      "variants": ["you’re a horrible friend", "you’re worthless as a friend"],
+      "variants": ["you’re a horrible friend","you’re worthless as a friend"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?pathetic\\s+excuse\\s+of\\s+(?:a\\s+)?friend\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A182",
@@ -1854,10 +1854,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse of a partner",
-      "variants": ["you’re a worthless partner", "you’re a horrible boyfriend", "you’re a horrible girlfriend"],
+      "variants": ["you’re a worthless partner","you’re a horrible boyfriend","you’re a horrible girlfriend"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?pathetic\\s+excuse\\s+of\\s+(?:a\\s+)?(?:partner|boyfriend|girlfriend|spouse)\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A183",
@@ -1865,10 +1865,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse of a child",
-      "variants": ["you’re a disgraceful child", "you’re a worthless son", "you’re a worthless daughter"],
+      "variants": ["you’re a disgraceful child","you’re a worthless son","you’re a worthless daughter"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?pathetic\\s+excuse\\s+of\\s+(?:a\\s+)?(?:child|son|daughter)\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A184",
@@ -1876,10 +1876,10 @@
       "category": "character_attack",
       "matchMode": "regex",
       "canonical": "you're pathetic excuse of a sibling",
-      "variants": ["you’re a disgraceful brother", "you’re a disgraceful sister"],
+      "variants": ["you’re a disgraceful brother","you’re a disgraceful sister"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?pathetic\\s+excuse\\s+of\\s+(?:a\\s+)?(?:sibling|brother|sister)\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 0.95, "anxious": 1.1, "disorganized": 1.05, "secure": 0.85 }
+      "styleWeight": {"avoidant": 0.95,"anxious": 1.1,"disorganized": 1.05,"secure": 0.85}
     },
     {
       "id": "A185",
@@ -1887,10 +1887,10 @@
       "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "i wish you'd disappear",
-      "variants": ["i wish you’d vanish", "i hope you disappear", "i want you gone forever"],
+      "variants": ["i wish you’d vanish","i hope you disappear","i want you gone forever"],
       "regex": "\\bi\\s+wish\\s+you['’`]?d\\s+(?:disappear|vanish)\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.0, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A186",
@@ -1898,10 +1898,10 @@
       "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "the world would be better without you",
-      "variants": ["everyone would be better off without you", "things would improve if you were gone"],
+      "variants": ["everyone would be better off without you","things would improve if you were gone"],
       "regex": "\\b(?:the\\s+world|everyone|things)\\s+would\\s+be\\s+better\\s+without\\s+you\\b",
       "threshold": 0.97,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.0, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1,"secure": 0.9}
     },
     {
       "id": "A187",
@@ -1909,10 +1909,10 @@
       "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "you're poison",
-      "variants": ["you’re toxic", "you’re venom", "you’re deadly to me"],
+      "variants": ["you’re toxic","you’re venom","you’re deadly to me"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:poison|toxic|venom)\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.0, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A188",
@@ -1920,10 +1920,10 @@
       "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "you're a disease",
-      "variants": ["you’re cancer", "you’re a plague", "you’re a virus"],
+      "variants": ["you’re cancer","you’re a plague","you’re a virus"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+(?:a\\s+)?(?:disease|cancer|plague|virus)\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.0, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1,"secure": 0.9}
     },
     {
       "id": "A189",
@@ -1931,10 +1931,10 @@
       "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "you're toxic",
-      "variants": ["you’re poison", "you’re poisonous"],
+      "variants": ["you’re poison","you’re poisonous"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+toxic\\b",
       "threshold": 0.95,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "A190",
@@ -1942,10 +1942,10 @@
       "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "you're cancer",
-      "variants": ["you’re like a disease", "you’re malignant"],
+      "variants": ["you’re like a disease","you’re malignant"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+cancer\\b",
       "threshold": 0.96,
-      "styleWeight": { "avoidant": 1.1, "anxious": 1.1, "disorganized": 1.0, "secure": 0.9 }
+      "styleWeight": {"avoidant": 1.1,"anxious": 1.1,"disorganized": 1,"secure": 0.9}
     },
     {
       "id": "A191",
@@ -1953,10 +1953,10 @@
       "category": "extreme_hostility",
       "matchMode": "regex",
       "canonical": "you're evil",
-      "variants": ["you’re pure evil", "you’re wicked"],
+      "variants": ["you’re pure evil","you’re wicked"],
       "regex": "\\byou(?:['’`]?re|\\s+are)\\s+evil\\b",
       "threshold": 0.94,
-      "styleWeight": { "avoidant": 1.05, "anxious": 1.05, "disorganized": 1.0, "secure": 0.85 }
+      "styleWeight": {"avoidant": 1.05,"anxious": 1.05,"disorganized": 1,"secure": 0.85}
     },
     {
       "id": "C004",
@@ -1964,10 +1964,10 @@
       "category": "passive_aggression",
       "matchMode": "regex",
       "canonical": "whatever you want",
-      "variants": ["do what you want", "suit yourself", "it’s your choice"],
+      "variants": ["do what you want","suit yourself","it’s your choice"],
       "regex": "\\bwhatever\\s+you\\s+want\\b",
       "threshold": 0.85,
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 0.95,"disorganized": 0.9,"secure": 0.75}
     },
     {
       "id": "C005",
@@ -1975,10 +1975,10 @@
       "category": "passive_aggression",
       "matchMode": "regex",
       "canonical": "fine, do what you want",
-      "variants": ["fine, have it your way", "alright, do as you wish"],
+      "variants": ["fine, have it your way","alright, do as you wish"],
       "regex": "\\bfine,?\\s+do\\s+what\\s+you\\s+want\\b|\\balright,?\\s+do\\s+as\\s+you\\s+wish\\b",
       "threshold": 0.86,
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 0.95,"disorganized": 0.9,"secure": 0.75}
     },
     {
       "id": "C007",
@@ -1986,10 +1986,10 @@
       "category": "minimizing",
       "matchMode": "regex",
       "canonical": "doesn't matter",
-      "variants": ["it’s irrelevant", "no difference", "whatever"],
+      "variants": ["it’s irrelevant","no difference","whatever"],
       "regex": "\\bdoesn['’`]?t\\s+matter\\b",
       "threshold": 0.83,
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 0.95,"disorganized": 0.9,"secure": 0.75}
     },
     {
       "id": "C008",
@@ -1997,10 +1997,10 @@
       "category": "defensive_disclaimer",
       "matchMode": "regex",
       "canonical": "don't take this the wrong way",
-      "variants": ["don’t misunderstand", "don’t get me wrong", "this isn’t meant badly"],
+      "variants": ["don’t misunderstand","don’t get me wrong","this isn’t meant badly"],
       "regex": "\\bdon['’`]?t\\s+take\\s+this\\s+the\\s+wrong\\s+way\\b",
       "threshold": 0.88,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.88,"anxious": 0.95,"disorganized": 0.9,"secure": 0.75}
     },
     {
       "id": "C009",
@@ -2008,10 +2008,10 @@
       "category": "indirect_blame",
       "matchMode": "regex",
       "canonical": "i just thought",
-      "variants": ["I only assumed", "I believed", "I figured"],
+      "variants": ["I only assumed","I believed","I figured"],
       "regex": "\\bi\\s+just\\s+thought\\b",
       "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.95, "disorganized": 0.88, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.85,"anxious": 0.95,"disorganized": 0.88,"secure": 0.75}
     },
     {
       "id": "C010",
@@ -2019,10 +2019,10 @@
       "category": "indirect_blame",
       "matchMode": "regex",
       "canonical": "if you'd told me earlier",
-      "variants": ["if only you told me sooner", "you could’ve mentioned earlier", "you should’ve said before"],
+      "variants": ["if only you told me sooner","you could’ve mentioned earlier","you should’ve said before"],
       "regex": "\\bif\\s+you['’`]?d\\s+told\\s+me\\s+earlier\\b",
       "threshold": 0.85,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.95, "disorganized": 0.88, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.85,"anxious": 0.95,"disorganized": 0.88,"secure": 0.75}
     },
     {
       "id": "C012",
@@ -2030,10 +2030,10 @@
       "category": "passive_aggression",
       "matchMode": "regex",
       "canonical": "if you say so",
-      "variants": ["whatever you say", "if that’s what you think"],
+      "variants": ["whatever you say","if that’s what you think"],
       "regex": "\\bif\\s+you\\s+say\\s+so\\b",
       "threshold": 0.83,
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 0.95,"disorganized": 0.9,"secure": 0.75}
     },
     {
       "id": "C014",
@@ -2041,10 +2041,10 @@
       "category": "indirect_blame",
       "matchMode": "regex",
       "canonical": "you could have",
-      "variants": ["you should have", "you might have", "you had the chance to"],
+      "variants": ["you should have","you might have","you had the chance to"],
       "regex": "\\byou\\s+could\\s+have\\b",
       "threshold": 0.85,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.95, "disorganized": 0.88, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.85,"anxious": 0.95,"disorganized": 0.88,"secure": 0.75}
     },
     {
       "id": "C016",
@@ -2052,10 +2052,10 @@
       "category": "questioning_reliability",
       "matchMode": "regex",
       "canonical": "i thought you",
-      "variants": ["I assumed you", "I figured you", "I expected you to"],
+      "variants": ["I assumed you","I figured you","I expected you to"],
       "regex": "\\bi\\s+thought\\s+you\\b",
       "threshold": 0.85,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.95, "disorganized": 0.88, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.85,"anxious": 0.95,"disorganized": 0.88,"secure": 0.75}
     },
     {
       "id": "C017",
@@ -2063,10 +2063,10 @@
       "category": "hedging",
       "matchMode": "regex",
       "canonical": "i guess you could say",
-      "variants": ["you could say that", "I suppose you could say", "maybe you’d say"],
+      "variants": ["you could say that","I suppose you could say","maybe you’d say"],
       "regex": "\\bi\\s+guess\\s+you\\s+could\\s+say\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
+      "threshold": 0.8,
+      "styleWeight": {"avoidant": 0.85,"anxious": 0.9,"disorganized": 0.85,"secure": 0.7}
     },
     {
       "id": "C018",
@@ -2074,10 +2074,10 @@
       "category": "passive_aggression",
       "matchMode": "regex",
       "canonical": "if you want",
-      "variants": ["if that’s what you want", "if you prefer", "if you feel like it"],
+      "variants": ["if that’s what you want","if you prefer","if you feel like it"],
       "regex": "\\bif\\s+you\\s+want\\b",
       "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.88,"anxious": 0.94,"disorganized": 0.88,"secure": 0.75}
     },
     {
       "id": "C019",
@@ -2085,10 +2085,10 @@
       "category": "defensive_disclaimer",
       "matchMode": "regex",
       "canonical": "i was just saying",
-      "variants": ["I only meant", "I was only saying", "I was just pointing out"],
+      "variants": ["I only meant","I was only saying","I was just pointing out"],
       "regex": "\\bi\\s+was\\s+just\\s+saying\\b",
       "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.92, "disorganized": 0.88, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.88,"anxious": 0.92,"disorganized": 0.88,"secure": 0.75}
     },
     {
       "id": "C020",
@@ -2096,10 +2096,10 @@
       "category": "hedging",
       "matchMode": "regex",
       "canonical": "i don't know, maybe",
-      "variants": ["I’m not sure, maybe", "possibly, I guess", "I can’t say for sure"],
+      "variants": ["I’m not sure, maybe","possibly, I guess","I can’t say for sure"],
       "regex": "\\bi\\s+don['’`]?t\\s+know,?\\s+maybe\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
+      "threshold": 0.8,
+      "styleWeight": {"avoidant": 0.85,"anxious": 0.9,"disorganized": 0.85,"secure": 0.7}
     },
     {
       "id": "C021",
@@ -2107,22 +2107,21 @@
       "category": "passive_aggression",
       "matchMode": "hybrid",
       "canonical": "up to you",
-      "variants": ["your choice", "whatever you decide", "it’s on you"],
+      "variants": ["your choice","whatever you decide","it’s on you"],
       "regex": "\\bup\\s+to\\s+you\\b",
       "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.88,"anxious": 0.94,"disorganized": 0.88,"secure": 0.75}
     },
     {
       "id": "C023",
-
       "tone": "caution",
       "category": "passive_aggression",
       "matchMode": "regex",
       "canonical": "if that's what you think",
-      "variants": ["if you believe that", "if that’s your opinion", "if that’s what you feel"],
+      "variants": ["if you believe that","if that’s your opinion","if that’s what you feel"],
       "regex": "\\bif\\s+that'?s\\s+what\\s+you\\s+think\\b",
       "threshold": 0.83,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.88,"anxious": 0.94,"disorganized": 0.88,"secure": 0.75}
     },
     {
       "id": "C024",
@@ -2130,10 +2129,10 @@
       "category": "hedging",
       "matchMode": "hybrid",
       "canonical": "i suppose so",
-      "variants": ["i guess so", "probably so", "i think so"],
+      "variants": ["i guess so","probably so","i think so"],
       "regex": "\\bi\\s+suppose\\s+so\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
+      "threshold": 0.8,
+      "styleWeight": {"avoidant": 0.85,"anxious": 0.9,"disorganized": 0.85,"secure": 0.7}
     },
     {
       "id": "C026",
@@ -2141,10 +2140,10 @@
       "category": "defensive_disclaimer",
       "matchMode": "hybrid",
       "canonical": "just saying",
-      "variants": ["i’m just saying", "just pointing it out", "only saying"],
+      "variants": ["i’m just saying","just pointing it out","only saying"],
       "regex": "(?<!not\\s)\\bjust\\s+saying\\b",
       "threshold": 0.84,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.92, "disorganized": 0.88, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.88,"anxious": 0.92,"disorganized": 0.88,"secure": 0.75}
     },
     {
       "id": "C028",
@@ -2154,7 +2153,7 @@
       "category": "passive_aggression",
       "canonical": "if you say so",
       "note": "Deduped to C012; keep as alias for back-compat",
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 0.95,"disorganized": 0.9,"secure": 0.75}
     },
     {
       "id": "C029",
@@ -2162,10 +2161,10 @@
       "category": "vague",
       "matchMode": "hybrid",
       "canonical": "not exactly",
-      "variants": ["not quite", "not really", "close but not exactly", "not precisely"],
+      "variants": ["not quite","not really","close but not exactly","not precisely"],
       "regex": "\\bnot\\s+(?:exactly|quite|really|precisely)\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
+      "threshold": 0.8,
+      "styleWeight": {"avoidant": 0.85,"anxious": 0.9,"disorganized": 0.85,"secure": 0.7}
     },
     {
       "id": "C030",
@@ -2173,10 +2172,10 @@
       "category": "passive_aggression",
       "matchMode": "hybrid",
       "canonical": "if you must",
-      "variants": ["if you really must", "go ahead if you must", "if you have to"],
+      "variants": ["if you really must","go ahead if you must","if you have to"],
       "regex": "\\bif\\s+you\\s+must\\b",
       "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.88,"anxious": 0.94,"disorganized": 0.88,"secure": 0.75}
     },
     {
       "id": "C031",
@@ -2184,10 +2183,10 @@
       "category": "passive_aggression",
       "matchMode": "hybrid",
       "canonical": "if you insist",
-      "variants": ["fine, if you insist", "if you really want to", "if you have to"],
+      "variants": ["fine, if you insist","if you really want to","if you have to"],
       "regex": "\\bif\\s+you\\s+insist\\b",
       "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.88,"anxious": 0.94,"disorganized": 0.88,"secure": 0.75}
     },
     {
       "id": "C032",
@@ -2195,10 +2194,10 @@
       "category": "hedging",
       "matchMode": "regex",
       "canonical": "kind of",
-      "variants": ["sort of", "kinda", "sorta", "kinda sorta"],
+      "variants": ["sort of","kinda","sorta","kinda sorta"],
       "regex": "\\b(?:kind|sort)\\s+of\\b|\\bkinda\\b|\\bsorta\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
+      "threshold": 0.8,
+      "styleWeight": {"avoidant": 0.85,"anxious": 0.9,"disorganized": 0.85,"secure": 0.7}
     },
     {
       "id": "C033",
@@ -2206,10 +2205,10 @@
       "category": "passive_aggression",
       "matchMode": "hybrid",
       "canonical": "do whatever you want",
-      "variants": ["do what you want", "your call then", "it’s your decision"],
+      "variants": ["do what you want","your call then","it’s your decision"],
       "regex": "\\bdo\\s+whatever\\s+you\\s+want\\b|\\bdo\\s+what\\s+you\\s+want\\b",
       "threshold": 0.84,
-      "styleWeight": { "avoidant": 0.90, "anxious": 0.95, "disorganized": 0.90, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.9,"anxious": 0.95,"disorganized": 0.9,"secure": 0.75}
     },
     {
       "id": "C034",
@@ -2217,10 +2216,10 @@
       "category": "minimizing",
       "matchMode": "regex",
       "canonical": "not that it matters",
-      "variants": ["doesn’t make a difference", "it’s irrelevant", "not important"],
+      "variants": ["doesn’t make a difference","it’s irrelevant","not important"],
       "regex": "\\bnot\\s+that\\s+it\\s+matters\\b",
       "threshold": 0.82,
-      "styleWeight": { "avoidant": 0.88, "anxious": 0.94, "disorganized": 0.88, "secure": 0.75 }
+      "styleWeight": {"avoidant": 0.88,"anxious": 0.94,"disorganized": 0.88,"secure": 0.75}
     },
     {
       "id": "C035",
@@ -2228,19 +2227,308 @@
       "category": "hedging",
       "matchMode": "hybrid",
       "canonical": "i guess so",
-      "variants": ["i suppose so", "probably", "i think so"],
+      "variants": ["i suppose so","probably","i think so"],
       "regex": "\\bi\\s+guess\\s+so\\b",
-      "threshold": 0.80,
-      "styleWeight": { "avoidant": 0.85, "anxious": 0.90, "disorganized": 0.85, "secure": 0.70 }
+      "threshold": 0.8,
+      "styleWeight": {"avoidant": 0.85,"anxious": 0.9,"disorganized": 0.85,"secure": 0.7}
+    },
+    {
+      "id": "P192",
+      "tone": "clear",
+      "category": "attachment_awareness",
+      "matchMode": "semantic",
+      "canonical": "attachment awareness",
+      "variants": ["attachment awareness","attachment_awareness"],
+      "regex": "\\battachment[ -]?awareness\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for attachment_awareness therapy advice category"
+    },
+    {
+      "id": "P193",
+      "tone": "clear",
+      "category": "boundary_setting",
+      "matchMode": "semantic",
+      "canonical": "boundary setting",
+      "variants": ["boundary setting","boundary_setting"],
+      "regex": "\\bboundary[ -]?setting\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for boundary_setting therapy advice category"
+    },
+    {
+      "id": "P194",
+      "tone": "clear",
+      "category": "conflict_resolution",
+      "matchMode": "semantic",
+      "canonical": "conflict resolution",
+      "variants": ["conflict resolution","conflict_resolution"],
+      "regex": "\\bconflict[ -]?resolution\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for conflict_resolution therapy advice category"
+    },
+    {
+      "id": "P195",
+      "tone": "clear",
+      "category": "communication_awareness",
+      "matchMode": "semantic",
+      "canonical": "communication awareness",
+      "variants": ["communication awareness","communication_awareness"],
+      "regex": "\\bcommunication[ -]?awareness\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for communication_awareness therapy advice category"
+    },
+    {
+      "id": "P196",
+      "tone": "clear",
+      "category": "communication_clarification",
+      "matchMode": "semantic",
+      "canonical": "communication clarification",
+      "variants": ["communication clarification","communication_clarification"],
+      "regex": "\\bcommunication[ -]?clarification\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for communication_clarification therapy advice category"
+    },
+    {
+      "id": "P197",
+      "tone": "clear",
+      "category": "communication_structure",
+      "matchMode": "semantic",
+      "canonical": "communication structure",
+      "variants": ["communication structure","communication_structure"],
+      "regex": "\\bcommunication[ -]?structure\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for communication_structure therapy advice category"
+    },
+    {
+      "id": "P198",
+      "tone": "clear",
+      "category": "emotional_support",
+      "matchMode": "semantic",
+      "canonical": "emotional support",
+      "variants": ["emotional support","emotional_support"],
+      "regex": "\\bemotional[ -]?support\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for emotional_support therapy advice category"
+    },
+    {
+      "id": "P199",
+      "tone": "clear",
+      "category": "intimacy_connection",
+      "matchMode": "semantic",
+      "canonical": "intimacy connection",
+      "variants": ["intimacy connection","intimacy_connection"],
+      "regex": "\\bintimacy[ -]?connection\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for intimacy_connection therapy advice category"
+    },
+    {
+      "id": "P200",
+      "tone": "clear",
+      "category": "vulnerability_sharing",
+      "matchMode": "semantic",
+      "canonical": "vulnerability sharing",
+      "variants": ["vulnerability sharing","vulnerability_sharing"],
+      "regex": "\\bvulnerability[ -]?sharing\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for vulnerability_sharing therapy advice category"
+    },
+    {
+      "id": "P201",
+      "tone": "clear",
+      "category": "positive_communication",
+      "matchMode": "semantic",
+      "canonical": "positive communication",
+      "variants": ["positive communication","positive_communication"],
+      "regex": "\\bpositive[ -]?communication\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for positive_communication therapy advice category"
+    },
+    {
+      "id": "P202",
+      "tone": "clear",
+      "category": "feedback_communication",
+      "matchMode": "semantic",
+      "canonical": "feedback communication",
+      "variants": ["feedback communication","feedback_communication"],
+      "regex": "\\bfeedback[ -]?communication\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for feedback_communication therapy advice category"
+    },
+    {
+      "id": "P203",
+      "tone": "clear",
+      "category": "general_communication",
+      "matchMode": "semantic",
+      "canonical": "general communication",
+      "variants": ["general communication","general_communication"],
+      "regex": "\\bgeneral[ -]?communication\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for general_communication therapy advice category"
+    },
+    {
+      "id": "P204",
+      "tone": "clear",
+      "category": "personal_development",
+      "matchMode": "semantic",
+      "canonical": "personal development",
+      "variants": ["personal development","personal_development"],
+      "regex": "\\bpersonal[ -]?development\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for personal_development therapy advice category"
+    },
+    {
+      "id": "P205",
+      "tone": "clear",
+      "category": "relationship_development",
+      "matchMode": "semantic",
+      "canonical": "relationship development",
+      "variants": ["relationship development","relationship_development"],
+      "regex": "\\brelationship[ -]?development\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for relationship_development therapy advice category"
+    },
+    {
+      "id": "P206",
+      "tone": "clear",
+      "category": "decision_making",
+      "matchMode": "semantic",
+      "canonical": "decision making",
+      "variants": ["decision making","decision_making"],
+      "regex": "\\bdecision[ -]?making\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for decision_making therapy advice category"
+    },
+    {
+      "id": "P207",
+      "tone": "clear",
+      "category": "coordination",
+      "matchMode": "semantic",
+      "canonical": "coordination",
+      "variants": ["coordination","coordination"],
+      "regex": "\\bcoordination\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for coordination therapy advice category"
+    },
+    {
+      "id": "P208",
+      "tone": "clear",
+      "category": "group_communication",
+      "matchMode": "semantic",
+      "canonical": "group communication",
+      "variants": ["group communication","group_communication"],
+      "regex": "\\bgroup[ -]?communication\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for group_communication therapy advice category"
+    },
+    {
+      "id": "P209",
+      "tone": "clear",
+      "category": "digital_communication",
+      "matchMode": "semantic",
+      "canonical": "digital communication",
+      "variants": ["digital communication","digital_communication"],
+      "regex": "\\bdigital[ -]?communication\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for digital_communication therapy advice category"
+    },
+    {
+      "id": "P210",
+      "tone": "clear",
+      "category": "safety_concerns",
+      "matchMode": "semantic",
+      "canonical": "safety concerns",
+      "variants": ["safety concerns","safety_concerns"],
+      "regex": "\\bsafety[ -]?concerns\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for safety_concerns therapy advice category"
+    },
+    {
+      "id": "P211",
+      "tone": "clear",
+      "category": "self_protection",
+      "matchMode": "semantic",
+      "canonical": "self protection",
+      "variants": ["self protection","self_protection"],
+      "regex": "\\bself[ -]?protection\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for self_protection therapy advice category"
+    },
+    {
+      "id": "P212",
+      "tone": "clear",
+      "category": "relationship_repair",
+      "matchMode": "semantic",
+      "canonical": "relationship repair",
+      "variants": ["relationship repair","relationship_repair"],
+      "regex": "\\brelationship[ -]?repair\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for relationship_repair therapy advice category"
+    },
+    {
+      "id": "P213",
+      "tone": "clear",
+      "category": "undefined",
+      "matchMode": "semantic",
+      "canonical": "undefined",
+      "variants": ["undefined","undefined"],
+      "regex": "\\bundefined\\b",
+      "threshold": 0.4,
+      "styleWeight": 0.8,
+      "contextOverrides": {},
+      "notes": "Pattern for undefined therapy advice category"
     }
   ],
-  "contextOverrides": {
-    "gratitude": {
-      "positive":   { "clear": 0.02 },
-      "supportive": { "clear": 0.02 },
-      "negative":   { "alert": -0.01 },
-      "frustrated": { "alert": -0.01 }
+  "contextOverrides": {"clear": 0.02},
+      "supportive": {
+        "clear": 0.02
+      },
+      "negative": {
+        "alert": -0.01
+      },
+      "frustrated": {
+        "alert": -0.01
+      }
     }
   }
 }
-    
