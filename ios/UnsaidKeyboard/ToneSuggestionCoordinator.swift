@@ -7,6 +7,12 @@ import CryptoKit
 import UIKit
 #endif
 
+
+// MARK: - Tone Suggestion Dispatcher Protocol
+protocol ToneSuggestionDispatcher: AnyObject {
+    func requestToneSuggestions(text: String, threadID: String)
+}
+
 // MARK: - Network Metrics Delegate for Debugging
 final class NetworkMetricsDelegate: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask,
@@ -98,8 +104,14 @@ final class ToneSuggestionCoordinator {
     private let debounceInterval: TimeInterval = 3.0 // 3s debounce for better rate limiting
     private var currentDocSeq: Int = 0
     private var lastTextHash: String = ""
-    private var debounceTask: Task<Void, Never>?
     private var isAnalysisInFlight = false
+    
+    // MARK: - Word-Boundary Coalescing (more explicit)
+    private let wordCoalesceMinGap: CFTimeInterval = 0.12
+    private var lastWordHash: Int = 0
+    private var lastWordAt: CFTimeInterval = 0
+    private var lastCompletedWordHash: Int = 0
+    private var quietEdgeToken: Timer?
     
     // MARK: - Router short-circuit guards
     private var lastRouterSnapshotHash = 0
@@ -125,48 +137,7 @@ final class ToneSuggestionCoordinator {
     
     // MARK: - Smart Triggering Logic
     private var lastAnalyzedTextCount = 0
-    private var debounceTimer: Timer?
     private let urgentCharacters: Set<Character> = ["!", "?", ".", "…", "😡", "😤", "💔"]
-    
-    /// Determines if analysis should be triggered based on typing patterns
-    private func shouldTriggerAnalysis(
-        fullText: String,
-        lastInserted: Character?,
-        isDeletion: Bool,
-        triggerReason: String
-    ) -> (shouldTrigger: Bool, isUrgent: Bool, useDebounce: Bool) {
-        
-        let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let currentCount = trimmed.count
-        let deltaCount = abs(currentCount - lastAnalyzedTextCount)
-        
-        // Always trigger for urgent characters (bypass debounce and rate limit)
-        if let char = lastInserted, urgentCharacters.contains(char) {
-            print("🔥 Urgent trigger: '\(char)' - immediate analysis")
-            return (true, true, false)
-        }
-        
-        // Trigger on word boundaries (space, punctuation, newline)
-        let atBoundary = lastInserted == " " || lastInserted == "\n" || 
-                        (lastInserted?.isPunctuation == true)
-        
-        // Trigger if text grew significantly (≥2 chars since last analysis)
-        let grewSignificantly = deltaCount >= 2
-        
-        if atBoundary || grewSignificantly {
-            print("📝 Boundary/growth trigger: boundary=\(atBoundary), growth=\(deltaCount)")
-            return (true, false, false)  // No debounce for these natural triggers
-        }
-        
-        // For other changes, use debounce
-        if currentCount > lastAnalyzedTextCount || isDeletion {
-            print("⏱ Debounced trigger: will wait 250ms")
-            return (true, false, true)  // Use debounce for continuous typing
-        }
-        
-        print("🚫 No trigger needed")
-        return (false, false, false)
-    }
     
     // MARK: - Centralized text snapshot with fallback
     private func currentPayloadText() -> String {
@@ -287,6 +258,31 @@ final class ToneSuggestionCoordinator {
         #if DEBUG
         print(msg())
         #endif
+    }
+    
+    // MARK: - Word-Boundary Detection Helpers
+    
+    private func lastCompletedWord(in text: String) -> Substring? {
+        // take everything before trailing whitespace
+        let trimmedRight = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedRight.isEmpty else { return nil }
+        // find last delimiter in original text
+        let delimiters = CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
+        let end = trimmedRight.endIndex
+        var start = trimmedRight.startIndex
+        var i = trimmedRight.index(before: end)
+        while i > start {
+            if let scalar = trimmedRight[i].unicodeScalars.first, delimiters.contains(scalar) {
+                start = trimmedRight.index(after: i); break
+            }
+            i = trimmedRight.index(before: i)
+        }
+        return trimmedRight[start..<end]
+    }
+
+    @inline(__always)
+    private func hashWord(_ w: Substring) -> Int {
+        var h = Hasher(); h.combine(w); return h.finalize()
     }
     
     // MARK: - Network diagnostics
@@ -2516,10 +2512,6 @@ extension ToneSuggestionCoordinator {
         lastInserted: Character? = nil,
         isDeletion: Bool = false
     ) {
-        // Cancel previous debounce
-        debounceTask?.cancel()
-        debounceTimer?.invalidate()
-        
         let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
         let textHash = sha256(trimmed)
         
@@ -2541,46 +2533,9 @@ extension ToneSuggestionCoordinator {
             return
         }
         
-        // Apply smart triggering logic
-        let (shouldTrigger, isUrgent, useDebounce) = shouldTriggerAnalysis(
-            fullText: trimmed,
-            lastInserted: lastInserted,
-            isDeletion: isDeletion,
-            triggerReason: triggerReason
-        )
-        
-        guard shouldTrigger else {
-            print("📄 ToneCoordinator: Smart trigger declined analysis")
-            return
-        }
-        
-        // Reset to neutral if text is too short (but not empty)
-        guard shouldAnalyzeFullText(trimmed) else {
-            print("📄 ToneCoordinator: Text too short (\(trimmed.count) chars) - skipping analysis but keeping current tone")
-            lastTextHash = textHash
-            return
-        }
-        
-        let performAnalysis = { [weak self] in
-            Task {
-                await self?.performFullTextAnalysisWithRateLimit(
-                    fullText: trimmed,
-                    textHash: textHash,
-                    isUrgent: isUrgent
-                )
-            }
-        }
-        
-        if useDebounce {
-            // Use 250ms debounce for continuous typing
-            print("📄 ToneCoordinator: Debouncing analysis for 250ms")
-            debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) { _ in
-                _ = performAnalysis()
-            }
-        } else {
-            // Immediate analysis for word boundaries, urgent chars, growth
-            print("📄 ToneCoordinator: Immediate analysis - trigger: \(triggerReason), urgent: \(isUrgent)")
-            _ = performAnalysis()
+        // Use edge-based routing instead of debounce
+        Task {
+            await onTextChanged(fullText: trimmed, lastInserted: lastInserted)
         }
     }
     
@@ -2605,8 +2560,6 @@ extension ToneSuggestionCoordinator {
     
     /// Immediately trigger analysis (for urgent cases like punctuation)
     func scheduleImmediateFullTextAnalysis(fullText: String, triggerReason: String = "urgent") {
-        debounceTask?.cancel()
-        
         let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
         let textHash = sha256(trimmed)
         
@@ -2643,6 +2596,58 @@ extension ToneSuggestionCoordinator {
     func shouldTriggerImmediate(for text: String) -> Bool {
         let punctuation: Set<Character> = [".", "!", "?", "\n"]
         return text.last.map(punctuation.contains) ?? false
+    }
+    
+    // MARK: - Word-Boundary Analysis
+    
+    /// Word-level coalescing gate to prevent analysis spam
+    private func allowWordAnalysis(_ text: String) -> Bool {
+        let now = CACurrentMediaTime()
+        let h = wordHash(text)
+        defer { lastWordHash = h; lastWordAt = now }
+        return !(h == lastWordHash && (now - lastWordAt) < wordCoalesceMinGap)
+    }
+    
+    private func wordHash(_ text: String) -> Int {
+        var h = Hasher()
+        h.combine(text.suffix(256)) // cheap-ish locality
+        return h.finalize()
+    }
+    
+    /// New API: analyze on word boundary with lighter coalescing
+    func analyzeOnWordBoundary(fullText: String, reason: String) {
+        // Skip keystroke debouncers; just coalesce *words* a bit to avoid stampede
+        guard allowWordAnalysis(fullText) else { return }
+        
+        let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let textHash = sha256(trimmed)
+        
+        // Reset to neutral if text is empty
+        if trimmed.isEmpty {
+            print("📄 ToneCoordinator: [WordBoundary] Text is empty - resetting to neutral")
+            Task { @MainActor in
+                self.lastUiTone = .neutral
+                self.delegate?.didUpdateToneStatus("neutral")
+            }
+            lastTextHash = ""
+            return
+        }
+        
+        // Skip if unchanged
+        guard textHash != lastTextHash else { return }
+        
+        // Reset to neutral if text is too short (but not empty)
+        guard shouldAnalyzeFullText(trimmed) else {
+            print("📄 ToneCoordinator: [WordBoundary] Text too short (\(trimmed.count) chars) - skipping analysis")
+            lastTextHash = textHash
+            return
+        }
+        
+        print("📄 ToneCoordinator: Word-boundary analysis for \(trimmed.count) chars, reason: \(reason)")
+        
+        Task { [weak self] in
+            await self?.performFullTextAnalysis(fullText: trimmed, textHash: textHash)
+        }
     }
     
     // MARK: - Private Full-Text Analysis Implementation
@@ -2816,6 +2821,43 @@ extension ToneSuggestionCoordinator {
         let data = Data(string.utf8)
         let hash = SHA256.hash(data: data)
         return hash.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+// MARK: - ToneSuggestionDispatcher Conformance
+extension ToneSuggestionCoordinator: ToneSuggestionDispatcher {
+    func requestToneSuggestions(text: String, threadID: String) {
+        #if DEBUG
+        dlog("🔘 Manual tone analysis requested - text: '\(text.prefix(50))\(text.count > 50 ? "..." : "")', threadID: \(threadID)")
+        #endif
+        
+        // Guard against spamming (inFlight protection)
+        guard !isAnalysisInFlight else {
+            #if DEBUG
+            dlog("🚫 Analysis already in flight - ignoring manual request")
+            #endif
+            return
+        }
+        
+        // Cancel any prior task before starting a new one
+        if let token = quietEdgeToken {
+            token.invalidate()
+            quietEdgeToken = nil
+            #if DEBUG
+            dlog("🔄 Cancelled prior analysis timer for manual request")
+            #endif
+        }
+        
+        // Increment document sequence for new manual analysis
+        currentDocSeq += 1
+        
+        // Call the service and publish results back to the UI
+        scheduleFullTextAnalysis(
+            fullText: text,
+            triggerReason: "manual-tone-button-\(threadID)",
+            lastInserted: nil,
+            isDeletion: false
+        )
     }
 }
 

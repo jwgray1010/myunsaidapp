@@ -124,6 +124,10 @@ final class KeyboardController: UIView,
     private var coordinator: ToneSuggestionCoordinator?
     private var isNetworkReachable = true // Track network state for UI updates
     
+    // MARK: - Thread context and dispatcher
+    private var currentThreadID: String = UUID().uuidString
+    weak var toneSuggestionDispatcher: ToneSuggestionDispatcher?
+    
     // MARK: - Suggestion Gating
     internal var suggestionsArmed = false // Accessible to SuggestionChipManager
     private var suggestionCooldownUntil: CFTimeInterval = 0
@@ -188,6 +192,11 @@ final class KeyboardController: UIView,
     // MARK: - Debounce & Coalesce
     private var analyzeTask: Task<Void, Never>?
     
+    // MARK: - Word-Boundary Analysis Gating
+    private var wordDirty = false           // set while user is editing a word
+    private var idleToken: DispatchSourceTimer? // short idle fallback
+    private let idleWordMs: TimeInterval = 0.45  // "paused typing" = analyze
+    
     // MARK: - Text Analysis Gating
     
     /// Determines if text is substantial enough to warrant tone analysis
@@ -246,6 +255,33 @@ final class KeyboardController: UIView,
         if h == lastSpellTextHash { return } // no-op
         lastSpellTextHash = h
         spellCheckerIntegration.refreshSpellCandidates(for: currentText)
+    }
+    
+    // MARK: - Word-Boundary Detection
+    
+    private func markTypingActivity() {
+        // restart idle timer whenever a non-boundary key is pressed
+        idleToken?.cancel()
+        idleToken = DispatchSource.makeTimerSource(queue: .main)
+        idleToken?.schedule(deadline: .now() + idleWordMs)
+        idleToken?.setEventHandler { [weak self] in
+            guard let self = self else { return }
+            if self.wordDirty {                 // only fire if a word changed
+                self.wordDirty = false
+                self.routeIfChanged(lastInserted: nil, isDeletion: false, urgent: false)
+            }
+            self.idleToken?.cancel()
+            self.idleToken = nil
+        }
+        idleToken?.resume()
+    }
+
+    private func isWordChar(_ s: String) -> Bool {
+        return s.count == 1 && s.rangeOfCharacter(from: CharacterSet.letters.union(.decimalDigits).union(CharacterSet(charactersIn: "'''"))) != nil
+    }
+
+    private func isWordBoundary(_ s: String) -> Bool {
+        return s == " " || s == "\n" || [".","!","?",",",";",":"].contains(s)
     }
     
     /// Optimized router that skips work when nothing changed
@@ -325,24 +361,29 @@ final class KeyboardController: UIView,
         if urgent {
             triggerReason = isDeletion ? "urgent_deletion" : "urgent_input"
         } else if isDeletion {
-            triggerReason = "deletion"
+            triggerReason = "deletion_pause" // Updated: deletion with idle
         } else if let inserted = lastInserted {
             // Check for punctuation that should trigger immediate analysis
             if coordinator.shouldTriggerImmediate(for: inserted) {
-                triggerReason = "punctuation"
+                triggerReason = "sentence_punct"
+            } else if isWordBoundary(inserted) {
+                triggerReason = "word_boundary"
             } else {
-                triggerReason = "input"
+                triggerReason = "input_activity"
             }
         } else {
-            triggerReason = "idle"
+            triggerReason = "idle_pause"
         }
         
-        // Use ToneSuggestionCoordinator for document-level analysis
-        if urgent || (lastInserted != nil && coordinator.shouldTriggerImmediate(for: lastInserted!)) {
-            // Immediate analysis for urgent cases or punctuation
+        // Use ToneSuggestionCoordinator for document-level analysis with word-boundary optimization
+        if urgent || triggerReason == "sentence_punct" {
+            // Immediate analysis for urgent cases or sentence punctuation
             coordinator.scheduleImmediateFullTextAnalysis(fullText: fullText, triggerReason: triggerReason)
+        } else if triggerReason == "idle_pause" || triggerReason == "word_boundary" || triggerReason == "deletion_pause" {
+            // Use word-boundary API for idle triggers, word boundaries, and deletion pauses
+            coordinator.analyzeOnWordBoundary(fullText: fullText, reason: triggerReason)
         } else {
-            // Regular debounced analysis
+            // Fallback to regular debounced analysis for continuous typing
             coordinator.scheduleFullTextAnalysis(fullText: fullText, triggerReason: triggerReason)
         }
         
@@ -558,6 +599,9 @@ final class KeyboardController: UIView,
         KBDLog("🔧 Coordinator initialized id=\(coordId)", .info, "KeyboardController")
         coordinator?.delegate = self
         
+        // Wire up coordinator as manual tone suggestion dispatcher
+        toneSuggestionDispatcher = coordinator
+        
         KBDLog("📄 ToneCoordinator ready for full-text analysis", .info, "KeyboardController")
         
         // Start network monitoring
@@ -638,6 +682,7 @@ final class KeyboardController: UIView,
     
     deinit {
         hapticIdleTimer?.cancel()
+        idleToken?.cancel() // Cancel word-boundary idle timer
         if isHapticSessionStarted {
             coordinator?.stopHapticSession()
         }
@@ -784,8 +829,8 @@ final class KeyboardController: UIView,
         performHapticFeedback()
         // 👉 refresh candidates on delete
         refreshSpellingIfMeaningful()
-        // Use router pattern for sentence-aware analysis after deletion
-        routeIfChanged(lastInserted: nil, isDeletion: true, urgent: false)
+        wordDirty = true
+        markTypingActivity() // idle fallback will trigger if user pauses
     }
     
     func performDeleteTick() {
@@ -793,8 +838,8 @@ final class KeyboardController: UIView,
         proxy.deleteBackward()
         // 👉 refresh candidates on repeat delete
         refreshSpellingIfMeaningful()
-        // Use router pattern for sentence-aware analysis after deletion
-        routeIfChanged(lastInserted: nil, isDeletion: true, urgent: false)
+        wordDirty = true
+        markTypingActivity()
     }
     
     func hapticLight() {
@@ -1689,14 +1734,26 @@ final class KeyboardController: UIView,
             updateKeycaps()
         }
         
-        // Use router pattern for sentence-aware analysis
-        let urgent = ".!?".contains(title) // Urgent if punctuation that might end sentence
-        routeIfChanged(lastInserted: textToInsert, isDeletion: false, urgent: urgent)
+        // 🔑 NEW: gate analysis per word
+        if isWordChar(textToInsert) {
+            wordDirty = true
+            markTypingActivity()            // only idle-trigger, no router call here
+        } else if isWordBoundary(textToInsert) {
+            // boundary → analyze immediately
+            wordDirty = false
+            let urgent = ".!?".contains(textToInsert)
+            routeIfChanged(lastInserted: textToInsert, isDeletion: false, urgent: urgent)
+        } else {
+            // symbols etc. treat like activity but not boundary
+            markTypingActivity()
+        }
     }
     
     @objc private func handleSpaceKey() {
         spaceHandler.handleSpaceKey()
-        // Use router pattern for sentence-aware analysis after space insertion
+        // commit autocorrect is already happening in SpaceHandler
+        // word boundary → analyze
+        wordDirty = false
         routeIfChanged(lastInserted: " ", isDeletion: false, urgent: false)
         // 👉 refresh (shows/hides strip appropriately after commit)
         refreshSpellingIfMeaningful()
@@ -1952,8 +2009,21 @@ final class KeyboardController: UIView,
         // Ensure tone button is visible when text changes (analysis may update it)
         ensureToneButtonVisible()
         
-        // Use router pattern for sentence-aware analysis
-        routeIfChanged(lastInserted: nil, isDeletion: false, urgent: false)
+        // REMOVED: Auto-trigger analysis on text change
+        // We now only trigger suggestions via manual tone button tap
+        /*
+        // If the last character is boundary → analyze; else set dirty and idle-fallback.
+        let snap = snapshotFullText()
+        if let last = snap.trimmingCharacters(in: .whitespacesAndNewlines).last,
+           ".!?,".contains(last) {
+            wordDirty = false
+            routeIfChanged(lastInserted: String(last), isDeletion: false, urgent: ".!?".contains(last))
+        } else {
+            wordDirty = true
+            markTypingActivity()
+        }
+        */
+        
         updateShiftForContext()
         
         // 👉 feed the spell bar
@@ -2273,10 +2343,7 @@ final class KeyboardController: UIView,
         guard now >= suggestionCooldownUntil else { return }
         suggestionCooldownUntil = now + suggestionCooldown
 
-        // Arm suggestions explicitly on each tap
-        suggestionsArmed = true
-
-        // If there's no text yet, show a tiny helper and stay armed
+        // Get current text for analysis
         let text = snapshotFullText().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
             suggestionChipManager.showSuggestion(
@@ -2286,8 +2353,8 @@ final class KeyboardController: UIView,
             return
         }
 
-        // Ask the coordinator for suggestions immediately for the current text
-        coordinator?.requestSuggestionsForButtonTap() // Use existing method that bypasses rate limits
+        // Request tone suggestions through dispatcher
+        toneSuggestionDispatcher?.requestToneSuggestions(text: text, threadID: currentThreadID)
     }
     
     // MARK: - Debug Methods
