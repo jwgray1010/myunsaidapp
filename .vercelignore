@@ -15,13 +15,10 @@ devtools_options.*
 # Google Cloud API (moved to separate deployment)
 gcloud-api/
 
-# Heavy API services (moved to Google Cloud)
-api/_lib/
-api/cron/
-api/debug/
-api/metrics.ts
-api/warmup.ts
-api/_warmup.ts
+# API backup (preserve complex services but don't deploy)
+api-backup/
+*.backup
+**/*.backup
 
 # Data files (moved to Google Cloud)
 data/
