@@ -958,7 +958,7 @@ final class KeyboardController: UIView,
     }
     
     func showUsageLimitAlert(message: String) {
-        suggestionChipManager.showSuggestion(text: message, tone: .caution)  // Type-safe
+        suggestionChipManager.showAutoSuggestion(text: message, toneString: "caution")  // System message - bypass restriction
     }
 
     // MARK: - Host Traits Sync
@@ -2142,7 +2142,7 @@ final class KeyboardController: UIView,
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.suggestionChipManager.showSuggestion(text: first, tone: self.currentUITone)
+            self.suggestionChipManager.showButtonSuggestion(text: first, toneString: self.currentUITone.rawValue)
             self.secureFixManager.markAdviceShown(toneString: self.currentUITone.rawValue)
             self.quickFixButton?.alpha = 1.0
         }
@@ -2313,7 +2313,7 @@ final class KeyboardController: UIView,
             guard let self = self else { return }
             
             // Show error in suggestion chip with neutral tone
-            self.suggestionChipManager.showSuggestion(text: message, tone: .neutral)
+            self.suggestionChipManager.showAutoSuggestion(text: message, toneString: "neutral")  // System error - bypass restriction
             
             // Also log to console for debugging
             #if DEBUG
@@ -2346,9 +2346,9 @@ final class KeyboardController: UIView,
         // Get current text for analysis
         let text = snapshotFullText().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
-            suggestionChipManager.showSuggestion(
+            suggestionChipManager.showButtonSuggestion(
                 text: "Type a message, then tap the tone icon to see suggestions.",
-                tone: .neutral
+                toneString: "neutral"
             )
             return
         }
@@ -2477,7 +2477,7 @@ final class KeyboardController: UIView,
         for (i, (text, tone)) in testSuggestions.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 2.0) {
                 self.logger.info("💬 Showing suggestion \(i+1): '\(text)' with tone: \(tone.rawValue)")
-                self.suggestionChipManager.showSuggestion(text: text, tone: tone)
+                self.suggestionChipManager.showAutoSuggestion(text: text, toneString: tone.rawValue)  // Debug mode - bypass restriction
             }
         }
     }

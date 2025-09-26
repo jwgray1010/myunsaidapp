@@ -280,7 +280,7 @@ final class SuggestionChipView: UIControl {
         chevronButton.accessibilityLabel = "Expand suggestion"
         chevronButton.addAction(UIAction { [weak self] _ in
             guard let self else { return }
-            if !self.isExpanded { self.expandIfNeeded(); return }
+            // Always advance page first if possible, expand is secondary
             self.advancePageIfPossible()
         }, for: .touchUpInside)
         chevronButton.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -392,10 +392,13 @@ final class SuggestionChipView: UIControl {
 
         autoHideTimer?.invalidate(); autoHideTimer = nil
 
-        // Rotate chevron
-        let rotateChevron = { self.chevronButton.transform = CGAffineTransform(rotationAngle: .pi / 2) }
+        // Hide chevron in expanded mode (scrollView handles scrolling)
+        let hideChevron = { 
+            self.chevronButton.alpha = 0.0
+            self.chevronButton.isEnabled = false
+        }
 
-        if shouldAnimate { UIView.animate(withDuration: 0.18) { rotateChevron() } } else { rotateChevron() }
+        if shouldAnimate { UIView.animate(withDuration: 0.18) { hideChevron() } } else { hideChevron() }
 
         // Switch to expanded constraints & compute pages for current width
         NSLayoutConstraint.deactivate(compactConstraints)
@@ -521,26 +524,60 @@ final class SuggestionChipView: UIControl {
         let visible = (textStorage.string as NSString).substring(with: page)
         textLabel.text = visible
 
-        // If last page, dim or hide chevron
-        chevronButton.alpha = (currentPage == pages.count - 1) ? 0.3 : 1.0
-        chevronButton.isEnabled = (currentPage < pages.count - 1)
+        // Update chevron direction and visibility based on page state
+        if pages.count <= 1 {
+            // Single page - show right arrow (expand)
+            chevronButton.setImage(UIImage(systemName: "chevron.right"), for: .normal)
+            chevronButton.alpha = 1.0
+            chevronButton.isEnabled = true
+            chevronButton.accessibilityLabel = "Expand suggestion"
+        } else if currentPage == 0 {
+            // First page - show down arrow (scroll down)
+            chevronButton.setImage(UIImage(systemName: "chevron.down"), for: .normal)
+            chevronButton.alpha = 1.0
+            chevronButton.isEnabled = true
+            chevronButton.accessibilityLabel = "Scroll down"
+        } else if currentPage == pages.count - 1 {
+            // Last page - show up arrow (scroll back to top)
+            chevronButton.setImage(UIImage(systemName: "chevron.up"), for: .normal)
+            chevronButton.alpha = 1.0
+            chevronButton.isEnabled = true
+            chevronButton.accessibilityLabel = "Back to top"
+        } else {
+            // Middle pages - show down arrow (continue scrolling)
+            chevronButton.setImage(UIImage(systemName: "chevron.down"), for: .normal)
+            chevronButton.alpha = 1.0
+            chevronButton.isEnabled = true
+            chevronButton.accessibilityLabel = "Scroll down"
+        }
     }
 
     private func advancePageIfPossible() {
-        guard isExpanded else { expandIfNeeded(); return }
-        guard currentPage + 1 < pages.count else {
-            // Optional behaviors on last page:
-            // 1) Dismiss:
-            // onDismiss?(); dismiss(animated: true); return
-            // 2) Collapse back to preview:
-            collapseToPreview(); return
-        }
-        currentPage += 1
-        UnifiedHapticsController.shared.lightTap()
-        if shouldAnimate {
-            UIView.transition(with: textLabel, duration: 0.18, options: .transitionCrossDissolve) { self.showCurrentPage() }
+        // If we have multiple pages, start paging immediately (no expand first)
+        if pages.count > 1 && currentPage + 1 < pages.count {
+            currentPage += 1
+            UnifiedHapticsController.shared.lightTap()
+            if shouldAnimate {
+                UIView.transition(with: textLabel, duration: 0.18, options: .transitionCrossDissolve) { 
+                    self.showCurrentPage() 
+                }
+            } else {
+                showCurrentPage()
+            }
+        } else if currentPage > 0 {
+            // We're at the end - go back to beginning
+            currentPage = 0
+            UnifiedHapticsController.shared.lightTap()
+            if shouldAnimate {
+                UIView.transition(with: textLabel, duration: 0.18, options: .transitionCrossDissolve) { 
+                    self.showCurrentPage() 
+                }
+            } else {
+                showCurrentPage()
+            }
         } else {
-            showCurrentPage()
+            // Single page or at beginning with no pages - expand instead
+            expandIfNeeded()
         }
     }
 
@@ -550,6 +587,10 @@ final class SuggestionChipView: UIControl {
         NSLayoutConstraint.deactivate(expandedConstraints)
         NSLayoutConstraint.activate(compactConstraints)
         setPreview(text: fullText, tone: .neutral, textHash: textHash) // tone will be reapplied by presenter
+        
+        // Restore proper chevron state for collapsed mode
+        showCurrentPage()
+        
         superview?.layoutIfNeeded()
     }
 

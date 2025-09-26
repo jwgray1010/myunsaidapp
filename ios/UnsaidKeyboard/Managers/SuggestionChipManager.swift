@@ -23,7 +23,7 @@ final class SuggestionChipManager {
     private var activeChip: SuggestionChipView?
     
     // 🔒 When true, only explicit button taps may show chips.
-    private var requireExplicitTap = false
+    private var requireExplicitTap = true  // Start with true - chips only on tone button tap
     
     // First-time user tutorial management
     private static let tutorialShownKey = "UnsaidKeyboardTutorialShown"
