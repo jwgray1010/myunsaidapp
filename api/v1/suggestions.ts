@@ -488,6 +488,10 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
         ui_tone: ui_tone,                                           // adjusted for suggestions
         ui_distribution: uiBuckets,                                 // adjusted & normalized
         
+        // ✅ ADD MISSING REQUIRED FIELDS for schema compatibility
+        triggerTone: ui_tone,                                       // The final tone bucket selection
+        trigger_tone_tags: [data.toneAnalysis.classification],     // Tags that triggered this tone
+        
         // ✅ ADD REQUIRED LEARNING SIGNALS FIELD from suggestionAnalysis
         learning_signals: (suggestionAnalysis?.analysis as any)?.learningSignals || {
           patterns_detected: [],

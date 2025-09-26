@@ -106,6 +106,65 @@
     "culture": {
       "neutral":    { "clear": 0.01 },
       "supportive": { "clear": 0.01 }
+    },
+
+    "conflict_prevention": {
+      "supportive": { "clear": 0.02 },
+      "assertive":  { "clear": 0.01, "caution": -0.01 },
+      "neutral":    { "clear": 0.01 }
+    },
+
+    "validation": {
+      "supportive": { "clear": 0.02, "caution": -0.01 },
+      "neutral":    { "clear": 0.01 }
+    },
+
+    "reassurance_seeking": {
+      "anxious":    { "caution": 0.02, "alert": -0.01 },
+      "tentative":  { "caution": 0.01 },
+      "sad":        { "caution": 0.01, "clear": -0.01 }
+    },
+
+    "emotion_regulation": {
+      "supportive": { "clear": 0.02 },
+      "reflective": { "clear": 0.01 },
+      "anxious":    { "clear": 0.01, "caution": -0.01 }
+    },
+
+    "defensiveness": {
+      "defensive":  { "alert": 0.02, "caution": -0.01 },
+      "frustrated": { "alert": 0.01, "caution": 0.01 },
+      "negative":   { "alert": 0.01 }
+    },
+
+    "withdrawal_impulse": {
+      "withdrawn":  { "alert": 0.03, "caution": -0.02 },
+      "defensive":  { "alert": 0.02, "clear": -0.01 },
+      "frustrated": { "alert": 0.01, "caution": 0.01 }
+    },
+
+    "overwhelm_guardrail": {
+      "overwhelmed": { "caution": 0.02, "alert": 0.01 },
+      "anxious":     { "caution": 0.02, "clear": -0.01 },
+      "frustrated":  { "caution": 0.01, "alert": 0.01 }
+    },
+
+    "accountability": {
+      "reflective":  { "clear": 0.01 },
+      "assertive":   { "clear": 0.01, "caution": -0.01 },
+      "apologetic":  { "clear": 0.01, "caution": -0.01 }
+    },
+
+    "trust_building": {
+      "supportive":  { "clear": 0.02 },
+      "reflective":  { "clear": 0.01 },
+      "neutral":     { "clear": 0.01 }
+    },
+
+    "attachment_attunement": {
+      "supportive":  { "clear": 0.02, "caution": -0.01 },
+      "empathetic":  { "clear": 0.01 },
+      "reflective":  { "clear": 0.01 }
     }
   },
 

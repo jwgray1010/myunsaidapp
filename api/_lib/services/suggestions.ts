@@ -1042,11 +1042,18 @@ function getMemoizedToneBucket(toneKey: string, contextLabel: string, intensityS
 
 // Enhanced tone matching: supports both exact raw tone matches and UI tone fallbacks
 function matchesToneClassification(item: any, toneKey: string): boolean {
-  const itemTone = item.triggerTone;
-  if (!itemTone) return false;
+  // Check for exact raw tone match first (highest precision)
+  if (item.rawTone && Array.isArray(item.rawTone)) {
+    if (item.rawTone.includes(toneKey)) return true;
+  }
   
-  // Direct match (preferred)
-  if (itemTone === toneKey) return true;
+  // Check triggerTone for UI bucket matches
+  const itemTone = item.triggerTone;
+  if (itemTone) {
+    // Handle both string and array triggerTone formats
+    const triggerTones = Array.isArray(itemTone) ? itemTone : [itemTone];
+    if (triggerTones.includes(toneKey)) return true;
+  }
   
   // Fallback matching: check if toneKey maps to the same UI bucket as itemTone
   const toneToUIBucket = (tone: string): string => {
@@ -1101,20 +1108,41 @@ function matchesToneClassification(item: any, toneKey: string): boolean {
   };
   
   const userUIBucket = toneToUIBucket(toneKey);
-  const itemUIBucket = toneToUIBucket(itemTone);
   
-  // Allow cross-matching within the same UI bucket
-  // e.g., "assertive" user tone can match "clear" therapy advice
-  return userUIBucket === itemUIBucket;
+  // Check UI bucket matching against triggerTone array
+  if (itemTone) {
+    const triggerTones = Array.isArray(itemTone) ? itemTone : [itemTone];
+    for (const tone of triggerTones) {
+      const itemUIBucket = toneToUIBucket(tone);
+      if (userUIBucket === itemUIBucket) return true;
+    }
+  }
+  
+  // Check UI bucket matching against rawTone array
+  if (item.rawTone && Array.isArray(item.rawTone)) {
+    for (const tone of item.rawTone) {
+      const itemUIBucket = toneToUIBucket(tone);
+      if (userUIBucket === itemUIBucket) return true;
+    }
+  }
+  
+  return false;
 }
 
 // Attachment-aware tone matching: considers attachment styles when determining UI bucket mappings
 function matchesToneClassificationWithAttachment(item: any, toneKey: string, attachmentStyle: string | null = null): boolean {
-  const itemTone = item.triggerTone;
-  if (!itemTone) return false;
+  // Check for exact raw tone match first (highest precision)
+  if (item.rawTone && Array.isArray(item.rawTone)) {
+    if (item.rawTone.includes(toneKey)) return true;
+  }
   
-  // Direct match (preferred)
-  if (itemTone === toneKey) return true;
+  // Check triggerTone for UI bucket matches
+  const itemTone = item.triggerTone;
+  if (itemTone) {
+    // Handle both string and array triggerTone formats
+    const triggerTones = Array.isArray(itemTone) ? itemTone : [itemTone];
+    if (triggerTones.includes(toneKey)) return true;
+  }
   
   // Get attachment-aware UI bucket mapping
   const getAttachmentAwareUIBucket = (tone: string, attachment: string | null): string => {
@@ -1176,9 +1204,25 @@ function matchesToneClassificationWithAttachment(item: any, toneKey: string, att
   };
   
   const userUIBucket = getAttachmentAwareUIBucket(toneKey, attachmentStyle);
-  const itemUIBucket = getAttachmentAwareUIBucket(itemTone, null); // Items don't have attachment context
   
-  return userUIBucket === itemUIBucket;
+  // Check UI bucket matching against triggerTone array
+  if (itemTone) {
+    const triggerTones = Array.isArray(itemTone) ? itemTone : [itemTone];
+    for (const tone of triggerTones) {
+      const itemUIBucket = getAttachmentAwareUIBucket(tone, null); // Items don't have attachment context
+      if (userUIBucket === itemUIBucket) return true;
+    }
+  }
+  
+  // Check UI bucket matching against rawTone array
+  if (item.rawTone && Array.isArray(item.rawTone)) {
+    for (const tone of item.rawTone) {
+      const itemUIBucket = getAttachmentAwareUIBucket(tone, null);
+      if (userUIBucket === itemUIBucket) return true;
+    }
+  }
+  
+  return false;
 }
 
 async function hybridRetrieve(text: string, contextLabel: string, toneKey: string, analysis?: any, k=ENV_CONTROLS.RETRIEVAL_POOL_SIZE) {
@@ -1779,25 +1823,52 @@ class AdviceEngine {
       // Tone match mass
       const { dist } = this.resolveToneBucket(signals.toneKey, signals.contextLabel, signals.intensityScore);
       
-      // Use enhanced tone matching - check both exact raw tone and UI bucket fallback
-      const exactToneMatch = it.triggerTone === signals.toneKey;
-      let toneBucket = it.triggerTone || 'clear';
-      let toneMatchMass = (dist as any)[toneBucket] ?? 0.33;
+      // Enhanced tone matching - check rawTone first, then triggerTone
+      let exactToneMatch = false;
+      let toneMatchMass = 0.33; // default fallback
+      let toneBucket = 'clear'; // default UI bucket
       
-      // If no exact match, try enhanced matching to get the appropriate UI bucket
-      // Use attachment-aware matching when attachment style is available
-      const hasEnhancedMatch = signals.attachmentStyle 
-        ? matchesToneClassificationWithAttachment(it, signals.toneKey, signals.attachmentStyle)
-        : matchesToneClassification(it, signals.toneKey);
-        
-      if (!exactToneMatch && hasEnhancedMatch) {
-        // Get UI bucket for the raw tone and use that for scoring
-        // Use attachment-aware bucket determination when available
+      // Check for exact raw tone match (highest precision)
+      if (it.rawTone && Array.isArray(it.rawTone) && it.rawTone.includes(signals.toneKey)) {
+        exactToneMatch = true;
+        // Use the UI bucket that this raw tone maps to for scoring
         const uiBucket = signals.attachmentStyle
           ? this.getUIBucketForToneWithAttachment(signals.toneKey, signals.attachmentStyle)
           : this.getUIBucketForTone(signals.toneKey);
-        if (uiBucket && it.triggerTone === uiBucket) {
-          toneMatchMass = (dist as any)[uiBucket] ?? 0.33;
+        if (uiBucket) {
+          toneBucket = uiBucket;
+          toneMatchMass = (dist as any)[uiBucket] ?? 0.5; // Higher confidence for exact matches
+        }
+      } 
+      // Check triggerTone for UI bucket matches
+      else if (it.triggerTone) {
+        const triggerTones = Array.isArray(it.triggerTone) ? it.triggerTone : [it.triggerTone];
+        if (triggerTones.includes(signals.toneKey)) {
+          exactToneMatch = true;
+          toneBucket = signals.toneKey; // Direct UI bucket match
+          toneMatchMass = (dist as any)[toneBucket] ?? 0.4;
+        } else {
+          // Use first triggerTone as fallback bucket
+          toneBucket = triggerTones[0] || 'clear';
+        }
+      }
+      
+      // If no exact match, try enhanced matching to get the appropriate UI bucket
+      if (!exactToneMatch) {
+        // Use attachment-aware matching when attachment style is available
+        const hasEnhancedMatch = signals.attachmentStyle 
+          ? matchesToneClassificationWithAttachment(it, signals.toneKey, signals.attachmentStyle)
+          : matchesToneClassification(it, signals.toneKey);
+          
+        if (hasEnhancedMatch) {
+          // Get UI bucket for the raw tone and use that for scoring
+          const uiBucket = signals.attachmentStyle
+            ? this.getUIBucketForToneWithAttachment(signals.toneKey, signals.attachmentStyle)
+            : this.getUIBucketForTone(signals.toneKey);
+          if (uiBucket) {
+            toneBucket = uiBucket;
+            toneMatchMass = (dist as any)[uiBucket] ?? 0.33; // Lower confidence for bucket matches
+          }
         }
       }
       

@@ -136,6 +136,7 @@ export const suggestionItemSchema = z.object({
       z.string(),
       z.array(z.string())
     ]).optional(),
+    rawTone: z.array(z.string()).optional(), // Raw emotion labels (21-tone classification)
     attachmentStyles: z.array(z.string()).optional(),
     intent: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
@@ -199,6 +200,7 @@ export const originalAnalysisSchema = z.object({
     z.enum(['clear','caution','alert']),
     z.string()
   ]).optional().describe('Legacy single trigger tone value (level fallback)'),
+  rawTone: z.array(z.string()).optional().describe('Array of raw emotion labels (21-tone classification)'),
   trigger_tone_tags: z.array(z.string()).optional().describe('Array of raw tone tags (21-label set) for search matching'),
   
   // UI consistency fields (adjusted for suggestions context)
