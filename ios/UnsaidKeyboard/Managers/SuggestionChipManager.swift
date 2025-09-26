@@ -123,6 +123,8 @@ final class SuggestionChipManager {
             (containerView as? KeyboardController)?.suggestionsArmed = false
         }
 
+        containerView.addSubview(chip) // layout first
+        
         // Remove any old position constraints if you decide to store them.
         // Position chip - overlay spelling bar if available, fallback to bottom of keyboard
         if let bar = suggestionBar {
