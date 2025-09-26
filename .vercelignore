@@ -12,6 +12,20 @@ pubspec.*
 analysis_options.*
 devtools_options.*
 
+# Google Cloud API (moved to separate deployment)
+gcloud-api/
+
+# Heavy API services (moved to Google Cloud)
+api/_lib/
+api/cron/
+api/debug/
+api/metrics.ts
+api/warmup.ts
+api/_warmup.ts
+
+# Data files (moved to Google Cloud)
+data/
+
 # Documentation
 docs/
 README.md
@@ -28,5 +42,4 @@ integration_test/
 **/*.test.*
 **/*.spec.*
 
-# Only include API and data folders for Vercel
-# Everything else should be ignored
+# Only api/v1/ should be deployed to Vercel

@@ -67,7 +67,13 @@ import Foundation
     
     // MARK: - Helpers (safe reads)
     private func arrayDict(forKey key: String, in defaults: UserDefaults) -> [[String: Any]] {
-        (defaults.array(forKey: key) as? [[String: Any]]) ?? []
+        // Keyboard writes encoded Data blobs, not arrays directly
+        if let data = defaults.data(forKey: key),
+           let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            return arr
+        }
+        // Fallback for legacy array format
+        return (defaults.array(forKey: key) as? [[String: Any]]) ?? []
     }
     
     private func dict(forKey key: String, in defaults: UserDefaults) -> [String: Any] {
@@ -208,7 +214,10 @@ import Foundation
         }
         
         // Resolve fallbacks and avoid optionals in output
-        let userId   = shared.string(forKey: Keys.userId) ?? shared.string(forKey: Keys.userIdAlt) ?? ""
+        let userId   = shared.string(forKey: Keys.userId) 
+                    ?? shared.string(forKey: Keys.userIdAlt) 
+                    ?? shared.string(forKey: "unsaid_user_id")
+                    ?? ""
         let email    = shared.string(forKey: Keys.userEmail) ?? shared.string(forKey: Keys.userEmailAlt) ?? ""
         let attach   = shared.string(forKey: Keys.attachmentStyle) ?? ""
         let persona  = shared.dictionary(forKey: Keys.personalityData) ?? [:]

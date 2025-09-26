@@ -142,7 +142,7 @@ actor PersonalityDataBridge {
     #if DEBUG
     init(suiteName: String = AppGroups.id) {
         self.ud = UserDefaults(suiteName: suiteName) ?? .standard
-        Task { @MainActor in
+        Task {
             await self.migrateIfNeeded()
             await self.log("Bridge ready (app group defaults active)", level: .info)
         }
@@ -150,7 +150,7 @@ actor PersonalityDataBridge {
     #else
     private init() {
         self.ud = UserDefaults(suiteName: AppGroups.id) ?? .standard
-        Task { @MainActor in
+        Task {
             await self.migrateIfNeeded()
             await self.log("Bridge ready (app group defaults active)", level: .info)
         }
@@ -164,8 +164,17 @@ actor PersonalityDataBridge {
     func getPersonalityType() -> String { string(K.personalityType, fallback: "analytical") }
     func getCurrentEmotionalState() -> String { string(K.emoState, fallback: "neutral") }
     func getCurrentEmotionalBucket() -> String { string(K.emoBucket, fallback: "moderate") }
-    func getProfanityLevel() -> Int { (ud.object(forKey: K.profLevel) as? Int) ?? 2 }
-    func getSarcasmLevel() -> Int { (ud.object(forKey: K.sarcLevel) as? Int) ?? 2 }
+    func getProfanityLevel() -> Int { ud.integer(forKey: K.profLevel) == 0 ? 2 : ud.integer(forKey: K.profLevel) }
+    func getSarcasmLevel() -> Int { ud.integer(forKey: K.sarcLevel) == 0 ? 2 : ud.integer(forKey: K.sarcLevel) }
+
+    // MARK: - Learner attachment getters
+    func getLearnerAttachmentStyle() -> String? { ud.string(forKey: K.learnerAttachmentStyle) }
+    func getAttachmentConfidence() -> Double? {
+        let v = ud.double(forKey: K.attachmentConfidence)
+        return v == 0 ? nil : v
+    }
+    func getAttachmentSource() -> String? { ud.string(forKey: K.attachmentSource) }
+    func getAttachmentConfirmedAt() -> Date? { ud.object(forKey: K.attachmentConfirmedAt) as? Date }
 
     /// Returns a flattened profile dictionary suitable for API payloads.
     func getPersonalityProfile() -> [String: Any] {
@@ -182,7 +191,7 @@ actor PersonalityDataBridge {
             profile["personality_scores"] = scores
         }
         if let prefs = ud.dictionary(forKey: K.prefs) {
-            profile["communication_preferences"] = trimmedPrefs(prefs)
+            profile["communication_preferences"] = trimmedPrefs(sanitizePrefs(prefs))
         }
         if let partner = ud.string(forKey: K.partnerStyle) {
             profile["partner_attachment_style"] = partner
@@ -190,6 +199,20 @@ actor PersonalityDataBridge {
         if let ctx = ud.string(forKey: K.relContext) {
             profile["relationship_context"] = ctx
         }
+        
+        // MARK: - Learner attachment fields
+        if let learner = ud.string(forKey: K.learnerAttachmentStyle) {
+            profile["learner_attachment_style"] = learner
+        }
+        let conf = ud.double(forKey: K.attachmentConfidence)
+        if conf > 0 { profile["attachment_confidence"] = conf }
+        if let src = ud.string(forKey: K.attachmentSource) {
+            profile["attachment_source"] = src
+        }
+        if let confirmed = ud.object(forKey: K.attachmentConfirmedAt) as? Date {
+            profile["attachment_confirmed_at"] = confirmed
+        }
+        
         profile["data_freshness"] = getDataFreshness()
         return profile
     }
@@ -202,6 +225,34 @@ actor PersonalityDataBridge {
     func getDataFreshness() -> Double {
         guard let date = ud.object(forKey: K.lastUpdate) as? Date else { return -1 }
         return Date().timeIntervalSince(date) / 3600.0
+    }
+
+    // MARK: - Public Profile Helper
+
+    struct PublicProfile {
+        let attachmentStyle: String
+        let communicationStyle: String
+        let personalityType: String
+        let emotionalState: String
+        let emotionalBucket: String
+        let learnerStyle: String?
+        let attachmentConfidence: Double?
+        let isComplete: Bool
+        let dataFreshnessHours: Double
+    }
+
+    func getPublicProfile() -> PublicProfile {
+        PublicProfile(
+            attachmentStyle: getAttachmentStyle(),
+            communicationStyle: getCommunicationStyle(),
+            personalityType: getPersonalityType(),
+            emotionalState: getCurrentEmotionalState(),
+            emotionalBucket: getCurrentEmotionalBucket(),
+            learnerStyle: getLearnerAttachmentStyle(),
+            attachmentConfidence: getAttachmentConfidence(),
+            isComplete: isPersonalityTestComplete(),
+            dataFreshnessHours: getDataFreshness()
+        )
     }
 
     // MARK: - Writer APIs (batched & minimal)
@@ -410,6 +461,14 @@ extension PersonalityDataBridge {
 
     func isNewUser() -> Bool {
         (getAttachmentLearningStartedAt() == nil) && !isPersonalityTestComplete()
+    }
+
+    func learningProgress() -> (elapsedDays: Int, totalDays: Int) {
+        let start = getAttachmentLearningStartedAt() ?? 0
+        let total = max(1, udSafe.integer(forKey: K.attachmentLearningDays))
+        guard start > 0 else { return (0, total) }
+        let elapsed = Int((Date().timeIntervalSince1970 - start) / 86_400.0)
+        return (min(elapsed, total), total)
     }
 }
 

@@ -1,0 +1,899 @@
+{
+  "version": "1.3.1",
+  "notes": "Canonical category alignment + aliases. Keeps 1.3.0 behavior while mapping legacy keys (validation, de-escalation) to empathy_builders/active_listening and emergency_deescalation/emotional_regulation. Adds optional canonical categories used elsewhere (safety_check, escalation_detection, breathing_techniques, communication_style_markers, etc.).",
+  "settings": {
+    "normalize": {
+      "casefold": true,
+      "strip_punct": true,
+      "lemmatize": true,
+      "unicode_nfkc": true,
+      "collapse_whitespace": true,
+      "preserve_emojis": true,
+      "apostrophes": ["'", "’", "`"],
+      "diacritics": "strip",
+      "elongation_collapse": { "enabled": true, "max_repeat": 3 },
+      "spelling_variants": { "enabled": true, "british_to_american": true }
+    },
+    "languages": {
+      "default": "en",
+      "detect": true,
+      "supported": ["en","es","fr","de","pt","it"],
+      "fallback": "en",
+      "xlang_heuristics": {
+        "mirror_lexemes": true,
+        "transliterate": true,
+        "shared_emojis": true
+      }
+    },
+    "matchMode": "hybrid",
+    "thresholds": {
+      "exact": 0.90,
+      "regex": 0.82,
+      "spacy": 0.76,
+      "embedding": 0.73,
+      "cluster_fire": 0.78,
+      "irony_override": 0.65,
+      "xlang_penalty": 0.03
+    },
+    "negation": {
+      "window": 4,
+      "invertTone": true,
+      "penalty": 0.25,
+      "denylist": ["not only ... but", "not because", "not just ... also"]
+    },
+    "context": {
+      "turn_window": 6,
+      "speaker_tracking": true,
+      "carry_over_intensity": 0.15,
+      "cooldown_ms": 250,
+      "cooldown_by_category": { "conflict": 350, "risk": 500, "validation": 150, "empathy_builders": 150 }
+    },
+    "reverseRegisterRule": {
+      "enabled": true,
+      "signals": ["affiliative insult", "banter markers", "emoji soften"],
+      "dampenMultiplier": 0.6,
+      "banter_markers": ["jk","lol","lmao","😂","😅","😉","j/k","kidding"]
+    },
+    "ironySarcasm": {
+      "enabled": true,
+      "signals": {
+        "scare_quotes": true,
+        "slash_s": true,
+        "ellipsis_pause": true,
+        "emoji_eye_roll": ["🙄","😒"],
+        "contrastive_markers": ["yeah right","sure, jan"]
+      },
+      "boost_contempt": 0.08,
+      "dampen_literal_toxicity": 0.05
+    },
+    "features": {
+      "caps_ratio_weight": 0.06,
+      "exclaim_count_weight": 0.05,
+      "absolute_terms": ["always","never","every","nothing","no one","everyone"],
+      "absolutizer_weight": 0.07,
+      "question_barrage_weight": 0.06,
+      "emoji_softeners": ["🙂","😊","🫶","🙏","✨","💙"],
+      "emoji_harsh": ["💀","🤡","🖕","🔥","⚔️"]
+    }
+  },
+
+  "aliases": {
+    "categories": {
+      "validation": ["empathy_builders","active_listening"],
+      "de-escalation": ["emergency_deescalation","emotional_regulation"]
+    }
+  },
+
+  "weights": {
+    "categoryWeights": {
+      "boundary": 1.03,
+      "validation": 1.10,
+      "de-escalation": 1.05,
+      "plan": 1.00,
+      "conflict": 1.00,
+      "repair": 1.00,
+      "distancing": 1.00,
+      "risk": 1.07,
+      "jealousy": 1.02,
+
+      "empathy_builders": 1.10,
+      "active_listening": 1.06,
+      "emergency_deescalation": 1.05,
+      "emotional_regulation": 1.03,
+      "safety_check": 1.04,
+      "escalation_detection": 1.02,
+      "breathing_techniques": 1.02,
+      "communication_style_markers": 1.00,
+      "relationship_stage_indicators": 1.00,
+      "attachment_triggers": 1.00,
+      "codependency_patterns": 1.00,
+      "independence_patterns": 1.00,
+      "cultural_context_patterns": 1.00,
+      "perspective_taking": 1.00
+    },
+    "profiles": {
+      "high_sensitivity": { "sarcasmPenalty": 1.3, "negationPenalty": 1.2, "ironySensitivity": 1.2 },
+      "low_reactivity":   { "intensityBoost": 0.9, "cooldownFactor": 1.1 },
+      "default":          { "intensityBoost": 1.0 }
+    }
+  },
+
+  "routing": {
+    "matrix": {
+      "conflict":      ["boundary","emergency_deescalation","empathy_builders","repair"],
+      "risk":          ["empathy_builders","boundary","emergency_deescalation","plan"],
+      "jealousy":      ["empathy_builders","plan","boundary"],
+      "distancing":    ["empathy_builders","emergency_deescalation","plan"],
+      "validation":    ["plan","repair"],
+      "boundary":      ["plan","empathy_builders"]
+    },
+    "policy": {
+      "max_actions": 2,
+      "prefer_clear_over_alert_when": ["apology","empathy_builders","emergency_deescalation"],
+      "block_escalate_if": ["gaslighting","ultimatum"]
+    }
+  },
+
+  "confidenceCalibration": {
+    "blend": { "regex": 0.35, "spacy": 0.20, "embedding": 0.35, "features": 0.10 },
+    "feature_bonus_caps": 0.02,
+    "feature_bonus_abs": 0.03,
+    "banter_dampen": 0.08,
+    "cooldown_decay": 0.06
+  },
+
+  "links": {
+    "attachmentOverrides": {
+      "anxious":      { "cautionBoost": 0.10, "alertDampen": 0.05 },
+      "avoidant":     { "clearBoost": 0.10,  "cautionBoost": 0.05 },
+      "disorganized": { "alertBoost": 0.10, "cautionBoost": 0.10 },
+      "secure":       { "clearBoost": 0.15 }
+    },
+    "userPreferenceCategories": {
+      "boundary": 0.10,
+      "validation": 0.10,
+      "de-escalation": 0.05,
+      "empathy_builders": 0.10,
+      "emergency_deescalation": 0.05
+    }
+  },
+
+  "actionPolicies": {
+    "on_detect": {
+      "conflict":   ["suggest_rewrite_secure", "offer_options_menu"],
+      "risk":       ["suggest_evidence_check","offer_pause_timer"],
+      "validation": ["mirror_then_ask"],
+      "boundary":   ["format_boundary_secure"],
+      "repair":     ["micro_apology_template"]
+    },
+    "templates": {
+      "rewrite_secure": "I-statements: feeling + need + doable request, no global labels.",
+      "options_menu": "Offer 2–3 concrete choices with time anchors.",
+      "boundary_secure": "Limit + rationale + alternative.",
+      "micro_apology": "Behavior → impact → repair step; avoid 'but'."
+    }
+  },
+
+  "clusterSchema": {
+    "id": "string",
+    "key": "string",
+    "category": "conflict|repair|plan|validation|boundary|distancing|jealousy|risk|de-escalation|empathy_builders|active_listening|emergency_deescalation|emotional_regulation|safety_check",
+    "description": "short explainer",
+    "toneAffinities": { "alert": "0..1", "caution": "0..1", "clear": "-1..1" },
+    "attachmentAdjustments": { "secure": "delta", "anxious": "delta", "avoidant": "delta", "disorganized": "delta" },
+    "contextLinks": ["CTX_* ids"],
+    "match": {
+      "lexical": ["literal variants"],
+      "regex": ["patterns"],
+      "spacyPatterns": [[{ "LOWER": "token" }]],
+      "semanticTags": ["concept tags"],
+      "embeddingHints": ["seed phrases"],
+      "xlang": { "es": ["..."], "fr": ["..."] }
+    },
+    "negationSensitive": "bool",
+    "intensityHooks": ["amplifiers/absolutizers/etc"],
+    "rewriteCues": { "secureFix": ["brief tips"], "examples": ["example rewrite"] },
+    "crossRefs": {
+      "triggerwordsTags": ["tags used in tone_triggerwords.json"],
+      "therapyAdviceTags": ["tags used to filter therapy_advice.json"],
+      "intensityModifierHints": ["map to intensity layer hooks"]
+    },
+    "weights": { "base": "0..1", "multiplierProfile": "profile key" },
+    "tests": [{ "text": "example", "expect": { "tone": "alert", "context": "conflict" } }]
+  },
+
+  "contexts": [
+    { "id": "CTX_CONFLICT", "signals": ["second-person blame","absolutizers"], "bias": { "alert": 0.08 } },
+    { "id": "CTX_ESCALATION", "signals": ["caps","exclaims>2","threat_terms"], "bias": { "alert": 0.12 } },
+    { "id": "CTX_REPAIR", "signals": ["apology_markers","future_plan"], "bias": { "clear": 0.10 } },
+    { "id": "CTX_RISK", "signals": ["reality_invalidation","threats"], "bias": { "alert": 0.15 } },
+    { "id": "CTX_PLANNING", "signals": ["time_tokens","dates","numbers"], "bias": { "clear": 0.08 } },
+    { "id": "CTX_RUPTURE", "signals": ["withdrawal","silence_markers"], "bias": { "caution": 0.07 } },
+    { "id": "CTX_MICRO_APOLOGY", "signals": ["sorry","my mistake"], "bias": { "clear": 0.06 } },
+    { "id": "CTX_INSECURITY", "signals": ["comparisons","triangulation"], "bias": { "caution": 0.05 } },
+    { "id": "CTX_BOUNDARY", "signals": ["limit_setting","request_stop"], "bias": { "clear": 0.08 } },
+    { "id": "CTX_DISCLOSURE", "signals": ["self_disclosure"], "bias": { "caution": 0.04 } },
+    { "id": "CTX_DEFENSIVE", "signals": ["deflection","counter_blame","justification"], "bias": { "caution": 0.06 } },
+    { "id": "CTX_DISMISSIVE", "signals": ["minimizing_language","topic_change","eye_roll_tone"], "bias": { "alert": 0.05 } },
+    { "id": "CTX_CURIOSITY", "signals": ["open_questions","explore_language","tell_me_more"], "bias": { "clear": 0.09 } },
+    { "id": "CTX_PLAYFUL", "signals": ["humor","teasing","lighthearted"], "bias": { "clear": 0.07 } },
+    { "id": "CTX_REFLECTIVE", "signals": ["past_tense","learning_language","realization"], "bias": { "clear": 0.06 } },
+    { "id": "CTX_LOGISTICS", "signals": ["scheduling","coordination","practical_details"], "bias": { "neutral": 0.05 } },
+    { "id": "CTX_CATASTROPHIZING", "signals": ["worst_case","disaster_language","everything_ruined"], "bias": { "alert": 0.10 } },
+    { "id": "CTX_MINIMIZATION", "signals": ["not_big_deal","downplay","whatever"], "bias": { "caution": 0.04 } },
+    { "id": "CTX_CONFUSION", "signals": ["mixed_signals","unclear","both_and_language"], "bias": { "caution": 0.05 } }
+  ],
+
+  "clusters": [
+    {
+      "id": "SEM_BLAME",
+      "key": "blame",
+      "category": "conflict",
+      "description": "Assigning fault to the other person.",
+      "toneAffinities": { "alert": 0.25, "caution": 0.05, "clear": -0.05 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.05, "avoidant": 0.02, "disorganized": 0.06 },
+      "contextLinks": ["CTX_CONFLICT","CTX_ESCALATION"],
+      "match": {
+        "lexical": ["fault","your fault","your doing","because of you","this is on you","you made me","all on you","your mistake","you caused this","you did this"],
+        "regex": ["\\b(your|ur)\\s+(fault|doing|mess|mistake)\\b","\\bbecause of you\\b","\\bthis\\s+is\\s+on\\s+you\\b","\\byou\\s+(caused|made)\\s+this\\b"],
+        "spacyPatterns": [[{ "LOWER": {"IN":["your","ur"]}}, { "LOWER": {"IN":["fault","doing","mess","mistake"]}}], [{ "LOWER":"because"},{ "LOWER":"of"},{ "LOWER":"you"}]],
+        "semanticTags": ["assigning_cause","externalization"],
+        "embeddingHints": ["it's your fault","this happened because of you"],
+        "xlang": { "es": ["es tu culpa","por tu culpa"], "fr": ["c’est de ta faute","à cause de toi"] }
+      },
+      "negationSensitive": true,
+      "intensityHooks": ["always","never","!!!","caps"],
+      "rewriteCues": {
+        "secureFix": [
+          "Shift to impact over blame (I-feel + need/request).",
+          "Name one behavior + one effect; avoid global attributions."
+        ],
+        "examples": [
+          "Instead of “This is your fault” → “I felt stuck when X happened. Next time could we Y?”"
+        ]
+      },
+      "crossRefs": {
+        "triggerwordsTags": ["blame","accusation"],
+        "therapyAdviceTags": ["repair","emergency_deescalation","impact-over-intent"],
+        "intensityModifierHints": ["absolutizer","repeater"]
+      },
+      "weights": { "base": 1.0, "multiplierProfile": "high_sensitivity" },
+      "tests": [{ "text": "This is your fault.", "expect": { "tone": "alert", "context": "conflict" } }]
+    },
+
+    {
+      "id": "SEM_WITHDRAW",
+      "key": "withdraw",
+      "category": "distancing",
+      "description": "Disengaging or shutting down.",
+      "toneAffinities": { "alert": 0.05, "caution": 0.20, "clear": -0.05 },
+      "attachmentAdjustments": { "secure": -0.02, "anxious": 0.06, "avoidant": 0.10, "disorganized": 0.06 },
+      "contextLinks": ["CTX_RUPTURE","CTX_CONFLICT"],
+      "match": {
+        "lexical": ["pull away","shut down","go quiet","check out","stonewall","go silent","disappear on me","ghosting","I can't do this right now"],
+        "regex": ["\\b(shut\\s*down|go\\s+quiet|check\\s+out|stonewall)\\b","\\b(pull(?:ing)?\\s+away)\\b"],
+        "spacyPatterns": [[{ "LOWER":"go"},{ "LOWER":{"IN":["quiet","silent"]}}]],
+        "semanticTags": ["withdrawal","shutdown"],
+        "embeddingHints": ["I’m shutting down","I checked out of the convo"],
+        "xlang": { "es": ["me cierro","me callo","me desconecto"], "fr": ["je me ferme","je me tais","je décroche"] }
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["ellipsis","long pause markers"],
+      "rewriteCues": {
+        "secureFix": [
+          "Name the need for a brief pause and give a return time.",
+          "Signal care + commitment before exiting."
+        ],
+        "examples": [
+          "“I’m getting flooded. Can we pause 20 minutes and pick this back up?”"
+        ]
+      },
+      "crossRefs": {
+        "triggerwordsTags": ["withdrawal","stonewalling"],
+        "therapyAdviceTags": ["co-regulation","timed-pause","repair"],
+        "intensityModifierHints": ["ellipsis_softener"]
+      },
+      "weights": { "base": 0.95, "multiplierProfile": "low_reactivity" },
+      "tests": [{ "text": "I’m shutting down.", "expect": { "tone": "caution", "context": "rupture" } }]
+    },
+
+    {
+      "id": "SEM_CONTEMPT",
+      "key": "contempt",
+      "category": "conflict",
+      "description": "Mockery or superiority signals.",
+      "toneAffinities": { "alert": 0.35, "caution": 0.05, "clear": -0.08 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.05, "avoidant": 0.04, "disorganized": 0.08 },
+      "contextLinks": ["CTX_ESCALATION","CTX_CONFLICT"],
+      "match": {
+        "lexical": ["pathetic","ridiculous","obviously","whatever (dismissive)","you’re impossible","grow up","give me a break"],
+        "regex": ["\\b(pathetic|ridiculous|grow\\s+up)\\b","\\bwhatever\\b"],
+        "spacyPatterns": [[{ "LOWER":"you’re"},{ "LOWER":"impossible"}]],
+        "semanticTags": ["mockery","superiority"],
+        "embeddingHints": ["eye roll tone","ugh whatever"],
+        "xlang": { "es": ["patético","ridículo","ya claro"], "fr": ["pathétique","ridicule","bien sûr (ironique)"] }
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["sarcasm","caps","!!!"],
+      "rewriteCues": {
+        "secureFix": [
+          "Drop evaluations; describe a specific moment/behavior.",
+          "Ask for one doable change."
+        ],
+        "examples": ["“When X happened I felt Y. Could we try Z next time?”"]
+      },
+      "crossRefs": {
+        "triggerwordsTags": ["contempt","insult"],
+        "therapyAdviceTags": ["emergency_deescalation","specific-request"],
+        "intensityModifierHints": ["sarcasm_flag","absolutizer"]
+      },
+      "weights": { "base": 1.05, "multiplierProfile": "high_sensitivity" }
+    },
+
+    {
+      "id": "SEM_ULTIMATUM",
+      "key": "ultimatum",
+      "category": "conflict",
+      "description": "If-then threats; leverage.",
+      "toneAffinities": { "alert": 0.40, "caution": 0.00, "clear": -0.10 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.05, "avoidant": 0.03, "disorganized": 0.07 },
+      "contextLinks": ["CTX_ESCALATION","CTX_BOUNDARY"],
+      "match": {
+        "lexical": ["if you don’t…, then…","do this or else","last chance","I’m done if…"],
+        "regex": ["\\bif\\s+you\\s+don'?t.*\\bthen\\b","\\b(or\\s+else)\\b","\\blast\\s+chance\\b"],
+        "spacyPatterns": [[{ "LOWER":"if"},{ "LOWER":"you"},{ "LOWER":{"REGEX":"don'?t"} }]],
+        "semanticTags": ["conditional_threat"],
+        "embeddingHints": ["do this or I’m done"],
+        "xlang": { "es": ["si no lo haces","o si no"], "fr": ["si tu ne","sinon"] }
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["caps","exclamation"],
+      "rewriteCues": {
+        "secureFix": [
+          "Replace threat with boundary + consequence you control.",
+          "Offer a collaborative path first."
+        ],
+        "examples": ["“If we can’t align by Friday, I’ll pause the trip planning.”"]
+      },
+      "crossRefs": {
+        "triggerwordsTags": ["threat","ultimatum"],
+        "therapyAdviceTags": ["boundary-secure","options-menu"],
+        "intensityModifierHints": ["absolutizer"]
+      },
+      "weights": { "base": 1.1, "multiplierProfile": "high_sensitivity" }
+    },
+
+    {
+      "id": "SEM_APOLOGY",
+      "key": "apology",
+      "category": "repair",
+      "description": "Ownership + remorse + repair.",
+      "toneAffinities": { "alert": -0.10, "caution": -0.05, "clear": 0.25 },
+      "attachmentAdjustments": { "secure": 0.05, "anxious": 0.02, "avoidant": 0.02, "disorganized": 0.02 },
+      "contextLinks": ["CTX_REPAIR","CTX_MICRO_APOLOGY"],
+      "match": {
+        "lexical": ["I’m sorry","I apologize","I didn’t mean that","my mistake","I own that","I was wrong"],
+        "regex": ["\\b(i'?m\\s+sorry|i\\s+apologize|my\\s+mistake|i\\s+was\\s+wrong)\\b"],
+        "spacyPatterns": [[{ "LOWER":{"IN":["sorry","apologize"]}}]],
+        "semanticTags": ["repair_initiation"],
+        "embeddingHints": ["owning impact","taking responsibility"]
+      },
+      "negationSensitive": true,
+      "intensityHooks": ["specificity bonus","offer-to-repair"],
+      "rewriteCues": {
+        "secureFix": ["Behavior → impact → next step; avoid 'but'."],
+        "examples": ["“I’m sorry I raised my voice. I see it shut you down. I’ll pause next time.”"]
+      },
+      "crossRefs": {
+        "triggerwordsTags": ["apology","repair"],
+        "therapyAdviceTags": ["micro-apology","repair-plan","validation"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 1.0, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_REASSURE",
+      "key": "reassurance",
+      "category": "empathy_builders",
+      "legacyCategory": "validation",
+      "description": "Care/commitment signals.",
+      "toneAffinities": { "alert": -0.15, "caution": -0.05, "clear": 0.30 },
+      "attachmentAdjustments": { "secure": 0.06, "anxious": 0.08, "avoidant": 0.02, "disorganized": 0.04 },
+      "contextLinks": ["CTX_REPAIR","CTX_CONFLICT"],
+      "match": {
+        "lexical": ["I’m here","I’ve got you","we’re a team","we’ll figure it out","you matter to me","I want this to work"],
+        "regex": ["\\b(i'?m\\s+here|we'?ll\\s+figure\\s+it\\s+out|you\\s+matter\\s+to\\s+me)\\b"],
+        "spacyPatterns": [[{ "LOWER":"we"},{ "LOWER":"got"},{ "LOWER":"this"}]],
+        "semanticTags": ["safety_signal"],
+        "embeddingHints": ["commitment signal","care language"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["future-orientation bonus"],
+      "rewriteCues": { "secureFix": ["Add one concrete next step with time anchor."],
+        "examples": ["“We’ll figure it out after dinner—let’s talk at 7.”"] },
+      "crossRefs": {
+        "triggerwordsTags": ["reassurance","validation"],
+        "therapyAdviceTags": ["validation","co-regulation","timeboxing"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.9, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_BOUNDARY",
+      "key": "boundary",
+      "category": "boundary",
+      "description": "Limits and conditions.",
+      "toneAffinities": { "alert": 0.05, "caution": 0.10, "clear": 0.20 },
+      "attachmentAdjustments": { "secure": 0.06, "anxious": 0.04, "avoidant": 0.06, "disorganized": 0.04 },
+      "contextLinks": ["CTX_BOUNDARY","CTX_PLANNING"],
+      "match": {
+        "lexical": ["that’s not okay","I need space","I can’t do X","please don’t","I won’t continue if…","I’m not available for that"],
+        "regex": ["\\b(that'?s\\s+not\\s+ok(?:ay)?|please\\s+don'?t|i\\s+need\\s+space)\\b"],
+        "spacyPatterns": [[{ "LOWER":"i"},{ "LOWER":"need"},{ "LOWER":"space"}]],
+        "semanticTags": ["limit_setting"],
+        "embeddingHints": ["stating limits","not okay with that"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["specificity bonus"],
+      "rewriteCues": { "secureFix": ["Limit + rationale + follow-up option."],
+        "examples": ["“I’m not okay with late texts. Let’s talk 9–6; urgent = call.”"] },
+      "crossRefs": {
+        "triggerwordsTags": ["boundary","limit"],
+        "therapyAdviceTags": ["boundary-secure","options-menu"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 1.0, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_JEALOUSY",
+      "key": "jealousy",
+      "category": "jealousy",
+      "description": "Comparisons and threat appraisals.",
+      "toneAffinities": { "alert": 0.20, "caution": 0.10, "clear": -0.05 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.08, "avoidant": 0.02, "disorganized": 0.06 },
+      "contextLinks": ["CTX_INSECURITY","CTX_CONFLICT"],
+      "match": {
+        "lexical": ["who were you with","you like them more","am I not enough","why them","you’re hiding something"],
+        "regex": ["\\byou\\s+like\\s+them\\s+more\\b","\\bam\\s+i\\s+not\\s+enough\\b","\\byou'?re\\s+hiding\\s+something\\b"],
+        "spacyPatterns": [[{ "LOWER":"who"},{ "LOWER":"were"},{ "LOWER":"you"},{ "LOWER":"with"}]],
+        "semanticTags": ["comparison_threat"],
+        "embeddingHints": ["romantic threat appraisal"]
+      },
+      "negationSensitive": true,
+      "intensityHooks": ["absolutizer","rapid-fire questions"],
+      "rewriteCues": { "secureFix": ["Name the feeling + ask for a reassurance plan."],
+        "examples": ["“I felt insecure last night—can we set expectations for texting?”"] },
+      "crossRefs": {
+        "triggerwordsTags": ["jealousy","comparison"],
+        "therapyAdviceTags": ["attachment-safety","clarify-expectations"],
+        "intensityModifierHints": ["absolutizer"]
+      },
+      "weights": { "base": 1.0, "multiplierProfile": "high_sensitivity" }
+    },
+
+    {
+      "id": "SEM_CONTROL",
+      "key": "control",
+      "category": "conflict",
+      "description": "Directives limiting autonomy.",
+      "toneAffinities": { "alert": 0.22, "caution": 0.08, "clear": -0.05 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.04, "avoidant": 0.06, "disorganized": 0.05 },
+      "contextLinks": ["CTX_CONFLICT","CTX_BOUNDARY"],
+      "match": {
+        "lexical": ["do it my way","you need to","you’re not allowed","don’t talk to them","check in every hour","send me your location"],
+        "regex": ["\\byou\\s+need\\s+to\\b","\\byou'?re\\s+not\\s+allowed\\b","\\bsend\\s+me\\s+your\\s+location\\b"],
+        "spacyPatterns": [[{ "LOWER":"you"},{ "LOWER":"need"},{ "LOWER":"to"}]],
+        "semanticTags": ["directive_control"],
+        "embeddingHints": ["controlling language"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["frequency mandates","deadline threats"],
+      "rewriteCues": { "secureFix": ["Translate to request + rationale; offer choices."],
+        "examples": ["“Could you text when you arrive? It helps me plan dinner.”"] },
+      "crossRefs": {
+        "triggerwordsTags": ["command","control"],
+        "therapyAdviceTags": ["collaborative-request","options-menu"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 1.02, "multiplierProfile": "high_sensitivity" }
+    },
+
+    {
+      "id": "SEM_GASLIGHT",
+      "key": "gaslighting",
+      "category": "risk",
+      "description": "Undermining perception; reality inversion.",
+      "toneAffinities": { "alert": 0.32, "caution": 0.08, "clear": -0.10 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.07, "avoidant": 0.04, "disorganized": 0.08 },
+      "contextLinks": ["CTX_RISK","CTX_CONFLICT"],
+      "match": {
+        "lexical": ["you’re imagining things","that never happened","you’re crazy","you always make things up","everyone knows you’re wrong"],
+        "regex": ["\\bthat\\s+never\\s+happened\\b","\\byou'?re\\s+(crazy|imagining\\s+things)\\b"],
+        "spacyPatterns": [[{ "LOWER":"you"},{ "LOWER":"always"},{ "LOWER":"make"},{ "LOWER":"things"},{ "LOWER":"up"}]],
+        "semanticTags": ["reality_invalidation"],
+        "embeddingHints": ["denying obvious facts"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["absolutizer","contempt blend"],
+      "rewriteCues": { "secureFix": ["Replace global invalidation with curiosity and specifics."],
+        "examples": ["“My memory is different; can we check messages to align?”"] },
+      "crossRefs": {
+        "triggerwordsTags": ["gaslighting","contempt"],
+        "therapyAdviceTags": ["evidence-check","shared-recall","validation"],
+        "intensityModifierHints": ["absolutizer"]
+      },
+      "weights": { "base": 1.08, "multiplierProfile": "high_sensitivity" }
+    },
+
+    {
+      "id": "SEM_UNCERTAINTY",
+      "key": "uncertainty",
+      "category": "de-escalation",
+      "relatedCanonical": ["emotional_regulation","hedge"],
+      "description": "Hedges and tentativeness.",
+      "toneAffinities": { "alert": -0.05, "caution": 0.10, "clear": 0.10 },
+      "attachmentAdjustments": { "secure": 0.02, "anxious": 0.03, "avoidant": -0.01, "disorganized": 0.02 },
+      "contextLinks": ["CTX_PLANNING","CTX_DISCLOSURE"],
+      "match": {
+        "lexical": ["maybe","I think","I guess","perhaps","sort of","kinda","not sure"],
+        "regex": ["\\b(maybe|perhaps|not\\s+sure|sort\\s+of|kinda)\\b"],
+        "spacyPatterns": [[{ "LOWER":"i"},{ "LOWER":"think"}]],
+        "semanticTags": ["hedge"],
+        "embeddingHints": ["tentative phrasing"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["downtoner"],
+      "rewriteCues": { "secureFix": ["Pair hedge with a concrete ask/time."],
+        "examples": ["“I think Friday works—can we lock 6pm?”"] },
+      "crossRefs": {
+        "triggerwordsTags": ["hedge","uncertainty"],
+        "therapyAdviceTags": ["clarify-plan","specific-request"],
+        "intensityModifierHints": ["downtoner"]
+      },
+      "weights": { "base": 0.95, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_PLANNING",
+      "key": "planning",
+      "category": "plan",
+      "description": "Logistics, scheduling.",
+      "toneAffinities": { "alert": -0.05, "caution": 0.10, "clear": 0.15 },
+      "attachmentAdjustments": { "secure": 0.04, "anxious": 0.02, "avoidant": 0.03, "disorganized": 0.01 },
+      "contextLinks": ["CTX_PLANNING"],
+      "match": {
+        "lexical": ["schedule","when works","what time","plan","calendar","reschedule","availability"],
+        "regex": ["\\bwhen\\s+works\\b","\\breschedul(e|ing)\\b","\\bavailability\\b"],
+        "spacyPatterns": [[{ "LOWER":"what"},{ "LOWER":"time"}]],
+        "semanticTags": ["logistics"],
+        "embeddingHints": ["calendar planning"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["numbers","dates"],
+      "rewriteCues": { "secureFix": ["Offer two concrete options and confirm timezone."],
+        "examples": ["“Tue 6–7 or Wed 5–6 (CT)? Your pick.”"] },
+      "crossRefs": {
+        "triggerwordsTags": ["plan","schedule"],
+        "therapyAdviceTags": ["coordination","clarify-plan"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.9, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_VALIDATION",
+      "key": "validation",
+      "category": "empathy_builders",
+      "legacyCategory": "validation",
+      "description": "Mirroring and emotion naming.",
+      "toneAffinities": { "alert": -0.10, "caution": -0.05, "clear": 0.25 },
+      "attachmentAdjustments": { "secure": 0.06, "anxious": 0.06, "avoidant": 0.03, "disorganized": 0.05 },
+      "contextLinks": ["CTX_REPAIR","CTX_CONFLICT"],
+      "match": {
+        "lexical": ["I hear you","that makes sense","I can see why","it’s valid you feel","I get why that hurt"],
+        "regex": ["\\b(i\\s+hear\\s+you|that\\s+makes\\s+sense|i\\s+can\\s+see\\s+why)\\b"],
+        "spacyPatterns": [[{ "LOWER":"i"},{ "LOWER":"hear"},{ "LOWER":"you"}]],
+        "semanticTags": ["validation"],
+        "embeddingHints": ["reflective listening"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["specificity bonus"],
+      "rewriteCues": { "secureFix": ["Mirror one concrete detail before suggesting next step."],
+        "examples": ["“I hear you felt dismissed when I was late. Want to set an arrival window?”"] },
+      "crossRefs": {
+        "triggerwordsTags": ["validation","empathy"],
+        "therapyAdviceTags": ["validation","reflective-listening"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.92, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_DEESCALATE",
+      "key": "de-escalation",
+      "category": "emergency_deescalation",
+      "legacyCategory": "de-escalation",
+      "description": "Cooling language and pace control.",
+      "toneAffinities": { "alert": -0.20, "caution": 0.00, "clear": 0.20 },
+      "attachmentAdjustments": { "secure": 0.05, "anxious": 0.05, "avoidant": 0.04, "disorganized": 0.05 },
+      "contextLinks": ["CTX_CONFLICT","CTX_REPAIR"],
+      "match": {
+        "lexical": ["let’s slow down","can we pause","one thing at a time","I want to understand","let me make sure I got this"],
+        "regex": ["\\blet'?s\\s+slow\\s+down\\b","\\bcan\\s+we\\s+pause\\b","\\bone\\s+thing\\s+at\\s+a\\s+time\\b"],
+        "spacyPatterns": [[{ "LOWER":"i"},{ "LOWER":"want"},{ "LOWER":"to"},{ "LOWER":"understand"}]],
+        "semanticTags": ["cooling"],
+        "embeddingHints": ["slowing pace language"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["timeboxing","breath cue"],
+      "rewriteCues": { "secureFix": ["Name the goal (understand/repair) + set a short pause or summary."],
+        "examples": ["“I want to understand. Can we pause 10 mins and regroup?”"] },
+      "crossRefs": {
+        "triggerwordsTags": ["de-escalation","cooling"],
+        "therapyAdviceTags": ["timeboxing","co-regulation"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.9, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_DEFENSIVE",
+      "key": "defensive",
+      "category": "conflict",
+      "description": "Deflection and counter-blame patterns.",
+      "toneAffinities": { "alert": 0.15, "caution": 0.20, "clear": -0.10 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.04, "avoidant": 0.05, "disorganized": 0.06 },
+      "contextLinks": ["CTX_DEFENSIVE","CTX_CONFLICT"],
+      "match": {
+        "lexical": ["that's not true","you always","what about you","I never said that","you're the one who"],
+        "regex": ["\\bthat'?s\\s+not\\s+true\\b","\\byou\\s+always\\b","\\bwhat\\s+about\\s+you\\b"],
+        "spacyPatterns": [[{ "LOWER":"you're"},{ "LOWER":"the"},{ "LOWER":"one"},{ "LOWER":"who"}]],
+        "semanticTags": ["deflection","counter_blame"],
+        "embeddingHints": ["turning it around","defensive pushback"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["counter-accusation"],
+      "rewriteCues": { "secureFix": ["Own your part first, then share your experience."],
+        "examples": ["\"I hear that hurt you. I also felt confused when...\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["defensive","deflection"],
+        "therapyAdviceTags": ["ownership-first","validation"],
+        "intensityModifierHints": ["absolutizer"]
+      },
+      "weights": { "base": 1.0, "multiplierProfile": "high_sensitivity" }
+    },
+
+    {
+      "id": "SEM_DISMISSIVE",
+      "key": "dismissive",
+      "category": "conflict",
+      "description": "Minimizing or brushing off concerns.",
+      "toneAffinities": { "alert": 0.25, "caution": 0.05, "clear": -0.08 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.03, "avoidant": 0.06, "disorganized": 0.04 },
+      "contextLinks": ["CTX_DISMISSIVE","CTX_CONFLICT"],
+      "match": {
+        "lexical": ["whatever","not a big deal","you're overreacting","calm down","it's fine","move on"],
+        "regex": ["\\bnot\\s+a\\s+big\\s+deal\\b","\\byou'?re\\s+overreacting\\b","\\bcalm\\s+down\\b"],
+        "spacyPatterns": [[{ "LOWER":"move"},{ "LOWER":"on"}]],
+        "semanticTags": ["minimizing_language","topic_change"],
+        "embeddingHints": ["brushing it off","not important"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["eye_roll_tone"],
+      "rewriteCues": { "secureFix": ["Acknowledge the importance before offering perspective."],
+        "examples": ["\"I can see this matters to you. Help me understand what's at stake.\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["dismissive","minimizing"],
+        "therapyAdviceTags": ["validation-first","curiosity"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 1.02, "multiplierProfile": "high_sensitivity" }
+    },
+
+    {
+      "id": "SEM_CURIOUS",
+      "key": "curious",
+      "category": "empathy_builders",
+      "description": "Genuine exploration and question asking.",
+      "toneAffinities": { "alert": -0.15, "caution": 0.05, "clear": 0.25 },
+      "attachmentAdjustments": { "secure": 0.05, "anxious": 0.03, "avoidant": 0.02, "disorganized": 0.03 },
+      "contextLinks": ["CTX_CURIOSITY","CTX_REPAIR"],
+      "match": {
+        "lexical": ["tell me more","I'm curious","help me understand","what's that like","can you explain"],
+        "regex": ["\\btell\\s+me\\s+more\\b","\\bi'?m\\s+curious\\b","\\bhelp\\s+me\\s+understand\\b"],
+        "spacyPatterns": [[{ "LOWER":"what's"},{ "LOWER":"that"},{ "LOWER":"like"}]],
+        "semanticTags": ["open_questions","explore_language"],
+        "embeddingHints": ["genuine interest","wanting to learn"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["follow-up questions"],
+      "rewriteCues": { "secureFix": ["Ask one specific question and pause for the answer."],
+        "examples": ["\"I'm curious about the timing part—what felt off about that?\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["curiosity","exploration"],
+        "therapyAdviceTags": ["open-ended-questions","active-listening"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.9, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_PLAYFUL",
+      "key": "playful",
+      "category": "empathy_builders",
+      "description": "Light humor and connection building.",
+      "toneAffinities": { "alert": -0.20, "caution": -0.05, "clear": 0.30 },
+      "attachmentAdjustments": { "secure": 0.06, "anxious": 0.02, "avoidant": 0.03, "disorganized": 0.01 },
+      "contextLinks": ["CTX_PLAYFUL","CTX_REPAIR"],
+      "match": {
+        "lexical": ["haha","that's funny","you crack me up","silly","adorable","cute chaos"],
+        "regex": ["\\bthat'?s\\s+funny\\b","\\byou\\s+crack\\s+me\\s+up\\b"],
+        "spacyPatterns": [[{ "LOWER":"cute"},{ "LOWER":"chaos"}]],
+        "semanticTags": ["humor","lighthearted"],
+        "embeddingHints": ["affectionate teasing","shared laughter"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["emoji_softeners"],
+      "rewriteCues": { "secureFix": ["Keep lightness appropriate to the conversation stakes."],
+        "examples": ["\"You're adorable when you're organizing the fridge 😊\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["playful","humor"],
+        "therapyAdviceTags": ["connection-building","lightness"],
+        "intensityModifierHints": ["emoji_softener"]
+      },
+      "weights": { "base": 0.85, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_REFLECTIVE",
+      "key": "reflective",
+      "category": "empathy_builders",
+      "description": "Processing and learning language.",
+      "toneAffinities": { "alert": -0.10, "caution": 0.05, "clear": 0.20 },
+      "attachmentAdjustments": { "secure": 0.04, "anxious": 0.02, "avoidant": 0.01, "disorganized": 0.03 },
+      "contextLinks": ["CTX_REFLECTIVE","CTX_REPAIR"],
+      "match": {
+        "lexical": ["I learned","looking back","I realize now","that taught me","I see the pattern"],
+        "regex": ["\\blooking\\s+back\\b","\\bi\\s+realize\\s+now\\b","\\bthat\\s+taught\\s+me\\b"],
+        "spacyPatterns": [[{ "LOWER":"i"},{ "LOWER":"see"},{ "LOWER":"the"},{ "LOWER":"pattern"}]],
+        "semanticTags": ["past_tense","learning_language"],
+        "embeddingHints": ["insight moment","growth awareness"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["realization"],
+      "rewriteCues": { "secureFix": ["Connect the learning to a future behavior."],
+        "examples": ["\"I see now that I shut down when stressed. Next time I'll say I need 5 minutes.\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["reflection","insight"],
+        "therapyAdviceTags": ["growth-mindset","self-awareness"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.9, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_LOGISTICS",
+      "key": "logistics",
+      "category": "plan",
+      "description": "Practical coordination and scheduling.",
+      "toneAffinities": { "alert": -0.05, "caution": 0.00, "clear": 0.15 },
+      "attachmentAdjustments": { "secure": 0.02, "anxious": 0.01, "avoidant": 0.02, "disorganized": 0.01 },
+      "contextLinks": ["CTX_LOGISTICS","CTX_PLANNING"],
+      "match": {
+        "lexical": ["what time","when works","calendar","schedule","coordinate","meeting link"],
+        "regex": ["\\bwhat\\s+time\\b","\\bwhen\\s+works\\b","\\bmeeting\\s+link\\b"],
+        "spacyPatterns": [[{ "LOWER":"calendar"}]],
+        "semanticTags": ["scheduling","coordination"],
+        "embeddingHints": ["calendar planning","practical details"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["numbers","dates"],
+      "rewriteCues": { "secureFix": ["Offer two options with clear timezones."],
+        "examples": ["\"Tuesday 3pm or Wednesday 5pm EST? Let me know what works.\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["logistics","scheduling"],
+        "therapyAdviceTags": ["coordination","clear-options"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.9, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_CATASTROPHIZING",
+      "key": "catastrophizing",
+      "category": "risk",
+      "description": "Worst-case scenario thinking.",
+      "toneAffinities": { "alert": 0.30, "caution": 0.15, "clear": -0.10 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.08, "avoidant": 0.02, "disorganized": 0.10 },
+      "contextLinks": ["CTX_CATASTROPHIZING","CTX_RISK"],
+      "match": {
+        "lexical": ["everything is ruined","this is a disaster","we're doomed","it's hopeless","worst case"],
+        "regex": ["\\beverything\\s+is\\s+ruined\\b","\\bthis\\s+is\\s+a\\s+disaster\\b","\\bwe'?re\\s+doomed\\b"],
+        "spacyPatterns": [[{ "LOWER":"worst"},{ "LOWER":"case"}]],
+        "semanticTags": ["worst_case","disaster_language"],
+        "embeddingHints": ["catastrophic thinking","all-or-nothing"]
+      },
+      "negationSensitive": true,
+      "intensityHooks": ["absolutizer","exclamation"],
+      "rewriteCues": { "secureFix": ["Scale it down: name one specific concern and one small step."],
+        "examples": ["\"I'm worried about the timing. Can we make a backup plan for Saturday?\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["catastrophizing","anxiety"],
+        "therapyAdviceTags": ["scale-down","specific-concerns"],
+        "intensityModifierHints": ["absolutizer"]
+      },
+      "weights": { "base": 1.05, "multiplierProfile": "high_sensitivity" }
+    },
+
+    {
+      "id": "SEM_MINIMIZATION",
+      "key": "minimization",
+      "category": "distancing",
+      "description": "Downplaying significance or impact.",
+      "toneAffinities": { "alert": 0.05, "caution": 0.15, "clear": 0.00 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.02, "avoidant": 0.04, "disorganized": 0.03 },
+      "contextLinks": ["CTX_MINIMIZATION","CTX_DISCLOSURE"],
+      "match": {
+        "lexical": ["it's nothing","not a big deal","don't worry about it","no problem","it's fine"],
+        "regex": ["\\bit'?s\\s+nothing\\b","\\bdon'?t\\s+worry\\s+about\\s+it\\b","\\bno\\s+problem\\b"],
+        "spacyPatterns": [[{ "LOWER":"it's"},{ "LOWER":"fine"}]],
+        "semanticTags": ["not_big_deal","downplay"],
+        "embeddingHints": ["brushing off","no big deal"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["deflection"],
+      "rewriteCues": { "secureFix": ["Acknowledge the impact even if you're okay with it."],
+        "examples": ["\"It stung a bit, but I understand you were stressed. All good.\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["minimizing","deflection"],
+        "therapyAdviceTags": ["acknowledge-impact","validation"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.95, "multiplierProfile": "low_reactivity" }
+    },
+
+    {
+      "id": "SEM_CONFUSION",
+      "key": "confusion",
+      "category": "distancing",
+      "description": "Ambivalent and mixed-signal language.",
+      "toneAffinities": { "alert": 0.05, "caution": 0.20, "clear": -0.05 },
+      "attachmentAdjustments": { "secure": 0.00, "anxious": 0.05, "avoidant": 0.03, "disorganized": 0.08 },
+      "contextLinks": ["CTX_CONFUSION","CTX_DISCLOSURE"],
+      "match": {
+        "lexical": ["I don't know","maybe yes maybe no","both and neither","I'm torn","mixed feelings"],
+        "regex": ["\\bi\\s+don'?t\\s+know\\b","\\bmixed\\s+feelings\\b","\\bi'?m\\s+torn\\b"],
+        "spacyPatterns": [[{ "LOWER":"both"},{ "LOWER":"and"},{ "LOWER":"neither"}]],
+        "semanticTags": ["mixed_signals","both_and_language"],
+        "embeddingHints": ["ambivalent feelings","unclear direction"]
+      },
+      "negationSensitive": false,
+      "intensityHooks": ["contradiction"],
+      "rewriteCues": { "secureFix": ["Name both parts separately, then pick one small step."],
+        "examples": ["\"Part of me wants space, part wants connection. Can we start with a short call?\""] },
+      "crossRefs": {
+        "triggerwordsTags": ["confusion","ambivalence"],
+        "therapyAdviceTags": ["dialectical-thinking","small-steps"],
+        "intensityModifierHints": []
+      },
+      "weights": { "base": 0.95, "multiplierProfile": "low_reactivity" }
+    }
+  ],
+
+  "tests": {
+    "unit": [
+      { "text": "This is your fault!!!", "expect": { "cluster": "blame", "tone": "alert", "route": ["boundary","emergency_deescalation"] } },
+      { "text": "I’m sorry about my tone. I’ll pause next time.", "expect": { "cluster": "apology", "tone": "clear", "route": ["empathy_builders"] } },
+      { "text": "If you don’t answer, then we’re done.", "expect": { "cluster": "ultimatum", "tone": "alert" } },
+      { "text": "maybe we lock Friday?", "expect": { "cluster": "uncertainty", "route": ["plan"] } },
+      { "text": "lol you’re ridiculous 🙄", "expect": { "cluster": "contempt", "sarcasm": true } }
+    ],
+    "regression": [
+      "not only was it late but helpful (no negation flip)",
+      "I don’t think you’re wrong (negation softens blame)"
+    ]
+  }
+}

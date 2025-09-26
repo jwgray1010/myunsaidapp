@@ -290,12 +290,12 @@ final class SafeKeyboardDataStorage {
             store(merged, forKey: StorageKeys.pendingSuggestions, defaults: defaults)
         }
 
-        // Count total for metadata (approximate bytes via Data.count)
-        let interactionBytes = dirtyFlags.i ? (defaults.data(forKey: StorageKeys.pendingInteractions)?.count ?? 0) : 0
-        let analyticsBytes = dirtyFlags.a ? (defaults.data(forKey: StorageKeys.pendingAnalytics)?.count ?? 0) : 0
-        let toneBytes = dirtyFlags.t ? (defaults.data(forKey: StorageKeys.pendingToneData)?.count ?? 0) : 0
-        let suggestionBytes = dirtyFlags.s ? (defaults.data(forKey: StorageKeys.pendingSuggestions)?.count ?? 0) : 0
-        let totalItems = interactionBytes + analyticsBytes + toneBytes + suggestionBytes
+        // Count total for metadata (all buckets, not just dirty ones)
+        let interactionBytes = defaults.data(forKey: StorageKeys.pendingInteractions)?.count ?? 0
+        let analyticsBytes   = defaults.data(forKey: StorageKeys.pendingAnalytics)?.count ?? 0
+        let toneBytes        = defaults.data(forKey: StorageKeys.pendingToneData)?.count ?? 0
+        let suggestionBytes  = defaults.data(forKey: StorageKeys.pendingSuggestions)?.count ?? 0
+        let totalBytes = interactionBytes + analyticsBytes + toneBytes + suggestionBytes
 
         // metadata (small, no need to debounce extra)
         let metadata: [String: Any] = [
@@ -304,8 +304,8 @@ final class SafeKeyboardDataStorage {
             "analytics_dirty": dirtyFlags.a,
             "tone_dirty": dirtyFlags.t,
             "suggestions_dirty": dirtyFlags.s,
-            "total_bytes_approx": totalItems,
-            "has_pending_data": totalItems > 0,
+            "total_bytes_approx": totalBytes,
+            "has_pending_data": totalBytes > 0,
             "keyboard_version": "2.0.0",
             "sync_source": "keyboard_extension"
         ]
@@ -350,17 +350,17 @@ final class SafeKeyboardDataStorage {
     func getAllPendingData() -> [String: [[String: Any]]] {
         let defaults = sharedDefaults
 
-        // decode codable and expose as `[String: Any]` for the app layer that expects dictionaries
-        func unwrap<T: Codable>(_ key: String, _: T.Type) -> [[String: Any]] {
+        // decode codable arrays and expose as `[String: Any]`
+        func unwrapArray<Element: Codable>(_ key: String, as: Element.Type) -> [[String: Any]] {
             guard let data = defaults.data(forKey: key),
-                  let decoded = try? JSONDecoder().decode([T].self, from: data) else { return [] }
+                  let decoded = try? jsonDecoder.decode([Element].self, from: data) else { return [] }
             return decoded.map { Self.toDictionary($0) }
         }
 
-        let interactions = unwrap(StorageKeys.pendingInteractions, [StoredInteraction].self)
-        let analytics    = unwrap(StorageKeys.pendingAnalytics,   [StoredAnalytics].self)
-        let tones        = unwrap(StorageKeys.pendingToneData,    [StoredTone].self)
-        let suggestions  = unwrap(StorageKeys.pendingSuggestions, [StoredSuggestion].self)
+        let interactions = unwrapArray(StorageKeys.pendingInteractions, as: StoredInteraction.self)
+        let analytics    = unwrapArray(StorageKeys.pendingAnalytics,    as: StoredAnalytics.self)
+        let tones        = unwrapArray(StorageKeys.pendingToneData,     as: StoredTone.self)
+        let suggestions  = unwrapArray(StorageKeys.pendingSuggestions,  as: StoredSuggestion.self)
 
         logger.info("📥 Retrieved pending data - Interactions: \(interactions.count), Analytics: \(analytics.count), Tone: \(tones.count), Suggestions: \(suggestions.count)")
 
@@ -439,6 +439,8 @@ final class SafeKeyboardDataStorage {
 
     private static func toDictionary<T: Encodable>(_ value: T) -> [String: Any] {
         // Safe "lossy" bridge for callers needing dictionaries
+        // Note: Can't access instance jsonEncoder from static context, so we create one
+        // TODO: Consider making this non-static to reuse instance encoder
         guard let data = try? JSONEncoder().encode(value),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
         return obj

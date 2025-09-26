@@ -236,6 +236,8 @@ final class EnhancedCommunicatorService {
     // MARK: - Dependencies / Config
 
     private let personalityBridge = PersonalityDataBridge.shared
+    private let learner: CommunicationPatternLearner
+    private let storage = SafeKeyboardDataStorage.shared
 
     /// Base host, no trailing slash, no `/api/v1` suffixed here.
     private let baseURL: URL
@@ -287,6 +289,7 @@ final class EnhancedCommunicatorService {
             self.userIdProvider = userIdProvider
             self.session = EnhancedCommunicatorService.makeEphemeralSession()
             (self.encoder, self.decoder) = EnhancedCommunicatorService.makeCoders()
+            self.learner = CommunicationPatternLearner(bridge: personalityBridge, windowDays: 7)
             self.onlineCheck = { true }
             return
         }
@@ -297,6 +300,7 @@ final class EnhancedCommunicatorService {
 
         self.session = EnhancedCommunicatorService.makeEphemeralSession()
         (self.encoder, self.decoder) = EnhancedCommunicatorService.makeCoders()
+        self.learner = CommunicationPatternLearner(bridge: personalityBridge, windowDays: 7)
 
         if monitorNetwork {
             _ = Connectivity.shared // start once
@@ -315,6 +319,7 @@ final class EnhancedCommunicatorService {
         messageType: String = "casual"
     ) async throws -> EnhancedAnalysisResponse.AnalysisResult {
 
+        let t0 = Date()
         let personalityProfile = await EnhancedAnalysisRequest.PersonalityProfile(from: personalityBridge)
         
         // Trim text size to reduce payload (API typically only needs last 3k chars)
@@ -331,11 +336,41 @@ final class EnhancedCommunicatorService {
         )
 
         let res: EnhancedAnalysisResponse = try await request(
-            path: "/api/v1/communicator",
+            path: "/tone",
             method: HTTPMethod.POST,
             body: req
         )
+        
+        // Extract categories properly as [String]? for learner
+        let cats: [String]? = !res.analysis.microPatterns.isEmpty
+            ? Array(Set(res.analysis.microPatterns.map { $0.type }))  // preferred: pattern types
+            : res.analysis.contextualFactors.map { Array($0.keys) }   // fallback: factor names
+        
+        // 🔐 Persist a minimal tone sample for local learning
+        let toneStatus = mapToToneStatus(res.analysis.primaryStyle)
+        storage.recordToneAnalysis(
+            text: String(text.suffix(1024)),
+            tone: toneStatus,
+            confidence: res.analysis.confidence,
+            analysisTime: Date().timeIntervalSince(t0),
+            categories: cats
+        )
+
+        // 🔁 Kick the learner (non-blocking)
+        Task { _ = await learner.learnNow() }
+
         return res.analysis
+    }
+    
+    // Helper to map API response to ToneStatus enum (fallback when no direct tone)
+    private func mapToToneStatus(_ primaryStyle: String) -> ToneStatus {
+        // Keep as fallback - attachment style to tone mapping
+        switch primaryStyle.lowercased() {
+        case "secure": return .clear
+        case "anxious": return .alert  
+        case "avoidant": return .caution
+        default: return .neutral
+        }
     }
 
     func observeText(
@@ -345,33 +380,89 @@ final class EnhancedCommunicatorService {
     ) async throws -> ObserveResponse {
         let personalityProfile = await EnhancedAnalysisRequest.PersonalityProfile(from: personalityBridge)
         
-        // Trim text size to reduce payload
-        let safeText = String(text.suffix(3000))
+        // Store learning data locally instead of sending to server
+        let trimmed = String(text.suffix(3000))
         
-        let req = ObserveRequest(
-            text: safeText,
-            meta: [
-                "relationshipPhase": relationshipPhase,
-                "stressLevel": stressLevel,
-                "source": "ios_keyboard"
-            ],
-            personalityProfile: personalityProfile
+        // Persist a lightweight interaction sample
+        storage.recordAnalytics(
+            event: "text_observation",
+            data: [
+                "text_length": "\(trimmed.count)",
+                "relationship_phase": relationshipPhase,
+                "stress_level": stressLevel,
+                "attachment_style": personalityProfile.attachmentStyle
+            ]
         )
-        return try await request(
-            path: "/api/v1/communicator",
-            method: HTTPMethod.POST,
-            body: req
+        
+        // Run learner now to get live estimate
+        let rollup = await learner.learnNow()
+        
+        return ObserveResponse(
+            ok: true,
+            userId: userIdProvider(),
+            estimate: .init(
+                primary: rollup.primary,
+                secondary: nil,
+                scores: rollup.scores,
+                confidence: rollup.confidence,
+                daysObserved: rollup.daysObserved,
+                windowComplete: rollup.windowComplete
+            ),
+            windowComplete: rollup.windowComplete,
+            enhancedAnalysis: .init(
+                confidence: rollup.confidence,
+                detectedPatterns: rollup.samples,
+                primaryPrediction: rollup.primary
+            )
         )
     }
 
     func getProfile() async throws -> ProfileResponse {
-        let emptyBody: [String: String]? = nil
-        return try await request(path: "/api/v1/communicator", method: HTTPMethod.GET, body: emptyBody)
+        // Get profile data locally from PersonalityDataBridge instead of server
+        let personalityProfile = await EnhancedAnalysisRequest.PersonalityProfile(from: personalityBridge)
+        let daysObserved = personalityProfile.isComplete ? 7 : 3
+        
+        return ProfileResponse(
+            ok: true,
+            userId: userIdProvider(),
+            estimate: .init(
+                primary: personalityProfile.attachmentStyle,
+                secondary: personalityProfile.communicationStyle,
+                scores: personalityProfile.personalityScores?.mapValues { Double($0) } ?? [:],
+                confidence: personalityProfile.isComplete ? 0.9 : 0.5,
+                daysObserved: daysObserved,
+                windowComplete: personalityProfile.isComplete
+            ),
+            rawScores: personalityProfile.personalityScores?.mapValues { Double($0) } ?? [:],
+            daysObserved: daysObserved,
+            windowComplete: personalityProfile.isComplete,
+            enhancedFeatures: .init(
+                advancedAnalysisAvailable: true,
+                version: "2.0.0-local",
+                accuracyTarget: "92%+",
+                features: ["local_storage", "real_time_learning", "privacy_first"]
+            )
+        )
     }
 
     func checkEnhancedCapabilities() async throws -> Bool {
         let profile = try await getProfile()
         return profile.enhancedFeatures?.advancedAnalysisAvailable ?? false
+    }
+
+    // MARK: - Public Learning API
+    
+    /// Trigger on-demand learning update (for app foreground, periodic refresh)
+    public func runLearningTick() async -> ObserveResponse.AttachmentEstimate {
+        let rollup = await learner.learnNow()
+        return ObserveResponse.AttachmentEstimate(
+            primary: rollup.primary,
+            secondary: rollup.scores.sorted(by: { $0.value > $1.value }).dropFirst().first?.key,
+            scores: rollup.scores,
+            confidence: rollup.confidence,
+            daysObserved: rollup.daysObserved,
+            windowComplete: rollup.windowComplete
+        )
     }
 
     // MARK: - Keyboard conveniences (unchanged)
@@ -426,8 +517,8 @@ final class EnhancedCommunicatorService {
 
     private func maybeGzip(_ data: Data) -> (data: Data, contentEncoding: String?) {
         guard data.count > 1024 else { return (data, nil) }
-        if let gz = (try? (data as NSData).compressed(using: .zlib)) as Data? {
-            return (gz, "gzip")
+        if let deflated = (try? (data as NSData).compressed(using: .zlib)) as Data? {
+            return (deflated, "deflate") // ✅ correct header for zlib/deflate
         }
         return (data, nil)
     }

@@ -30,7 +30,7 @@ final class PersonalityDataManager {
         // Persist full blob for the app
         ud.set(results, forKey: "personality_test_results")
         ud.set(Date(), forKey: "last_personality_update")
-    ud.set(true, forKey: "personality_test_complete")
+        ud.set(true, forKey: "personality_test_complete")
 
         // Derived fields
         if let counts = results["counts"] as? [String: Int] {
@@ -84,35 +84,35 @@ final class PersonalityDataManager {
 
         // Compose a bridge-friendly payload
         var bridge: [String: Any] = personalityData
-        if let v = ud.string(forKey: "attachment_style") { bridge[PersonalityKeys.attachmentStyle.rawValue] = v }
-        if let v = ud.string(forKey: "communication_style") { bridge[PersonalityKeys.communicationStyle.rawValue] = v }
-        if let v = ud.string(forKey: "dominant_personality_type") { bridge[PersonalityKeys.personalityType.rawValue] = v }
+        if let v = ud.string(forKey: "attachment_style") { bridge["attachment_style"] = v }
+        if let v = ud.string(forKey: "communication_style") { bridge["communication_style"] = v }
+        if let v = ud.string(forKey: "dominant_personality_type") { bridge["personality_type"] = v }
 
-        if let s = ud.dictionary(forKey: "personality_scores") { bridge[PersonalityKeys.personalityScores.rawValue] = s }
-        if let p = ud.dictionary(forKey: "communication_preferences") { bridge[PersonalityKeys.communicationPreferences.rawValue] = p }
+        if let s = ud.dictionary(forKey: "personality_scores") { bridge["personality_scores"] = s }
+        if let p = ud.dictionary(forKey: "communication_preferences") { bridge["communication_preferences"] = p }
 
         // Batch write into app group
         let now = Date()
         let batch: [String: Any] = bridge.merging([
-            PersonalityKeys.personalityDataV2.rawValue: bridge,
-            PersonalityKeys.lastUpdate.rawValue: now,
-            PersonalityKeys.dataVersion.rawValue: "v2.0",
-            PersonalityKeys.isComplete.rawValue: true,
-            PersonalityKeys.syncStatus.rawValue: "pending"
+            "personality_data_v2": bridge,
+            "personality_last_update": now,
+            "personality_data_version": "v2.0",
+            "personality_test_complete": true,
+            "sync_status": "pending"
         ]) { $1 }
 
         for (k, v) in batch { shared.set(v, forKey: k) }
     }
 
     private func syncComponentsToKeyboardExtension() {
-    let shared = sharedUD
+        let shared = sharedUD
         var batch: [String: Any] = [
-            PersonalityKeys.lastUpdate.rawValue: Date(),
-            PersonalityKeys.syncStatus.rawValue: "pending"
+            "personality_last_update": Date(),
+            "sync_status": "pending"
         ]
-        if let v = ud.string(forKey: "attachment_style") { batch[PersonalityKeys.attachmentStyle.rawValue] = v }
-        if let v = ud.string(forKey: "communication_style") { batch[PersonalityKeys.communicationStyle.rawValue] = v }
-        if let v = ud.string(forKey: "dominant_personality_type") { batch[PersonalityKeys.personalityType.rawValue] = v }
+        if let v = ud.string(forKey: "attachment_style") { batch["attachment_style"] = v }
+        if let v = ud.string(forKey: "communication_style") { batch["communication_style"] = v }
+        if let v = ud.string(forKey: "dominant_personality_type") { batch["personality_type"] = v }
         for (k, v) in batch { shared.set(v, forKey: k) }
     }
 
@@ -127,14 +127,14 @@ final class PersonalityDataManager {
     }
 
     private func syncEmotionalStateToKeyboardExtension(state: String, bucket: String, label: String) {
-    let shared = sharedUD
+        let shared = sharedUD
         let batch: [String: Any] = [
-            PersonalityKeys.currentEmotionalState.rawValue: state,
-            PersonalityKeys.currentEmotionalBucket.rawValue: bucket,
-            PersonalityKeys.emotionalStateLabel.rawValue: label,
-            PersonalityKeys.emotionalStateTimestamp.rawValue: Date().timeIntervalSince1970,
-            PersonalityKeys.lastUpdate.rawValue: Date(),
-            PersonalityKeys.syncStatus.rawValue: "pending"
+            "currentEmotionalState": state,
+            "currentEmotionalStateBucket": bucket,
+            "emotionalStateLabel": label,
+            "emotionalStateTimestamp": Date().timeIntervalSince1970,
+            "personality_last_update": Date(),
+            "sync_status": "pending"
         ]
         for (k, v) in batch { shared.set(v, forKey: k) }
     }
@@ -144,25 +144,23 @@ final class PersonalityDataManager {
         syncToKeyboardExtension(results)
 
         // Also push latest emotional + relationship if present
-        do {
-            var batch: [String: Any] = [
-                PersonalityKeys.lastUpdate.rawValue: Date(),
-                PersonalityKeys.syncStatus.rawValue: "pending"
-            ]
-            if let state = ud.string(forKey: "currentEmotionalState") {
-                batch[PersonalityKeys.currentEmotionalState.rawValue] = state
-                batch[PersonalityKeys.currentEmotionalBucket.rawValue] = ud.string(forKey: "currentEmotionalStateBucket") ?? "moderate"
-                batch[PersonalityKeys.emotionalStateLabel.rawValue] = ud.string(forKey: "emotionalStateLabel") ?? "Neutral"
-                batch[PersonalityKeys.emotionalStateTimestamp.rawValue] = ud.double(forKey: "emotionalStateTimestamp")
-            }
-            if let partner = ud.string(forKey: "partner_attachment_style") {
-                batch[PersonalityKeys.partnerAttachmentStyle.rawValue] = partner
-            }
-            if let ctx = ud.string(forKey: "relationship_context") {
-                batch[PersonalityKeys.relationshipContext.rawValue] = ctx
-            }
-            for (k, v) in batch { sharedUD.set(v, forKey: k) }
+        var batch: [String: Any] = [
+            "personality_last_update": Date(),
+            "sync_status": "pending"
+        ]
+        if let state = ud.string(forKey: "currentEmotionalState") {
+            batch["currentEmotionalState"] = state
+            batch["currentEmotionalStateBucket"] = ud.string(forKey: "currentEmotionalStateBucket") ?? "moderate"
+            batch["emotionalStateLabel"] = ud.string(forKey: "emotionalStateLabel") ?? "Neutral"
+            batch["emotionalStateTimestamp"] = ud.double(forKey: "emotionalStateTimestamp")
         }
+        if let partner = ud.string(forKey: "partner_attachment_style") {
+            batch["partner_attachment_style"] = partner
+        }
+        if let ctx = ud.string(forKey: "relationship_context") {
+            batch["relationship_context"] = ctx
+        }
+        for (k, v) in batch { sharedUD.set(v, forKey: k) }
 
         log.info("Force-synced personality data to keyboard")
     }

@@ -23,6 +23,6 @@
     "noUnusedParameters": false,
     "baseUrl": "."
   },
-  "include": ["api/**/*", "*.ts", "*.js"],
+  "include": ["api-backup/**/*", "vercel-api/**/*", "*.ts", "*.js"],
   "exclude": ["node_modules", ".vercel", "dist", "coverage"]
 }

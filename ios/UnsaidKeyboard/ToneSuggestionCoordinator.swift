@@ -100,6 +100,11 @@ final class ToneSuggestionCoordinator {
     #endif
     private let instanceId = UUID().uuidString
     
+    // MARK: - Personality / learning
+    private let bridge = PersonalityDataBridge.shared
+    private lazy var learner = CommunicationPatternLearner(bridge: PersonalityDataBridge.shared, windowDays: 7)
+    private let storage = SafeKeyboardDataStorage.shared
+    
     // MARK: - Full-Text Analysis State (replacing ToneScheduler)
     private let debounceInterval: TimeInterval = 3.0 // 3s debounce for better rate limiting
     private var currentDocSeq: Int = 0
@@ -488,7 +493,6 @@ final class ToneSuggestionCoordinator {
     private func cacheTTL(for path: String) -> TimeInterval {
         switch path {
         case "/api/v1/suggestions": return 5.0
-        case "/api/v1/communicator": return 10.0
         default: return 5.0
         }
     }
@@ -717,7 +721,6 @@ final class ToneSuggestionCoordinator {
     func debugPingAll() {
         KBDLog("🔧 normalized base: \(normalizedBaseURLString())", .debug, "ToneCoordinator")
         KBDLog("🔧 suggestions: \(normalizedBaseURLString() + "/api/v1/suggestions")", .debug, "ToneCoordinator")
-        KBDLog("🔧 communicator: \(normalizedBaseURLString() + "/api/v1/communicator")", .debug, "ToneCoordinator")
         KBDLog("🔧 tone: \(normalizedBaseURLString() + "/api/v1/tone")", .debug, "ToneCoordinator")
         dumpAPIConfig()
         
@@ -1235,20 +1238,10 @@ final class ToneSuggestionCoordinator {
             let suggestion = extractSuggestionSafely(from: body)
             
             // (Optional) Persist helpful correlation data for debugging
-            // Uncomment if SafeKeyboardDataStorage is available
-            /*
+            // TODO: Store learning data locally using SafeKeyboardDataStorage
             if !root.isEmpty {
-                SafeKeyboardDataStorage.shared.recordAnalytics(
-                    event: "suggestions_sent",
-                    data: [
-                        "compose_id": self.composeId,
-                        "client_seq": String(self.clientSequence - 1), // last used
-                        "text_sha256": (payloadToSend["text_sha256"] as? String) ?? "",
-                        "ui_tone": (payloadToSend["toneAnalysis"] as? [String: Any])?["classification"] as? String ?? ""
-                    ]
-                )
+                // SafeKeyboardDataStorage calls will be added by iOS build
             }
-            */
             
             completion(suggestion)
         }
@@ -1384,7 +1377,7 @@ final class ToneSuggestionCoordinator {
             if !breakerOpen.contains(circuitKey) { setBreaker(circuitKey, open: true) }
             completion(nil); return
         }
-        let allowed = Set(["api/v1/suggestions", "api/v1/communicator"])
+        let allowed = Set(["api/v1/suggestions"])
         guard allowed.contains(normalized) else {
             throttledLog("invalid endpoint \(normalized); expected one of \(allowed)", category: "api")
             completion(nil); return
@@ -1667,55 +1660,86 @@ final class ToneSuggestionCoordinator {
         return finalPayload
     }
     
-    // MARK: - Communicator Learning
+    // MARK: - Local Storage Learning (Client-side)
     private func updateCommunicatorProfile(with text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count >= 10 else { return }
         
-        var payload: [String: Any] = [
-            "text": trimmed,
-            "meta": [
-                "source": "keyboard",
-                "timestamp": isoTimestamp(),
-                "context": "realtime_typing"
-            ],
-            "userId": getUserId()
-        ]
-        if let email = getUserEmail() { payload["userEmail"] = email }
+        // Use storage for learning events, trigger learner
+        storage.storeCommunicationEvent(text: trimmed, category: "general")
+        learner.learnNow()  // Trigger learning with fresh data
         
-        callEndpoint(path: "api/v1/communicator", payload: payload) { [weak self] _ in
-            self?.throttledLog("communicator profile updated", category: "learning")
+        // Update bridge with learning progress after communication
+        Task {
+            let newStyle = learner.getAttachmentStyle()
+            let newConfidence = learner.getAttachmentConfidence()
+            
+            // Only update bridge if we have meaningful confidence
+            if newConfidence > 0.1 {
+                await bridge.updateLearningProgress(
+                    newAttachmentHint: newStyle,
+                    confidence: newConfidence
+                )
+            }
         }
+        
+        throttledLog("stored communication event locally (text length: \(trimmed.count))", category: "learning")
     }
     
     private func updateCommunicatorProfileWithSuggestion(_ suggestion: String, accepted: Bool) {
-        guard accepted else { return }
+        guard accepted else { 
+            // Store rejection too for learning
+            storage.storeSuggestionInteraction(suggestion: suggestion, accepted: false, category: "general")
+            return 
+        }
         let trimmed = suggestion.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         
-        var payload: [String: Any] = [
-            "text": trimmed,
-            "meta": [
-                "source": "keyboard_suggestion",
-                "timestamp": isoTimestamp(),
-                "context": "accepted_suggestion",
-                "suggestion_accepted": true,
-                "original_text": currentText
-            ],
-            "userId": getUserId()
-        ]
-        if let email = getUserEmail() { payload["userEmail"] = email }
+        // Store suggestion acceptance for learning
+        storage.storeSuggestionInteraction(suggestion: trimmed, accepted: true, category: "general")
+        learner.learnNow()  // Trigger learning with fresh acceptance data
         
-        callEndpoint(path: "api/v1/communicator", payload: payload) { [weak self] _ in
-            self?.throttledLog("communicator learned from accepted suggestion", category: "learning")
+        // Update bridge with learning progress after acceptance
+        Task {
+            await bridge.updateLearningProgress(
+                newAttachmentHint: learner.getAttachmentStyle(),
+                confidence: learner.getAttachmentConfidence()
+            )
         }
+        
+        throttledLog("stored accepted suggestion locally (length: \(trimmed.count))", category: "learning")
     }
     
-    // MARK: - Misc helpers / stubs
-    private func personalityProfileForAPI() -> [String: Any]? { return [:] }
-    private func resolvedAttachmentStyle() -> (style: String?, provisional: Bool, source: String) { ("secure", false, "default") }
-    private func getAttachmentStyle() -> String { "secure" }
-    private func getEmotionalState() -> String { "neutral" }
+    // MARK: - Persona / Bridge integration
+
+    private func personalityProfileForAPI() -> [String: Any]? {
+        // Flattened profile already shaped for API-ish usage
+        var p = bridge.getPersonalityProfile()
+        // Normalize a few keys to camelCase the coordinator expects
+        p["attachmentStyle"] = p["attachment_style"]
+        p["communicationStyle"] = p["communication_style"]
+        p["personalityType"] = p["personality_type"]
+        p["emotionalState"] = p["emotional_state"] ?? p["currentEmotionalState"]
+        p["emotionalBucket"] = p["emotional_bucket"] ?? p["currentEmotionalStateBucket"]
+        p["newUser"] = bridge.isNewUser()
+        p["learningDaysRemaining"] = bridge.learningDaysRemaining()
+        // Provisional if not confirmed
+        let confirmed = (p["personality_test_complete"] as? Bool) ?? false
+        p["attachmentProvisional"] = !confirmed
+        return p
+    }
+
+    private func resolvedAttachmentStyle() -> (style: String?, provisional: Bool, source: String) {
+        // Prefer confirmed, else learner, else default
+        let confirmed = bridge.isPersonalityTestComplete()
+        let style = bridge.getAttachmentStyle()
+        let learner = bridge.getLearnerAttachmentStyle()
+        let src = confirmed ? (bridge.getAttachmentSource() ?? "confirmed") : (bridge.getAttachmentSource() ?? "learner")
+        return (confirmed ? style : (learner ?? style), !confirmed, src)
+    }
+
+    private func getAttachmentStyle() -> String { resolvedAttachmentStyle().style ?? "secure" }
+    private func getEmotionalState() -> String { bridge.getCurrentEmotionalState() }
     
     /// Simple helper to detect emotional language for testing purposes
     private func containsEmotionalLanguage(_ text: String) -> Bool {
@@ -2089,6 +2113,17 @@ extension ToneSuggestionCoordinator {
             
             // Log server decision for debugging 
             print("🔎 ANALYZED text='\(trimmed.prefix(50))' serverTone=\(resolvedToneString) serverBucket=\(serverBucket.rawValue)")
+            
+            // Persist tone analysis event for local learning
+            storage.storeToneAnalysisEvent(
+                text: trimmed,
+                primaryTone: toneOut.primary_tone ?? resolvedToneString,
+                confidence: toneOut.confidence ?? 0.5,
+                uiBucket: resolvedToneString
+            )
+            
+            // Trigger learning after tone analysis
+            learner.learnNow()
             
             // Always trust the server's tone decision - no local overrides
             let newTone = serverBucket
@@ -2753,6 +2788,17 @@ extension ToneSuggestionCoordinator {
             if let buckets = buckets {
                 print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", buckets.clear)), caution: \(String(format: "%.2f", buckets.caution)), alert: \(String(format: "%.2f", buckets.alert))")
             }
+
+            // Persist full-text tone analysis event for local learning
+            self.storage.storeToneAnalysisEvent(
+                text: result.text,
+                primaryTone: result.primary_tone ?? uiTone,
+                confidence: confidence,
+                uiBucket: uiTone
+            )
+            
+            // Trigger learning after full-text analysis
+            self.learner.learnNow()
 
             // Cache the successful analysis for fallback use in suggestions
             self.lastAnalysis = LastAnalysis(

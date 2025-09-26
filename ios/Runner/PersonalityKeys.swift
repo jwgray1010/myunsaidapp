@@ -34,7 +34,7 @@ enum PersonalityKeys: String {
     case dataVersion                = "personality_data_version"
     case lastUpdate                 = "personality_last_update"
     case isComplete                 = "personality_test_complete"
-    case syncStatus                 = "personality_sync_status"
+    case syncStatus                 = "sync_status"
     case bridgeVersion              = "personality_bridge_version"
     case lastSyncTimestamp          = "last_sync_timestamp"
 }

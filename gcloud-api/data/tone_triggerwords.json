@@ -1,0 +1,205 @@
+{
+  "version": "2.3.0-lite",
+  "notes": "Expanded categories to mirror phrase_edges/profanity rules: emotional_regulation, somatic_awareness, breathing_techniques, crisis, safety_check, emergency_deescalation, active_listening, empathy_builders, perspective_taking, attachment_triggers, codependency_patterns, independence_patterns, escalation_detection, repair_readiness, relationship_stage_indicators, communication_style_markers, cultural_context_patterns, and extreme_hostility. Fully backward-compatible.",
+  "engine": {
+    "matching": "aho-corasick",
+    "alsoUseRegex": true,
+    "wordBoundary": true,
+    "tokenWindow": 4,
+    "locale": ["en", "en-US", "en-GB"],
+    "normalize": {
+      "lowercase": true,
+      "stripAccents": true,
+      "collapseWhitespace": true,
+      "canonicalizeApostrophes": true,
+      "stripZeroWidth": true,
+      "squashRepeats": { "enabled": true, "minRun": 3, "replaceWith": 2 },
+      "leetMap": { "enabled": true, "map": { "1":"i", "3":"e", "4":"a", "5":"s", "7":"t", "0":"o", "@":"a", "$":"s" } }
+    },
+    "negation": {
+      "enabled": true,
+      "markers": ["not","don't","doesn't","didn't","won't","can't","isn't","aren't","wasn't","weren't","haven't","hasn't","hadn't","never","no","none","nothing","nobody","nowhere"],
+      "scope": 3,
+      "flipIntensity": 0.6,
+      "exceptions": ["not safe","not okay","not good","not right","not cool"]
+    },
+    "contextScopes": {
+      "conflict": ["argument","fight","angry","mad","upset","tension","hostile"],
+      "planning": ["schedule","plan","organize","arrange","meeting","calendar"],
+      "repair": ["sorry","apologize","fix","resolve","reset","improve","better"],
+      "disclosure": ["share","tell","confess","admit","reveal","open up"],
+      "casual": ["chat","talk","hang","chill","friendly"],
+      "digital": ["password","passcode","unlock","read receipts","location sharing"],
+      "logistics": ["ETA","traffic","parking","address","where are you","when will you"],
+      "intimacy": ["come over","in the mood","cuddle","kiss","touch"],
+      "safety": ["unsafe","scared","afraid","threat","violence","police","911"],
+      "regulation": ["breathe","pause","step away","calm down","walk","reset","grounding"],
+      "relationship_stage": ["dating","boyfriend","girlfriend","fiancé","spouse","married","co-parent"],
+      "culture": ["family tradition","cultural","custom","faith","language","values"],
+      "communication_style": ["direct","blunt","indirect","hint","imply","sarcasm"]
+    }
+  },
+
+  "categories": {
+    "profanity": "Offensive expletives/curses",
+    "insult": "Name-calling or personal attacks",
+    "threat": "Intent to harm or punish",
+    "ultimatum": "Conditional coercion/relationship stakes",
+    "contempt": "Belittling/dismissive tone",
+    "escalation": "Absolutes/overgeneralizations/hostility",
+    "extreme_hostility": "Direct hate/revulsion toward partner",
+    "command": "Imperatives applied to partner",
+    "gaslighting": "Undermining reality/perception",
+    "minimization": "Downplaying partner’s experience",
+    "jealousy": "Possessive/insecure probing",
+    "control": "Restrictions, surveillance, isolation",
+
+    "uncertainty": "Ambiguity/low confidence",
+    "hedge": "Softening qualifiers",
+    "discomfort": "Social unease/tension",
+    "concern": "Worry/nervousness",
+    "avoidance": "Delay/deflect/withdraw",
+
+    "structure": "Organizing/clarifying",
+    "plan": "Actionability/time/place",
+    "agreement": "Consensus/alignment",
+    "confirmation": "Check understanding",
+    "boundary": "Limits/needs",
+    "solution": "Repair/resolution",
+    "repair": "Intent to mend / make amends",
+    "micro_apology": "Small apologies",
+    "reconnection": "Affection/bridge-building",
+    "gratitude": "Thanks/recognition",
+
+    "emotional_regulation": "Self-regulation moves (pause, breathe, time-out)",
+    "somatic_awareness": "Body cues (heart rate, clenched jaw, shaky)",
+    "breathing_techniques": "Explicit breath/pace prompts",
+
+    "crisis": "Immediate danger/referral signals",
+    "safety_check": "Assessing safety/asking if safe",
+    "emergency_deescalation": "Lowering heat / requesting help",
+
+    "active_listening": "Reflect, paraphrase, summarize",
+    "empathy_builders": "Validate feeling/meaning/need",
+    "perspective_taking": "See partner's viewpoint",
+
+    "attachment_triggers": "Attachment threat language",
+    "codependency_patterns": "Over-responsibility/approval-seeking",
+    "independence_patterns": "Healthy autonomy/balance",
+
+    "escalation_detection": "Meta markers that conflict is rising",
+    "repair_readiness": "Willingness/energy to repair",
+
+    "relationship_stage_indicators": "Dating vs. long-term vs. co-parent",
+    "communication_style_markers": "Direct vs. indirect styles",
+    "cultural_context_patterns": "Cultural/faith/family-norm signals"
+  },
+
+  "weights": {
+    "default": { "typeMultipliers": {} },
+    "alert":   { "typeMultipliers": { "extreme_hostility": 1.25, "threat": 1.25, "crisis": 1.30, "escalation_detection": 1.10 } },
+    "caution": { "typeMultipliers": { "attachment_triggers": 1.06, "relationship_stage_indicators": 1.04 } },
+    "clear":   { "typeMultipliers": {
+      "emotional_regulation": 1.10, "breathing_techniques": 1.10, "active_listening": 1.10,
+      "empathy_builders": 1.10, "perspective_taking": 1.08, "repair_readiness": 1.10,
+      "independence_patterns": 1.06, "communication_style_markers": 1.04, "safety_check": 1.08, "emergency_deescalation": 1.08
+    } }
+  },
+
+  "alert": {
+    "triggerwords": [
+      { "text": "extreme hostility (hate)", "intensity": 1.20, "type": "extreme_hostility",
+        "aho": ["i hate you","i despise you","i can't stand you","you disgust me","i wish you were gone"],
+        "sarcasmSensitive": true
+      },
+      { "text": "escalation absolutes (you+always/never)", "intensity": 0.95, "type": "escalation",
+        "regex": "(?i)\\byou\\s+(always|never|constantly|every\\s*time)\\b"
+      },
+      { "text": "threat core", "intensity": 1.10, "type": "threat",
+        "aho": ["or else","you'll regret","watch yourself","watch your back","take you to court","lawyer up","make you pay","revenge","payback"]
+      },
+      { "text": "crisis risk", "intensity": 1.20, "type": "crisis",
+        "regex": "(?i)\\b(i feel unsafe|i am unsafe|i'?m scared of you|this isn'?t safe|call 911|i need the police)\\b"
+      },
+      { "text": "gaslighting", "intensity": 0.95, "type": "gaslighting",
+        "regex": "(?i)\\b(you'?re imagining this|that never happened|you made it up|you'?re crazy|you'?re overreacting|i never said that)\\b"
+      },
+      { "text": "minimization hard", "intensity": 0.90, "type": "minimization",
+        "aho": ["you're overreacting","calm down","it's not that serious","you're being dramatic"]
+      },
+      { "text": "control jealousy", "intensity": 1.05, "type": "control",
+        "aho": ["give me your passcode","let me see your phone","share passwords","turn on read receipts","share your location","delete them","block them","who is that"],
+        "regex": "(?i)\\b(pass(code|word)s?|unlock|read\\s+receipts|share\\s+location)\\b"
+      }
+    ]
+  },
+
+  "caution": {
+    "triggerwords": [
+      { "text": "uncertainty core", "intensity": 0.70, "type": "uncertainty",
+        "aho": ["unclear","not clear","hard to tell","not obvious","idk","i don't know","unsure","iffy","on the fence"]
+      },
+      { "text": "attachment trigger mentions", "intensity": 0.65, "type": "attachment_triggers",
+        "aho": ["you'll leave me","you don't care about me","i'm not enough for you","you always abandon me"]
+      },
+      { "text": "relationship stage markers", "intensity": 0.55, "type": "relationship_stage_indicators",
+        "aho": ["since we're just dating","as co-parents","as my husband","as my wife","as my spouse","as partners"]
+      },
+      { "text": "escalation meta (getting worse)", "intensity": 0.75, "type": "escalation_detection",
+        "aho": ["this is getting worse","this is spiraling","you keep pushing","this is out of control","we're escalating"]
+      }
+    ]
+  },
+
+  "clear": {
+    "triggerwords": [
+      { "text": "regulation moves", "intensity": 0.80, "type": "emotional_regulation",
+        "aho": ["let's pause","time-out","timeout","let's take five","step away","cool off","reset for a bit","take a break"]
+      },
+      { "text": "breathing techniques", "intensity": 0.85, "type": "breathing_techniques",
+        "aho": ["deep breath","box breathing","inhale for four","exhale slow","count to ten","slow my breathing"]
+      },
+      { "text": "somatic cues", "intensity": 0.65, "type": "somatic_awareness",
+        "aho": ["my heart's racing","my chest is tight","my jaw is clenched","i'm shaky","butterflies","knot in my stomach"]
+      },
+      { "text": "active listening", "intensity": 0.85, "type": "active_listening",
+        "aho": ["what i hear you saying","so you're saying","let me make sure i got this","if i understand right","reflecting back"]
+      },
+      { "text": "empathy builders", "intensity": 0.85, "type": "empathy_builders",
+        "aho": ["that makes sense you’d feel","i can see why","i get how that landed","i imagine that was hard","i see your point"]
+      },
+      { "text": "perspective taking", "intensity": 0.80, "type": "perspective_taking",
+        "aho": ["from your side","from your perspective","putting myself in your shoes","if i were you"]
+      },
+      { "text": "repair readiness", "intensity": 0.85, "type": "repair_readiness",
+        "aho": ["i have the energy to talk","i'm ready to repair","i can come back calmly","i can be constructive now","let's do this gently"]
+      },
+      { "text": "independence healthy", "intensity": 0.70, "type": "independence_patterns",
+        "aho": ["i need some solo time","i'll handle my part","let's each own our tasks","i'll take responsibility for mine"]
+      },
+      { "text": "communication style markers", "intensity": 0.60, "type": "communication_style_markers",
+        "aho": ["i'm being direct here","i don't want to be indirect","i'm trying not to hint","i'll be clear"]
+      },
+      { "text": "cultural context", "intensity": 0.60, "type": "cultural_context_patterns",
+        "aho": ["in my culture","my family's tradition","our faith teaches","how my family does it","culturally speaking"]
+      },
+      { "text": "safety check", "intensity": 0.85, "type": "safety_check",
+        "aho": ["are you safe","am i safe","is this safe","do you feel safe","safety first"],
+        "negationSensitive": false
+      }
+    ]
+  },
+
+  "crossIntegration": {
+    "description": "Coordinates with related JSON configs so categories align across subsystems",
+    "integrationPoints": {
+      "phrase_edges.json": { "purpose": "Edge clusters; provides extreme_hostility, crisis, repair_readiness signals", "priority": "high" },
+      "profanity.rules.json": { "purpose": "Hard floors & second-person targeting; consumes extreme_hostility/crisis signals", "priority": "high" },
+      "intensity_modifiers.json": { "purpose": "ALL CAPS, punctuation, emoji scaling; do not over-penalize positive exclamations", "priority": "high" },
+      "sarcasm_indicators.json": { "purpose": "Sarcasm detection to tune minimization/passive-aggression", "priority": "medium" },
+      "context_classifier.json": { "purpose": "Context gating for regulation/skills/stage markers", "priority": "high" },
+      "relationship_dynamics.json": { "purpose": "Attachment/codependency/independence patterns", "priority": "medium" },
+      "contextual_intelligence.json": { "purpose": "Relationship stage, style markers, cultural patterns", "priority": "medium" }
+    }
+  }
+}

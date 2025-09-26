@@ -1,0 +1,220 @@
+{
+  "version": "2.1.2-accurate",
+  "notes": "Adds conservative contextOverrides for regulation, crisis, relationship_stage, communication_style, culture, and escalation to align with 2.3.0-lite scopes. No new buckets or engine steps; retains conservative mapping.",
+  "defaultBucket": "general",
+
+  "engine": {
+    "applyOrder": ["base_distribution", "context_boosts", "normalize"],
+    "combination": { "contextMode": "additive", "normalizeMode": "l1", "mathDomain": "logit" },
+    "validation": { "enforceSumOne": true, "weightRange": [0.0, 1.0], "thresholdRange": [0.0, 1.0], "requireIdsToExist": false }
+  },
+
+  "eligibility": {
+    "clear": {
+      "requirePhraseLevel": false,
+      "excludeTokens": [],
+      "overshadow": { "by": "alert", "min": 0.80, "ratio": 2.5 },
+      "preferCautionIfBoth": 0.50
+    }
+  },
+
+  "toneBuckets": {
+    "general": { "base": { "clear": 0.78, "caution": 0.18, "alert": 0.04 } },
+
+    "positive":        { "base": { "clear": 0.88, "caution": 0.10, "alert": 0.02 } },
+    "supportive":      { "base": { "clear": 0.90, "caution": 0.09, "alert": 0.01 } },
+    "playful":         { "base": { "clear": 0.85, "caution": 0.12, "alert": 0.03 } },
+    "curious":         { "base": { "clear": 0.82, "caution": 0.15, "alert": 0.03 } },
+    "reflective":      { "base": { "clear": 0.75, "caution": 0.20, "alert": 0.05 } },
+
+    "confident":       { "base": { "clear": 0.80, "caution": 0.16, "alert": 0.04 } },
+    "assertive":       { "base": { "clear": 0.60, "caution": 0.32, "alert": 0.08 } },
+    "logistical":      { "base": { "clear": 0.78, "caution": 0.18, "alert": 0.04 } },
+
+    "neutral":         { "base": { "clear": 0.62, "caution": 0.28, "alert": 0.10 } },
+    "tentative":       { "base": { "clear": 0.38, "caution": 0.56, "alert": 0.06 } },
+    "apologetic":      { "base": { "clear": 0.45, "caution": 0.48, "alert": 0.07 } },
+    "confused_ambivalent": { "base": { "clear": 0.35, "caution": 0.58, "alert": 0.07 } },
+
+    "anxious":         { "base": { "clear": 0.26, "caution": 0.64, "alert": 0.10 } },
+    "sad":             { "base": { "clear": 0.30, "caution": 0.62, "alert": 0.08 } },
+    "frustrated":      { "base": { "clear": 0.24, "caution": 0.58, "alert": 0.18 } },
+    "overwhelmed":     { "base": { "clear": 0.22, "caution": 0.68, "alert": 0.10 } },
+    "withdrawn":       { "base": { "clear": 0.25, "caution": 0.65, "alert": 0.10 } },
+    "jealous_insecure": { "base": { "clear": 0.20, "caution": 0.60, "alert": 0.20 } },
+    "catastrophizing": { "base": { "clear": 0.15, "caution": 0.65, "alert": 0.20 } },
+    "minimization":    { "base": { "clear": 0.35, "caution": 0.55, "alert": 0.10 } },
+
+    "negative":        { "base": { "clear": 0.28, "caution": 0.54, "alert": 0.18 } },
+    "defensive":       { "base": { "clear": 0.20, "caution": 0.55, "alert": 0.25 } },
+    "dismissive":      { "base": { "clear": 0.18, "caution": 0.50, "alert": 0.32 } },
+    "critical":        { "base": { "clear": 0.15, "caution": 0.45, "alert": 0.40 } },
+
+    "angry":           { "base": { "clear": 0.12, "caution": 0.38, "alert": 0.50 } },
+    "hostile":         { "base": { "clear": 0.08, "caution": 0.25, "alert": 0.67 } },
+    "aggressive":      { "base": { "clear": 0.05, "caution": 0.20, "alert": 0.75 } },
+    "contempt":        { "base": { "clear": 0.04, "caution": 0.16, "alert": 0.80 } },
+    "safety_concern":  { "base": { "clear": 0.06, "caution": 0.22, "alert": 0.72 } }
+  },
+
+  "contextOverrides": {
+    "conflict": {
+      "angry":      { "alert": 0.02, "caution": -0.01 },
+      "frustrated": { "alert": 0.01, "caution":  0.00 }
+    },
+    "jealousy": {
+      "anxious":    { "caution": 0.02, "clear": -0.01 },
+      "angry":      { "alert": 0.01, "caution": 0.01 },
+      "frustrated": { "caution": 0.01, "alert": 0.01 },
+      "sad":        { "caution": 0.01, "clear": -0.01 }
+    },
+    "escalation": {
+      "angry":      { "alert": 0.02 },
+      "frustrated": { "alert": 0.01, "caution":  0.00 },
+      "negative":   { "alert": 0.01 }
+    },
+    "repair": {
+      "sad":        { "clear": 0.02, "caution": -0.01 },
+      "supportive": { "clear": 0.01 }
+    },
+    "boundary": {
+      "assertive":  { "clear": 0.02, "caution": -0.01 }
+    },
+
+    "regulation": {
+      "anxious":     { "clear": 0.01, "caution": -0.01 },
+      "frustrated":  { "clear": 0.01, "alert":  -0.01 },
+      "supportive":  { "clear": 0.01 }
+    },
+
+    "crisis": {
+      "angry":          { "alert": 0.02 },
+      "negative":       { "alert": 0.02 },
+      "safety_concern": { "alert": 0.02, "caution": -0.01 }
+    },
+
+    "relationship_stage": {
+      "tentative":  { "caution": 0.01 },
+      "assertive":  { "clear": 0.01 }
+    },
+
+    "communication_style": {
+      "neutral":    { "clear": 0.01 },
+      "assertive":  { "clear": 0.01, "caution": -0.01 }
+    },
+
+    "culture": {
+      "neutral":    { "clear": 0.01 },
+      "supportive": { "clear": 0.01 }
+    },
+
+    "conflict_prevention": {
+      "supportive": { "clear": 0.02 },
+      "assertive":  { "clear": 0.01, "caution": -0.01 },
+      "neutral":    { "clear": 0.01 }
+    },
+
+    "validation": {
+      "supportive": { "clear": 0.02, "caution": -0.01 },
+      "neutral":    { "clear": 0.01 }
+    },
+
+    "reassurance_seeking": {
+      "anxious":    { "caution": 0.02, "alert": -0.01 },
+      "tentative":  { "caution": 0.01 },
+      "sad":        { "caution": 0.01, "clear": -0.01 }
+    },
+
+    "emotion_regulation": {
+      "supportive": { "clear": 0.02 },
+      "reflective": { "clear": 0.01 },
+      "anxious":    { "clear": 0.01, "caution": -0.01 }
+    },
+
+    "defensiveness": {
+      "defensive":  { "alert": 0.02, "caution": -0.01 },
+      "frustrated": { "alert": 0.01, "caution": 0.01 },
+      "negative":   { "alert": 0.01 }
+    },
+
+    "withdrawal_impulse": {
+      "withdrawn":  { "alert": 0.03, "caution": -0.02 },
+      "defensive":  { "alert": 0.02, "clear": -0.01 },
+      "frustrated": { "alert": 0.01, "caution": 0.01 }
+    },
+
+    "overwhelm_guardrail": {
+      "overwhelmed": { "caution": 0.02, "alert": 0.01 },
+      "anxious":     { "caution": 0.02, "clear": -0.01 },
+      "frustrated":  { "caution": 0.01, "alert": 0.01 }
+    },
+
+    "accountability": {
+      "reflective":  { "clear": 0.01 },
+      "assertive":   { "clear": 0.01, "caution": -0.01 },
+      "apologetic":  { "clear": 0.01, "caution": -0.01 }
+    },
+
+    "trust_building": {
+      "supportive":  { "clear": 0.02 },
+      "reflective":  { "clear": 0.01 },
+      "neutral":     { "clear": 0.01 }
+    },
+
+    "attachment_attunement": {
+      "supportive":  { "clear": 0.02, "caution": -0.01 },
+      "empathetic":  { "clear": 0.01 },
+      "reflective":  { "clear": 0.01 }
+    }
+  },
+
+  "attachmentOverrides": {
+    "avoidant": {
+      "withdrawn":       { "alert": 0.40, "caution": -0.25, "clear": -0.15 },
+      "apologetic":      { "clear": 0.25, "caution": -0.20, "alert": -0.05 },
+      "sad":             { "alert": 0.15, "caution": -0.10, "clear": -0.05 },
+      "anxious":         { "alert": 0.35, "caution": -0.25, "clear": -0.10 },
+      "assertive":       { "caution": 0.15, "clear": -0.15 },
+      "supportive":      { "caution": 0.05, "clear": -0.05 },
+      "curious":         { "caution": 0.08, "clear": -0.08 },
+      "reflective":      { "caution": 0.10, "clear": -0.10 }
+    },
+    
+    "anxious": {
+      "withdrawn":       { "caution": 0.05, "alert": -0.05 },
+      "apologetic":      { "caution": 0.20, "clear": -0.15, "alert": 0.05 },
+      "jealous_insecure": { "alert": 0.15, "caution": -0.10, "clear": -0.05 },
+      "catastrophizing": { "alert": 0.10, "caution": -0.05, "clear": -0.05 },
+      "defensive":       { "alert": 0.08, "caution": -0.05, "clear": -0.03 },
+      "confused_ambivalent": { "alert": 0.05, "caution": -0.03, "clear": -0.02 },
+      "minimization":    { "alert": 0.10, "caution": -0.08, "clear": -0.02 },
+      "assertive":       { "caution": 0.15, "clear": -0.15 }
+    },
+
+    "disorganized": {
+      "angry":           { "alert": 0.08, "caution": -0.05, "clear": -0.03 },
+      "frustrated":      { "alert": 0.05, "caution": -0.03, "clear": -0.02 },
+      "defensive":       { "alert": 0.10, "caution": -0.08, "clear": -0.02 },
+      "dismissive":      { "alert": 0.08, "caution": -0.05, "clear": -0.03 },
+      "withdrawn":       { "alert": 0.35, "caution": -0.30, "clear": -0.05 },
+      "catastrophizing": { "alert": 0.10, "caution": -0.05, "clear": -0.05 },
+      "confused_ambivalent": { "alert": 0.08, "caution": -0.05, "clear": -0.03 },
+      "anxious":         { "alert": 0.31, "caution": -0.25, "clear": -0.06 },
+      "assertive":       { "caution": 0.15, "clear": -0.15 }
+    },
+
+    "secure": {
+      "assertive":       { "clear": 0.05, "caution": -0.03, "alert": -0.02 },
+      "supportive":      { "clear": 0.02, "caution": -0.01 },
+      "reflective":      { "clear": 0.03, "caution": -0.02 },
+      "curious":         { "clear": 0.03, "caution": -0.02 }
+    }
+  },
+
+  "intensityShifts": {
+    "thresholds": { "low": 0.20, "med": 0.50, "high": 0.75 },
+    "low":  { "clear":  0.00,  "caution": 0.00,  "alert":  0.00 },
+    "med":  { "clear": -0.005, "caution": 0.010, "alert": -0.005 },
+    "high": { "clear": -0.015, "caution": 0.000, "alert":  0.015 }
+  }
+}

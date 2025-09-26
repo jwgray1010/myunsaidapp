@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Quick test to verify our schema fixes work
-const { DataLoaderService } = require('./api/_lib/services/dataLoader.ts');
+const { DataLoaderService } = require('./api-backup/_lib/services/dataLoader.js');
 
 async function testSchemaFix() {
   console.log('Testing schema fix for Zod tone errors...');
