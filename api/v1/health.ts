@@ -1,7 +1,7 @@
 // api/v1/health.ts - Bridge health check (Google Cloud proxy status)
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { logger } from '../_lib/logger';
-import { gcloudClient } from '../_lib/services';
+import { gcloudClient } from '../_lib/services/gcloudClient';
 
 // Timeout wrapper for Google Cloud calls
 function callWithTimeout<T>(promise: Promise<T>, timeoutMs: number = 5000): Promise<T> {
