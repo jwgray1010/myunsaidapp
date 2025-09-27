@@ -1,6 +1,6 @@
 // api/v1/tone.ts - Pure bridge to Google Cloud
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { gcloudClient } from '../_lib/services/gcloudClient';
+import { gcloudClient } from '../_lib/gcloudClient';
 import { logger } from '../_lib/logger';
 import crypto from 'crypto';
 
