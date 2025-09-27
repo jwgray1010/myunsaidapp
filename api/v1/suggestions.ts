@@ -108,22 +108,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       10000 // 10 second timeout
     );
     
-    if (response.success) {
-      // Cache the result
-      requestCache.set(cacheKey, {
-        result: response.data,
-        timestamp: Date.now()
-      });
-      
-      logger.info(`[${requestId}] Suggestions generated successfully by Google Cloud`);
-      return res.status(200).json(response.data);
-    } else {
-      logger.error(`[${requestId}] Google Cloud suggestions error: ${response.error}`);
-      return res.status(500).json({
-        error: 'Suggestions generation failed',
-        details: response.error
-      });
-    }
+    // Cache the result
+    requestCache.set(cacheKey, {
+      result: response,
+      timestamp: Date.now()
+    });
+    
+    logger.info(`[${requestId}] Suggestions generated successfully by Google Cloud`);
+    return res.status(200).json(response);
   } catch (error) {
     if ((error as Error).name === 'AbortError') {
       logger.error(`[${requestId}] Google Cloud timeout`);

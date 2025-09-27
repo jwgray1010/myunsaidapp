@@ -103,22 +103,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       8000 // 8 second timeout for tone analysis
     );
     
-    if (response.success) {
-      // Cache the result
-      requestCache.set(cacheKey, {
-        result: response.data,
-        timestamp: Date.now()
-      });
-      
-      logger.info(`[${requestId}] Tone analysis completed by Google Cloud`);
-      return res.status(200).json(response.data);
-    } else {
-      logger.error(`[${requestId}] Google Cloud tone analysis error: ${response.error}`);
-      return res.status(500).json({
-        error: 'Tone analysis failed',
-        details: response.error
-      });
-    }
+    // Cache the result
+    requestCache.set(cacheKey, {
+      result: response,
+      timestamp: Date.now()
+    });
+    
+    logger.info(`[${requestId}] Tone analysis completed by Google Cloud`);
+    return res.status(200).json(response);
   } catch (error) {
     if ((error as Error).name === 'AbortError') {
       logger.error(`[${requestId}] Google Cloud timeout`);
