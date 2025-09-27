@@ -2,12 +2,7 @@
   "version": 2,
   "functions": {
     "api/v1/**/*.ts": {
-      "runtime": "nodejs20.x"
-    }
-  },
-  "build": {
-    "env": {
-      "NODE_VERSION": "20"
+      "runtime": "@vercel/node@3.0.21"
     }
   },
   "rewrites": [
