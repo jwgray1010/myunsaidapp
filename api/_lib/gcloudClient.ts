@@ -1,5 +1,5 @@
-// api/_lib/services/gcloudClient.ts
-import { logger } from '../logger';
+// api/_lib/gcloudClient.ts
+import { logger } from './logger';
 
 export interface GCloudToneRequest {
   text: string;
