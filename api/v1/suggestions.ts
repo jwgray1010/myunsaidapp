@@ -17,8 +17,26 @@ function cleanCache() {
   }
 }
 
-function getCacheKey(userId: string, textHash: string, clientSeq: number): string {
-  return `${userId}:${textHash}:${clientSeq}`;
+function getCacheKey(
+  userId: string, 
+  textHash: string, 
+  clientSeq: number, 
+  context?: string, 
+  attachmentStyle?: string, 
+  rich?: any,
+  composeId?: string,
+  toneAnalysis?: any
+): string {
+  const seq = Number(clientSeq) || 1;
+  const ctxKey = String(context || 'general').toLowerCase();
+  const attachKey = String(attachmentStyle || 'secure').toLowerCase();
+  const composeKey = String(composeId || 'nocmp');
+  const richKey = rich ? crypto.createHash('sha256').update(JSON.stringify(rich)).digest('hex').substring(0, 8) : 'norich';
+  const toneKey = toneAnalysis 
+    ? crypto.createHash('sha256').update(JSON.stringify(toneAnalysis)).digest('hex').substring(0, 8)
+    : 'notone';
+  
+  return `${userId}:${textHash}:${seq}:${ctxKey}:${attachKey}:${composeKey}:${richKey}:${toneKey}`;
 }
 
 function validateTextSHA256(text: string, expectedHash: string): boolean {
@@ -40,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-Id, X-User-Id');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-Id, X-User-Id, X-Client-Seq');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -53,58 +71,77 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const requestId = Math.random().toString(36).substring(2, 15);
   const userId = req.headers['x-user-id'] as string || req.body?.userId || 'anonymous';
   
+  // Set request ID header for tracing
+  res.setHeader('X-Request-Id', requestId);
+  
   logger.info(`[${requestId}] POST /v1/suggestions - User: ${userId}`);
   
   try {
     cleanCache(); // Clean expired entries on each request
     
-    // Basic validation - iOS v1 contract essentials
+    // Basic validation - iOS v1.5 contract (rich backward-compatible)
     if (!req.body || !req.body.text || !req.body.context || !req.body.attachmentStyle) {
       return res.status(400).json({
         success: false,
         error: 'Invalid request format. Required: text, context, attachmentStyle.',
-        contract_version: 'v1'
+        contract_version: 'v1.5'
       });
     }
     
     const { text, text_sha256, client_seq, compose_id, toneAnalysis, context, attachmentStyle, rich, meta } = req.body;
+    
+    // Payload size guard
+    if (text.length > 8000) {
+      return res.status(413).json({
+        success: false,
+        error: 'Text too long',
+        details: 'Maximum text length is 8000 characters',
+        contract_version: 'v1.5'
+      });
+    }
     
     // SHA256 validation (iOS security check)
     if (text_sha256 && !validateTextSHA256(text, text_sha256)) {
       return res.status(400).json({
         success: false,
         error: 'Text SHA256 mismatch. Provided hash does not match text content.',
-        contract_version: 'v1'
+        contract_version: 'v1.5'
       });
     }
     
     // Request deduplication check
     const textHash = text_sha256 || crypto.createHash('sha256').update(text, 'utf8').digest('hex');
-    const cacheKey = getCacheKey(userId, textHash, client_seq || 1);
+    const cacheKey = getCacheKey(userId, textHash, client_seq || 1, context, attachmentStyle, rich, compose_id, toneAnalysis);
     const existing = requestCache.get(cacheKey);
     
     if (existing) {
       logger.info(`[${requestId}] Returning cached response`);
-      return res.status(208).json({
-        ...existing.result,
+      // Always use 200 status and envelope format for consistency  
+      res.setHeader('X-Cache', 'HIT');
+      return res.status(200).json({
+        success: true,
+        data: {
+          ...existing.result,
+          client_seq: client_seq ?? 1, // ✅ Echo client sequencing for cached responses
+          cached: true,
+          cacheHitTimestamp: new Date().toISOString()
+        },
         cached: true,
-        cache_hit_timestamp: new Date().toISOString()
+        requestId,
+        ts: Date.now()
       });
     }
     
-    // Bridge minimal envelope to Google Cloud - let it do all the heavy lifting
+    // Bridge rich v1.5 envelope to Google Cloud - forward all rich context
+    const payload: any = { text, context, attachmentStyle, rich, meta, userId, compose_id };
+    
+    // Only pass real ToneResponse objects, let Cloud Run handle missing tone
+    if (toneAnalysis) {
+      payload.fullToneAnalysis = toneAnalysis; // ✅ Map toneAnalysis → fullToneAnalysis
+    }
+    
     const response = await callWithTimeout(
-      gcloudClient.generateSuggestions({
-        text,
-        toneAnalysis: toneAnalysis || {
-          classification: 'neutral',
-          confidence: 0.5,
-          ui_distribution: { clear: 0.34, caution: 0.33, alert: 0.33 }
-        },
-        context,
-        attachmentStyle,
-        userId
-      }),
+      gcloudClient.generateSuggestions(payload),
       10000 // 10 second timeout
     );
     
@@ -115,20 +152,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
     
     logger.info(`[${requestId}] Suggestions generated successfully by Google Cloud`);
-    return res.status(200).json(response);
+    
+    // Always return consistent v1.5 envelope format
+    res.setHeader('X-Cache', 'MISS');
+    return res.status(200).json({
+      success: true,
+      data: { 
+        ...response, 
+        client_seq: client_seq ?? 1, // ✅ Echo client sequencing back
+        compose_id // Return compose_id for session correlation
+      },
+      cached: false,
+      requestId,
+      ts: Date.now()
+    });
   } catch (error) {
     if ((error as Error).name === 'AbortError') {
       logger.error(`[${requestId}] Google Cloud timeout`);
       return res.status(504).json({
+        success: false,
         error: 'Request timeout',
-        details: 'Google Cloud service did not respond in time'
+        details: 'Google Cloud service did not respond in time',
+        requestId,
+        ts: Date.now()
       });
     }
     
     logger.error(`[${requestId}] Suggestions bridge error:`, error);
     return res.status(500).json({
+      success: false,
       error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      details: error instanceof Error ? error.message : 'Unknown error',
+      requestId,
+      ts: Date.now()
     });
   }
 }

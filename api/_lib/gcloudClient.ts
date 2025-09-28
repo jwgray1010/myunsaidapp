@@ -8,6 +8,11 @@ export interface GCloudToneRequest {
   userId?: string;
   deepAnalysis?: boolean;
   isNewUser?: boolean;
+  rich?: any;  // v1.5 rich context for deeper analysis
+  mode?: string;  // iOS coordinator mode field
+  doc_seq?: number;  // iOS coordinator document sequence
+  text_hash?: string;  // iOS coordinator text hash
+  client_seq?: number;  // iOS coordinator client sequence
   userProfile?: {
     id: string;
     attachment?: string;
@@ -18,10 +23,12 @@ export interface GCloudToneRequest {
 
 export interface GCloudSuggestionsRequest {
   text: string;
-  toneAnalysis: any;
+  fullToneAnalysis?: any; // ✅ Match Cloud Run service schema expectation
   context?: string;
   attachmentStyle?: string;
   userId?: string;
+  rich?: any;   // v1.5 rich context (contextClassifier, attachmentBoosts, etc)
+  meta?: any;   // v1.5 metadata (locale, tz, client info)
 }
 
 export interface GCloudResponse<T = any> {
