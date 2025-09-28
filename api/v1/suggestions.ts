@@ -4,6 +4,18 @@ import { gcloudClient } from '../_lib/gcloudClient';
 import { logger } from '../_lib/logger';
 import crypto from 'crypto';
 
+// Simple token authentication
+function requireSimpleToken(req: VercelRequest, res: VercelResponse): boolean {
+  const hdr = (req.headers['authorization'] || req.headers['Authorization']) as string | undefined;
+  const match = hdr && /^Bearer\s+(.+)$/i.exec(hdr.trim());
+  const token = match?.[1] ?? null;
+  const ok = token && process.env.API_BEARER_TOKEN && token === process.env.API_BEARER_TOKEN;
+  if (!ok) {
+    res.status(401).json({ success: false, error: 'AUTH_REQUIRED' });
+  }
+  return !!ok;
+}
+
 // Simple request deduplication (in-memory, per instance only)
 const requestCache = new Map<string, { result: any; timestamp: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -18,7 +30,6 @@ function cleanCache() {
 }
 
 function getCacheKey(
-  userId: string, 
   textHash: string, 
   clientSeq: number, 
   context?: string, 
@@ -36,7 +47,7 @@ function getCacheKey(
     ? crypto.createHash('sha256').update(JSON.stringify(toneAnalysis)).digest('hex').substring(0, 8)
     : 'notone';
   
-  return `${userId}:${textHash}:${seq}:${ctxKey}:${attachKey}:${composeKey}:${richKey}:${toneKey}`;
+  return `anon:${textHash}:${seq}:${ctxKey}:${attachKey}:${composeKey}:${richKey}:${toneKey}`;
 }
 
 function validateTextSHA256(text: string, expectedHash: string): boolean {
@@ -58,23 +69,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-Id, X-User-Id, X-Client-Seq');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-Id, X-Client-Seq');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
+  
+  // Require authentication for all non-OPTIONS requests
+  if (!requireSimpleToken(req, res)) return;
   
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
   
   const requestId = Math.random().toString(36).substring(2, 15);
-  const userId = req.headers['x-user-id'] as string || req.body?.userId || 'anonymous';
   
   // Set request ID header for tracing
   res.setHeader('X-Request-Id', requestId);
   
-  logger.info(`[${requestId}] POST /v1/suggestions - User: ${userId}`);
+  logger.info(`[${requestId}] POST /v1/suggestions - Anonymous request`);
   
   try {
     cleanCache(); // Clean expired entries on each request
@@ -111,7 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     // Request deduplication check
     const textHash = text_sha256 || crypto.createHash('sha256').update(text, 'utf8').digest('hex');
-    const cacheKey = getCacheKey(userId, textHash, client_seq || 1, context, attachmentStyle, rich, compose_id, toneAnalysis);
+    const cacheKey = getCacheKey(textHash, client_seq || 1, context, attachmentStyle, rich, compose_id, toneAnalysis);
     const existing = requestCache.get(cacheKey);
     
     if (existing) {
@@ -133,11 +146,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     
     // Bridge rich v1.5 envelope to Google Cloud - forward all rich context
-    const payload: any = { text, context, attachmentStyle, rich, meta, userId, compose_id };
+    const payload: any = { text, context, attachmentStyle, rich, meta, compose_id };
     
     // Only pass real ToneResponse objects, let Cloud Run handle missing tone
     if (toneAnalysis) {
-      payload.fullToneAnalysis = toneAnalysis; // ✅ Map toneAnalysis → fullToneAnalysis
+      // Pass with consistent naming
+      payload.toneAnalysis = toneAnalysis;
     }
     
     const response = await callWithTimeout(

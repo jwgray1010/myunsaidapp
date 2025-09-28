@@ -5,7 +5,6 @@ export interface GCloudToneRequest {
   text: string;
   context?: string;
   attachmentStyle?: string;
-  userId?: string;
   deepAnalysis?: boolean;
   isNewUser?: boolean;
   rich?: any;  // v1.5 rich context for deeper analysis
@@ -13,6 +12,7 @@ export interface GCloudToneRequest {
   doc_seq?: number;  // iOS coordinator document sequence
   text_hash?: string;  // iOS coordinator text hash
   client_seq?: number;  // iOS coordinator client sequence
+  toneAnalysis?: any;  // Forward any existing tone analysis
   userProfile?: {
     id: string;
     attachment?: string;
@@ -23,12 +23,12 @@ export interface GCloudToneRequest {
 
 export interface GCloudSuggestionsRequest {
   text: string;
-  fullToneAnalysis?: any; // ✅ Match Cloud Run service schema expectation
+  toneAnalysis?: any; // Consistent tone analysis field
   context?: string;
   attachmentStyle?: string;
-  userId?: string;
   rich?: any;   // v1.5 rich context (contextClassifier, attachmentBoosts, etc)
   meta?: any;   // v1.5 metadata (locale, tz, client info)
+  compose_id?: string;  // Session correlation ID
 }
 
 export interface GCloudResponse<T = any> {
