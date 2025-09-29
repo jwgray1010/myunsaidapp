@@ -379,11 +379,10 @@ final class ToneSuggestionCoordinator {
             return false
         }
 
-        let configured = !apiBaseURL.isEmpty && !bearerToken.isEmpty
+        let configured = !apiBaseURL.isEmpty
         print("🔧 DEBUG: API Base URL: '\(apiBaseURL)'")
-        print("🔧 DEBUG: Bearer Token: \(redact(bearerToken))")
-        print("🔧 DEBUG: API configured: \(configured)")
-        KBDLog("🔧 API configured: \(configured) - URL: '\(apiBaseURL)', Bearer Token: '\(redact(bearerToken))'", .debug, "ToneCoordinator")
+        print("🔧 DEBUG: API configured: \(configured) (no auth required)")
+        KBDLog("🔧 API configured: \(configured) - URL: '\(apiBaseURL)' (no auth required)", .debug, "ToneCoordinator")
         return configured
     }    // MARK: Networking (improved for keyboard extension reliability)
     private lazy var session: URLSession = {
@@ -707,7 +706,7 @@ final class ToneSuggestionCoordinator {
     // MARK: - Headers Helper (for suggestions/observe)
     private func setEssentialHeaders(on request: inout URLRequest, clientSeq: UInt64) {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(self.bearerToken)", forHTTPHeaderField: "Authorization")
+        // Auth removed - endpoints are now open
         request.setValue("\(clientSeq)", forHTTPHeaderField: "x-client-seq")
     }
     
@@ -2507,7 +2506,7 @@ extension ToneSuggestionCoordinator {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = token?.nilIfEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        // Auth removed - endpoints are now open
         request.setValue(getUserId(), forHTTPHeaderField: "x-user-id")
 
         // Build request body based on mode
