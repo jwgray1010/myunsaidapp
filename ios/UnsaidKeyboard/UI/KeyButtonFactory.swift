@@ -420,7 +420,7 @@ final class ExtendedSpaceButton: UIButton {
 final class ExtendedTouchButton: UIButton {
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         // Conservative expansion matching KeyButton's 2pt policy to prevent overlaps
-        bounds.insetBy(dx: -2, dy: -1).contains(point)  // Reduced from -8,-4 to match KeyButton
+        return bounds.insetBy(dx: -2, dy: -1).contains(point)  // Reduced from -8,-4 to match KeyButton
     }
     override func layoutSubviews() {
         super.layoutSubviews()

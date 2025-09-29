@@ -65,3 +65,6 @@ Thumbs.db
 
 # ML Models (too large for git)
 models/*.onnx
+
+# GCloud API (separate deployment)
+gcloud-api/

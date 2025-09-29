@@ -22,6 +22,7 @@
     "general": { "base": { "clear": 0.78, "caution": 0.18, "alert": 0.04 } },
 
     "positive":        { "base": { "clear": 0.88, "caution": 0.10, "alert": 0.02 } },
+    "congratulatory":  { "base": { "clear": 0.96, "caution": 0.03, "alert": 0.01 } },
     "supportive":      { "base": { "clear": 0.90, "caution": 0.09, "alert": 0.01 } },
     "playful":         { "base": { "clear": 0.85, "caution": 0.12, "alert": 0.03 } },
     "curious":         { "base": { "clear": 0.82, "caution": 0.15, "alert": 0.03 } },

@@ -364,9 +364,9 @@ final class KeyboardController: UIView,
             triggerReason = "deletion_pause" // Updated: deletion with idle
         } else if let inserted = lastInserted {
             // Check for punctuation that should trigger immediate analysis
-            if coordinator.shouldTriggerImmediate(for: inserted) {
+            if coordinator.shouldTriggerImmediate(for: String(inserted)) {
                 triggerReason = "sentence_punct"
-            } else if isWordBoundary(inserted) {
+            } else if isWordBoundary(String(inserted)) {
                 triggerReason = "word_boundary"
             } else {
                 triggerReason = "input_activity"
@@ -549,6 +549,12 @@ final class KeyboardController: UIView,
             toneButton.isEnabled = reachable
             // REMOVED: Don't force-neutral on brief offline - just disable button
             // This prevents tone state corruption during network blips
+        }
+        
+        // Update quickFix button state based on connectivity
+        if let quickFix = quickFixButton {
+            quickFix.isEnabled = reachable
+            quickFix.alpha = reachable ? 1.0 : 0.5
         }
         
         // Dismiss suggestion chips when going offline
@@ -790,8 +796,10 @@ final class KeyboardController: UIView,
         // Ensure tone button remains visible after layout
         ensureToneButtonVisible()
         
-        // Apply QWERTY stagger after layout
-        applyQwertyStaggerIfNeeded()
+        // Apply QWERTY stagger after layout (only for letters mode)
+        if currentMode == .letters {
+            applyQwertyStaggerIfNeeded()
+        }
         
         guard let bg = toneButtonBackground, let g = toneGradient else { return }
         let newBounds = bg.bounds.integral
@@ -810,7 +818,9 @@ final class KeyboardController: UIView,
             guard let self = self,
                   let bg = self.toneButtonBackground,
                   let g = self.toneGradient else { return }
-            g.frame = nonZeroRect(bg.bounds.integral)
+            let newFrame = nonZeroRect(bg.bounds.integral)
+            guard g.frame != newFrame else { return }     // Skip redundant layout
+            g.frame = newFrame
             g.cornerRadius = nonZero(bg.bounds.height) / 2
             bg.layer.shadowPath = UIBezierPath(roundedRect: bg.bounds, cornerRadius: g.cornerRadius).cgPath
         }
@@ -831,6 +841,9 @@ final class KeyboardController: UIView,
         refreshSpellingIfMeaningful()
         wordDirty = true
         markTypingActivity() // idle fallback will trigger if user pauses
+        
+        // Notify coordinator of deletion
+        coordinator?.onTextChanged(fullText: snapshotFullText(), lastInserted: nil, isDeletion: true)
     }
     
     func performDeleteTick() {
@@ -840,6 +853,9 @@ final class KeyboardController: UIView,
         refreshSpellingIfMeaningful()
         wordDirty = true
         markTypingActivity()
+        
+        // Notify coordinator of deletion
+        coordinator?.onTextChanged(fullText: snapshotFullText(), lastInserted: nil, isDeletion: true)
     }
     
     func hapticLight() {
@@ -1032,6 +1048,12 @@ final class KeyboardController: UIView,
         toneButton.imageView?.contentMode = .scaleAspectFit
         toneButton.layer.cornerRadius = 32.5  // Half of 65pt
         toneButton.clipsToBounds = true
+        
+        // Configure accessibility
+        toneButton.isAccessibilityElement = true
+        toneButton.accessibilityLabel = "Tone indicator"
+        toneButton.accessibilityHint = "Shows the tone analysis of your message"
+        toneButton.accessibilityValue = "Neutral" // Will be updated dynamically
         
         // ✅ CRITICAL: Ensure button is always visible from creation
         toneButton.isHidden = false
@@ -1265,10 +1287,10 @@ final class KeyboardController: UIView,
         }
         
         // Skip redundant work if tone is same and visuals are synchronized
-        let visualOutOfSync = (toneGradient == nil) ||
-                             (toneGradient?.colors == nil) ||
-                             (bg.layer.animation(forKey: "alertPulse") == nil && tone == .alert) ||
-                             bg.alpha < 0.99
+        let noGradient = (toneGradient == nil)
+        let noColors = (toneGradient?.colors as? [CGColor])?.isEmpty ?? true
+        let wantsAlertPulse = (tone == .alert) && (bg.layer.animation(forKey: "alertPulse") == nil)
+        let visualOutOfSync = noGradient || noColors || wantsAlertPulse || (bg.alpha < 0.99)
         
         if tone == currentTone && !visualOutOfSync {
             print("🎨 APPLY skipped: redundant tone=\(tone.rawValue) (same as current)")
@@ -1294,6 +1316,9 @@ final class KeyboardController: UIView,
         if let button = toneButton {
             button.isHidden = false
             button.alpha = max(button.alpha, 1.0)
+            
+            // Update accessibility value for VoiceOver
+            button.accessibilityValue = tone.accessibilityDescription
         }
 
         // Destination visual state
@@ -1734,18 +1759,24 @@ final class KeyboardController: UIView,
             updateKeycaps()
         }
         
-        // 🔑 NEW: gate analysis per word
+        // 🔑 NEW: gate analysis per word and notify coordinator
         if isWordChar(textToInsert) {
             wordDirty = true
             markTypingActivity()            // only idle-trigger, no router call here
+            // Notify coordinator of text change
+            coordinator?.onTextChanged(fullText: snapshotFullText(), lastInserted: textToInsert.first, isDeletion: false)
         } else if isWordBoundary(textToInsert) {
             // boundary → analyze immediately
             wordDirty = false
             let urgent = ".!?".contains(textToInsert)
             routeIfChanged(lastInserted: textToInsert, isDeletion: false, urgent: urgent)
+            // Notify coordinator of text change
+            coordinator?.onTextChanged(fullText: snapshotFullText(), lastInserted: textToInsert.first, isDeletion: false)
         } else {
             // symbols etc. treat like activity but not boundary
             markTypingActivity()
+            // Notify coordinator of text change
+            coordinator?.onTextChanged(fullText: snapshotFullText(), lastInserted: textToInsert.first, isDeletion: false)
         }
     }
     
@@ -1755,6 +1786,10 @@ final class KeyboardController: UIView,
         // word boundary → analyze
         wordDirty = false
         routeIfChanged(lastInserted: " ", isDeletion: false, urgent: false)
+        
+        // Notify coordinator of space input
+        coordinator?.onTextChanged(fullText: snapshotFullText(), lastInserted: " ", isDeletion: false)
+        
         // 👉 refresh (shows/hides strip appropriately after commit)
         refreshSpellingIfMeaningful()
     }
@@ -1780,7 +1815,7 @@ final class KeyboardController: UIView,
         }
         
         // Conservative fallback: assume Messages context for safety
-        return false
+        return true
     }
     
     @objc private func handleReturnKey() {
@@ -1974,9 +2009,10 @@ final class KeyboardController: UIView,
         updateShiftButtonAppearance()
         updateKeycaps()
         
-        // Apply stagger on next runloop so frames are valid
+        // Apply stagger on next runloop so frames are valid (only for letters mode)
         DispatchQueue.main.async { [weak self] in
-            self?.applyQwertyStaggerIfNeeded()
+            guard let self = self, self.currentMode == .letters else { return }
+            self.applyQwertyStaggerIfNeeded()
         }
     }
     
@@ -2008,6 +2044,9 @@ final class KeyboardController: UIView,
         
         // Ensure tone button is visible when text changes (analysis may update it)
         ensureToneButtonVisible()
+        
+        // Notify coordinator of external text changes (paste, autocorrect, etc.)
+        coordinator?.onTextChanged(fullText: currentFullText, lastInserted: nil, isDeletion: false)
         
         // REMOVED: Auto-trigger analysis on text change
         // We now only trigger suggestions via manual tone button tap
@@ -2093,7 +2132,7 @@ final class KeyboardController: UIView,
     }
     
     private func setUndoVisible(_ visible: Bool) {
-        guard let b = undoButton, b.isHidden == visible else { return }
+        guard let b = undoButton, b.isHidden != visible else { return }
         // perform animation only when state changes
         b.isHidden = !visible
         UIView.animate(withDuration: 0.18) { b.alpha = visible ? 1 : 0 }

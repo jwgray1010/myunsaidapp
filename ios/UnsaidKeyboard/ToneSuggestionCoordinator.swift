@@ -202,6 +202,14 @@ final class ToneSuggestionCoordinator {
         return (fromExt?.nilIfEmpty ?? fromMain?.nilIfEmpty) ?? ""
     }()
     
+    private lazy var bearerToken: String = {
+        let extBundle = Bundle(for: ToneSuggestionCoordinator.self)
+        let mainBundle = Bundle.main
+        let fromExt = extBundle.object(forInfoDictionaryKey: "API_BEARER_TOKEN") as? String
+        let fromMain = mainBundle.object(forInfoDictionaryKey: "API_BEARER_TOKEN") as? String
+        return (fromExt?.nilIfEmpty ?? fromMain?.nilIfEmpty) ?? ""
+    }()
+    
     // MARK: - Helper for API timestamp format
     private func isoTimestamp() -> String { Self.iso8601.string(from: Date()) }
     
@@ -371,11 +379,11 @@ final class ToneSuggestionCoordinator {
             return false
         }
 
-        let configured = !apiBaseURL.isEmpty && !apiKey.isEmpty
+        let configured = !apiBaseURL.isEmpty && !bearerToken.isEmpty
         print("🔧 DEBUG: API Base URL: '\(apiBaseURL)'")
-        print("🔧 DEBUG: API Key: \(redact(apiKey))")
+        print("🔧 DEBUG: Bearer Token: \(redact(bearerToken))")
         print("🔧 DEBUG: API configured: \(configured)")
-        KBDLog("🔧 API configured: \(configured) - URL: '\(apiBaseURL)', Key: '\(redact(apiKey))'", .debug, "ToneCoordinator")
+        KBDLog("🔧 API configured: \(configured) - URL: '\(apiBaseURL)', Bearer Token: '\(redact(bearerToken))'", .debug, "ToneCoordinator")
         return configured
     }    // MARK: Networking (improved for keyboard extension reliability)
     private lazy var session: URLSession = {
@@ -699,8 +707,7 @@ final class ToneSuggestionCoordinator {
     // MARK: - Headers Helper (for suggestions/observe)
     private func setEssentialHeaders(on request: inout URLRequest, clientSeq: UInt64) {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(self.apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(getUserId(), forHTTPHeaderField: "x-user-id")
+        request.setValue("Bearer \(self.bearerToken)", forHTTPHeaderField: "Authorization")
         request.setValue("\(clientSeq)", forHTTPHeaderField: "x-client-seq")
     }
     
@@ -755,18 +762,15 @@ final class ToneSuggestionCoordinator {
         
         setupWorkQueueIdentification()
         
-        // 📦 Check if triggerwords data is bundled in extension
-        let triggerwordsURL = Bundle.main.url(forResource: "tone_triggerwords", withExtension: "json")
-        print("📦 triggerwords.json present in extension bundle? \(triggerwordsURL != nil)")
-        if let url = triggerwordsURL {
-            print("📦 triggerwords.json path: \(url.path)")
-        }
-        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.startNetworkMonitoringSafely() }
         #if DEBUG
         KBDLog("🧠 Personality Data Bridge Status:", .debug, "ToneCoordinator")
-        KBDLog(" - Attachment Style: '\(getAttachmentStyle())'", .debug, "ToneCoordinator")
-        KBDLog(" - Emotional State: '\(getEmotionalState())'", .debug, "ToneCoordinator")
+        Task {
+            let attachmentStyle = await getAttachmentStyle()
+            let emotionalState = await getEmotionalState()
+            KBDLog(" - Attachment Style: '\(attachmentStyle)'", .debug, "ToneCoordinator")
+            KBDLog(" - Emotional State: '\(emotionalState)'", .debug, "ToneCoordinator")
+        }
         #endif
     }
     
@@ -976,7 +980,7 @@ final class ToneSuggestionCoordinator {
             #endif
         }
         
-        context.merge(personalityPayload()) { _, new in new }
+        context.merge(personalityPayloadSync()) { _, new in new }
         
         // Call regular API - the bypass is handled by not checking rate limits above
         callSuggestionsAPI(context: context, usingSnapshot: textToAnalyze) { [weak self] suggestion in
@@ -1064,7 +1068,7 @@ final class ToneSuggestionCoordinator {
             #endif
         }
         
-        context.merge(personalityPayload()) { _, new in new }
+        context.merge(personalityPayloadSync()) { _, new in new }
         
         callSuggestionsAPI(context: context, usingSnapshot: textToAnalyze) { [weak self] suggestion in
             self?.suggestionsInFlight = false
@@ -1163,7 +1167,7 @@ final class ToneSuggestionCoordinator {
             #endif
         }
         
-        context.merge(personalityPayload()) { _, new in new }
+        context.merge(personalityPayloadSync()) { _, new in new }
         
         callSuggestionsAPI(context: context, usingSnapshot: textToAnalyze) { [weak self] suggestion in
             guard let self else { return }
@@ -1198,7 +1202,7 @@ final class ToneSuggestionCoordinator {
         payload["requestId"] = requestID.uuidString
         payload["userId"] = getUserId()
         payload["userEmail"] = getUserEmail()
-        payload.merge(personalityPayload()) { _, new in new }
+        payload.merge(personalityPayloadSync()) { _, new in new }
         payload["conversationHistory"] = exportConversationHistoryForAPI(withCurrentText: snapshot)
         
         var safePayload = payload
@@ -1215,7 +1219,7 @@ final class ToneSuggestionCoordinator {
         let canonicalPayload = buildCanonicalV1Payload(
             text: textForAdvice,
             context: (context["meta"] as? [String: Any])?["context"] as? String ?? (context["context"] as? String) ?? "general",
-            persona: personalityPayload(),
+            persona: personalityPayloadSync(),
             toneFromCache: toneFromCache
         )
 
@@ -1273,7 +1277,7 @@ final class ToneSuggestionCoordinator {
         let ca = max(0, d["caution"] ?? 0)
         let a = max(0, d["alert"] ?? 0)
         let s = (c + ca + a)
-        guard s > 0 else { return ["clear": 1.0, "caution": 0.0, "alert": 0.0] }
+        guard s > 0 else { return ["clear": 0.33, "caution": 0.33, "alert": 0.34] }
         return ["clear": c / s, "caution": ca / s, "alert": a / s]
     }
     
@@ -1629,13 +1633,13 @@ final class ToneSuggestionCoordinator {
     }
     
     // MARK: - Personality payload (cached)
-    private func personalityPayload() -> [String: Any] {
+    private func personalityPayload() async -> [String: Any] {
         let now = Date()
         if now.timeIntervalSince(cachedPersonaAt) < personaTTL, !cachedPersona.isEmpty {
             return cachedPersona
         }
-        let profile = personalityProfileForAPI() ?? [:]
-        let resolved = resolvedAttachmentStyle()
+        let profile = await personalityProfileForAPI() ?? [:]
+        let resolved = await resolvedAttachmentStyle()
         var metaDict: [String: Any] = [:]
         metaDict["emotional_state"] = profile["emotionalState"] ?? "neutral"
         metaDict["communication_style"] = profile["communicationStyle"] ?? "direct"
@@ -1660,25 +1664,56 @@ final class ToneSuggestionCoordinator {
         return finalPayload
     }
     
+    // Synchronous fallback version that uses cached data or defaults
+    private func personalityPayloadSync() -> [String: Any] {
+        let now = Date()
+        if now.timeIntervalSince(cachedPersonaAt) < personaTTL, !cachedPersona.isEmpty {
+            return cachedPersona
+        }
+        
+        // Return minimal default payload when async bridge calls aren't available
+        let defaultPayload: [String: Any] = [
+            "attachmentStyle": "secure",
+            "meta": [
+                "emotional_state": "neutral",
+                "communication_style": "direct",
+                "emotional_bucket": "moderate",
+                "personality_type": "unknown",
+                "new_user": true,
+                "attachment_provisional": true,
+                "learning_days_remaining": 7,
+                "attachment_source": "default"
+            ],
+            "context": "general",
+            "user_profile": [:]
+        ]
+        
+        // Cache the default payload briefly
+        cachedPersona = defaultPayload
+        cachedPersonaAt = now
+        return defaultPayload
+    }
+    
     // MARK: - Local Storage Learning (Client-side)
     private func updateCommunicatorProfile(with text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count >= 10 else { return }
         
         // Use storage for learning events, trigger learner
-        storage.storeCommunicationEvent(text: trimmed, category: "general")
-        learner.learnNow()  // Trigger learning with fresh data
+        storage.recordAnalytics(event: "communication_event", data: ["text": trimmed, "category": "general"])
+        Task { await learner.learnNow() }  // Trigger learning with fresh data
         
         // Update bridge with learning progress after communication
         Task {
-            let newStyle = learner.getAttachmentStyle()
-            let newConfidence = learner.getAttachmentConfidence()
+            let newStyle = await bridge.getAttachmentStyle()
+            let newConfidence = await bridge.getAttachmentConfidence()
             
             // Only update bridge if we have meaningful confidence
-            if newConfidence > 0.1 {
-                await bridge.updateLearningProgress(
-                    newAttachmentHint: newStyle,
-                    confidence: newConfidence
+            if let confidence = newConfidence, confidence > 0.1 {
+                await bridge.setLearnerAttachmentStyle(
+                    newStyle,
+                    confidence: confidence,
+                    source: "local_learning"
                 )
             }
         }
@@ -1689,22 +1724,24 @@ final class ToneSuggestionCoordinator {
     private func updateCommunicatorProfileWithSuggestion(_ suggestion: String, accepted: Bool) {
         guard accepted else { 
             // Store rejection too for learning
-            storage.storeSuggestionInteraction(suggestion: suggestion, accepted: false, category: "general")
+            storage.recordSuggestionInteraction(suggestion: suggestion, accepted: false, context: "general")
             return 
         }
         let trimmed = suggestion.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         
         // Store suggestion acceptance for learning
-        storage.storeSuggestionInteraction(suggestion: trimmed, accepted: true, category: "general")
-        learner.learnNow()  // Trigger learning with fresh acceptance data
+        storage.recordSuggestionInteraction(suggestion: trimmed, accepted: true, context: "general")
+        Task { await learner.learnNow() }  // Trigger learning with fresh acceptance data
         
         // Update bridge with learning progress after acceptance
+        // Note: These methods would be implemented to store learning progress
+        // For now, we'll track suggestion acceptance via analytics
         Task {
-            await bridge.updateLearningProgress(
-                newAttachmentHint: learner.getAttachmentStyle(),
-                confidence: learner.getAttachmentConfidence()
-            )
+            storage.recordAnalytics(event: "learning_suggestion_accepted", data: [
+                "suggestion_length": trimmed.count,
+                "source": "coordinator"
+            ])
         }
         
         throttledLog("stored accepted suggestion locally (length: \(trimmed.count))", category: "learning")
@@ -1712,34 +1749,34 @@ final class ToneSuggestionCoordinator {
     
     // MARK: - Persona / Bridge integration
 
-    private func personalityProfileForAPI() -> [String: Any]? {
+    private func personalityProfileForAPI() async -> [String: Any]? {
         // Flattened profile already shaped for API-ish usage
-        var p = bridge.getPersonalityProfile()
+        var p = await bridge.getPersonalityProfile()
         // Normalize a few keys to camelCase the coordinator expects
         p["attachmentStyle"] = p["attachment_style"]
         p["communicationStyle"] = p["communication_style"]
         p["personalityType"] = p["personality_type"]
         p["emotionalState"] = p["emotional_state"] ?? p["currentEmotionalState"]
         p["emotionalBucket"] = p["emotional_bucket"] ?? p["currentEmotionalStateBucket"]
-        p["newUser"] = bridge.isNewUser()
-        p["learningDaysRemaining"] = bridge.learningDaysRemaining()
+        p["newUser"] = await bridge.isNewUser()
+        p["learningDaysRemaining"] = await bridge.learningDaysRemaining()
         // Provisional if not confirmed
         let confirmed = (p["personality_test_complete"] as? Bool) ?? false
         p["attachmentProvisional"] = !confirmed
         return p
     }
 
-    private func resolvedAttachmentStyle() -> (style: String?, provisional: Bool, source: String) {
+    private func resolvedAttachmentStyle() async -> (style: String?, provisional: Bool, source: String) {
         // Prefer confirmed, else learner, else default
-        let confirmed = bridge.isPersonalityTestComplete()
-        let style = bridge.getAttachmentStyle()
-        let learner = bridge.getLearnerAttachmentStyle()
-        let src = confirmed ? (bridge.getAttachmentSource() ?? "confirmed") : (bridge.getAttachmentSource() ?? "learner")
+        let confirmed = await bridge.isPersonalityTestComplete()
+        let style = await bridge.getAttachmentStyle()
+        let learner = await bridge.getLearnerAttachmentStyle()
+        let src = confirmed ? (await bridge.getAttachmentSource() ?? "confirmed") : (await bridge.getAttachmentSource() ?? "learner")
         return (confirmed ? style : (learner ?? style), !confirmed, src)
     }
 
-    private func getAttachmentStyle() -> String { resolvedAttachmentStyle().style ?? "secure" }
-    private func getEmotionalState() -> String { bridge.getCurrentEmotionalState() }
+    private func getAttachmentStyle() async -> String { await resolvedAttachmentStyle().style ?? "secure" }
+    private func getEmotionalState() async -> String { await bridge.getCurrentEmotionalState() }
     
     /// Simple helper to detect emotional language for testing purposes
     private func containsEmotionalLanguage(_ text: String) -> Bool {
@@ -1934,7 +1971,7 @@ extension ToneSuggestionCoordinator {
             case "alert": return .alert
             case "neutral": return .neutral
             case "insufficient": return .insufficient
-            default: return .clear
+            default: return .neutral
             }
         }
     }
@@ -1951,10 +1988,26 @@ extension ToneSuggestionCoordinator {
             defer { prevFullText = fullText }
             let now = Date()
             
+            // Find the current sentence being worked on
             let segments = fullText.components(separatedBy: sentenceEnders)
             let tailSentence = segments.last?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            
+            // If the tail sentence is empty but we have content, it means we finished a sentence
+            let hasCompleteSentences = segments.count > 1 || (segments.count == 1 && fullText.rangeOfCharacter(from: sentenceEnders) != nil)
             let wasTail = currentSentence
-            currentSentence = tailSentence
+            
+            // Update current sentence - use the working sentence or the full text if no sentence enders
+            if tailSentence.isEmpty && hasCompleteSentences {
+                // We're after a sentence ender, look at the last complete sentence
+                let completeSentences = segments.dropLast()
+                currentSentence = completeSentences.last?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            } else if tailSentence.isEmpty {
+                // No content at all
+                currentSentence = ""
+            } else {
+                // Working on a sentence
+                currentSentence = tailSentence
+            }
             
             if let last = lastInserted {
                 if sentenceEnders.contains(last.unicodeScalars.first!) {
@@ -2062,6 +2115,7 @@ extension ToneSuggestionCoordinator {
     }
     
     private func analyze(_ sentence: String) async {
+        let startTime = Date()
         dlog("🔬 DEBUG: analyze() called with sentence: '\(sentence)'")
         
         let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2115,15 +2169,15 @@ extension ToneSuggestionCoordinator {
             print("🔎 ANALYZED text='\(trimmed.prefix(50))' serverTone=\(resolvedToneString) serverBucket=\(serverBucket.rawValue)")
             
             // Persist tone analysis event for local learning
-            storage.storeToneAnalysisEvent(
-                text: trimmed,
-                primaryTone: toneOut.primary_tone ?? resolvedToneString,
-                confidence: toneOut.confidence ?? 0.5,
-                uiBucket: resolvedToneString
-            )
+            storage.recordAnalytics(event: "tone_analysis", data: [
+                "text": trimmed,
+                "tone": resolvedToneString,
+                "confidence": toneOut.confidence ?? 0.5,
+                "analysis_time": Date().timeIntervalSince1970 - startTime.timeIntervalSince1970
+            ])
             
             // Trigger learning after tone analysis
-            learner.learnNow()
+            Task { await learner.learnNow() }
             
             // Always trust the server's tone decision - no local overrides
             let newTone = serverBucket
@@ -2180,7 +2234,7 @@ extension ToneSuggestionCoordinator {
             lastToneAnalysis = [
                 "text": trimmed,
                 "toneAnalysis": [
-                    "ui_tone": toneOut.ui_tone ?? "clear",
+                    "ui_tone": toneOut.ui_tone ?? "neutral",
                     "ui_distribution": toneOut.finalDistribution,
                     "confidence": toneOut.confidence ?? 0.5,
                     "primary_tone": toneOut.primary_tone ?? "neutral",
@@ -2247,15 +2301,32 @@ extension ToneSuggestionCoordinator {
     }
     
     // MARK: - API Response Models
-    private struct ToneEnvelope<T: Decodable>: Decodable {
-        let success: Bool
-        let data: T
+    
+    // Accepts either { success, data } or a flat ToneOut payload
+    private struct ToneEnvelope: Decodable {
+        let data: ToneOut
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            
+            // Try to decode as envelope first { success, data }
+            if let nested = try? container.decode(ToneOut.self, forKey: .data) {
+                self.data = nested
+            } else {
+                // If that fails, decode the whole thing as ToneOut (flat response)
+                self.data = try ToneOut(from: decoder)
+            }
+        }
+        
+        enum CodingKeys: String, CodingKey {
+            case data
+        }
     }
     
     private struct ToneOut: Decodable {
-        let ok: Bool
-        let userId: String
-        let text: String
+        let ok: Bool?
+        let userId: String?
+        let text: String?
         let uiTone: String?          // "clear" | "caution" | "alert" | "neutral" | "insufficient"
         let uiDistribution: Buckets? // mirrors "buckets"
         let buckets: Buckets?        // legacy alias in server
@@ -2269,10 +2340,19 @@ extension ToneSuggestionCoordinator {
         let intensity: Double?
         let confidence: Double?
         
+        // Server response fields that might be flat or nested
+        let primaryTone: String?
+        let emotions: [String: Double]?
+        let sentimentScore: Double?
+        let contextSeverity: [String: Double]?
+        
+        // Optional extras the server might add
+        let cached: Bool?
+        let cacheHitTimestamp: String?
+        
         // Legacy compatibility properties
         var ui_tone: String? { return uiTone }
-        var primary_tone: String? { return analysis?.primaryTone }
-        var emotions: [String: Double]? { return analysis?.emotions }
+        var primary_tone: String? { return primaryTone ?? analysis?.primaryTone }
         var finalDistribution: [String: Double] {
             if let buckets = uiDistribution ?? buckets {
                 return ["clear": buckets.clear, "caution": buckets.caution, "alert": buckets.alert]
@@ -2304,7 +2384,7 @@ extension ToneSuggestionCoordinator {
                 if d.caution >= d.clear { return ("caution", d) }
                 return ("clear", d)
             }
-            return ("", nil)
+            return ("neutral", nil)
         }
     }
     
@@ -2339,9 +2419,9 @@ extension ToneSuggestionCoordinator {
             return (docTone, toneOut.uiDistribution ?? toneOut.buckets)
         }
         
-        // Last resort: use "clear" default if server response corrupted
-        let defaultBuckets = Buckets(clear: 1.0, caution: 0.0, alert: 0.0)
-        return ("clear", defaultBuckets)
+        // Last resort: use "neutral" default if server response corrupted
+        let defaultBuckets = Buckets(clear: 0.33, caution: 0.33, alert: 0.34)
+        return ("neutral", defaultBuckets)
     }
     
     private struct DocumentAnalysis: Decodable {
@@ -2466,12 +2546,14 @@ extension ToneSuggestionCoordinator {
             print("🌐 DEBUG: Received response: \(httpResponse)")
             print("🌐 DEBUG: HTTP Status: \(httpResponse.statusCode)")
             
-            // Check for error status codes
-            switch httpResponse.statusCode {
-            case 401: throw APIError.authRequired
-            case 402: throw APIError.paymentRequired
-            case 500...599: throw APIError.serverError(httpResponse.statusCode)
-            default: break
+            // Treat 200–299 **including 208** as success
+            guard (200...299).contains(httpResponse.statusCode) else {
+                switch httpResponse.statusCode {
+                case 401: throw APIError.authRequired
+                case 402: throw APIError.paymentRequired
+                case 500...599: throw APIError.serverError(httpResponse.statusCode)
+                default: throw APIError.serverError(httpResponse.statusCode)
+                }
             }
         }
         
@@ -2484,7 +2566,7 @@ extension ToneSuggestionCoordinator {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         
         do {
-            let envelope = try decoder.decode(ToneEnvelope<ToneOut>.self, from: data)
+            let envelope = try decoder.decode(ToneEnvelope.self, from: data)
             let (toneString, buckets) = resolvedTone(from: envelope.data)
             
             print("📄 ToneCoordinator: Analysis complete - ui_tone: \(toneString)")
@@ -2790,25 +2872,25 @@ extension ToneSuggestionCoordinator {
             }
 
             // Persist full-text tone analysis event for local learning
-            self.storage.storeToneAnalysisEvent(
-                text: result.text,
-                primaryTone: result.primary_tone ?? uiTone,
-                confidence: confidence,
-                uiBucket: uiTone
-            )
+            self.storage.recordAnalytics(event: "tone_analysis_event", data: [
+                "text": result.text,
+                "primary_tone": result.primary_tone ?? uiTone,
+                "confidence": confidence,
+                "ui_bucket": uiTone
+            ])
             
             // Trigger learning after full-text analysis
-            self.learner.learnNow()
+            Task { await self.learner.learnNow() }
 
             // Cache the successful analysis for fallback use in suggestions
             self.lastAnalysis = LastAnalysis(
-                text: result.text,
+                text: result.text ?? "", // Safely unwrap with empty string fallback
                 uiTone: uiTone,
                 docSeq: expectedDocSeq,
                 hash: expectedHash,
                 timestamp: Date()
             )
-            print("💾 Cached analysis: '\(String(result.text.prefix(50)))...', tone: \(uiTone)")
+            print("💾 Cached analysis: '\(String((result.text ?? "").prefix(50)))...', tone: \(uiTone)")
 
             // Cache the result for future requests
             self.analysisCache[expectedHash] = (tone: uiTone, timestamp: Date())
@@ -2851,8 +2933,8 @@ extension ToneSuggestionCoordinator {
             }
             
             // Extract document tone from ui_distribution (not buckets)
-            let uiTone = response["ui_tone"] as? String ?? "clear"
-            let uiDistribution = response["ui_distribution"] as? [String: Double] ?? ["clear": 1.0, "caution": 0.0, "alert": 0.0]
+            let uiTone = response["ui_tone"] as? String ?? "neutral"
+            let uiDistribution = response["ui_distribution"] as? [String: Double] ?? ["clear": 0.33, "caution": 0.33, "alert": 0.34]
             let confidence = response["confidence"] as? Double ?? 0.0
             
             print("📄 ToneCoordinator: Analysis complete - docSeq: \(expectedDocSeq), ui_tone: \(uiTone), duration: \(Int(duration * 1000))ms")

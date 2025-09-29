@@ -1,2 +1,0 @@
-// Request logging middleware
-export {};

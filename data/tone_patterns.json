@@ -2517,6 +2517,61 @@
       "styleWeight": 0.8,
       "contextOverrides": {},
       "notes": "Pattern for undefined therapy advice category"
+    },
+    {
+      "id": "C001",
+      "tone": "congratulatory",
+      "category": "celebration",
+      "matchMode": "hybrid",
+      "canonical": "that's amazing",
+      "variants": ["that's wonderful", "that's incredible", "that's fantastic", "you're amazing", "so proud of you", "you did great", "well done", "you nailed it"],
+      "regex": "\\b(?:that'?s\\s+(?:amazing|wonderful|incredible|fantastic|awesome|brilliant)|you'?re\\s+(?:amazing|incredible|wonderful|awesome)|so\\s+proud\\s+of\\s+you|you\\s+did\\s+(?:great|amazing|awesome)|well\\s+done|you\\s+nailed\\s+it)\\b",
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.7, "anxious": 0.8, "disorganized": 0.8, "secure": 0.9}
+    },
+    {
+      "id": "C002", 
+      "tone": "congratulatory",
+      "category": "appreciation",
+      "matchMode": "hybrid",
+      "canonical": "thank you so much",
+      "variants": ["thank you for that", "really appreciate it", "means a lot", "grateful for you", "you're the best"],
+      "regex": "\\b(?:thank\\s+you\\s+(?:so\\s+much|for\\s+that)|really\\s+appreciate|means\\s+a\\s+lot|grateful\\s+for\\s+you|you'?re\\s+the\\s+best)\\b",
+      "threshold": 0.85,
+      "styleWeight": {"avoidant": 0.8, "anxious": 0.9, "disorganized": 0.8, "secure": 0.9}
+    },
+    {
+      "id": "C003",
+      "tone": "congratulatory", 
+      "category": "affirmation",
+      "matchMode": "hybrid",
+      "canonical": "you're so thoughtful",
+      "variants": ["you're so kind", "you're so sweet", "you're incredible", "love how you", "I admire", "you inspire me"],
+      "regex": "\\b(?:you'?re\\s+so\\s+(?:thoughtful|kind|sweet|caring|considerate)|you'?re\\s+incredible|love\\s+how\\s+you|i\\s+admire|you\\s+inspire\\s+me)\\b",
+      "threshold": 0.88,
+      "styleWeight": {"avoidant": 0.75, "anxious": 0.85, "disorganized": 0.8, "secure": 0.9}
+    },
+    {
+      "id": "C004",
+      "tone": "congratulatory",
+      "category": "achievement",
+      "matchMode": "hybrid", 
+      "canonical": "you handled that perfectly",
+      "variants": ["you did exactly right", "perfect response", "couldn't have done better", "you really got it", "exactly what was needed"],
+      "regex": "\\b(?:you\\s+handled\\s+that\\s+(?:perfectly|well|great)|you\\s+did\\s+exactly\\s+right|perfect\\s+response|couldn'?t\\s+have\\s+done\\s+better|you\\s+really\\s+got\\s+it|exactly\\s+what\\s+was\\s+needed)\\b",
+      "threshold": 0.92,
+      "styleWeight": {"avoidant": 0.8, "anxious": 0.85, "disorganized": 0.8, "secure": 0.9}
+    },
+    {
+      "id": "C005",
+      "tone": "congratulatory",
+      "category": "growth_celebration", 
+      "matchMode": "hybrid",
+      "canonical": "I can see how much you've grown",
+      "variants": ["you've really improved", "such great progress", "love seeing this growth", "you've come so far", "this is real progress"],
+      "regex": "\\b(?:i\\s+can\\s+see\\s+how\\s+much\\s+you'?ve\\s+grown|you'?ve\\s+really\\s+improved|such\\s+great\\s+progress|love\\s+seeing\\s+this\\s+growth|you'?ve\\s+come\\s+so\\s+far|this\\s+is\\s+real\\s+progress)\\b",
+      "threshold": 0.9,
+      "styleWeight": {"avoidant": 0.8, "anxious": 0.9, "disorganized": 0.85, "secure": 0.9}
     }
   ],
   "contextOverrides": {"clear": 0.02},

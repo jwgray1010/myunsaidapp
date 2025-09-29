@@ -153,23 +153,20 @@ final class KeyPreviewManager {
     // MARK: - Private Helpers
     
     private func findKeyboardContainerView(for button: UIButton) -> UIView? {
-        // Walk up the view hierarchy to find the KeyboardController root view
-        var currentView: UIView? = button
+        // Walk up the view hierarchy to find a suitable container
+        var currentView: UIView? = button.superview
         
         while let view = currentView {
-            // Look specifically for KeyboardController view, not just any non-stack view
-            if String(describing: type(of: view)).contains("KeyboardController") {
+            // Look for views with reasonable keyboard-like dimensions
+            // and not stack views (which are layout helpers)
+            let bounds = view.bounds
+            let hasKeyboardLikeDimensions = bounds.width > 250 && bounds.height > 150
+            let isNotStackView = !(view is UIStackView)
+            
+            if isNotStackView && hasKeyboardLikeDimensions {
                 return view
             }
-            currentView = view.superview
-        }
-        
-        // Fallback: find any view that's not a stack view and has reasonable bounds
-        currentView = button.superview
-        while let view = currentView {
-            if !(view is UIStackView), view.bounds.width > 200 {
-                return view
-            }
+            
             currentView = view.superview
         }
         

@@ -1,2 +1,0 @@
-// Auth middleware placeholder
-export {};

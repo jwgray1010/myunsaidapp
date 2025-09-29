@@ -81,6 +81,8 @@
 	<string>https://api.myunsaidapp.com</string>
 		<key>UNSAID_API_KEY</key>
 	<string>37da2c87b923d4e9dd388f13580d75396c84d8ab5f9c58b505a80e892b3d7e9d</string>
+	<key>API_BEARER_TOKEN</key>
+	<string>URhIBZpw1lgmZX9WNC7u6mbysTHIAzh1X3TBjdobcmM</string>
 	
 	<!-- Background App Refresh for automatic data sync -->
 	<key>UIBackgroundModes</key>

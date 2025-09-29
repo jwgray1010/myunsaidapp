@@ -38,6 +38,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@express-rate-limit/tsconfig": "^1.0.2",
     "@types/node": "^20.19.11",
     "typescript": "^5.9.2",
     "vercel": "^32.5.0"

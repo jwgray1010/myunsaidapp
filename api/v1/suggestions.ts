@@ -158,7 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       gcloudClient.generateSuggestions(payload),
       10000 // 10 second timeout
     );
-    
+
     // Cache the result
     requestCache.set(cacheKey, {
       result: response,

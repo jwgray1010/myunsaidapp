@@ -44,6 +44,19 @@ public enum ToneStatus: String, CaseIterable, Codable, Sendable {
         }
     }
     
+    var accessibilityDescription: String {
+        switch self {
+        case .clear:
+            return "Clear tone - message looks good"
+        case .caution:
+            return "Caution tone - message may need adjustment"
+        case .alert:
+            return "Alert tone - message may be problematic"
+        case .neutral:
+            return "Neutral tone - no analysis available"
+        }
+    }
+    
     #if canImport(UIKit)
     var color: UIColor {
         switch self {
