@@ -187,7 +187,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       mode,
       doc_seq,
       text_hash: textHash, // Also pass as text_hash for backward compatibility
-      client_seq,
+      client_seq: client_seq || 1, // Ensure it's always a positive number
       toneAnalysis
     };
 
