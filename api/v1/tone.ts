@@ -194,15 +194,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       toneAnalysis
     };
 
-    const response = await callWithTimeout(
+    const response: unknown = await callWithTimeout(
       gcloudClient.analyzeTone(payload),
       8000 // 8 second timeout
     );
 
+    // Guard against non-object responses and validate
+    const responseObj = response && typeof response === 'object' 
+      ? (response as Record<string, unknown>) 
+      : { value: response };
+
     // Validate and ensure UI fields are present
     let validatedResponse;
     try {
-      validatedResponse = ensureUiFields(response);
+      validatedResponse = ensureUiFields(responseObj);
     } catch (error) {
       logger.error(`[${requestId}] Google Cloud Run returned invalid tone schema: ${error instanceof Error ? error.message : 'Unknown error'}`);
       return res.status(502).json({

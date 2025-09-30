@@ -141,14 +141,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payload.toneAnalysis = toneAnalysis;
     }
     
-    const response = await callWithTimeout(
+    const response: unknown = await callWithTimeout(
       gcloudClient.generateSuggestions(payload),
       10000 // 10 second timeout
     );
 
+    // Guard against non-object responses for safe spreading
+    const responseObj = response && typeof response === 'object' 
+      ? (response as Record<string, unknown>) 
+      : { value: response };
+
     // Cache the result
     requestCache.set(cacheKey, {
-      result: response,
+      result: responseObj,
       timestamp: Date.now()
     });
     
@@ -159,7 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       data: { 
-        ...response, 
+        ...responseObj, 
         client_seq: normalizedClientSeq, // ✅ Echo normalized client sequencing back
         compose_id // Return compose_id for session correlation
       },

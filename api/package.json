@@ -4,7 +4,7 @@
   "description": "Vercel API bridge to Google Cloud Run",
   "main": "index.js",
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "packageManager": "npm@10.8.2",
   "scripts": {
