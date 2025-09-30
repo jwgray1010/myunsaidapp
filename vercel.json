@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "api/v1/**/*.ts": {
-      "runtime": "@vercel/node@3.0.21"
+      "runtime": "@vercel/node@3.2.21"
     }
   },
   "rewrites": [
