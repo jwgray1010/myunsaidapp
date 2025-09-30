@@ -643,7 +643,7 @@ final class ToneSuggestionCoordinator {
     
     // Request Mgmt / Backoff / Client Sequence (for suggestions/observe)
     private var latestRequestID = UUID()
-    private var clientSequence: UInt64 = 0
+    private var clientSequence: UInt64 = 1  // Start at 1 to satisfy Google Cloud schema validation
     private var pendingClientSeq: UInt64 = 0
     
     // MARK: - Composition Session
@@ -699,7 +699,7 @@ final class ToneSuggestionCoordinator {
     private var requestCompletionTimes: [String: Date] = [:]
     private func cacheTTL(for path: String) -> TimeInterval {
         switch path {
-        case "/v1/suggestions": return 5.0
+        case "/api/v1/suggestions", "/v1/suggestions": return 5.0  // Support both old and new paths
         default: return 5.0
         }
     }
@@ -894,7 +894,7 @@ final class ToneSuggestionCoordinator {
     }
     
     // Shared Defaults & Persona
-    private let sharedUserDefaults: UserDefaults = UserDefaults.standard
+    private let sharedUserDefaults: UserDefaults = AppGroups.shared
     private var cachedPersona: [String: Any] = [:]
     private var cachedPersonaAt: Date = .distantPast
     private let personaTTL: TimeInterval = 10 * 60
@@ -926,8 +926,8 @@ final class ToneSuggestionCoordinator {
     
     func debugPingAll() {
         KBDLog("🔧 normalized base: \(normalizedBaseURLString())", .debug, "ToneCoordinator")
-        KBDLog("🔧 suggestions: \(normalizedBaseURLString() + "/v1/suggestions")", .debug, "ToneCoordinator")
-        KBDLog("🔧 tone: \(normalizedBaseURLString() + "/v1/tone")", .debug, "ToneCoordinator")
+        print("🔧 suggestions: \(normalizedBaseURLString() + "/v1/suggestions")")
+        KBDLog("🔧 tone: \(normalizedBaseURLString() + "/api/v1/tone")", .debug, "ToneCoordinator")
         dumpAPIConfig()
         
         // Test a sample suggestion request to verify endpoints work
@@ -1523,8 +1523,8 @@ final class ToneSuggestionCoordinator {
             "client_seq": clientSequence,
             "compose_id": composeId,
 
-            // context can be a single tag or an array — array is fine
-            "context": [context],                      
+            // context as a string to match Node.js handler expectations
+            "context": context,                      
 
             // personalization
             "attachmentStyle": attachmentStyle        // from persona/resolved
@@ -1602,7 +1602,7 @@ final class ToneSuggestionCoordinator {
             if !breakerOpen.contains(circuitKey) { setBreaker(circuitKey, open: true) }
             completion(nil); return
         }
-        let allowed = Set(["v1/suggestions"])
+        let allowed = Set(["v1/suggestions", "api/v1/suggestions"])
         guard allowed.contains(normalized) else {
             throttledLog("invalid endpoint \(normalized); expected one of \(allowed)", category: "api")
             completion(nil); return
@@ -2722,7 +2722,7 @@ extension ToneSuggestionCoordinator {
     
     private func postTone(base: String, text: String, token: String?, fullTextMode: Bool = false) async throws -> ToneOut {
         let origin = normalizedBaseURLString()
-        let fullURL = "\(origin)/v1/tone"
+        let fullURL = "\(origin)/api/v1/tone"
         print("🌐 DEBUG: Attempting to POST to: \(fullURL)")
         
         guard let url = URL(string: fullURL) else { 
@@ -2791,7 +2791,7 @@ extension ToneSuggestionCoordinator {
 
         #if DEBUG
         if logGate.allow("tone_req", "\(text.count)") {
-            netLog.info("🎯 [\(self.instanceId)] POST /v1/tone len=\(text.count)")
+            netLog.info("🎯 [\(self.instanceId)] POST /api/v1/tone len=\(text.count)")
         }
         #endif
 

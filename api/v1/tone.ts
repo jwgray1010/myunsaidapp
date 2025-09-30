@@ -128,6 +128,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     const { text, text_sha256, client_seq, context, attachmentStyle, rich, mode, doc_seq, text_hash, toneAnalysis } = req.body;
     
+    // Normalize client_seq to always be ≥1 for consistent correlation
+    const normalizedClientSeq = Math.max(Number(client_seq) || 1, 1);
+    
     // Payload size guard
     if (text.length > 8000) {
       return res.status(413).json({
@@ -149,7 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     // Request deduplication check
     const textHash = text_sha256 || text_hash || crypto.createHash('sha256').update(text, 'utf8').digest('hex');
-    const cacheKey = getCacheKey(textHash, client_seq || 1, context, attachmentStyle, rich, mode, doc_seq, toneAnalysis);
+    const cacheKey = getCacheKey(textHash, normalizedClientSeq, context, attachmentStyle, rich, mode, doc_seq, toneAnalysis);
     const existing = requestCache.get(cacheKey);
     
     if (existing) {
@@ -162,7 +165,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           success: true,
           data: {
             ...validated,
-            client_seq: client_seq ?? 1,
+            client_seq: normalizedClientSeq,
             cached: true,
             cacheHitTimestamp: new Date().toISOString()
           },
@@ -187,7 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       mode,
       doc_seq,
       text_hash: textHash, // Also pass as text_hash for backward compatibility
-      client_seq: client_seq || 1, // Ensure it's always a positive number
+      client_seq: normalizedClientSeq, // Pass normalized client_seq ≥1
       toneAnalysis
     };
 
@@ -225,7 +228,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       data: { 
         ...validatedResponse, 
-        client_seq: client_seq ?? 1 // ✅ Echo client sequencing back
+        client_seq: normalizedClientSeq // ✅ Echo normalized client sequencing back
       },
       cached: false,
       requestId,

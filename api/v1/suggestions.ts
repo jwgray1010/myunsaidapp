@@ -1,9 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import { gcloudClient } from '../_lib/gcloudClient';
 import { logger } from '../_lib/logger';
 import crypto from 'crypto';
-
-// Google Cloud Run service URL
-const GCLOUD_API_BASE = process.env.GCLOUD_API_BASE || 'https://unsaid-gcloud-api-835271127477.us-central1.run.app';
 
 // Simple request deduplication (in-memory, per instance only)
 const requestCache = new Map<string, { result: any; timestamp: number }>();
@@ -89,6 +87,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     const { text, text_sha256, client_seq, compose_id, toneAnalysis, context, attachmentStyle, rich, meta } = req.body;
     
+    // Normalize client_seq to always be ≥1 for consistent correlation
+    const normalizedClientSeq = Math.max(Number(client_seq) || 1, 1);
+    
     // Payload size guard
     if (text.length > 8000) {
       return res.status(413).json({
@@ -110,7 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     // Request deduplication check
     const textHash = text_sha256 || crypto.createHash('sha256').update(text, 'utf8').digest('hex');
-    const cacheKey = getCacheKey(textHash, client_seq || 1, context, attachmentStyle, rich, compose_id, toneAnalysis);
+    const cacheKey = getCacheKey(textHash, normalizedClientSeq, context, attachmentStyle, rich, compose_id, toneAnalysis);
     const existing = requestCache.get(cacheKey);
     
     if (existing) {
@@ -121,7 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: true,
         data: {
           ...existing.result,
-          client_seq: client_seq ?? 1, // ✅ Echo client sequencing for cached responses
+          client_seq: normalizedClientSeq, // ✅ Echo normalized client sequencing for cached responses
           cached: true,
           cacheHitTimestamp: new Date().toISOString()
         },
@@ -132,7 +133,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     
     // Bridge rich v1.5 envelope to Google Cloud - forward all rich context
-    const payload: any = { text, context, attachmentStyle, rich, meta, compose_id };
+    const payload: any = { text, context, attachmentStyle, rich, meta, compose_id, client_seq: normalizedClientSeq };
     
     // Only pass real ToneResponse objects, let Cloud Run handle missing tone
     if (toneAnalysis) {
@@ -159,7 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       data: { 
         ...response, 
-        client_seq: client_seq ?? 1, // ✅ Echo client sequencing back
+        client_seq: normalizedClientSeq, // ✅ Echo normalized client sequencing back
         compose_id // Return compose_id for session correlation
       },
       cached: false,
