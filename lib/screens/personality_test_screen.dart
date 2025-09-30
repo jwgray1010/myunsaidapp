@@ -311,6 +311,9 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
             if (states.contains(WidgetState.selected)) {
               return questionTypeColor;
             }
+            if (states.contains(WidgetState.disabled)) {
+              return Colors.grey.shade300;
+            }
             return Colors.grey.shade400;
           }),
           overlayColor: WidgetStateProperty.resolveWith((states) {
@@ -490,101 +493,55 @@ class _PersonalityTestScreenState extends State<PersonalityTestScreen> {
 
                         // Answer options — RadioListTile version (single-select)
                         Column(
-                          children: question.options.asMap().entries.map((
-                            entry,
-                          ) {
+                          children: question.options.asMap().entries.map((entry) {
                             final idx = entry.key;
                             final option = entry.value;
                             final isSelected = _selectedIndex == idx;
+                            final selectedBg = questionTypeColor.withOpacity(0.10);
+                            final selectedText = _getContrastingTextColor(questionTypeColor);
 
                             return Card(
-                              margin: const EdgeInsets.only(
-                                bottom: AppTheme.spaceMD,
-                              ),
-                              elevation: isSelected ? 1.5 : 0,
-                              color: isSelected
-                                  ? null
-                                  : null, // Allow RadioListTile tileColor to show
+                              margin: const EdgeInsets.only(bottom: AppTheme.spaceMD),
+                              elevation: isSelected ? 2 : 0,
+                              // Let the ListTile paint the selection background — don't force Card color.
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppTheme.radiusLG,
-                                ),
+                                borderRadius: BorderRadius.circular(AppTheme.radiusLG),
                                 side: BorderSide(
                                   color: isSelected
                                       ? questionTypeColor
-                                      : Colors.grey.withValues(alpha: 0.30),
+                                      : Colors.grey.withOpacity(0.30),
                                   width: isSelected ? 2 : 1,
                                 ),
                               ),
-                              child: Theme(
-                                // Override theme specifically for RadioListTile to ensure proper text visibility
-                                data: Theme.of(context).copyWith(
-                                  // Override radio button theme
-                                  radioTheme: RadioThemeData(
-                                    fillColor: WidgetStateProperty.resolveWith((
-                                      states,
-                                    ) {
-                                      if (states.contains(
-                                        WidgetState.selected,
-                                      )) {
-                                        return questionTypeColor;
-                                      }
-                                      return Colors.grey.shade400;
-                                    }),
-                                  ),
-                                  // Override list tile theme for better text visibility
-                                  listTileTheme: ListTileThemeData(
-                                    textColor: isSelected
-                                        ? _getContrastingTextColor(
-                                            questionTypeColor,
-                                          )
-                                        : Colors.black87,
-                                    selectedColor: _getContrastingTextColor(
-                                      questionTypeColor,
-                                    ),
-                                  ),
+                              child: RadioListTile<int>(
+                                value: idx,                       // bind by index
+                                groupValue: _selectedIndex,       // current selection
+                                onChanged: (i) => _selectByIndex(i!),
+                                selected: isSelected,
+                                // Let ListTile handle background when selected:
+                                selectedTileColor: selectedBg,
+                                // Keep unselected plainly white:
+                                tileColor: Colors.white,
+                                // Use titleTextStyle instead of listTileTheme.textColor overrides:
+                                title: Text(
+                                  option.text,
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                        color: isSelected ? selectedText : Colors.black87,
+                                        height: 1.15,
+                                      ),
                                 ),
-                                child: RadioListTile<int>(
-                                  value: idx, // bind by index
-                                  groupValue:
-                                      _selectedIndex, // current selection
-                                  onChanged: (i) => _selectByIndex(i!),
-                                  title: Text(
-                                    option.text,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                          fontWeight: isSelected
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
-                                          // Use contrasting color based on background
-                                          color: isSelected
-                                              ? _getContrastingTextColor(
-                                                  questionTypeColor,
-                                                )
-                                              : Colors.black87,
-                                          height: 1.15,
-                                        ),
-                                  ),
-                                  activeColor: questionTypeColor,
-                                  selected: isSelected,
-                                  tileColor: isSelected
-                                      ? questionTypeColor.withValues(
-                                          alpha: 0.08,
-                                        )
-                                      : Colors
-                                            .white, // Explicit white background for unselected
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      AppTheme.radiusLG,
-                                    ),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: AppTheme.spaceLG,
-                                    vertical: AppTheme.spaceMD,
-                                  ),
+                                // Radio fill color – rely on the per-screen radioTheme or set here:
+                                activeColor: questionTypeColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(AppTheme.radiusLG),
                                 ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: AppTheme.spaceLG,
+                                  vertical: AppTheme.spaceMD,
+                                ),
+                                // (Optional) Slightly denser touch target without hurting a11y:
+                                visualDensity: const VisualDensity(horizontal: 0, vertical: -1),
                               ),
                             );
                           }).toList(),
