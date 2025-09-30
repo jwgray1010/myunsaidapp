@@ -1,7 +1,9 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { gcloudClient } from '../_lib/gcloudClient';
 import { logger } from '../_lib/logger';
 import crypto from 'crypto';
+
+// Google Cloud Run service URL
+const GCLOUD_API_BASE = process.env.GCLOUD_API_BASE || 'https://unsaid-gcloud-api-835271127477.us-central1.run.app';
 
 // Simple request deduplication (in-memory, per instance only)
 const requestCache = new Map<string, { result: any; timestamp: number }>();

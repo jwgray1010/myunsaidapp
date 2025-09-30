@@ -45,7 +45,7 @@ class GoogleCloudClient {
   private readonly timeout: number;
 
   constructor() {
-    this.baseUrl = process.env.GCLOUD_API_URL || 'https://my-node-backend-835271127477.us-central1.run.app';
+    this.baseUrl = process.env.GCLOUD_API_URL || 'https://unsaid-gcloud-api-835271127477.us-central1.run.app';
     this.timeout = 30000; // 30 seconds
   }
 

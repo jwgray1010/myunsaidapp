@@ -1,7 +1,9 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { gcloudClient } from '../_lib/gcloudClient';
 import { logger } from '../_lib/logger';
+import { gcloudClient } from '../_lib/gcloudClient';
 import crypto from 'crypto';
+
+// Google Cloud Run endpoint
 
 // Simple request deduplication (in-memory, per instance only)
 const requestCache = new Map<string, { result: any; timestamp: number }>();
@@ -37,6 +39,43 @@ function getCacheKey(
     : 'notone';
   
   return `anon:${textHash}:${seq}:${ctxKey}:${attachKey}:${richKey}:${modeKey}:${docSeqKey}:${toneKey}`;
+}
+
+function ensureUiFields(resp: any) {
+  // Validate required fields
+  if (!resp || typeof resp !== 'object') {
+    throw new Error('Invalid response: not an object');
+  }
+
+  // Check for therapeutic.probs - this is required for proper tone analysis
+  const probs = resp.therapeutic?.probs;
+  if (!probs || typeof probs !== 'object') {
+    throw new Error('Missing required field: therapeutic.probs');
+  }
+
+  const { clear, caution, alert } = probs;
+  if (typeof clear !== 'number' || typeof caution !== 'number' || typeof alert !== 'number') {
+    throw new Error('Invalid therapeutic.probs: must be numbers');
+  }
+
+  // If ui_tone already exists, pass through unchanged
+  if (resp.ui_tone && resp.ui_distribution) {
+    return resp;
+  }
+
+  // Compute ui_tone deterministically from therapeutic.probs (argmax)
+  const ui_tone = alert >= caution && alert >= clear ? 'alert'
+                : caution >= clear ? 'caution' : 'clear';
+
+  // Use actual probabilities, no fallbacks
+  const ui_distribution = { clear, caution, alert };
+
+  return { 
+    ...resp, 
+    ui_tone, 
+    ui_distribution,
+    contract_version: 'tone-v2'
+  };
 }
 
 function validateTextSHA256(text: string, expectedHash: string): boolean {
@@ -117,50 +156,75 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       logger.info(`[${requestId}] Returning cached tone response`);
       // Always use 200 status and envelope format for consistency
       res.setHeader('X-Cache', 'HIT');
-      return res.status(200).json({
-        success: true,
-        data: {
-          ...existing.result,
-          client_seq: client_seq ?? 1, // ✅ Echo client sequencing for cached responses
+      try {
+        const validated = ensureUiFields(existing.result);
+        return res.status(200).json({
+          success: true,
+          data: {
+            ...validated,
+            client_seq: client_seq ?? 1,
+            cached: true,
+            cacheHitTimestamp: new Date().toISOString()
+          },
           cached: true,
-          cacheHitTimestamp: new Date().toISOString()
-        },
-        cached: true,
+          requestId,
+          ts: Date.now()
+        });
+      } catch (error) {
+        // Cache contained invalid data, remove it and continue to fresh request
+        logger.warn(`[${requestId}] Cached data invalid, removing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        requestCache.delete(cacheKey);
+      }
+    }
+    
+    // Forward to Google Cloud Run service via gcloudClient
+    const payload = {
+      text,
+      text_sha256: textHash, // Pass the computed SHA256 hash
+      context, 
+      attachmentStyle,
+      rich,
+      mode,
+      doc_seq,
+      text_hash: textHash, // Also pass as text_hash for backward compatibility
+      client_seq,
+      toneAnalysis
+    };
+
+    const response = await callWithTimeout(
+      gcloudClient.analyzeTone(payload),
+      8000 // 8 second timeout
+    );
+
+    // Validate and ensure UI fields are present
+    let validatedResponse;
+    try {
+      validatedResponse = ensureUiFields(response);
+    } catch (error) {
+      logger.error(`[${requestId}] Google Cloud Run returned invalid tone schema: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return res.status(502).json({
+        success: false,
+        error: 'Upstream tone analysis service error',
+        details: 'Invalid response schema from tone analysis service',
         requestId,
         ts: Date.now()
       });
     }
-    
-    // Bridge rich v1.5 envelope to Google Cloud - forward optional rich context
-    const response = await callWithTimeout(
-      gcloudClient.analyzeTone({
-        text,
-        context: context || 'general', 
-        attachmentStyle: attachmentStyle || 'secure',
-        rich,    // Forward rich context for local heuristics
-        mode,    // Forward iOS coordinator mode
-        doc_seq, // Forward iOS coordinator document sequence
-        text_hash, // Forward iOS coordinator text hash
-        client_seq, // Forward iOS coordinator client sequence
-        toneAnalysis // Forward any existing tone analysis
-      }),
-      8000 // 8 second timeout for tone analysis
-    );
-    
-    // Cache the result
+
+    // Cache the validated result
     requestCache.set(cacheKey, {
-      result: response,
+      result: validatedResponse,
       timestamp: Date.now()
     });
-    
-    logger.info(`[${requestId}] Tone analysis completed by Google Cloud`);
-    
+
+    logger.info(`[${requestId}] Tone analysis completed by Google Cloud Run`);
+
     // Always return consistent envelope format
     res.setHeader('X-Cache', 'MISS');
     return res.status(200).json({
       success: true,
       data: { 
-        ...response, 
+        ...validatedResponse, 
         client_seq: client_seq ?? 1 // ✅ Echo client sequencing back
       },
       cached: false,
