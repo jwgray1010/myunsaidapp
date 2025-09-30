@@ -110,7 +110,7 @@ public extension ToneStatus {
     }
 }
 
-/// Represents different attachment styles - ACTIVELY USED
+/// Represents different attachment styles - CONSOLIDATED
 enum AttachmentStyle: String, CaseIterable, Codable {
     case secure = "secure"
     case anxious = "anxious"
@@ -133,6 +133,9 @@ enum AttachmentStyle: String, CaseIterable, Codable {
         }
     }
 }
+
+/// Type alias for compatibility with UnsaidShims naming
+typealias AttachmentStyleDetected = AttachmentStyle
 
 /// Represents different keyboard operational modes - ACTIVELY USED
 enum KeyboardMode: String, CaseIterable, Codable {
@@ -167,7 +170,7 @@ enum KeyboardMode: String, CaseIterable, Codable {
     }
 }
 
-/// Represents different communication patterns - ACTIVELY USED in UserProfile
+/// Represents different communication patterns - CONSOLIDATED
 enum CommunicationPattern: String, CaseIterable, Codable {
     case aggressive
     case passiveAggressive
@@ -178,6 +181,11 @@ enum CommunicationPattern: String, CaseIterable, Codable {
     case neutral
     case iStatement
     case youStatement
+    // Additional cases from UnsaidShims
+    case direct = "direct"
+    case indirect = "indirect"
+    case supportive = "supportive"
+    case critical = "critical"
     
     var displayName: String {
         switch self {
@@ -199,11 +207,19 @@ enum CommunicationPattern: String, CaseIterable, Codable {
             return "I-Statement"
         case .youStatement:
             return "You-Statement"
+        case .direct:
+            return "Direct"
+        case .indirect:
+            return "Indirect"
+        case .supportive:
+            return "Supportive"
+        case .critical:
+            return "Critical"
         }
     }
 }
 
-/// Represents different relationship contexts - ACTIVELY USED in UserProfile
+/// Represents different relationship contexts - CONSOLIDATED
 enum RelationshipContext: String, CaseIterable, Codable {
     case unknown = "unknown"
     case romantic = "romantic"
@@ -211,18 +227,22 @@ enum RelationshipContext: String, CaseIterable, Codable {
     case friendship = "friendship"
     case professional = "professional"
     case acquaintance = "acquaintance"
+    // Additional cases from UnsaidShims for compatibility
+    case friend = "friend"
+    case partner = "partner"
+    case coworker = "coworker"
     
     var displayName: String {
         switch self {
         case .unknown:
             return "Unknown"
-        case .romantic:
+        case .romantic, .partner:
             return "Romantic"
         case .family:
             return "Family"
-        case .friendship:
+        case .friendship, .friend:
             return "Friendship"
-        case .professional:
+        case .professional, .coworker:
             return "Professional"
         case .acquaintance:
             return "Acquaintance"
@@ -230,13 +250,19 @@ enum RelationshipContext: String, CaseIterable, Codable {
     }
 }
 
-/// Represents interaction types for keyboard analytics
+/// Represents interaction types for keyboard analytics - CONSOLIDATED
 enum InteractionType: String, CaseIterable, Codable {
     case toneAnalysis = "tone_analysis"
     case suggestion = "suggestion"
     case keyPress = "key_press"
     case textEntry = "text_entry"
     case correction = "correction"
+    // Additional cases from UnsaidShims
+    case typing = "typing"
+    case suggestionTap = "suggestion_tap"
+    case acceptedSuggestion = "accepted_suggestion"
+    case rejectedSuggestion = "rejected_suggestion"
+    case other = "other"
 }
 
 // MARK: - Global Variables

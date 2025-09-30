@@ -8,6 +8,7 @@
 import UIKit
 import Foundation
 import os.log
+import CryptoKit
 
 @MainActor
 protocol SuggestionChipManagerDelegate: AnyObject {
@@ -104,7 +105,7 @@ final class SuggestionChipManager {
         KBDLog("🎯 ChipManager: Presenting new chip, clearing any existing active chip", .debug, "ChipManager")
         
         let chip = SuggestionChipView()
-        chip.setPreview(text: text, tone: tone, textHash: String(text.hashValue))
+        chip.setPreview(text: text, tone: tone, textHash: sha256Hex(text))
         
         // Avoid retain cycles: the chip owns these closures
         chip.onExpanded = { [weak self, weak chip] in 
@@ -123,9 +124,6 @@ final class SuggestionChipManager {
             (containerView as? KeyboardController)?.suggestionsArmed = false
         }
 
-        containerView.addSubview(chip) // layout first
-        
-        // Remove any old position constraints if you decide to store them.
         // Position chip - overlay spelling bar if available, fallback to bottom of keyboard
         if let bar = suggestionBar {
             // Overlay the chip exactly on top of the spelling bar
@@ -292,11 +290,11 @@ final class SuggestionChipManager {
             if let chip = activeChip {
                 // Re-anchor above the bar
                 chip.translatesAutoresizingMaskIntoConstraints = false
-                // Remove previous vertical constraints if you're storing them; otherwise rely on Auto Layout conflict resolution:
-                NSLayoutConstraint.deactivate(chip.constraints.filter {
-                    // crude filter for bottom/vertical constraints you added
-                    ($0.firstItem as? UIView) === chip || ($0.secondItem as? UIView) === chip
-                })
+                // Safe constraint removal - only remove constraints owned by the chip
+                let chipConstraints = chip.constraints.filter { 
+                    $0.firstItem as? UIView === chip || $0.secondItem as? UIView === chip 
+                }
+                NSLayoutConstraint.deactivate(chipConstraints)
                 NSLayoutConstraint.activate([
                     chip.bottomAnchor.constraint(equalTo: bar.topAnchor, constant: -6),
                     chip.leadingAnchor.constraint(equalTo: containerView!.leadingAnchor, constant: 8),
@@ -350,5 +348,12 @@ final class SuggestionChipManager {
         KBDLog("🧪 CHIP INTEGRATION TEST SCHEDULED", .debug, "ChipManager")
         KBDLog("   Watch for chips appearing every 2 seconds...", .debug, "ChipManager")
         #endif
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func sha256Hex(_ s: String) -> String {
+        let bytes = SHA256.hash(data: Data(s.utf8))
+        return bytes.map { String(format: "%02x", $0) }.joined()
     }
 }

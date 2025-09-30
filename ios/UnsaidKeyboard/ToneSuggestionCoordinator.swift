@@ -234,26 +234,60 @@ final class ToneSuggestionCoordinator {
         return redacted
     }
     
-    // MARK: - URL normalization helper (for suggestions/observe)
+    // MARK: - Enhanced URL normalization helper
     private func normalizedBaseURLString() -> String {
         let raw = apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        var s = raw.hasSuffix("/") ? String(raw.dropLast()) : raw
+        
+        // Handle empty or invalid URLs
+        guard !raw.isEmpty else {
+            throttledLog("⚠️ Empty API base URL provided", category: "url")
+            return "https://api.myunsaidapp.com" // fallback
+        }
+        
+        // Ensure URL has a scheme
+        var urlString = raw
+        if !raw.hasPrefix("http://") && !raw.hasPrefix("https://") {
+            urlString = "https://\(raw)"
+            throttledLog("🔧 Added https:// scheme to URL: \(urlString)", category: "url")
+        }
+        
+        // Parse and validate URL
+        guard let url = URL(string: urlString), let host = url.host else {
+            throttledLog("⚠️ Invalid URL format: \(urlString)", category: "url")
+            return "https://api.myunsaidapp.com" // fallback
+        }
+        
+        // Reconstruct normalized URL
+        let scheme = url.scheme ?? "https"
+        let port = url.port.map { ":\($0)" } ?? ""
+        var path = url.path
         
         // Only strip /api/v1 or /api if they are path components, not part of the domain
         // E.g., strip from "https://localhost:3000/api/v1" but NOT from "https://api.myunsaidapp.com"
-        if let url = URL(string: s), let host = url.host {
-            // If 'api' is part of the domain (like api.myunsaidapp.com), don't strip anything
-            if host.contains("api.") {
-                return s
+        if !host.contains("api.") {
+            // Strip API path suffixes for development URLs
+            if path.lowercased().hasSuffix("/api/v1") {
+                path = String(path.dropLast(7))
+            } else if path.lowercased().hasSuffix("/api") {
+                path = String(path.dropLast(4))
             }
-            
-            // Otherwise, strip /api/v1 or /api path suffixes for development URLs
-            let lowers = s.lowercased()
-            if lowers.hasSuffix("/api/v1") { s = String(s.dropLast(7)) }
-            else if lowers.hasSuffix("/api") { s = String(s.dropLast(4)) }
         }
         
-        return s // e.g. https://api.myunsaidapp.com or https://localhost:3000
+        // Remove trailing slash from path
+        if path.hasSuffix("/") && path != "/" {
+            path = String(path.dropLast())
+        }
+        
+        // Construct final URL
+        let normalizedURL = "\(scheme)://\(host)\(port)\(path.isEmpty || path == "/" ? "" : path)"
+        
+        #if DEBUG
+        if urlString != normalizedURL {
+            print("🔧 URL normalized: '\(urlString)' → '\(normalizedURL)'")
+        }
+        #endif
+        
+        return normalizedURL
     }
     
     // MARK: - Idempotency helper (for suggestions/observe)
@@ -262,7 +296,9 @@ final class ToneSuggestionCoordinator {
         if let text = payload["text"] as? String { hashableContent += text }
         if let context = payload["context"] as? String { hashableContent += context }
         if let toneOverride = payload["toneOverride"] as? String { hashableContent += toneOverride }
-        return String(hashableContent.hash)
+        let data = Data(hashableContent.utf8)
+        let hash = SHA256.hash(data: data)
+        return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
     
     // MARK: - Cheap logging gate for Release
@@ -418,6 +454,129 @@ final class ToneSuggestionCoordinator {
         return URLSession(configuration: cfg, delegate: networkDelegate, delegateQueue: nil)
     }()
     
+    // MARK: - Shared Network Wrapper with Circuit Breaker Integration
+    private func postJSON(
+        to endpoint: String,
+        payload: [String: Any],
+        circuitKey: String? = nil,
+        completion: @escaping ([String: Any]?) -> Void
+    ) {
+        let origin = normalizedBaseURLString()
+        let fullURL = "\(origin)\(endpoint)"
+        
+        guard let url = URL(string: fullURL) else {
+            throttledLog("Invalid URL: \(fullURL)", category: "api")
+            completion(nil)
+            return
+        }
+        
+        // Circuit breaker check - convert string key to CircuitKey if provided
+        if let keyString = circuitKey {
+            let circuitKey = CircuitKey(host: url.host ?? "unknown", path: endpoint)
+            if breakerOpen.contains(circuitKey) {
+                throttledLog("Circuit breaker OPEN for \(endpoint)", category: "api")
+                completion(nil)
+                return
+            }
+        }
+        
+        workQueue.async { [weak self] in
+            guard let self else { completion(nil); return }
+            
+            let currentClientSeq = self.clientSequence
+            self.clientSequence += 1
+            
+            var request = URLRequest(url: url, timeoutInterval: 10.0)
+            request.httpMethod = "POST"
+            self.setEssentialHeaders(on: &request, clientSeq: currentClientSeq)
+            
+            var enhancedPayload = payload
+            enhancedPayload["client_seq"] = currentClientSeq
+            enhancedPayload["timestamp"] = self.isoTimestamp()
+            
+            do {
+                request.httpBody = try JSONSerialization.data(withJSONObject: enhancedPayload, options: [])
+            } catch {
+                self.throttledLog("JSON serialization failed: \(error.localizedDescription)", category: "api")
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            
+            DispatchQueue.main.async {
+                let task = self.session.dataTask(with: request) { data, response, error in
+                    if let error = error as NSError? {
+                        if error.code == NSURLErrorCancelled { completion(nil); return }
+                        self.handleNetworkError(error, url: url)
+                        
+                        // Open circuit breaker on repeated failures
+                        if let keyString = circuitKey {
+                            let circuitKey = CircuitKey(host: url.host ?? "unknown", path: endpoint)
+                            self.circuitFailureCount[keyString, default: 0] += 1
+                            if self.circuitFailureCount[keyString]! >= 3 {
+                                self.setBreaker(circuitKey, open: true)
+                            }
+                        }
+                        completion(nil)
+                        return
+                    }
+                    
+                    guard let http = response as? HTTPURLResponse else {
+                        self.throttledLog("No HTTPURLResponse for \(fullURL)", category: "api")
+                        completion(nil)
+                        return
+                    }
+                    
+                    guard (200..<300).contains(http.statusCode), let data = data else {
+                        self.throttledLog("HTTP \(http.statusCode) for \(fullURL)", category: "api")
+                        // Handle specific error codes
+                        Task { @MainActor in
+                            switch http.statusCode {
+                            case 401: self.delegate?.didReceiveAPIError(.authRequired)
+                            case 402: self.delegate?.didReceiveAPIError(.paymentRequired)
+                            default: self.delegate?.didReceiveAPIError(.serverError(http.statusCode))
+                            }
+                        }
+                        completion(nil)
+                        return
+                    }
+                    
+                    // Success - reset circuit breaker
+                    if let keyString = circuitKey {
+                        let circuitKey = CircuitKey(host: url.host ?? "unknown", path: endpoint)
+                        self.circuitFailureCount[keyString] = 0
+                        self.setBreaker(circuitKey, open: false)
+                    }
+                    
+                    do {
+                        let json = try JSONSerialization.jsonObject(with: data, options: [])
+                        guard let responseDict = json as? [String: Any] else {
+                            self.throttledLog("Response is not a dictionary", category: "api")
+                            completion(nil)
+                            return
+                        }
+                        completion(responseDict)
+                    } catch {
+                        self.throttledLog("JSON decode failed: \(error.localizedDescription)", category: "api")
+                        completion(nil)
+                    }
+                }
+                
+                #if DEBUG
+                print("🌐 \(request.httpMethod ?? "POST") \(request.url!.absoluteString)")
+                print("🌐 Headers: \(self.redactSensitiveHeaders(request.allHTTPHeaderFields))")
+                if let body = request.httpBody {
+                    print("🌐 Body: \(String(data: body, encoding: .utf8) ?? "<non-utf8>")")
+                }
+                #endif
+                
+                task.resume()
+            }
+        }
+    }
+    
+    // Circuit breaker failure tracking
+    private var circuitFailureCount: [String: Int] = [:]
+    
     // Network metrics delegate for debugging timeouts
     private lazy var networkDelegate = NetworkMetricsDelegate()
     private var inFlightTask: URLSessionDataTask?
@@ -495,11 +654,52 @@ final class ToneSuggestionCoordinator {
     }
     private var authBackoffUntil: Date = .distantPast
     private var netBackoffUntil: Date = .distantPast
+    
+    // MARK: - Enhanced Exponential Backoff System
+    private var consecutiveFailures: [String: Int] = [:]
+    private var lastBackoffDurations: [String: TimeInterval] = [:]
+    
+    private func calculateBackoffDuration(for endpoint: String, failureCount: Int) -> TimeInterval {
+        let baseDelay: TimeInterval = 1.0 // Start with 1 second
+        let maxDelay: TimeInterval = 60.0 // Cap at 60 seconds
+        let jitterRange: TimeInterval = 0.3 // ±30% jitter
+        
+        // Exponential backoff: baseDelay * (2^failureCount)
+        let exponentialDelay = baseDelay * pow(2.0, Double(min(failureCount, 6))) // Cap at 2^6 = 64s
+        let clampedDelay = min(exponentialDelay, maxDelay)
+        
+        // Add jitter to prevent thundering herd
+        let jitter = Double.random(in: -jitterRange...jitterRange) * clampedDelay
+        let finalDelay = max(0.1, clampedDelay + jitter)
+        
+        throttledLog("⏱️ Backoff calculated for \(endpoint): \(String(format: "%.1f", finalDelay))s (failure #\(failureCount))", category: "backoff")
+        return finalDelay
+    }
+    
+    private func recordNetworkFailure(for endpoint: String) {
+        let failures = consecutiveFailures[endpoint, default: 0] + 1
+        consecutiveFailures[endpoint] = failures
+        
+        let backoffDuration = calculateBackoffDuration(for: endpoint, failureCount: failures)
+        lastBackoffDurations[endpoint] = backoffDuration
+        netBackoffUntil = Date().addingTimeInterval(backoffDuration)
+        
+        throttledLog("🚫 Network failure #\(failures) for \(endpoint), backing off for \(String(format: "%.1f", backoffDuration))s", category: "backoff")
+    }
+    
+    private func recordNetworkSuccess(for endpoint: String) {
+        if consecutiveFailures[endpoint] != nil {
+            throttledLog("✅ Network success for \(endpoint), resetting backoff", category: "backoff")
+            consecutiveFailures[endpoint] = 0
+            lastBackoffDurations[endpoint] = nil
+        }
+        netBackoffUntil = .distantPast
+    }
     private var inFlightRequests: [String: URLSessionDataTask] = [:]
     private var requestCompletionTimes: [String: Date] = [:]
     private func cacheTTL(for path: String) -> TimeInterval {
         switch path {
-        case "/api/v1/suggestions": return 5.0
+        case "/v1/suggestions": return 5.0
         default: return 5.0
         }
     }
@@ -726,8 +926,8 @@ final class ToneSuggestionCoordinator {
     
     func debugPingAll() {
         KBDLog("🔧 normalized base: \(normalizedBaseURLString())", .debug, "ToneCoordinator")
-        KBDLog("🔧 suggestions: \(normalizedBaseURLString() + "/api/v1/suggestions")", .debug, "ToneCoordinator")
-        KBDLog("🔧 tone: \(normalizedBaseURLString() + "/api/v1/tone")", .debug, "ToneCoordinator")
+        KBDLog("🔧 suggestions: \(normalizedBaseURLString() + "/v1/suggestions")", .debug, "ToneCoordinator")
+        KBDLog("🔧 tone: \(normalizedBaseURLString() + "/v1/tone")", .debug, "ToneCoordinator")
         dumpAPIConfig()
         
         // Test a sample suggestion request to verify endpoints work
@@ -736,7 +936,7 @@ final class ToneSuggestionCoordinator {
             "context": "general"
         ]
         KBDLog("🔧 Testing suggestions endpoint...", .debug, "ToneCoordinator")
-        callEndpoint(path: "api/v1/suggestions", payload: testPayload) { result in
+        callEndpoint(path: "v1/suggestions", payload: testPayload) { result in
             if result != nil {
                 KBDLog("✅ Suggestions endpoint responded", .info, "ToneCoordinator")
             } else {
@@ -803,6 +1003,7 @@ final class ToneSuggestionCoordinator {
         lastRouterSnapshotHash = h
         lastRouterTrigger = (lastInserted, isDeletion, urgent)
         dlog("🚀 Router: proceeding with analysis")
+        // Always dispatch MainActor functions to main thread safely
         Task { @MainActor in
             onTextChanged(fullText: fullText, lastInserted: lastInserted, isDeletion: isDeletion)
         }
@@ -936,7 +1137,7 @@ final class ToneSuggestionCoordinator {
         dlog("🎯 BUTTON TAP: generatePerfectSuggestionForButtonTap called with snapshot length: \(snapshot.count)")
         
         var textToAnalyze = snapshot
-        if textToAnalyze.count > 1000 { textToAnalyze = String(textToAnalyze.suffix(1000)) }
+        if textToAnalyze.count > 5000 { textToAnalyze = String(textToAnalyze.suffix(5000)) }
         
         print("🎯 🔥 BUTTON TAP: About to analyze text for suggestions: '\(String(textToAnalyze.prefix(50)))...' (length: \(textToAnalyze.count))")
         
@@ -1023,7 +1224,7 @@ final class ToneSuggestionCoordinator {
         throttledLog("🎯 Fetching suggestions for tone button tap", category: "suggestions")
         
         var textToAnalyze = text
-        if textToAnalyze.count > 1000 { textToAnalyze = String(textToAnalyze.suffix(1000)) }
+        if textToAnalyze.count > 5000 { textToAnalyze = String(textToAnalyze.suffix(5000)) }
         
         var context: [String: Any] = [
             "text": textToAnalyze,
@@ -1113,7 +1314,7 @@ final class ToneSuggestionCoordinator {
         dlog("🎯 DEBUG: generatePerfectSuggestion called with snapshot length: \(snapshot.count)")
         
         var textToAnalyze = snapshot.isEmpty ? currentText : snapshot
-        if textToAnalyze.count > 1000 { textToAnalyze = String(textToAnalyze.suffix(1000)) }
+        if textToAnalyze.count > 5000 { textToAnalyze = String(textToAnalyze.suffix(5000)) }
         
         // Guard against redundant suggestion requests
         let h = snapshotHash(textToAnalyze)
@@ -1228,7 +1429,7 @@ final class ToneSuggestionCoordinator {
         if let email = getUserEmail() { payloadToSend["userEmail"] = email }
         
         // Use retry wrapper for suggestions to handle transient network errors
-        callEndpointWithRetry(path: "api/v1/suggestions", payload: payloadToSend) { [weak self] data in
+        callEndpointWithRetry(path: "v1/suggestions", payload: payloadToSend) { [weak self] data in
             guard let self else { completion(nil); return }
             guard requestID == self.latestRequestID else { completion(nil); return }
             
@@ -1238,7 +1439,12 @@ final class ToneSuggestionCoordinator {
             if !root.isEmpty {
                 self.storeAPIResponseInSharedStorage(endpoint: "suggestions", request: payload, response: root)
             }
+            
+            // Extract suggestion text
             let suggestion = extractSuggestionSafely(from: body)
+            
+            // Extract and apply UI tone information from suggestions response
+            self.extractAndApplyUIToneFromSuggestions(response: root)
             
             // (Optional) Persist helpful correlation data for debugging
             // TODO: Store learning data locally using SafeKeyboardDataStorage
@@ -1251,21 +1457,36 @@ final class ToneSuggestionCoordinator {
     }
     
     private func extractSuggestionSafely(from dict: [String: Any]) -> String? {
+        // Prefer normalized schema first
         if let arr = dict["suggestions"] as? [[String: Any]], let first = arr.first {
-            let t = safeString(from: first, keys: ["text", "message", "advice"])
-            if !t.isEmpty { return t }
+            if let t = first["text"] as? String, !t.isEmpty { return t }
+            if let a = first["advice"] as? String, !a.isEmpty { return a }
         }
+        // Fallbacks you already have
         if let fixes = dict["quickFixes"] as? [String], let first = fixes.first, !first.isEmpty { return first }
         let advice = safeString(from: dict, keys: ["advice", "tip", "suggestion", "general_suggestion"])
         if !advice.isEmpty { return advice }
         if let extras = dict["extras"] as? [String: Any],
            let arr = extras["suggestions"] as? [[String: Any]],
-           let first = arr.first {
-            let t = safeString(from: first, keys: ["text"])
-            if !t.isEmpty { return t }
-        }
+           let first = arr.first,
+           let t = first["text"] as? String, !t.isEmpty { return t }
         if let s = dict["data"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
         return nil
+    }
+    
+    // Extract UI tone information from suggestions response and apply to UI
+    private func extractAndApplyUIToneFromSuggestions(response: [String: Any]) {
+        // Also grab the normalized UI tone back if you want pill consistency:
+        let ui_tone = (response["ui_tone"] as? String) ?? (response["original_analysis"] as? [String: Any])?["ui_tone"] as? String
+        let ui_distribution = (response["ui_distribution"] as? [String: Double]) ??
+                              ((response["original_analysis"] as? [String: Any])?["ui_distribution"] as? [String: Double])
+        
+        if let uiTone = ui_tone, let uiDistribution = ui_distribution {
+            // Apply the UI tone from suggestions response
+            Task { @MainActor in
+                self.applyDocumentTone(uiTone: uiTone, uiDistribution: uiDistribution, confidence: 0.8)
+            }
+        }
     }
     
     // MARK: - Helper Methods
@@ -1287,68 +1508,69 @@ final class ToneSuggestionCoordinator {
         persona: [String: Any],
         toneFromCache: [String: Any]? // lastToneAnalysis?["toneAnalysis"] as? [String: Any]
     ) -> [String: Any] {
-        // 1) Hash always matches the provided text
-        let textSHA256 = sha256(text)
+        // Cap text at 5000 characters per schema requirement
+        let cappedText = text.count > 5000 ? String(text.suffix(5000)) : text
+        
+        // Always send text_sha256 for server deduplication
+        let textSHA256 = sha256(cappedText)
 
-        // 2) Attachment style from persona (or secure)
+        // Attachment style from persona (or secure default)
         let attachmentStyle = (persona["attachmentStyle"] as? String) ?? "secure"
 
-        // 3) ToneAnalysis: prefer server cache; otherwise fallback to UI state
-        let tone: [String: Any]
-        if let t = toneFromCache {
-            // Expecting ui_tone, ui_distribution, confidence, intensity?
-            let classification = (t["ui_tone"] as? String) ?? "neutral"
-            let dist = (t["ui_distribution"] as? [String: Double]) ?? ["clear": 0.33, "caution": 0.33, "alert": 0.34]
-            let conf = (t["confidence"] as? Double) ?? 0.5
-            let intensity = (t["intensity"] as? Double)
+        var payload: [String: Any] = [
+            "text": cappedText,
+            "text_sha256": textSHA256,
+            "client_seq": clientSequence,
+            "compose_id": composeId,
 
-            tone = [
-                "classification": classification,
-                "confidence": conf,
-                "ui_distribution": normalizeUIDistribution(dist),
-                "intensity": intensity as Any
+            // context can be a single tag or an array — array is fine
+            "context": [context],                      
+
+            // personalization
+            "attachmentStyle": attachmentStyle        // from persona/resolved
+        ]
+        
+        // UI-first tone for cache/keying and guidance fusion
+        if let toneCache = toneFromCache {
+            payload["toneAnalysis"] = [
+                "classification": (toneCache["ui_tone"] as? String) ?? "neutral",
+                "confidence": (toneCache["confidence"] as? Double) ?? 0.5,
+                "ui_distribution": (toneCache["ui_distribution"] as? [String: Double]) ?? [
+                    "clear": 0.33, "caution": 0.33, "alert": 0.34
+                ],
+                "intensity": toneCache["intensity"] as Any
             ].compactMapValues { $0 }
-        } else {
-            // Fallback from UI pill + smoothedBuckets
-            let classification = lastUiTone.rawValue // "clear"|"caution"|"alert"|"neutral"|...
-            let dist = ["clear": smoothedBuckets.clear, "caution": smoothedBuckets.caution, "alert": smoothedBuckets.alert]
-            tone = [
-                "classification": classification,
-                "confidence": 0.5,
-                "ui_distribution": normalizeUIDistribution(dist),
-                "intensity": 0.5
-            ]
         }
 
-        // 4) Rich (optional) – preserve what you stored from tone API if available
-        var rich: [String: Any] = [:]
+        // rich optional context
         if toneFromCache != nil {
-            // If you stored an `analysis` subtree earlier, surface what you can:
+            var rich: [String: Any] = [:]
             if let analysis = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["analysis"] as? [String: Any] {
                 rich["emotions"] = analysis["emotions"] ?? [:]
                 rich["linguistic_features"] = analysis["linguistic_features"] ?? [:]
                 rich["context_analysis"] = analysis["context_analysis"] ?? [:]
                 rich["attachment_insights"] = analysis["attachment_insights"] ?? []
             }
-            rich["raw_tone"] = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["primary_tone"] ?? ""
-            rich["categories"] = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["categories"] ?? []
-            rich["sentiment_score"] = ((lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["analysis"] as? [String: Any])?["sentiment_score"] ?? 0.0
-            rich["timestamp"] = ISO8601DateFormatter().string(from: Date())
-            rich["metadata"] = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["metadata"] ?? [:]
-            rich["attachmentEstimate"] = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["attachmentEstimate"] ?? [:]
-            rich["isNewUser"] = (lastToneAnalysis?["toneAnalysis"] as? [String: Any])?["isNewUser"] ?? false
+            if !rich.isEmpty {
+                payload["rich"] = rich
+            }
         }
 
-        return [
-            "text": text,
-            "text_sha256": textSHA256,
-            "client_seq": clientSequence,           // will be set by callEndpoint()
-            "compose_id": composeId,                // stable for session
-            "toneAnalysis": tone,                   // REQUIRED
-            "context": context,
-            "attachmentStyle": attachmentStyle,
-            "rich": rich
+        // meta / features (all optional; schema passthrough)
+        payload["features"] = ["advice", "evidence"]        // keep bounded (schema max 8)
+        payload["maxSuggestions"] = 3
+        payload["meta"] = [
+            "platform": "iOS",
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
+            "source": "keyboard",
+            "request_type": "suggestion"
         ]
+        
+        // Add conversation history and user profile
+        payload["conversationHistory"] = exportConversationHistoryForAPI()
+        payload["user_profile"] = persona["user_profile"] ?? [:]
+
+        return payload
     }
     
     // MARK: - Core networking for suggestions/observe
@@ -1380,7 +1602,7 @@ final class ToneSuggestionCoordinator {
             if !breakerOpen.contains(circuitKey) { setBreaker(circuitKey, open: true) }
             completion(nil); return
         }
-        let allowed = Set(["api/v1/suggestions"])
+        let allowed = Set(["v1/suggestions"])
         guard allowed.contains(normalized) else {
             throttledLog("invalid endpoint \(normalized); expected one of \(allowed)", category: "api")
             completion(nil); return
@@ -1440,11 +1662,12 @@ final class ToneSuggestionCoordinator {
                     if let error = error as NSError? {
                         if error.code == NSURLErrorCancelled { completion(nil); return }
                         self.handleNetworkError(error, url: url)
-                        // Basic backoff
-                        self.netBackoffUntil = Date().addingTimeInterval(2.0)
+                        // Enhanced exponential backoff
+                        self.recordNetworkFailure(for: normalized)
                         completion(nil); return
                     }
-                    self.netBackoffUntil = .distantPast
+                    // Success - reset backoff
+                    self.recordNetworkSuccess(for: normalized)
                     
                     guard let http = response as? HTTPURLResponse else {
                         self.throttledLog("no HTTPURLResponse for \(normalized)", category: "api")
@@ -2009,7 +2232,7 @@ extension ToneSuggestionCoordinator {
             }
             
             if let last = lastInserted {
-                if sentenceEnders.contains(last.unicodeScalars.first!) {
+                if let us = last.unicodeScalars.first, sentenceEnders.contains(us) {
                     if tailSentence.isEmpty {
                         lastTriggerTime = now
                         return .sentenceFinalized
@@ -2026,7 +2249,10 @@ extension ToneSuggestionCoordinator {
             }
             
             if isDeletion {
-                let removedEnder = prevFullText.last.map { sentenceEnders.contains($0.unicodeScalars.first!) } ?? false
+                let removedEnder: Bool = {
+                    guard let ch = prevFullText.last, let us = ch.unicodeScalars.first else { return false }
+                    return sentenceEnders.contains(us)
+                }()
                 if removedEnder { lastTriggerTime = now; return .deleteEdge }
                 let crossedWordBoundary =
                     (wasTail.count > tailSentence.count && (wasTail.last == " " || tailSentence.last == " ")) ||
@@ -2301,25 +2527,26 @@ extension ToneSuggestionCoordinator {
     
     // MARK: - API Response Models
     
-    // Accepts either { success, data } or a flat ToneOut payload
-    private struct ToneEnvelope: Decodable {
-        let data: ToneOut
-        
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            
-            // Try to decode as envelope first { success, data }
-            if let nested = try? container.decode(ToneOut.self, forKey: .data) {
-                self.data = nested
-            } else {
-                // If that fails, decode the whole thing as ToneOut (flat response)
-                self.data = try ToneOut(from: decoder)
-            }
-        }
-        
-        enum CodingKeys: String, CodingKey {
-            case data
-        }
+    private struct ToneEnvelopeV15: Decodable {
+        let success: Bool
+        let data: ToneResponseDataV15?
+        let cached: Bool?
+        let requestId: String?
+        let ts: Int?
+    }
+
+    private struct ToneResponseDataV15: Decodable {
+        let ui_tone: String?
+        let ui_distribution: [String: Double]?
+        let client_seq: Int?
+        let mode: String?
+        let doc_seq: Int?
+        let text_hash: String?
+        let doc_tone: String?
+        let tone: String?
+        let confidence: Double?
+        let sentiment_score: Double?
+        // keep anything else loosely if you need later
     }
     
     private struct ToneOut: Decodable {
@@ -2495,7 +2722,7 @@ extension ToneSuggestionCoordinator {
     
     private func postTone(base: String, text: String, token: String?, fullTextMode: Bool = false) async throws -> ToneOut {
         let origin = normalizedBaseURLString()
-        let fullURL = "\(origin)/api/v1/tone"
+        let fullURL = "\(origin)/v1/tone"
         print("🌐 DEBUG: Attempting to POST to: \(fullURL)")
         
         guard let url = URL(string: fullURL) else { 
@@ -2509,22 +2736,53 @@ extension ToneSuggestionCoordinator {
         // Auth removed - endpoints are now open
         request.setValue(getUserId(), forHTTPHeaderField: "x-user-id")
 
-        // Build request body based on mode
-        var body: [String: Any] = [
-            "text": text, 
-            "context": "general", 
-            "client_seq": clientSequence
-        ]
+        // Build v1.5 tone request (strict keys per toneRequestSchema)
+        // Cap text at 5000 characters as per schema requirement
+        let cappedText = text.count > 5000 ? String(text.suffix(5000)) : text
         
-        if fullTextMode {
-            body["mode"] = "full"
-            body["doc_seq"] = currentDocSeq
-            body["text_hash"] = sha256(text)
-            print("📄 DEBUG: Full-text mode request - docSeq: \(currentDocSeq), hash: \(sha256(text).prefix(8))")
-        } else {
-            body["mode"] = "legacy"
-            print("📄 DEBUG: Legacy mode request")
+        var body: [String: Any] = [
+            "text": cappedText,
+            "context": "general",                     // or detected context tag(s)
+            "client_seq": clientSequence,             // echo sequencing
+            "compose_id": composeId,                  // helps Vercel cache keys
+            "mode": fullTextMode ? "full" : "legacy", // schema default is "full"
+            "doc_seq": currentDocSeq,                 // echoes back
+            "text_sha256": sha256(cappedText),        // integrity + cache key
+            "attachmentStyle": await getAttachmentStyle(), // or your resolved style
+            "includeSuggestions": false,              // tone only
+            "includeEmotions": true,
+            "includeAttachmentInsights": false,
+            "deepAnalysis": false,
+            "isNewUser": false
+        ]
+
+        // If you have cached tone analysis to forward:
+        if let lastToneAnalysis = lastToneAnalysis,
+           let t = lastToneAnalysis["toneAnalysis"] as? [String: Any],
+           let cls = t["ui_tone"] as? String,
+           let dist = t["ui_distribution"] as? [String: Double],
+           let conf = t["confidence"] as? Double {
+            body["toneAnalysis"] = [
+                "classification": cls,                   // "clear" | "caution" | "alert" | "neutral"
+                "confidence": conf,
+                "ui_distribution": [
+                    "clear": dist["clear"] ?? 0.33,
+                    "caution": dist["caution"] ?? 0.33,
+                    "alert": dist["alert"] ?? 0.34
+                ]
+                // "intensity", "rawToneTop", "intents" optional
+            ]
         }
+
+        // Optional rich/meta (schema allows passthrough)
+        body["rich"] = [
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+        ]
+        body["meta"] = [
+            "platform": "iOS",
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
+            "requestId": UUID().uuidString
+        ]
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -2533,7 +2791,7 @@ extension ToneSuggestionCoordinator {
 
         #if DEBUG
         if logGate.allow("tone_req", "\(text.count)") {
-            netLog.info("🎯 [\(self.instanceId)] POST /api/v1/tone len=\(text.count)")
+            netLog.info("🎯 [\(self.instanceId)] POST /v1/tone len=\(text.count)")
         }
         #endif
 
@@ -2565,15 +2823,40 @@ extension ToneSuggestionCoordinator {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         
         do {
-            let envelope = try decoder.decode(ToneEnvelope.self, from: data)
-            let (toneString, buckets) = resolvedTone(from: envelope.data)
+            let envelope = try decoder.decode(ToneEnvelopeV15.self, from: data)
             
-            print("📄 ToneCoordinator: Analysis complete - ui_tone: \(toneString)")
-            if let buckets = buckets {
-                print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", buckets.clear)), caution: \(String(format: "%.2f", buckets.caution)), alert: \(String(format: "%.2f", buckets.alert))")
+            // Check envelope success field if present
+            guard envelope.success, let d = envelope.data else {
+                print("🌐 DEBUG: Response envelope indicates failure")
+                throw APIError.serverError(500)
             }
             
-            return envelope.data
+            // canonical resolution (prefer ui_tone + ui_distribution)
+            let uiTone = d.ui_tone ?? d.doc_tone ?? "neutral"
+            let buckets = d.ui_distribution ?? ["clear": 0.33, "caution": 0.33, "alert": 0.34]
+            
+            print("📄 ToneCoordinator: Analysis complete - ui_tone: \(uiTone)")
+            print("📄 ToneCoordinator: UI Distribution - clear: \(String(format: "%.2f", buckets["clear"] ?? 0)), caution: \(String(format: "%.2f", buckets["caution"] ?? 0)), alert: \(String(format: "%.2f", buckets["alert"] ?? 0))")
+            
+            // Create a ToneOut for backward compatibility using the existing init approach
+            let toneOutData = [
+                "ui_tone": uiTone,
+                "ui_distribution": buckets,
+                "doc_tone": d.doc_tone as Any,
+                "mode": d.mode as Any,
+                "doc_seq": d.doc_seq as Any,
+                "text_hash": d.text_hash as Any,
+                "tone": d.tone as Any,
+                "confidence": d.confidence as Any,
+                "sentiment_score": d.sentiment_score as Any,
+                "cached": envelope.cached as Any,
+                "client_seq": d.client_seq as Any
+            ].compactMapValues { $0 }
+            
+            let toneOutDataForDecoding = try JSONSerialization.data(withJSONObject: toneOutData)
+            let toneOut = try decoder.decode(ToneOut.self, from: toneOutDataForDecoding)
+            
+            return toneOut
         } catch {
             print("❌ DEBUG: Envelope decode failed: \(error)")
             throw error

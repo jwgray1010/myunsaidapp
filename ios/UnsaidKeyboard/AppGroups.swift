@@ -12,10 +12,8 @@ enum AppGroups {
     static let id = "group.com.example.unsaid"
 
     static var defaults: UserDefaults {
-        guard let ud = UserDefaults(suiteName: id) else {
-            fatalError("App Group not configured or missing entitlements: \(id)")
-        }
-        return ud
+        // Return the suite or fall back to .standard in dev to avoid crashes.
+        UserDefaults(suiteName: id) ?? .standard
     }
 
     static var shared: UserDefaults { defaults }

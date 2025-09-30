@@ -10,6 +10,7 @@
 
 import UIKit
 import os.log
+import CryptoKit
 
 @MainActor
 protocol SuggestionChipPresenting: AnyObject {
@@ -53,8 +54,9 @@ final class SuggestionChipView: UIControl {
     private let textStorage = NSTextStorage()
     private let textContainer = NSTextContainer(size: .zero)
     
-    // How many lines per page when expanded (tweak to taste)
+    // How many lines per page when expanded/collapsed (tweak to taste)
     private let linesPerPageExpanded = 4
+    private let linesPerPageCollapsed = 1
 
     // Layout
     private let collapsedHeight: CGFloat = 44
@@ -109,6 +111,11 @@ final class SuggestionChipView: UIControl {
         textView.text = ""
         
         applyTone(tone, animated: false)
+
+        // Compute pages for the new text
+        recomputePages()
+        currentPage = 0
+        showCurrentPage()
 
         // Accessibility
         isAccessibilityElement = true
@@ -367,16 +374,10 @@ final class SuggestionChipView: UIControl {
         capsule.layer.shadowOpacity = enableShadows ? 1 : 0
         capsule.layer.shadowPath = UIBezierPath(roundedRect: capsule.bounds, cornerRadius: 18).cgPath
         
-        // Keep pages in sync with size changes
-        if isExpanded {
-            let oldWidth = textContainer.size.width
-            let newWidth = max(10, capsule.bounds.width - (hPadExpanded * 2))
-            if abs(newWidth - oldWidth) > 0.5 {  // reflow only on meaningful changes
-                recomputePages()
-                currentPage = min(currentPage, max(0, pages.count - 1))
-                showCurrentPage()
-            }
-        }
+        // Keep pages in sync with size changes for both collapsed and expanded states
+        recomputePages()
+        currentPage = min(currentPage, max(0, pages.count - 1))
+        showCurrentPage()
     }
 
     // MARK: - Behavior
@@ -468,14 +469,13 @@ final class SuggestionChipView: UIControl {
     // MARK: - Page Computation and Navigation
 
     private func recomputePages() {
-        guard isExpanded else { pages = []; currentPage = 0; return }
-
-        // Measure with the label's available width
-        let width = max(10, capsule.bounds.width - (hPadExpanded * 2))
+        // Use the actual available width for the current state
+        let hPad = isExpanded ? hPadExpanded : hPadCompact
+        let width = max(10, capsule.bounds.width - (hPad * 2))
         let height = CGFloat.greatestFiniteMagnitude
         textContainer.size = CGSize(width: width, height: height)
 
-        // Build attributed string matching the label's look
+        // Build attributed string matching the preview look
         let attr = NSMutableAttributedString(string: fullText)
         let style = NSMutableParagraphStyle()
         style.lineBreakMode = .byWordWrapping
@@ -497,15 +497,16 @@ final class SuggestionChipView: UIControl {
             glyphIndex = NSMaxRange(lineRange)
         }
 
-        // Group every N lines into a page
+        // Group every N lines into a page (1 when collapsed, 4 when expanded)
+        let chunk = isExpanded ? linesPerPageExpanded : linesPerPageCollapsed
         pages.removeAll(keepingCapacity: true)
         var i = 0
         while i < lineRanges.count {
-            let slice = Array(lineRanges[i..<min(i + linesPerPageExpanded, lineRanges.count)])
+            let slice = Array(lineRanges[i..<min(i + chunk, lineRanges.count)])
             let loc = slice.first!.location
             let len = NSMaxRange(slice.last!) - loc
             pages.append(NSRange(location: loc, length: len))
-            i += linesPerPageExpanded
+            i += chunk
         }
 
         // Fall back to single page if we didn't detect lines (very short text)
@@ -553,6 +554,9 @@ final class SuggestionChipView: UIControl {
     }
 
     private func advancePageIfPossible() {
+        // Lazy recompute if pages is empty
+        if pages.isEmpty { recomputePages() }
+        
         // If we have multiple pages, start paging immediately (no expand first)
         if pages.count > 1 && currentPage + 1 < pages.count {
             currentPage += 1
@@ -576,7 +580,7 @@ final class SuggestionChipView: UIControl {
                 showCurrentPage()
             }
         } else {
-            // Single page or at beginning with no pages - expand instead
+            // If we're single-page even after recompute, expand
             expandIfNeeded()
         }
     }
@@ -606,12 +610,20 @@ final class SuggestionChipView: UIControl {
         RunLoop.main.add(t, forMode: .common)
         autoHideTimer = t
     }
+
+    // MARK: - Helper Methods
+
+    private func sha256Hex(_ s: String) -> String {
+        let bytes = SHA256.hash(data: Data(s.utf8))
+        return bytes.map { String(format: "%02x", $0) }.joined()
+    }
 }
 
 // MARK: - SuggestionChipPresenting
 extension SuggestionChipView: SuggestionChipPresenting {
     func presentSuggestion(_ text: String, tone: ToneStatus) {
-        setPreview(text: text, tone: tone, textHash: String(text.hashValue))
+        setPreview(text: text, tone: tone, textHash: sha256Hex(text))
+        startAutoHideTimer() // Restart timer so refreshed chips feel fresh
     }
 
     func dismissSuggestion() {

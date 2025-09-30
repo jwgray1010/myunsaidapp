@@ -11,6 +11,7 @@ import Foundation
 import os.log
 import AudioToolbox
 import UIKit
+import CryptoKit
 
 // MARK: - Analysis Result for switch-in analysis
 struct AnalysisResult {
